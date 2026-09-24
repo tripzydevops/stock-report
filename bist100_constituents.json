@@ -1,0 +1,406 @@
+[
+  {
+    "symbol": "ISCTR",
+    "name": "Hisse Detay"
+  },
+  {
+    "symbol": "AEFES",
+    "name": "AEFES"
+  },
+  {
+    "symbol": "AGHOL",
+    "name": "AGHOL"
+  },
+  {
+    "symbol": "AKBNK",
+    "name": "AKBNK"
+  },
+  {
+    "symbol": "AKSA",
+    "name": "AKSA"
+  },
+  {
+    "symbol": "AKSEN",
+    "name": "AKSEN"
+  },
+  {
+    "symbol": "ALARK",
+    "name": "ALARK"
+  },
+  {
+    "symbol": "ALTNY",
+    "name": "ALTNY"
+  },
+  {
+    "symbol": "ANSGR",
+    "name": "ANSGR"
+  },
+  {
+    "symbol": "ARCLK",
+    "name": "ARCLK"
+  },
+  {
+    "symbol": "ASELS",
+    "name": "ASELS"
+  },
+  {
+    "symbol": "ASTOR",
+    "name": "ASTOR"
+  },
+  {
+    "symbol": "BALSU",
+    "name": "BALSU"
+  },
+  {
+    "symbol": "BERA",
+    "name": "BERA"
+  },
+  {
+    "symbol": "BIMAS",
+    "name": "BIMAS"
+  },
+  {
+    "symbol": "BRSAN",
+    "name": "BRSAN"
+  },
+  {
+    "symbol": "BRYAT",
+    "name": "BRYAT"
+  },
+  {
+    "symbol": "BSOKE",
+    "name": "BSOKE"
+  },
+  {
+    "symbol": "BTCIM",
+    "name": "BTCIM"
+  },
+  {
+    "symbol": "CANTE",
+    "name": "CANTE"
+  },
+  {
+    "symbol": "CCOLA",
+    "name": "CCOLA"
+  },
+  {
+    "symbol": "CIMSA",
+    "name": "CIMSA"
+  },
+  {
+    "symbol": "CVKMD",
+    "name": "CVKMD"
+  },
+  {
+    "symbol": "CWENE",
+    "name": "CWENE"
+  },
+  {
+    "symbol": "DAPGM",
+    "name": "DAPGM"
+  },
+  {
+    "symbol": "DOAS",
+    "name": "DOAS"
+  },
+  {
+    "symbol": "DOHOL",
+    "name": "DOHOL"
+  },
+  {
+    "symbol": "DSTKF",
+    "name": "DSTKF"
+  },
+  {
+    "symbol": "ECILC",
+    "name": "ECILC"
+  },
+  {
+    "symbol": "EFOR",
+    "name": "EFOR"
+  },
+  {
+    "symbol": "EGEEN",
+    "name": "EGEEN"
+  },
+  {
+    "symbol": "EKGYO",
+    "name": "EKGYO"
+  },
+  {
+    "symbol": "ENERY",
+    "name": "ENERY"
+  },
+  {
+    "symbol": "ENJSA",
+    "name": "ENJSA"
+  },
+  {
+    "symbol": "ENKAI",
+    "name": "ENKAI"
+  },
+  {
+    "symbol": "EREGL",
+    "name": "EREGL"
+  },
+  {
+    "symbol": "ESEN",
+    "name": "ESEN"
+  },
+  {
+    "symbol": "EUPWR",
+    "name": "EUPWR"
+  },
+  {
+    "symbol": "EUREN",
+    "name": "EUREN"
+  },
+  {
+    "symbol": "FENER",
+    "name": "FENER"
+  },
+  {
+    "symbol": "FROTO",
+    "name": "FROTO"
+  },
+  {
+    "symbol": "GARAN",
+    "name": "GARAN"
+  },
+  {
+    "symbol": "GESAN",
+    "name": "GESAN"
+  },
+  {
+    "symbol": "GLRMK",
+    "name": "GLRMK"
+  },
+  {
+    "symbol": "GRSEL",
+    "name": "GRSEL"
+  },
+  {
+    "symbol": "GRTHO",
+    "name": "GRTHO"
+  },
+  {
+    "symbol": "GSRAY",
+    "name": "GSRAY"
+  },
+  {
+    "symbol": "GUBRF",
+    "name": "GUBRF"
+  },
+  {
+    "symbol": "HALKB",
+    "name": "HALKB"
+  },
+  {
+    "symbol": "HEKTS",
+    "name": "HEKTS"
+  },
+  {
+    "symbol": "IEYHO",
+    "name": "IEYHO"
+  },
+  {
+    "symbol": "ISMEN",
+    "name": "ISMEN"
+  },
+  {
+    "symbol": "IZENR",
+    "name": "IZENR"
+  },
+  {
+    "symbol": "KCHOL",
+    "name": "KCHOL"
+  },
+  {
+    "symbol": "KLRHO",
+    "name": "KLRHO"
+  },
+  {
+    "symbol": "KONTR",
+    "name": "KONTR"
+  },
+  {
+    "symbol": "KRDMD",
+    "name": "KRDMD"
+  },
+  {
+    "symbol": "KTLEV",
+    "name": "KTLEV"
+  },
+  {
+    "symbol": "KUYAS",
+    "name": "KUYAS"
+  },
+  {
+    "symbol": "MAGEN",
+    "name": "MAGEN"
+  },
+  {
+    "symbol": "MAVI",
+    "name": "MAVI"
+  },
+  {
+    "symbol": "MGROS",
+    "name": "MGROS"
+  },
+  {
+    "symbol": "MIATK",
+    "name": "MIATK"
+  },
+  {
+    "symbol": "MPARK",
+    "name": "MPARK"
+  },
+  {
+    "symbol": "OBAMS",
+    "name": "OBAMS"
+  },
+  {
+    "symbol": "ODAS",
+    "name": "ODAS"
+  },
+  {
+    "symbol": "ODINE",
+    "name": "ODINE"
+  },
+  {
+    "symbol": "OTKAR",
+    "name": "OTKAR"
+  },
+  {
+    "symbol": "OYAKC",
+    "name": "OYAKC"
+  },
+  {
+    "symbol": "PAHOL",
+    "name": "PAHOL"
+  },
+  {
+    "symbol": "PASEU",
+    "name": "PASEU"
+  },
+  {
+    "symbol": "PETKM",
+    "name": "PETKM"
+  },
+  {
+    "symbol": "PGSUS",
+    "name": "PGSUS"
+  },
+  {
+    "symbol": "PSGYO",
+    "name": "PSGYO"
+  },
+  {
+    "symbol": "QUAGR",
+    "name": "QUAGR"
+  },
+  {
+    "symbol": "RALYH",
+    "name": "RALYH"
+  },
+  {
+    "symbol": "REEDR",
+    "name": "REEDR"
+  },
+  {
+    "symbol": "SAHOL",
+    "name": "SAHOL"
+  },
+  {
+    "symbol": "SASA",
+    "name": "SASA"
+  },
+  {
+    "symbol": "SISE",
+    "name": "SISE"
+  },
+  {
+    "symbol": "SKBNK",
+    "name": "SKBNK"
+  },
+  {
+    "symbol": "SMRTG",
+    "name": "SMRTG"
+  },
+  {
+    "symbol": "SOKM",
+    "name": "SOKM"
+  },
+  {
+    "symbol": "TAVHL",
+    "name": "TAVHL"
+  },
+  {
+    "symbol": "TCELL",
+    "name": "TCELL"
+  },
+  {
+    "symbol": "THYAO",
+    "name": "THYAO"
+  },
+  {
+    "symbol": "TKFEN",
+    "name": "TKFEN"
+  },
+  {
+    "symbol": "TOASO",
+    "name": "TOASO"
+  },
+  {
+    "symbol": "TRALT",
+    "name": "TRALT"
+  },
+  {
+    "symbol": "TRENJ",
+    "name": "TRENJ"
+  },
+  {
+    "symbol": "TRMET",
+    "name": "TRMET"
+  },
+  {
+    "symbol": "TSKB",
+    "name": "TSKB"
+  },
+  {
+    "symbol": "TTKOM",
+    "name": "TTKOM"
+  },
+  {
+    "symbol": "TUKAS",
+    "name": "TUKAS"
+  },
+  {
+    "symbol": "TUPRS",
+    "name": "TUPRS"
+  },
+  {
+    "symbol": "TURSG",
+    "name": "TURSG"
+  },
+  {
+    "symbol": "ULKER",
+    "name": "ULKER"
+  },
+  {
+    "symbol": "VAKBN",
+    "name": "VAKBN"
+  },
+  {
+    "symbol": "VESTL",
+    "name": "VESTL"
+  },
+  {
+    "symbol": "YKBNK",
+    "name": "YKBNK"
+  },
+  {
+    "symbol": "ZOREN",
+    "name": "ZOREN"
+  }
+]

@@ -1,0 +1,56 @@
+name: MarketPulse Automated Cloud Sync
+
+on:
+  schedule:
+    # 18:15 TRT (UTC+3) -> 15:15 UTC (Mon-Fri after BIST close)
+    - cron: '15 15 * * 1-5'
+    # 23:15 TRT (UTC+3) -> 20:15 UTC (Mon-Fri after US close)
+    - cron: '15 20 * * 1-5'
+  # Allows triggering manually from the GitHub Actions tab anytime
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install openpyxl xlsxwriter
+
+      - name: Execute MarketPulse Extraction & Sync
+        env:
+          PYTHONIOENCODING: utf-8
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://erzxltcalghadzfevfjx.supabase.co' }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI' }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python export_to_spreadsheet.py
+
+      - name: Upload Latest Spreadsheet as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketPulse_Latest_Spreadsheet
+          path: MarketPulse_Latest.xlsx
+          retention-days: 30
+
+      - name: Commit & Push Updated Spreadsheet to Repo
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "MarketPulse Cloud Bot"
+          git add MarketPulse_Latest.xlsx bist100_constituents.json bist100_symbols.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update market data and trade signals [skip ci]" && git push)
