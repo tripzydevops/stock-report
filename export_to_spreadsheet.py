@@ -23,6 +23,7 @@ from app.services.screener import run_all_screens
 from app.services.market_regime import evaluate_regime
 from app.services.risk_manager import calculate_position_size, calculate_risk_reward
 from app.services.trade_evaluator import backtest_all_historical_signals, calculate_performance_summary
+from app.services.opening_scanner import scan_all_openings
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION — Edit your watchlist here
@@ -413,8 +414,12 @@ def main():
     print("📋 Building spreadsheet tabs & evaluating trade performance...")
     outcomes_df, kpi_df, strat_df = build_trade_outcomes_and_scorecard(all_enriched)
     
+    print("🔔 Scanning opening session, gaps & daily direction bias...")
+    opening_df, breadth_summary = scan_all_openings(all_enriched, asset_info)
+    
     sheets = {
         "📊 Dashboard": build_latest_prices_sheet(all_enriched, asset_info),
+        "🔔 Opening Direction": opening_df,
         "🏆 Trade Outcomes": outcomes_df,
         "📈 Scorecard & KPIs": kpi_df,
         "🔬 Strategy Breakdown": strat_df,
