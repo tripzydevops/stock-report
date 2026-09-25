@@ -22,6 +22,7 @@ from app.services.indicators import compute_all_indicators
 from app.services.screener import run_all_screens
 from app.services.market_regime import evaluate_regime
 from app.services.risk_manager import calculate_position_size, calculate_risk_reward
+from app.services.trade_evaluator import backtest_all_historical_signals, calculate_performance_summary
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURATION — Edit your watchlist here
@@ -277,6 +278,33 @@ def build_fx_sheet(fx_data, top_n_days=252):
     return recent
 
 
+def build_trade_outcomes_and_scorecard(all_enriched):
+    """
+    Evaluates historical and active trade setups, tracks their real-world outcomes (target hit vs stop loss),
+    and computes scorecard KPIs.
+    """
+    trades = backtest_all_historical_signals(all_enriched, lookback_bars=120)
+    
+    rows = []
+    for t in trades:
+        rows.append({
+            "Symbol": t["symbol"].replace(".IS", ""),
+            "Strategy": t["strategy"],
+            "Signal Date": t["signal_date"],
+            "Entry Price": round(t["entry_price"], 2),
+            "Target Price": round(t["target"], 2) if t["target"] else "",
+            "Stop Loss": round(t["stop_loss"], 2) if t["stop_loss"] else "",
+            "Exit Price": round(t["exit_price"], 2) if t["exit_price"] else "",
+            "Exit Date": t["exit_date"] if t["exit_date"] else "Still Active",
+            "Result": t["status"],
+            "PnL %": f"{t['pnl_pct']:+.2f}%",
+            "Days Held": t["days_held"],
+        })
+    outcomes_df = pd.DataFrame(rows)
+    kpi_df, strat_df = calculate_performance_summary(trades)
+    return outcomes_df, kpi_df, strat_df
+
+
 def build_position_sizing_sheet():
     """Build a reference position sizing table."""
     rows = []
@@ -382,13 +410,17 @@ def main():
         asset_info[sym] = {"Market": "BIST", "Currency": "TRY", "Asset Class": "stock"}
     
     # 5. Build all sheets
-    print("📋 Building spreadsheet tabs...")
+    print("📋 Building spreadsheet tabs & evaluating trade performance...")
+    outcomes_df, kpi_df, strat_df = build_trade_outcomes_and_scorecard(all_enriched)
     
     sheets = {
         "📊 Dashboard": build_latest_prices_sheet(all_enriched, asset_info),
-        "🚦 Market Regime": build_market_regime_sheet(us_data, bist_data),
+        "🏆 Trade Outcomes": outcomes_df,
+        "📈 Scorecard & KPIs": kpi_df,
+        "🔬 Strategy Breakdown": strat_df,
         "🎯 Trade Signals": build_trade_signals_sheet(all_enriched, asset_info),
-        "📈 Assets": build_assets_sheet(us_data, bist_data),
+        "🚦 Market Regime": build_market_regime_sheet(us_data, bist_data),
+        "📋 Assets": build_assets_sheet(us_data, bist_data),
         "💱 USD-TRY Rate": build_fx_sheet(fx_data, top_n_days=252),
         "📐 Position Sizing": build_position_sizing_sheet(),
         "📅 Price History": build_price_history_sheet(all_enriched, top_n_days=252),
@@ -405,14 +437,15 @@ def main():
     except Exception as e:
         print(f"⚠️ Note: Database sync skipped: {e}")
     
-    # 7. Summary
+    # 8. Summary
     dashboard = sheets.get("📊 Dashboard", pd.DataFrame())
     signals = sheets.get("🎯 Trade Signals", pd.DataFrame())
     
     print(f"\n📊 Report Summary:")
     print(f"   • {len(dashboard)} assets tracked")
-    print(f"   • {len(signals)} trade signals found")
-    print(f"   • 7 tabs exported")
+    print(f"   • {len(signals)} new trade signals found")
+    print(f"   • {len(outcomes_df)} historical trades evaluated")
+    print(f"   • {len(sheets)} total tabs exported")
     print(f"\n💡 Upload '{output_path}' to Google Drive → Open with Google Sheets")
 
 
