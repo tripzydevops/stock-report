@@ -160,6 +160,165 @@ def _ema_status(row):
         return "🔴 Below 200 EMA"
 
 
+def build_portfolio_sheet(all_enriched, asset_info, fx_data):
+    """
+    Builds the live Portfolio Tracker sheet from portfolio.json.
+    Computes real-time market value, cost basis, unrealized P&L (amount & %),
+    today's change, portfolio weight %, and stop-loss risk alerts.
+    """
+    portfolio_file = OUTPUT_DIR / "portfolio.json"
+    if not portfolio_file.exists():
+        return pd.DataFrame()
+        
+    try:
+        with open(portfolio_file, "r", encoding="utf-8") as f:
+            holdings = json.load(f)
+    except Exception as e:
+        print(f"Error loading portfolio.json: {e}")
+        return pd.DataFrame()
+        
+    # Get current USD/TRY rate for currency conversion
+    usd_try_rate = 34.0
+    if fx_data is not None and not fx_data.empty:
+        col = 'close' if 'close' in fx_data.columns else ('Close' if 'Close' in fx_data.columns else fx_data.columns[0])
+        try:
+            usd_try_rate = float(fx_data[col].iloc[-1])
+        except Exception:
+            usd_try_rate = 34.0
+            
+    rows = []
+    total_val_try = 0.0
+    total_cost_try = 0.0
+    
+    temp_items = []
+    for item in holdings:
+        raw_sym = item.get("symbol", "").upper().strip()
+        df = all_enriched.get(raw_sym) if raw_sym in all_enriched else all_enriched.get(f"{raw_sym}.IS")
+            
+        shares = float(item.get("shares", 0))
+        entry_price = float(item.get("entry_price", 0))
+        
+        curr_price = entry_price
+        prev_price = entry_price
+        if df is not None and not df.empty:
+            valid_close = df['close'].dropna()
+            if not valid_close.empty:
+                curr_price = float(valid_close.iloc[-1])
+                prev_price = float(valid_close.iloc[-2]) if len(valid_close) >= 2 else curr_price
+        
+        currency = item.get("currency", "TRY").upper()
+        rate_to_try = usd_try_rate if currency == "USD" else 1.0
+        
+        cost_basis = shares * entry_price
+        market_val = shares * curr_price
+        cost_try = cost_basis * rate_to_try
+        mkt_val_try = market_val * rate_to_try
+        
+        total_val_try += mkt_val_try
+        total_cost_try += cost_try
+        
+        temp_items.append({
+            "item": item,
+            "raw_sym": raw_sym,
+            "shares": shares,
+            "entry_price": entry_price,
+            "curr_price": curr_price,
+            "prev_price": prev_price,
+            "cost_basis": cost_basis,
+            "market_val": market_val,
+            "cost_try": cost_try,
+            "mkt_val_try": mkt_val_try,
+            "currency": currency,
+            "rate_to_try": rate_to_try
+        })
+        
+    for p in temp_items:
+        item = p["item"]
+        shares = p["shares"]
+        entry = p["entry_price"]
+        curr = p["curr_price"]
+        prev = p["prev_price"]
+        cost = p["cost_basis"]
+        mkt_val = p["market_val"]
+        curr_pnl_amt = mkt_val - cost
+        curr_pnl_pct = ((curr - entry) / entry) * 100 if entry > 0 else 0.0
+        day_chg_pct = ((curr - prev) / prev) * 100 if prev > 0 else 0.0
+        weight_pct = (p["mkt_val_try"] / total_val_try) * 100 if total_val_try > 0 else 0.0
+        
+        pnl_try = p["mkt_val_try"] - p["cost_try"]
+        
+        stop = float(item.get("stop_loss", 0)) if item.get("stop_loss") else None
+        target = float(item.get("target_price", 0)) if item.get("target_price") else None
+        
+        # Risk Alert Status
+        if target and curr >= target:
+            status = "🎯 Target Hit"
+        elif stop and curr <= stop:
+            status = "🛑 Stop Breached"
+        elif stop and ((curr - stop) / curr) <= 0.025:
+            status = "⚠️ Near Stop (<2.5%)"
+        else:
+            status = "🟢 Safe / Holding"
+            
+        dist_stop = f"{((curr - stop) / curr) * 100:+.1f}%" if stop else "-"
+        dist_target = f"{((target - curr) / curr) * 100:+.1f}%" if target else "-"
+        
+        rows.append({
+            "Symbol": p["raw_sym"],
+            "Market": "US" if p["currency"] == "USD" else "BIST",
+            "Shares": int(shares) if shares.is_integer() else shares,
+            "Currency": p["currency"],
+            "Avg Entry": round(entry, 2),
+            "Current Price": round(curr, 2),
+            "Daily Chg %": f"{day_chg_pct:+.2f}%",
+            "Cost Basis (Local)": round(cost, 2),
+            "Market Value (Local)": round(mkt_val, 2),
+            "Unrealized P&L (Local)": round(curr_pnl_amt, 2),
+            "Return %": f"{curr_pnl_pct:+.2f}%",
+            "Market Value (₺)": round(p["mkt_val_try"], 2),
+            "Unrealized P&L (₺)": round(pnl_try, 2),
+            "Weight %": f"{weight_pct:.1f}%",
+            "Stop Loss": round(stop, 2) if stop else "-",
+            "Distance to Stop": dist_stop,
+            "Target Price": round(target, 2) if target else "-",
+            "Distance to Target": dist_target,
+            "Risk Alert": status,
+            "Entry Date": item.get("entry_date", ""),
+            "Notes": item.get("notes", "")
+        })
+        
+    # Append Total Portfolio Summary row
+    if rows:
+        total_pnl_try = total_val_try - total_cost_try
+        total_ret_pct = ((total_val_try - total_cost_try) / total_cost_try) * 100 if total_cost_try > 0 else 0.0
+        rows.append({
+            "Symbol": "📊 TOTAL PORTFOLIO",
+            "Market": "GLOBAL",
+            "Shares": len(temp_items),
+            "Currency": "TRY",
+            "Avg Entry": "",
+            "Current Price": "",
+            "Daily Chg %": "",
+            "Cost Basis (Local)": "",
+            "Market Value (Local)": "",
+            "Unrealized P&L (Local)": "",
+            "Return %": f"{total_ret_pct:+.2f}%",
+            "Market Value (₺)": round(total_val_try, 2),
+            "Unrealized P&L (₺)": round(total_pnl_try, 2),
+            "Weight %": "100.0%",
+            "Stop Loss": "",
+            "Distance to Stop": "",
+            "Target Price": "",
+            "Distance to Target": "",
+            "Risk Alert": "🏆 Portfolio Summary",
+            "Entry Date": "",
+            "Notes": f"USD/TRY: {usd_try_rate:.2f}"
+        })
+        
+    return pd.DataFrame(rows)
+
+
+
 def build_market_regime_sheet(us_data, bist_data):
     """Build market regime analysis sheet."""
     rows = []
@@ -419,6 +578,7 @@ def main():
     
     sheets = {
         "📊 Dashboard": build_latest_prices_sheet(all_enriched, asset_info),
+        "💼 My Portfolio": build_portfolio_sheet(all_enriched, asset_info, fx_data),
         "🔔 Opening Direction": opening_df,
         "🏆 Trade Outcomes": outcomes_df,
         "📈 Scorecard & KPIs": kpi_df,

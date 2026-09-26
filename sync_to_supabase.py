@@ -184,6 +184,40 @@ def sync_all_to_supabase():
         except Exception as e:
             print(f"Error inserting signals: {e}")
 
+    # 6. Sync Portfolio Positions
+    portfolio_file = Path(__file__).parent / "portfolio.json"
+    if portfolio_file.exists():
+        import json
+        print("📥 Syncing Portfolio Positions...")
+        try:
+            with open(portfolio_file, "r", encoding="utf-8") as f:
+                holdings = json.load(f)
+            pos_rows = []
+            for item in holdings:
+                raw_sym = item.get("symbol", "").upper().strip()
+                asset_id = symbol_to_id.get(raw_sym) or symbol_to_id.get(f"{raw_sym}.IS")
+                if not asset_id:
+                    continue
+                pos_rows.append({
+                    "asset_id": asset_id,
+                    "quantity": float(item.get("shares", 0)),
+                    "avg_entry_price": float(item.get("entry_price", 0)),
+                    "entry_date": item.get("entry_date") or str(datetime.now().date()),
+                    "stop_loss": float(item.get("stop_loss")) if item.get("stop_loss") else None,
+                    "target_price": float(item.get("target_price")) if item.get("target_price") else None,
+                    "notes": str(item.get("notes", "")),
+                    "is_open": True,
+                })
+            if pos_rows:
+                try:
+                    client.table("portfolio_positions").delete().eq("is_open", True).execute()
+                except Exception:
+                    pass
+                client.table("portfolio_positions").insert(pos_rows).execute()
+                print(f"✅ Recorded {len(pos_rows)} portfolio positions in Supabase.")
+        except Exception as e:
+            print(f"Error syncing portfolio positions: {e}")
+
     print("\n🎉 ALL EXTRACTED DATA IS FULLY RECORDED IN SUPABASE POSTGRESQL!")
 
 if __name__ == "__main__":
