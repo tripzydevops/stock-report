@@ -220,6 +220,7 @@ def build_portfolio_sheet(all_enriched, asset_info, fx_data):
         temp_items.append({
             "item": item,
             "raw_sym": raw_sym,
+            "df": df,
             "shares": shares,
             "entry_price": entry_price,
             "curr_price": curr_price,
@@ -247,25 +248,55 @@ def build_portfolio_sheet(all_enriched, asset_info, fx_data):
         
         pnl_try = p["mkt_val_try"] - p["cost_try"]
         
+        strat_type = str(item.get("strategy_type", "SWING")).upper().strip()
+        df_p = p.get("df")
+        last_row = df_p.iloc[-1] if (df_p is not None and not df_p.empty) else pd.Series()
+        
+        rsi = float(last_row.get("rsi_14", 50)) if pd.notna(last_row.get("rsi_14")) else 50.0
+        ema200 = float(last_row.get("ema_200", 0)) if pd.notna(last_row.get("ema_200")) else 0.0
+        bb_lower = float(last_row.get("bb_lower", 0)) if pd.notna(last_row.get("bb_lower")) else 0.0
+        
         stop = float(item.get("stop_loss", 0)) if item.get("stop_loss") else None
         target = float(item.get("target_price", 0)) if item.get("target_price") else None
         
-        # Risk Alert Status
-        if target and curr >= target:
-            status = "🎯 Target Hit"
-        elif stop and curr <= stop:
-            status = "🛑 Stop Breached"
-        elif stop and ((curr - stop) / curr) <= 0.025:
-            status = "⚠️ Near Stop (<2.5%)"
+        if strat_type in ["DIVIDEND", "INCOME", "DCA", "CORE"]:
+            # Dividend / Core Income logic: NO stop loss panic alerts
+            # Instead, trigger Accumulation / Dip-Buy signals when asset is on sale
+            if rsi < 35 and (ema200 > 0 and curr <= ema200 * 1.03):
+                status = "💎 PRIME ACCUMULATE (Oversold at 200 EMA)"
+            elif rsi < 35 or (bb_lower > 0 and curr <= bb_lower):
+                status = "🛒 DIP BUY (Oversold / Lower Band)"
+            elif ema200 > 0 and curr <= ema200 * 1.02:
+                status = "📥 VALUE ZONE (At 200 EMA Support)"
+            elif rsi > 70:
+                status = "⚠️ OVERBOUGHT (Pause Buying / High Price)"
+            elif target and curr >= target:
+                status = "🎯 Target Reached (Consider Trimming)"
+            else:
+                status = "🟢 HOLD & COMPOUND (Yield Safe)"
+                
+            stop_display = "DCA Mode"
+            dist_stop = f"RSI: {rsi:.1f}"
+            dist_target = f"{((target - curr) / curr) * 100:+.1f}%" if target else "-"
         else:
-            status = "🟢 Safe / Holding"
-            
-        dist_stop = f"{((curr - stop) / curr) * 100:+.1f}%" if stop else "-"
-        dist_target = f"{((target - curr) / curr) * 100:+.1f}%" if target else "-"
+            # Tactical Swing trade logic: Strict Stop Loss
+            if target and curr >= target:
+                status = "🎯 Target Hit"
+            elif stop and curr <= stop:
+                status = "🛑 Stop Breached"
+            elif stop and ((curr - stop) / curr) <= 0.025:
+                status = "⚠️ Near Stop (<2.5%)"
+            else:
+                status = "🟢 Safe / Holding"
+                
+            stop_display = round(stop, 2) if stop else "-"
+            dist_stop = f"{((curr - stop) / curr) * 100:+.1f}%" if stop else "-"
+            dist_target = f"{((target - curr) / curr) * 100:+.1f}%" if target else "-"
         
         rows.append({
             "Symbol": p["raw_sym"],
             "Market": "US" if p["currency"] == "USD" else "BIST",
+            "Strategy Type": strat_type,
             "Shares": int(shares) if shares.is_integer() else shares,
             "Currency": p["currency"],
             "Avg Entry": round(entry, 2),
@@ -278,11 +309,11 @@ def build_portfolio_sheet(all_enriched, asset_info, fx_data):
             "Market Value (₺)": round(p["mkt_val_try"], 2),
             "Unrealized P&L (₺)": round(pnl_try, 2),
             "Weight %": f"{weight_pct:.1f}%",
-            "Stop Loss": round(stop, 2) if stop else "-",
-            "Distance to Stop": dist_stop,
+            "Stop Loss / Mode": stop_display,
+            "Distance to Stop / RSI": dist_stop,
             "Target Price": round(target, 2) if target else "-",
             "Distance to Target": dist_target,
-            "Risk Alert": status,
+            "Risk / Action Alert": status,
             "Entry Date": item.get("entry_date", ""),
             "Notes": item.get("notes", "")
         })
