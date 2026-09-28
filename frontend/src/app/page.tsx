@@ -131,21 +131,7 @@ export default function Home() {
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
-  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([
-    {
-      id: 'trade-init-1',
-      symbol: 'THYAO',
-      name: 'Türk Hava Yolları',
-      market: 'BIST',
-      currency: 'TRY',
-      sharesSold: 50,
-      entryPrice: 280.00,
-      exitPrice: 325.00,
-      realizedPnl: 2250.00,
-      realizedPnlPercent: 16.07,
-      closeDate: '2026-09-20'
-    }
-  ]);
+  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase

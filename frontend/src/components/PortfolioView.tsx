@@ -137,11 +137,11 @@ export default function PortfolioView({
               {showRealized ? 'Hide Log' : 'View History'}
             </button>
           </div>
-          <div className={`mt-2 text-2xl font-black ${totalRealizedPnlTRY >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {totalRealizedPnlTRY >= 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
+          <div className={`mt-2 text-2xl font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
+            {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            {realizedTrades.length} Tranche Sales Executed
+            {realizedTrades.length > 0 ? `${realizedTrades.length} Tranche Sales Executed` : 'No Closed Trades Yet'}
           </div>
         </div>
       </div>
@@ -307,8 +307,8 @@ export default function PortfolioView({
               <p className="text-xs text-gray-500">Every executed sale locks in realized profit and is recorded here for lifetime performance tracking.</p>
             </div>
             <div className="text-right">
-              <span className={`text-sm font-black ${totalRealizedPnlTRY >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {totalRealizedPnlTRY >= 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)} Total Realized
+              <span className={`text-sm font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
+                {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)} Total Realized
               </span>
             </div>
           </div>
@@ -327,7 +327,15 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {realizedTrades.map((trade) => {
+                {realizedTrades.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-gray-500 dark:text-gray-400">
+                      <p className="font-semibold text-sm">No executed sales or closed tranches yet.</p>
+                      <p className="text-xs mt-1">When you sell or trim shares via the ⚡ Trade button, your executed sales and realized P&L will be tracked here.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  realizedTrades.map((trade) => {
                   const isProfit = trade.realizedPnl >= 0;
                   return (
                     <tr key={trade.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
@@ -366,7 +374,7 @@ export default function PortfolioView({
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
