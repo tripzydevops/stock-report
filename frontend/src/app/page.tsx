@@ -7,6 +7,7 @@ import TradeCard, { TradeSignal } from '../components/TradeCard';
 import AssetTable, { AssetData } from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
 import AddAssetModal from '../components/AddAssetModal';
+import AddHoldingModal from '../components/AddHoldingModal';
 import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
@@ -163,6 +164,7 @@ export default function Home() {
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(34.25);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase
@@ -310,6 +312,85 @@ export default function Home() {
     loadData();
   }, []);
 
+  const handleRemoveHolding = async (symbol: string) => {
+    // 1. Immediately update UI state
+    setPortfolio(prev => prev.filter(item => item.symbol !== symbol));
+    setDividends(prev => prev.filter(item => item.symbol !== symbol));
+
+    // 2. Persist deletion in Supabase
+    try {
+      const cleanSym = symbol.replace('.IS', '');
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        await supabase
+          .from('portfolio_positions')
+          .delete()
+          .eq('asset_id', assetData[0].id);
+      }
+    } catch (err) {
+      console.warn('Could not remove holding from Supabase:', err);
+    }
+  };
+
+  const handleAddHolding = async (newHolding: PortfolioItem, isDiv: boolean, divYield?: number) => {
+    // 1. Immediately update UI state
+    setPortfolio(prev => [newHolding, ...prev]);
+
+    if (isDiv) {
+      const yld = divYield || 5.0;
+      const yoc = newHolding.entryPrice > 0
+        ? ((newHolding.currentPrice * yld) / newHolding.entryPrice)
+        : yld;
+
+      const newDiv: DividendAsset = {
+        symbol: newHolding.symbol,
+        name: newHolding.name,
+        shares: newHolding.shares,
+        entryPrice: newHolding.entryPrice,
+        currentPrice: newHolding.currentPrice,
+        currency: newHolding.currency,
+        dividendYield: yld,
+        yieldOnCost: yoc,
+        annualPayout: (newHolding.shares * newHolding.currentPrice * yld) / 100,
+        monthlyPayout: (newHolding.shares * newHolding.currentPrice * yld) / 1200,
+        payoutRatio: 52.0,
+        safetyRating: 'A',
+        frequency: newHolding.market === 'US' ? 'Quarterly' : 'Annual'
+      };
+      setDividends(prev => [newDiv, ...prev]);
+    }
+
+    // 2. Persist to Supabase
+    try {
+      const cleanSym = newHolding.symbol.replace('.IS', '');
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        await supabase.from('portfolio_positions').insert([{
+          asset_id: assetData[0].id,
+          quantity: newHolding.shares,
+          avg_entry_price: newHolding.entryPrice,
+          stop_loss: newHolding.stopLoss > 0 ? newHolding.stopLoss : null,
+          is_open: true,
+          notes: newHolding.dcaRationale
+        }]);
+      }
+    } catch (err) {
+      console.warn('Could not save holding to Supabase:', err);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-[#0b0f19] text-gray-900 dark:text-gray-100 pb-20">
       {/* Top Header */}
@@ -387,7 +468,12 @@ export default function Home() {
 
         {/* TAB 2: MY PORTFOLIO & DCA */}
         {activeTab === 'portfolio' && (
-          <PortfolioView portfolio={portfolio} usdTryRate={usdTryRate} />
+          <PortfolioView
+            portfolio={portfolio}
+            usdTryRate={usdTryRate}
+            onRemoveHolding={handleRemoveHolding}
+            onAddHoldingClick={() => setIsHoldingModalOpen(true)}
+          />
         )}
 
         {/* TAB 3: DIVIDEND TRACKER */}
@@ -421,6 +507,12 @@ export default function Home() {
         onSuccess={() => {
           console.log('Asset added successfully.');
         }}
+      />
+
+      <AddHoldingModal
+        isOpen={isHoldingModalOpen}
+        onClose={() => setIsHoldingModalOpen(false)}
+        onAddHolding={handleAddHolding}
       />
     </main>
   );

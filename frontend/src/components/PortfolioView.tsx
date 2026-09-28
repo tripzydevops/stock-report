@@ -6,9 +6,16 @@ import { PortfolioItem } from '../lib/supabaseClient';
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
   usdTryRate: number;
+  onRemoveHolding?: (symbol: string) => void;
+  onAddHoldingClick?: () => void;
 }
 
-export default function PortfolioView({ portfolio, usdTryRate }: PortfolioViewProps) {
+export default function PortfolioView({
+  portfolio,
+  usdTryRate,
+  onRemoveHolding,
+  onAddHoldingClick,
+}: PortfolioViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
 
   const totalCostTRY = portfolio.reduce((acc, item) => {
@@ -30,6 +37,12 @@ export default function PortfolioView({ portfolio, usdTryRate }: PortfolioViewPr
     const c = curr || currencyMode;
     const symbol = c === 'USD' ? '$' : '₺';
     return `${symbol}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const handleRemove = (symbol: string) => {
+    if (window.confirm(`Are you sure you want to remove ${symbol} from your portfolio?`)) {
+      onRemoveHolding?.(symbol);
+    }
   };
 
   return (
@@ -108,6 +121,14 @@ export default function PortfolioView({ portfolio, usdTryRate }: PortfolioViewPr
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800">
               🟢 Value DCA Buy Zone Active
             </span>
+            {onAddHoldingClick && (
+              <button
+                onClick={onAddHoldingClick}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors flex items-center space-x-1"
+              >
+                <span>+ Add Holding</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -123,6 +144,7 @@ export default function PortfolioView({ portfolio, usdTryRate }: PortfolioViewPr
                 <th className="px-5 py-3 text-right">Unrealized P&L</th>
                 <th className="px-5 py-3 text-center">Stop Loss</th>
                 <th className="px-5 py-3 text-center">DCA Accumulation Zone</th>
+                <th className="px-4 py-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -201,9 +223,28 @@ export default function PortfolioView({ portfolio, usdTryRate }: PortfolioViewPr
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-4 text-center">
+                      <button
+                        onClick={() => handleRemove(item.symbol)}
+                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                        title={`Remove ${item.symbol} from portfolio`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
+              {portfolio.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <p className="text-base font-semibold">No active holdings in portfolio.</p>
+                    <p className="text-xs mt-1">Use the "+ Add Holding" button above to add positions.</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
