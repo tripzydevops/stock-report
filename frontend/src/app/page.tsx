@@ -22,6 +22,7 @@ import {
   OpeningDirectionItem,
   RealizedTrade,
   ExecutedOrder,
+  CapitalTransfer,
 } from '../lib/supabaseClient';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -285,6 +286,17 @@ const INITIAL_ORDERS: ExecutedOrder[] = [
   }
 ];
 
+const INITIAL_TRANSFERS: CapitalTransfer[] = [
+  {
+    id: 'trans-001',
+    transferType: 'DEPOSIT',
+    amount: 17000.00,
+    currency: 'TRY',
+    transferDate: '2026-09-16',
+    notes: 'Account capital funding & deposit'
+  }
+];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
@@ -308,6 +320,7 @@ export default function Home() {
   const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
   const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
+  const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase
@@ -445,6 +458,24 @@ export default function Home() {
           setExecutedOrders(mappedOrders);
         }
 
+        // 5. Fetch Capital Transfers from Supabase
+        const { data: transData } = await supabase
+          .from('portfolio_transfers')
+          .select('*')
+          .order('transfer_date', { ascending: false });
+
+        if (transData && transData.length > 0) {
+          const mappedTrans: CapitalTransfer[] = transData.map((t: any) => ({
+            id: t.id,
+            transferType: t.transfer_type,
+            amount: Number(t.amount),
+            currency: t.currency || 'TRY',
+            transferDate: t.transfer_date,
+            notes: t.notes
+          }));
+          setTransfers(mappedTrans);
+        }
+
       } catch (err) {
         console.warn('Using enriched fallback offline data:', err);
         generateFallbackAssets();
@@ -516,6 +547,27 @@ export default function Home() {
       }
     } catch (err) {
       console.warn('Could not remove holding from Supabase:', err);
+    }
+  };
+
+  const handleAddTransfer = async (newTransfer: CapitalTransfer) => {
+    setTransfers(prev => [newTransfer, ...prev]);
+    if (newTransfer.transferType === 'DEPOSIT') {
+      setCashBalance(prev => prev + newTransfer.amount);
+    } else {
+      setCashBalance(prev => Math.max(0, prev - newTransfer.amount));
+    }
+
+    try {
+      await supabase.from('portfolio_transfers').insert([{
+        transfer_type: newTransfer.transferType,
+        amount: newTransfer.amount,
+        currency: newTransfer.currency,
+        transfer_date: newTransfer.transferDate,
+        notes: newTransfer.notes
+      }]);
+    } catch (err) {
+      console.warn('Error saving transfer to Supabase:', err);
     }
   };
 
@@ -823,6 +875,7 @@ export default function Home() {
             portfolio={portfolio}
             realizedTrades={realizedTrades}
             orders={executedOrders}
+            transfers={transfers}
             usdTryRate={usdTryRate}
             cashBalanceTRY={cashBalance}
             onRemoveHolding={handleRemoveHolding}
@@ -831,6 +884,7 @@ export default function Home() {
               setSelectedHolding(item);
               setTradeModalOpen(true);
             }}
+            onAddTransfer={handleAddTransfer}
           />
         )}
 

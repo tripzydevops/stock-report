@@ -126,3 +126,12 @@ export interface ExecutedOrder {
   dcaNote?: string;
 }
 
+export interface CapitalTransfer {
+  id: string;
+  transferType: 'DEPOSIT' | 'WITHDRAWAL';
+  amount: number;
+  currency: string;
+  transferDate: string;
+  notes?: string;
+}
+

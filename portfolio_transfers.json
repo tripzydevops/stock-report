@@ -1,0 +1,10 @@
+[
+  {
+    "id": "trans-init-17000",
+    "transferType": "DEPOSIT",
+    "amount": 17000.00,
+    "currency": "TRY",
+    "transferDate": "2026-09-16",
+    "notes": "Initial brokerage capital deposit"
+  }
+]
