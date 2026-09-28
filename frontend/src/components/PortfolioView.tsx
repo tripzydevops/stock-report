@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PortfolioItem, RealizedTrade } from '../lib/supabaseClient';
+import { PortfolioItem, RealizedTrade, ExecutedOrder } from '../lib/supabaseClient';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
   realizedTrades?: RealizedTrade[];
+  orders?: ExecutedOrder[];
   usdTryRate: number;
   cashBalanceTRY?: number;
   onRemoveHolding?: (symbol: string) => void;
@@ -16,6 +17,7 @@ interface PortfolioViewProps {
 export default function PortfolioView({
   portfolio,
   realizedTrades = [],
+  orders = [],
   usdTryRate,
   cashBalanceTRY = 2952.26,
   onRemoveHolding,
@@ -23,7 +25,9 @@ export default function PortfolioView({
   onTradeHolding,
 }: PortfolioViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
-  const [showRealized, setShowRealized] = useState(false);
+  const [showRealized, setShowRealized] = useState(true);
+  const [orderSideFilter, setOrderSideFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
+  const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
 
   // Active portfolio calculations
   const totalCostTRY = portfolio.reduce((acc, item) => {
@@ -380,6 +384,136 @@ export default function PortfolioView({
           </div>
         </div>
       )}
+
+      {/* 4. Executed Orders & Broker Trade History */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
+          <div>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+              <span>📜</span>
+              <span>Executed Orders & DCA Accumulation Log</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
+                {orders.length} Executed
+              </span>
+            </h3>
+            <p className="text-xs text-gray-500">Live synchronization with your brokerage executed orders, showing fills, timestamps, ref IDs, and DCA tranches.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Side filter */}
+            <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+              {(['ALL', 'BUY', 'SELL'] as const).map((side) => (
+                <button
+                  key={side}
+                  onClick={() => setOrderSideFilter(side)}
+                  className={`px-2.5 py-1 font-bold rounded-md transition-all ${
+                    orderSideFilter === side
+                      ? side === 'BUY'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : side === 'SELL'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-blue-600 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                  }`}
+                >
+                  {side === 'ALL' ? 'All Sides' : side === 'BUY' ? 'Buys' : 'Sells'}
+                </button>
+              ))}
+            </div>
+
+            {/* Asset filter */}
+            <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+              {['ALL', 'ISMEN', 'TURSG', 'AKBNK'].map((sym) => (
+                <button
+                  key={sym}
+                  onClick={() => setOrderAssetFilter(sym)}
+                  className={`px-2 py-1 font-semibold rounded-md transition-all ${
+                    orderAssetFilter === sym
+                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm font-bold'
+                      : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th className="px-5 py-3">Asset</th>
+                <th className="px-5 py-3 text-center">Side / Order</th>
+                <th className="px-5 py-3 text-center">Status</th>
+                <th className="px-5 py-3 text-right">Quantity</th>
+                <th className="px-5 py-3 text-right">Realzd. Price</th>
+                <th className="px-5 py-3 text-right">Total Amount</th>
+                <th className="px-5 py-3">DCA Note / Purpose</th>
+                <th className="px-5 py-3 text-right">Date & Time</th>
+                <th className="px-5 py-3 text-right">Ref ID</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {orders
+                .filter(ord => {
+                  const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
+                  const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
+                  return matchesSide && matchesAsset;
+                })
+                .map((ord) => {
+                  const isBuy = ord.side === 'BUY';
+                  return (
+                    <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-gray-900 dark:text-white">{ord.symbol}</span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            {ord.market}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500">{ord.name}</div>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-black ${
+                          isBuy 
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' 
+                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-300 dark:border-purple-800'
+                        }`}>
+                          {isBuy ? 'BUY' : 'SELL'} {ord.orderType}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                          ✓ {ord.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium text-gray-900 dark:text-white">
+                        {ord.quantity.toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
+                        ₺{ord.price.toFixed(2)}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
+                        ₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
+                        {ord.dcaNote || '-'}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs text-gray-500 font-mono">
+                        {ord.dateTime}
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-mono text-gray-400">
+                        {ord.ref}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

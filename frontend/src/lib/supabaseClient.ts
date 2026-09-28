@@ -109,3 +109,20 @@ export interface RealizedTrade {
   closeDate: string;
 }
 
+export interface ExecutedOrder {
+  id: string;
+  ref: string;
+  symbol: string;
+  name: string;
+  market: string;
+  side: 'BUY' | 'SELL';
+  orderType: string;
+  quantity: number;
+  price: number;
+  totalValue: number;
+  currency: string;
+  dateTime: string;
+  status: 'Filled';
+  dcaNote?: string;
+}
+

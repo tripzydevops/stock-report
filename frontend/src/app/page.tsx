@@ -21,6 +21,7 @@ import {
   StrategyStat,
   OpeningDirectionItem,
   RealizedTrade,
+  ExecutedOrder,
 } from '../lib/supabaseClient';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -121,6 +122,169 @@ const INITIAL_ORB: OpeningDirectionItem[] = [
   { symbol: 'ISMEN', market: 'BIST', gapPercent: -0.15, gapType: 'Flat Open', orbStatus: 'Inside Range', bias: 'Neutral', volumeSpike: false }
 ];
 
+const INITIAL_REALIZED_TRADES: RealizedTrade[] = [
+  {
+    id: 'trade-000cr0',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    currency: 'TRY',
+    sharesSold: 153,
+    entryPrice: 32.56,
+    exitPrice: 35.02,
+    realizedPnl: 376.38,
+    realizedPnlPercent: 7.56,
+    closeDate: '2026-09-17'
+  }
+];
+
+const INITIAL_ORDERS: ExecutedOrder[] = [
+  {
+    id: 'ord-0003I3',
+    ref: '#0003I3',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 66,
+    price: 31.08,
+    totalValue: 2051.28,
+    currency: 'TRY',
+    dateTime: '28.09.26 - 11:37',
+    status: 'Filled',
+    dcaNote: 'DCA Tranche 2 - Lowered avg cost to ₺31.89'
+  },
+  {
+    id: 'ord-0003FZ',
+    ref: '#0003FZ',
+    symbol: 'TURSG',
+    name: 'Türkiye Sigorta',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 186,
+    price: 5.40,
+    totalValue: 1004.40,
+    currency: 'TRY',
+    dateTime: '28.09.26 - 11:31',
+    status: 'Filled',
+    dcaNote: 'DCA Tranche 4 - Lowered avg cost to ₺5.85'
+  },
+  {
+    id: 'ord-000F7P',
+    ref: '#000F7P',
+    symbol: 'TURSG',
+    name: 'Türkiye Sigorta',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 4,
+    price: 5.90,
+    totalValue: 23.60,
+    currency: 'TRY',
+    dateTime: '24.09.26 - 17:32',
+    status: 'Filled',
+    dcaNote: 'Odd-lot accumulation'
+  },
+  {
+    id: 'ord-000B95',
+    ref: '#000B95',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 76,
+    price: 32.60,
+    totalValue: 2477.60,
+    currency: 'TRY',
+    dateTime: '24.09.26 - 14:35',
+    status: 'Filled',
+    dcaNote: 'Tranche 1 - Position initiation'
+  },
+  {
+    id: 'ord-000B8L',
+    ref: '#000B8L',
+    symbol: 'AKBNK',
+    name: 'Akbank T.A.Ş.',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 35,
+    price: 71.20,
+    totalValue: 2492.00,
+    currency: 'TRY',
+    dateTime: '24.09.26 - 14:34',
+    status: 'Filled',
+    dcaNote: 'Position initiation at 50 EMA support'
+  },
+  {
+    id: 'ord-0005ZE',
+    ref: '#0005ZE',
+    symbol: 'TURSG',
+    name: 'Türkiye Sigorta',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 906,
+    price: 5.92,
+    totalValue: 5363.52,
+    currency: 'TRY',
+    dateTime: '18.09.26 - 12:00',
+    status: 'Filled',
+    dcaNote: 'Core position build'
+  },
+  {
+    id: 'ord-000CTC',
+    ref: '#000CTC',
+    symbol: 'TURSG',
+    name: 'Türkiye Sigorta',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 167,
+    price: 5.99,
+    totalValue: 1000.33,
+    currency: 'TRY',
+    dateTime: '17.09.26 - 16:09',
+    status: 'Filled',
+    dcaNote: 'Initial breakout entry tranche'
+  },
+  {
+    id: 'ord-000CR0',
+    ref: '#000CR0',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'SELL',
+    orderType: 'Limit',
+    quantity: 153,
+    price: 35.02,
+    totalValue: 5358.06,
+    currency: 'TRY',
+    dateTime: '17.09.26 - 16:00',
+    status: 'Filled',
+    dcaNote: 'Full swing profit taking (+₺376.38 / +7.56%)'
+  },
+  {
+    id: 'ord-0009YP',
+    ref: '#0009YP',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 153,
+    price: 32.56,
+    totalValue: 4981.68,
+    currency: 'TRY',
+    dateTime: '16.09.26 - 15:42',
+    status: 'Filled',
+    dcaNote: 'Swing trade entry tranche'
+  }
+];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
@@ -142,7 +306,8 @@ export default function Home() {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
   const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
-  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([]);
+  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
+  const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase
@@ -252,6 +417,32 @@ export default function Home() {
           if (mappedSignals.length > 0) {
             setSignals(mappedSignals);
           }
+        }
+
+        // 4. Fetch Executed Orders from Supabase
+        const { data: ordersData } = await supabase
+          .from('portfolio_orders')
+          .select('*')
+          .order('executed_at', { ascending: false });
+
+        if (ordersData && ordersData.length > 0) {
+          const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => ({
+            id: o.id,
+            ref: o.order_ref,
+            symbol: o.symbol,
+            name: o.symbol === 'ISMEN' ? 'İş Yatırım Menkul Değerler' : o.symbol === 'TURSG' ? 'Türkiye Sigorta' : o.symbol === 'AKBNK' ? 'Akbank T.A.Ş.' : o.symbol,
+            market: 'BIST',
+            side: o.side,
+            orderType: o.order_type || 'Limit',
+            quantity: Number(o.quantity),
+            price: Number(o.price),
+            totalValue: Number(o.total_amount),
+            currency: o.currency || 'TRY',
+            dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+            status: o.status || 'Filled',
+            dcaNote: o.notes
+          }));
+          setExecutedOrders(mappedOrders);
         }
 
       } catch (err) {
@@ -631,6 +822,7 @@ export default function Home() {
           <PortfolioView
             portfolio={portfolio}
             realizedTrades={realizedTrades}
+            orders={executedOrders}
             usdTryRate={usdTryRate}
             cashBalanceTRY={cashBalance}
             onRemoveHolding={handleRemoveHolding}
