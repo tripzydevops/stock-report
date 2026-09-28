@@ -1,13 +1,15 @@
 'use client';
 
 import React from 'react';
-import { StrategyStat } from '../lib/supabaseClient';
+import { StrategyStat, ScannedTradeSignal } from '../lib/supabaseClient';
+import ScanSignalsLedger from './ScanSignalsLedger';
 
 interface ScorecardViewProps {
   strategies: StrategyStat[];
+  scannedSignals?: ScannedTradeSignal[];
 }
 
-export default function ScorecardView({ strategies }: ScorecardViewProps) {
+export default function ScorecardView({ strategies, scannedSignals = [] }: ScorecardViewProps) {
   const totalTrades = strategies.reduce((acc, s) => acc + s.totalTrades, 0);
   const weightedWinRate = totalTrades > 0
     ? strategies.reduce((acc, s) => acc + s.winRate * s.totalTrades, 0) / totalTrades
@@ -127,6 +129,9 @@ export default function ScorecardView({ strategies }: ScorecardViewProps) {
           </table>
         </div>
       </div>
+
+      {/* Historical Signals & Outcome Audit Ledger */}
+      <ScanSignalsLedger signals={scannedSignals} />
 
       {/* Rationale & Edge Guide */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

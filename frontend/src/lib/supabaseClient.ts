@@ -34,6 +34,25 @@ export interface LiveSignal {
   riskReward?: number;
 }
 
+export interface ScannedTradeSignal {
+  id: string;
+  symbol: string;
+  name: string;
+  market: 'BIST' | 'US' | string;
+  strategy: string;
+  signalDate: string;
+  entryPrice: number;
+  stopLoss: number;
+  targetPrice: number;
+  riskReward: number;
+  confidence: number;
+  status: 'open' | 'target_hit' | 'stopped_out' | 'expired' | 'invalidated';
+  outcomePnlPct?: number | null;
+  closedAt?: string | null;
+  aiRationale: string;
+  currency: 'TRY' | 'USD';
+}
+
 export interface PortfolioItem {
   symbol: string;
   name: string;

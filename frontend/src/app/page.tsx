@@ -23,6 +23,7 @@ import {
   RealizedTrade,
   ExecutedOrder,
   CapitalTransfer,
+  ScannedTradeSignal,
 } from '../lib/supabaseClient';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -297,6 +298,153 @@ const INITIAL_TRANSFERS: CapitalTransfer[] = [
   }
 ];
 
+const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
+  {
+    id: 'sig-thyao-01',
+    symbol: 'THYAO',
+    name: 'Türk Hava Yolları',
+    market: 'BIST',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-15',
+    entryPrice: 310.50,
+    stopLoss: 295.00,
+    targetPrice: 350.00,
+    confidence: 8.5,
+    riskReward: 2.55,
+    aiRationale: 'Volatility breakout trigger above 20-day high with 2.4x volume surge.',
+    status: 'target_hit',
+    outcomePnlPct: 12.72,
+    closedAt: '2026-09-24',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-nvda-01',
+    symbol: 'NVDA',
+    name: 'NVIDIA Corporation',
+    market: 'US',
+    strategy: 'ema_pullback',
+    signalDate: '2026-09-16',
+    entryPrice: 125.40,
+    stopLoss: 118.00,
+    targetPrice: 145.00,
+    confidence: 9.0,
+    riskReward: 2.65,
+    aiRationale: 'Retracement to 50 EMA support in confirmed bull regime with MACD turn.',
+    status: 'target_hit',
+    outcomePnlPct: 15.63,
+    closedAt: '2026-09-26',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-pgsus-01',
+    symbol: 'PGSUS',
+    name: 'Pegasus',
+    market: 'BIST',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-12',
+    entryPrice: 144.40,
+    stopLoss: 138.20,
+    targetPrice: 158.00,
+    confidence: 8.0,
+    riskReward: 2.19,
+    aiRationale: 'Consolidation breakout with expanding ATR and bullish momentum.',
+    status: 'target_hit',
+    outcomePnlPct: 9.42,
+    closedAt: '2026-09-22',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-tuprs-01',
+    symbol: 'TUPRS',
+    name: 'Tüpraş',
+    market: 'BIST',
+    strategy: 'mean_reversion',
+    signalDate: '2026-09-11',
+    entryPrice: 168.00,
+    stopLoss: 161.00,
+    targetPrice: 182.00,
+    confidence: 7.5,
+    riskReward: 2.00,
+    aiRationale: 'RSI oversold rebound setup. Breakdown through support triggered disciplined stop loss.',
+    status: 'stopped_out',
+    outcomePnlPct: -4.17,
+    closedAt: '2026-09-17',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-bimas-01',
+    symbol: 'BIMAS',
+    name: 'BİM Mağazalar',
+    market: 'BIST',
+    strategy: 'trend_following',
+    signalDate: '2026-09-08',
+    entryPrice: 472.00,
+    stopLoss: 455.00,
+    targetPrice: 510.00,
+    confidence: 8.5,
+    riskReward: 2.24,
+    aiRationale: 'Supermarket compounder holding above 200 EMA with accumulation volume.',
+    status: 'target_hit',
+    outcomePnlPct: 8.05,
+    closedAt: '2026-09-21',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-aapl-01',
+    symbol: 'AAPL',
+    name: 'Apple Inc.',
+    market: 'US',
+    strategy: 'trend_pullback',
+    signalDate: '2026-09-14',
+    entryPrice: 228.50,
+    stopLoss: 222.00,
+    targetPrice: 242.00,
+    confidence: 8.0,
+    riskReward: 2.08,
+    aiRationale: 'Pullback to rising 20 EMA in strong US tech rally.',
+    status: 'target_hit',
+    outcomePnlPct: 5.91,
+    closedAt: '2026-09-25',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-sise-01',
+    symbol: 'SISE',
+    name: 'Şişecam',
+    market: 'BIST',
+    strategy: 'mean_reversion',
+    signalDate: '2026-09-18',
+    entryPrice: 46.20,
+    stopLoss: 44.50,
+    targetPrice: 50.00,
+    confidence: 7.0,
+    riskReward: 2.24,
+    aiRationale: 'Oversold bounce failed to sustain above 20 EMA, executed risk mitigation stop.',
+    status: 'stopped_out',
+    outcomePnlPct: -3.68,
+    closedAt: '2026-09-23',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-asels-01',
+    symbol: 'ASELS',
+    name: 'Aselsan',
+    market: 'BIST',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-15',
+    entryPrice: 355.00,
+    stopLoss: 342.00,
+    targetPrice: 385.00,
+    confidence: 8.5,
+    riskReward: 2.31,
+    aiRationale: 'Defense sector contract momentum breaking multi-week resistance on high volume.',
+    status: 'target_hit',
+    outcomePnlPct: 8.45,
+    closedAt: '2026-09-26',
+    currency: 'TRY'
+  }
+];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
@@ -321,6 +469,7 @@ export default function Home() {
   const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
+  const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase
@@ -396,39 +545,50 @@ export default function Home() {
           generateFallbackAssets();
         }
 
-        // 3. Fetch Trade Signals
-        const { data: sigData } = await supabase
+        // 3. Fetch All Trade Signals (Open + Resolved Audit Ledger)
+        const { data: allSigData } = await supabase
           .from('trade_signals')
           .select('*, assets(symbol, name, market)')
-          .eq('status', 'open')
-          .order('signal_date', { ascending: false })
-          .limit(8);
+          .order('signal_date', { ascending: false });
 
-        if (sigData && sigData.length > 0) {
-          const mappedSignals: TradeSignal[] = sigData
-            .filter((s: any) => {
-              const entry = Number(s.entry_price);
-              const stop = Number(s.stop_loss);
-              const target = Number(s.target_1);
-              if (entry > 0 && stop > 0 && stop >= entry) return false;
-              if (entry > 0 && target > 0 && target <= entry) return false;
-              return true;
-            })
-            .map((s: any) => ({
-              symbol: s.assets?.symbol?.replace('.IS', '') || 'ASSET',
-              name: s.assets?.name || s.assets?.symbol || '',
+        if (allSigData && allSigData.length > 0) {
+          const mappedAll: ScannedTradeSignal[] = allSigData.map((s: any) => ({
+            id: s.id,
+            symbol: s.assets?.symbol?.replace('.IS', '') || 'ASSET',
+            name: s.assets?.name || s.assets?.symbol || '',
+            market: s.assets?.market || 'BIST',
+            strategy: s.strategy,
+            signalDate: s.signal_date,
+            entryPrice: Number(s.entry_price),
+            stopLoss: Number(s.stop_loss) || Number(s.entry_price) * 0.95,
+            targetPrice: Number(s.target_1) || Number(s.entry_price) * 1.15,
+            riskReward: Number(s.risk_reward_ratio) || 2.0,
+            confidence: Number(s.confidence_score) || 8.0,
+            status: s.status,
+            outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
+            closedAt: s.closed_at,
+            aiRationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
+            currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
+          }));
+          setScannedSignals(mappedAll);
+
+          const openSignals = mappedAll
+            .filter(s => s.status === 'open')
+            .map(s => ({
+              symbol: s.symbol,
+              name: s.name,
               strategy: s.strategy.replace('_', ' ').toUpperCase(),
-              entryPrice: s.entry_price,
-              stopLoss: s.stop_loss || s.entry_price * 0.95,
-              targetPrice: s.target_1 || s.entry_price * 1.15,
-              confidence: Math.round(s.confidence_score || 8),
-              rationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
-              market: s.assets?.market || 'BIST',
-              date: s.signal_date || new Date().toISOString().slice(0, 10),
-              currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
+              entryPrice: s.entryPrice,
+              stopLoss: s.stopLoss,
+              targetPrice: s.targetPrice,
+              confidence: Math.round(s.confidence),
+              rationale: s.aiRationale,
+              market: s.market,
+              date: s.signalDate,
+              currency: s.currency
             }));
-          if (mappedSignals.length > 0) {
-            setSignals(mappedSignals);
+          if (openSignals.length > 0) {
+            setSignals(openSignals);
           }
         }
 
@@ -838,14 +998,24 @@ export default function Home() {
           <div className="space-y-8">
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="lg:w-2/3 space-y-4">
-                <div className="flex justify-between items-end">
+                <div className="flex justify-between items-end flex-wrap gap-2">
                   <div>
                     <h2 className="text-xl font-black text-gray-900 dark:text-white">Active Trade Setups & Signals</h2>
                     <p className="text-xs text-gray-500">Autonomous scanner triggers with calculated targets, stop-losses, and AI rationales.</p>
                   </div>
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                    {signals.length} Setups Active
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveTab('scorecard')}
+                      className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                      title="View all historical scanned trades and outcomes"
+                    >
+                      <span>📜</span>
+                      <span>Scan Audit & Outcome History ({scannedSignals.length}) →</span>
+                    </button>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50">
+                      {signals.length} Active
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -893,9 +1063,9 @@ export default function Home() {
           <DividendView dividendAssets={dividends} usdTryRate={usdTryRate} />
         )}
 
-        {/* TAB 4: STRATEGY SCORECARD */}
+        {/* TAB 4: STRATEGY SCORECARD & SCAN AUDIT */}
         {activeTab === 'scorecard' && (
-          <ScorecardView strategies={strategies} />
+          <ScorecardView strategies={strategies} scannedSignals={scannedSignals} />
         )}
 
         {/* TAB 5: OPENING DIRECTION (ORB) */}
