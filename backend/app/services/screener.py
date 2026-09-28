@@ -89,27 +89,29 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         last = df.iloc[-1]
         entry = last['close']
         
-        # Determine breakout direction using MACD
+        # Spot equities are Long-only. Only trigger on bullish breakout (positive momentum)
         if last['macd_histogram'] > 0:
             stop = last['kc_lower']
+            if stop >= entry:
+                stop = entry * 0.95  # Fallback 5% stop if Keltner lower is at or above entry
             target = entry + 2 * (entry - stop)
-        else:
-            stop = last['kc_upper']
-            target = entry - 2 * (stop - entry)
             
-        risk = abs(entry - stop)
-        reward = abs(target - entry)
-        rr = reward / risk if risk > 0 else 0
-        
-        return {
-            'symbol': symbol,
-            'strategy': 'Volatility Squeeze',
-            'signal_date': df.index[-1],
-            'entry_price': entry,
-            'stop_loss': stop,
-            'target_1': target,
-            'risk_reward_ratio': round(rr, 2)
-        }
+            risk = entry - stop
+            reward = target - entry
+            rr = reward / risk if risk > 0 else 0
+            
+            return {
+                'symbol': symbol,
+                'strategy': 'Volatility Squeeze',
+                'signal_date': df.index[-1],
+                'entry_price': entry,
+                'stop_loss': stop,
+                'target_1': target,
+                'risk_reward_ratio': round(rr, 2)
+            }
+        # If MACD histogram <= 0, it is a bearish breakdown (short setup).
+        # We reject short setups since spot equities do not support short-selling.
+        return None
     return None
 
 def screen_fund_momentum(df: pd.DataFrame, symbol: str) -> Optional[Dict]:

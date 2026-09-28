@@ -150,6 +150,26 @@ def sync_all_to_supabase():
         except Exception as e:
             print(f"Error upserting regime: {e}")
 
+    # 4b. Sync FX Rates
+    try:
+        xl = pd.ExcelFile(excel_path)
+        if "💱 USD-TRY Rate" in xl.sheet_names:
+            print("📥 Syncing FX Rates...")
+            df_fx = pd.read_excel(excel_path, sheet_name="💱 USD-TRY Rate")
+            fx_rows = []
+            for _, row in df_fx.tail(30).iterrows():
+                if pd.notna(row["USD/TRY Rate"]) and pd.notna(row["Date"]):
+                    fx_rows.append({
+                        "pair": "USDTRY",
+                        "date": str(row["Date"])[:10],
+                        "rate": float(row["USD/TRY Rate"])
+                    })
+            if fx_rows:
+                client.table("fx_rates").upsert(fx_rows, on_conflict="pair,date").execute()
+                print(f"✅ Recorded {len(fx_rows)} USD/TRY FX rates.")
+    except Exception as e:
+        print(f"Error syncing FX rates: {e}")
+
     # 5. Sync Trade Signals
     print("📥 Syncing Trade Signals...")
     df_sig = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
@@ -163,14 +183,23 @@ def sync_all_to_supabase():
             
         sig_date = str(row["Signal Date"])[:10]
         strategy = str(row["Strategy"]).lower().replace(" ", "_")
+        entry_p = float(row["Entry Price"]) if pd.notna(row["Entry Price"]) else 0
+        stop_l = float(row["Stop Loss"]) if pd.notna(row["Stop Loss"]) else None
+        target_p = float(row["Target"]) if pd.notna(row["Target"]) else None
+
+        # Sanity check: Spot equities MUST be long setups (target > entry and stop < entry)
+        if target_p is not None and stop_l is not None and entry_p > 0:
+            if target_p <= entry_p or stop_l >= entry_p:
+                print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_p})")
+                continue
         
         signal_rows.append({
             "asset_id": asset_id,
             "strategy": strategy,
             "signal_date": sig_date,
-            "entry_price": float(row["Entry Price"]) if pd.notna(row["Entry Price"]) else 0,
-            "stop_loss": float(row["Stop Loss"]) if pd.notna(row["Stop Loss"]) else None,
-            "target_1": float(row["Target"]) if pd.notna(row["Target"]) else None,
+            "entry_price": entry_p,
+            "stop_loss": stop_l,
+            "target_1": target_p,
             "risk_reward_ratio": float(row["R:R Ratio"]) if pd.notna(row["R:R Ratio"]) else None,
             "confidence_score": 8.0,
             "ai_rationale": f"{row['Strategy']} trigger for {sym}. Target: {row['Target']}, Stop: {row['Stop Loss']}.",
@@ -179,6 +208,8 @@ def sync_all_to_supabase():
         
     if signal_rows:
         try:
+            # Clear old open signals before inserting fresh valid signals
+            client.table("trade_signals").delete().eq("status", "open").execute()
             client.table("trade_signals").insert(signal_rows).execute()
             print(f"✅ Recorded {len(signal_rows)} active trade signals in Supabase.")
         except Exception as e:

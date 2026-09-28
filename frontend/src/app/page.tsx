@@ -153,10 +153,10 @@ const INITIAL_ORB: OpeningDirectionItem[] = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bullish', close: 545.20, trend: 'up'
+    status: 'Bullish', close: 771.35, trend: 'up'
   });
   const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Neutral', close: 9850.40, trend: 'flat'
+    status: 'Neutral', close: 12550.94, trend: 'flat'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [assets, setAssets] = useState<AssetData[]>([]);
@@ -164,7 +164,7 @@ export default function Home() {
   const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
-  const [usdTryRate, setUsdTryRate] = useState<number>(34.25);
+  const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
@@ -192,30 +192,31 @@ export default function Home() {
       try {
         setIsLoading(true);
 
-        // 1. Fetch Market Regime
-        const { data: regData } = await supabase
-          .from('market_regime')
-          .select('*')
-          .order('date', { ascending: false })
-          .limit(2);
+        // 1. Fetch Market Regimes specifically by market
+        const [usRes, bistRes, fxRes] = await Promise.all([
+          supabase.from('market_regime').select('*').eq('market', 'US').order('date', { ascending: false }).limit(1),
+          supabase.from('market_regime').select('*').eq('market', 'BIST').order('date', { ascending: false }).limit(1),
+          supabase.from('fx_rates').select('rate').eq('pair', 'USDTRY').order('date', { ascending: false }).limit(1)
+        ]);
 
-        if (regData && regData.length > 0) {
-          const us = regData.find((r: any) => r.market === 'US');
-          const bist = regData.find((r: any) => r.market === 'BIST');
-          if (us) {
-            setUsRegime({
-              status: us.regime === 'bullish' ? 'Bullish' : us.regime === 'bearish' ? 'Bearish' : 'Neutral',
-              close: us.index_close || 545.20,
-              trend: us.regime === 'bullish' ? 'up' : us.regime === 'bearish' ? 'down' : 'flat'
-            });
-          }
-          if (bist) {
-            setBistRegime({
-              status: bist.regime === 'bullish' ? 'Bullish' : bist.regime === 'bearish' ? 'Bearish' : 'Neutral',
-              close: bist.index_close || 9850.40,
-              trend: bist.regime === 'bullish' ? 'up' : bist.regime === 'bearish' ? 'down' : 'flat'
-            });
-          }
+        if (usRes.data && usRes.data.length > 0) {
+          const us = usRes.data[0];
+          setUsRegime({
+            status: us.regime === 'bullish' ? 'Bullish' : us.regime === 'bearish' ? 'Bearish' : 'Neutral',
+            close: Number(us.index_close) || 771.35,
+            trend: us.regime === 'bullish' ? 'up' : us.regime === 'bearish' ? 'down' : 'flat'
+          });
+        }
+        if (bistRes.data && bistRes.data.length > 0) {
+          const bist = bistRes.data[0];
+          setBistRegime({
+            status: bist.regime === 'bullish' ? 'Bullish' : bist.regime === 'bearish' ? 'Bearish' : 'Neutral',
+            close: Number(bist.index_close) || 12550.94,
+            trend: bist.regime === 'bullish' ? 'up' : bist.regime === 'bearish' ? 'down' : 'flat'
+          });
+        }
+        if (fxRes.data && fxRes.data.length > 0 && fxRes.data[0].rate) {
+          setUsdTryRate(Number(fxRes.data[0].rate));
         }
 
         // 2. Fetch Assets & Indicators
@@ -267,20 +268,31 @@ export default function Home() {
           .limit(8);
 
         if (sigData && sigData.length > 0) {
-          const mappedSignals: TradeSignal[] = sigData.map((s: any) => ({
-            symbol: s.assets?.symbol?.replace('.IS', '') || 'ASSET',
-            name: s.assets?.name || s.assets?.symbol || '',
-            strategy: s.strategy.replace('_', ' ').toUpperCase(),
-            entryPrice: s.entry_price,
-            stopLoss: s.stop_loss || s.entry_price * 0.95,
-            targetPrice: s.target_1 || s.entry_price * 1.15,
-            confidence: Math.round(s.confidence_score || 8),
-            rationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
-            market: s.assets?.market || 'BIST',
-            date: s.signal_date || new Date().toISOString().slice(0, 10),
-            currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
-          }));
-          setSignals(mappedSignals);
+          const mappedSignals: TradeSignal[] = sigData
+            .filter((s: any) => {
+              const entry = Number(s.entry_price);
+              const stop = Number(s.stop_loss);
+              const target = Number(s.target_1);
+              if (entry > 0 && stop > 0 && stop >= entry) return false;
+              if (entry > 0 && target > 0 && target <= entry) return false;
+              return true;
+            })
+            .map((s: any) => ({
+              symbol: s.assets?.symbol?.replace('.IS', '') || 'ASSET',
+              name: s.assets?.name || s.assets?.symbol || '',
+              strategy: s.strategy.replace('_', ' ').toUpperCase(),
+              entryPrice: s.entry_price,
+              stopLoss: s.stop_loss || s.entry_price * 0.95,
+              targetPrice: s.target_1 || s.entry_price * 1.15,
+              confidence: Math.round(s.confidence_score || 8),
+              rationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
+              market: s.assets?.market || 'BIST',
+              date: s.signal_date || new Date().toISOString().slice(0, 10),
+              currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
+            }));
+          if (mappedSignals.length > 0) {
+            setSignals(mappedSignals);
+          }
         }
 
       } catch (err) {

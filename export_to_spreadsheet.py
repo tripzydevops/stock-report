@@ -23,7 +23,7 @@ import numpy as np
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-from app.services.data_fetcher import fetch_us_prices, fetch_bist_prices, fetch_fx_rate
+from app.services.data_fetcher import fetch_us_prices, fetch_bist_prices, fetch_fx_rate, _normalize_ohlcv_columns
 from app.services.indicators import compute_all_indicators
 from app.services.screener import run_all_screens
 from app.services.market_regime import evaluate_regime
@@ -82,11 +82,11 @@ def fetch_all_data():
     for etf in BIST_ETFS:
         try:
             df = yf.download(etf, period="1y", auto_adjust=False)
-            if not df.empty:
-                df.columns = [c.lower().replace(' ', '_') for c in df.columns]
+            df = _normalize_ohlcv_columns(df)
+            if not df.empty and 'close' in df.columns:
                 bist_data[etf] = df
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error fetching {etf}: {e}")
     
     print("📡 Fetching USD/TRY rate...")
     fx_data = fetch_fx_rate("USDTRY", period="1y")

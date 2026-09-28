@@ -6,16 +6,26 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
+def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Safely extracts standard OHLCV column names regardless of MultiIndex structure."""
+    if df.empty:
+        return df
+    if isinstance(df.columns, pd.MultiIndex):
+        l0 = [str(c).lower() for c in df.columns.get_level_values(0)]
+        l1 = [str(c).lower() for c in df.columns.get_level_values(1)]
+        if any('close' in c for c in l1):
+            df.columns = [str(c).lower().replace(' ', '_') for c in df.columns.get_level_values(1)]
+        elif any('close' in c for c in l0):
+            df.columns = [str(c).lower().replace(' ', '_') for c in df.columns.get_level_values(0)]
+        else:
+            df.columns = [str(c[-1]).lower().replace(' ', '_') for c in df.columns]
+    else:
+        df.columns = [str(col).lower().replace(' ', '_') for col in df.columns]
+    return df
+
 def fetch_us_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.DataFrame]:
     """
     Fetches daily OHLCV price data for US stocks/ETFs.
-    
-    Args:
-        symbols: List of ticker symbols (e.g., ['AAPL', 'MSFT'])
-        period: Time period to fetch (e.g., '1y', 'max')
-        
-    Returns:
-        Dict mapping symbol to DataFrame with OHLCV data.
     """
     results = {}
     if not symbols:
@@ -26,26 +36,18 @@ def fetch_us_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.Data
         
         if len(symbols) == 1:
             symbol = symbols[0]
-            df = data.copy()
-            # Handle MultiIndex columns (newer yfinance)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col[0].lower().replace(' ', '_') for col in df.columns]
-            else:
-                df.columns = [col.lower().replace(' ', '_') for col in df.columns]
-            if not df.empty:
+            df = _normalize_ohlcv_columns(data.copy())
+            if not df.empty and 'close' in df.columns and not df['close'].isna().all():
                 results[symbol] = df
         else:
             for symbol in symbols:
                 try:
                     if isinstance(data.columns, pd.MultiIndex) and symbol in data.columns.get_level_values(1):
                         df = data.xs(symbol, level=1, axis=1).copy()
-                        df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+                        df = _normalize_ohlcv_columns(df)
                     elif isinstance(data.columns, pd.MultiIndex) and symbol in data.columns.get_level_values(0):
                         df = data[symbol].copy()
-                        if isinstance(df.columns, pd.MultiIndex):
-                            df.columns = [col[0].lower().replace(' ', '_') for col in df.columns]
-                        else:
-                            df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+                        df = _normalize_ohlcv_columns(df)
                     else:
                         continue
                     if not df.empty and 'close' in df.columns and not df['close'].isna().all():
@@ -73,12 +75,8 @@ def fetch_bist_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.Da
         
         if len(normalized_symbols) == 1:
             symbol = normalized_symbols[0]
-            df = data.copy()
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col[0].lower().replace(' ', '_') for col in df.columns]
-            else:
-                df.columns = [col.lower().replace(' ', '_') for col in df.columns]
-            if not df.empty:
+            df = _normalize_ohlcv_columns(data.copy())
+            if not df.empty and 'close' in df.columns and not df['close'].isna().all():
                 original_sym = symbols[0]
                 results[original_sym] = df
         else:
@@ -86,13 +84,10 @@ def fetch_bist_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.Da
                 try:
                     if isinstance(data.columns, pd.MultiIndex) and symbol in data.columns.get_level_values(1):
                         df = data.xs(symbol, level=1, axis=1).copy()
-                        df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+                        df = _normalize_ohlcv_columns(df)
                     elif isinstance(data.columns, pd.MultiIndex) and symbol in data.columns.get_level_values(0):
                         df = data[symbol].copy()
-                        if isinstance(df.columns, pd.MultiIndex):
-                            df.columns = [col[0].lower().replace(' ', '_') for col in df.columns]
-                        else:
-                            df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+                        df = _normalize_ohlcv_columns(df)
                     else:
                         continue
                     if not df.empty and 'close' in df.columns and not df['close'].isna().all():
@@ -159,12 +154,7 @@ def fetch_fx_rate(pair: str = 'USDTRY', period: str = '1y') -> pd.DataFrame:
     ticker = f"{pair}=X"
     try:
         df = yf.download(ticker, period=period, auto_adjust=False)
-        # Handle MultiIndex columns (newer yfinance returns ('Close', 'TRY=X'))
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0].lower().replace(' ', '_') for col in df.columns]
-        else:
-            df.columns = [col.lower().replace(' ', '_') for col in df.columns]
-        return df
+        return _normalize_ohlcv_columns(df)
     except Exception as e:
         logger.error(f"Error fetching FX rate for {pair}: {str(e)}")
         return pd.DataFrame()
