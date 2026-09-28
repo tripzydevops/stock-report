@@ -78,19 +78,28 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', shares: 35,
     entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
     dividendYield: 4.52, yieldOnCost: 4.45, annualPayout: 110.80, monthlyPayout: 9.23,
-    payoutRatio: 28.5, safetyRating: 'A', frequency: 'Annual'
+    payoutRatio: 28.5, safetyRating: 'A', frequency: 'Annual',
+    nextExDate: '2027-03-26', nextPaymentDate: '2027-03-30',
+    estimatedNextDPS: 3.165, estimatedNextPayout: 110.80,
+    payoutMonth: 'March 2027', paymentStatus: 'Estimated'
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 142,
     entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
     dividendYield: 7.82, yieldOnCost: 7.72, annualPayout: 349.60, monthlyPayout: 29.13,
-    payoutRatio: 58.4, safetyRating: 'A', frequency: 'Annual'
+    payoutRatio: 58.4, safetyRating: 'A', frequency: 'Annual',
+    nextExDate: '2027-03-29', nextPaymentDate: '2027-04-02',
+    estimatedNextDPS: 2.462, estimatedNextPayout: 349.60,
+    payoutMonth: 'March / April 2027', paymentStatus: 'Estimated'
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 1263,
     entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
     dividendYield: 6.45, yieldOnCost: 6.24, annualPayout: 460.60, monthlyPayout: 38.38,
-    payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual'
+    payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual',
+    nextExDate: '2027-05-22', nextPaymentDate: '2027-05-26',
+    estimatedNextDPS: 0.3647, estimatedNextPayout: 460.60,
+    payoutMonth: 'May 2027', paymentStatus: 'Estimated'
   }
 ];
 

@@ -67,6 +67,12 @@ export interface DividendAsset {
   payoutRatio: number;
   safetyRating: 'A' | 'B' | 'C';
   frequency: string;
+  nextExDate?: string;
+  nextPaymentDate?: string;
+  estimatedNextDPS?: number;
+  estimatedNextPayout?: number;
+  payoutMonth?: string;
+  paymentStatus?: 'Estimated' | 'Confirmed';
 }
 
 export interface StrategyStat {
