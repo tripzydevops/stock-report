@@ -51,85 +51,46 @@ const INITIAL_SIGNALS: TradeSignal[] = [
 
 const INITIAL_PORTFOLIO: PortfolioItem[] = [
   {
-    symbol: 'THYAO', name: 'Türk Hava Yolları', market: 'BIST',
-    shares: 100, entryPrice: 310.00, currentPrice: 326.50, currency: 'TRY',
-    totalCost: 31000, currentValue: 32650, pnlAmount: 1650, pnlPercent: 5.32,
-    stopLoss: 295.00, distanceToStop: 9.6, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Consolidating above 50 EMA; prime structural compounder.'
+    symbol: 'AKBNK', name: 'Akbank T.A.Ş.', market: 'BIST',
+    shares: 35, entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
+    totalCost: 2492.00, currentValue: 2453.50, pnlAmount: -38.50, pnlPercent: -1.54,
+    stopLoss: 67.50, distanceToStop: 3.7, isDividend: true,
+    dcaZone: 'BUY', dcaRationale: 'Major private bank holding; pullback to 50 EMA support.'
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
-    shares: 500, entryPrice: 32.50, currentPrice: 35.80, currency: 'TRY',
-    totalCost: 16250, currentValue: 17900, pnlAmount: 1650, pnlPercent: 10.15,
-    stopLoss: 31.00, distanceToStop: 13.4, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; hold existing size.'
+    shares: 142, entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
+    totalCost: 4528.38, currentValue: 4470.16, pnlAmount: -58.72, pnlPercent: -1.30,
+    stopLoss: 29.50, distanceToStop: 6.3, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.'
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
-    shares: 2000, entryPrice: 6.05, currentPrice: 6.72, currency: 'TRY',
-    totalCost: 12100, currentValue: 13440, pnlAmount: 1340, pnlPercent: 11.07,
-    stopLoss: 5.80, distanceToStop: 13.7, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'Steady payout ratio, trend intact.'
-  },
-  {
-    symbol: 'ASELS', name: 'Aselsan', market: 'BIST',
-    shares: 100, entryPrice: 360.00, currentPrice: 374.50, currency: 'TRY',
-    totalCost: 36000, currentValue: 37450, pnlAmount: 1450, pnlPercent: 4.03,
-    stopLoss: 345.00, distanceToStop: 7.9, isDividend: false,
-    dcaZone: 'HOLD', dcaRationale: 'Tactical defense momentum swing trade.'
-  },
-  {
-    symbol: 'AAPL', name: 'Apple Inc.', market: 'US',
-    shares: 10, entryPrice: 225.00, currentPrice: 231.80, currency: 'USD',
-    totalCost: 2250, currentValue: 2318, pnlAmount: 68, pnlPercent: 3.02,
-    stopLoss: 215.00, distanceToStop: 7.2, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'Core global technology anchor.'
-  },
-  {
-    symbol: 'SCHD', name: 'Schwab US Dividend Equity', market: 'US',
-    shares: 25, entryPrice: 80.50, currentPrice: 82.10, currency: 'USD',
-    totalCost: 2012.50, currentValue: 2052.50, pnlAmount: 40, pnlPercent: 1.99,
-    stopLoss: 76.00, distanceToStop: 7.4, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Yield-on-Cost compounder; DCA accumulation zone active.'
+    shares: 1263, entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
+    totalCost: 7391.85, currentValue: 7148.58, pnlAmount: -243.27, pnlPercent: -3.29,
+    stopLoss: 5.40, distanceToStop: 4.6, isDividend: true,
+    dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.'
   }
 ];
 
 const INITIAL_DIVIDENDS: DividendAsset[] = [
   {
-    symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 500,
-    entryPrice: 32.50, currentPrice: 35.80, currency: 'TRY',
-    dividendYield: 7.82, yieldOnCost: 8.62, annualPayout: 1395, monthlyPayout: 116.25,
+    symbol: 'AKBNK', name: 'Akbank T.A.Ş.', shares: 35,
+    entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
+    dividendYield: 4.52, yieldOnCost: 4.45, annualPayout: 110.80, monthlyPayout: 9.23,
+    payoutRatio: 28.5, safetyRating: 'A', frequency: 'Annual'
+  },
+  {
+    symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 142,
+    entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
+    dividendYield: 7.82, yieldOnCost: 7.72, annualPayout: 349.60, monthlyPayout: 29.13,
     payoutRatio: 58.4, safetyRating: 'A', frequency: 'Annual'
   },
   {
-    symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 2000,
-    entryPrice: 6.05, currentPrice: 6.72, currency: 'TRY',
-    dividendYield: 6.45, yieldOnCost: 7.16, annualPayout: 866, monthlyPayout: 72.17,
+    symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 1263,
+    entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
+    dividendYield: 6.45, yieldOnCost: 6.24, annualPayout: 460.60, monthlyPayout: 38.38,
     payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual'
-  },
-  {
-    symbol: 'THYAO', name: 'Türk Hava Yolları', shares: 100,
-    entryPrice: 310.00, currentPrice: 326.50, currency: 'TRY',
-    dividendYield: 4.10, yieldOnCost: 4.32, annualPayout: 1338, monthlyPayout: 111.50,
-    payoutRatio: 32.5, safetyRating: 'A', frequency: 'Annual'
-  },
-  {
-    symbol: 'TUPRS', name: 'Tüpraş', shares: 80,
-    entryPrice: 155.00, currentPrice: 165.20, currency: 'TRY',
-    dividendYield: 9.15, yieldOnCost: 9.75, annualPayout: 1210, monthlyPayout: 100.83,
-    payoutRatio: 74.0, safetyRating: 'B', frequency: 'Semi-Annual'
-  },
-  {
-    symbol: 'SCHD', name: 'Schwab US Dividend Equity', shares: 25,
-    entryPrice: 80.50, currentPrice: 82.10, currency: 'USD',
-    dividendYield: 3.48, yieldOnCost: 3.55, annualPayout: 71.42, monthlyPayout: 5.95,
-    payoutRatio: 48.0, safetyRating: 'A', frequency: 'Quarterly'
-  },
-  {
-    symbol: 'O', name: 'Realty Income Corp', shares: 30,
-    entryPrice: 52.00, currentPrice: 54.30, currency: 'USD',
-    dividendYield: 5.62, yieldOnCost: 5.87, annualPayout: 91.50, monthlyPayout: 7.63,
-    payoutRatio: 78.5, safetyRating: 'B', frequency: 'Monthly'
   }
 ];
 
@@ -165,6 +126,7 @@ export default function Home() {
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
+  const [cashBalance, setCashBalance] = useState<number>(2952.26);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
@@ -670,6 +632,7 @@ export default function Home() {
             portfolio={portfolio}
             realizedTrades={realizedTrades}
             usdTryRate={usdTryRate}
+            cashBalanceTRY={cashBalance}
             onRemoveHolding={handleRemoveHolding}
             onAddHoldingClick={() => setIsHoldingModalOpen(true)}
             onTradeHolding={(item) => {

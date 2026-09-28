@@ -7,6 +7,7 @@ interface PortfolioViewProps {
   portfolio: PortfolioItem[];
   realizedTrades?: RealizedTrade[];
   usdTryRate: number;
+  cashBalanceTRY?: number;
   onRemoveHolding?: (symbol: string) => void;
   onAddHoldingClick?: () => void;
   onTradeHolding?: (holding: PortfolioItem) => void;
@@ -16,6 +17,7 @@ export default function PortfolioView({
   portfolio,
   realizedTrades = [],
   usdTryRate,
+  cashBalanceTRY = 2952.26,
   onRemoveHolding,
   onAddHoldingClick,
   onTradeHolding,
@@ -28,11 +30,14 @@ export default function PortfolioView({
     return acc + (item.currency === 'USD' ? item.totalCost * usdTryRate : item.totalCost);
   }, 0);
 
-  const totalValTRY = portfolio.reduce((acc, item) => {
+  const totalStockValTRY = portfolio.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
-  const totalPnlTRY = totalValTRY - totalCostTRY;
+  const cashValTRY = cashBalanceTRY || 0;
+  const totalValTRY = totalStockValTRY + cashValTRY;
+
+  const totalPnlTRY = totalStockValTRY - totalCostTRY;
   const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
 
   // Realized profit calculation
@@ -41,9 +46,11 @@ export default function PortfolioView({
   }, 0);
 
   const totalValDisplay = currencyMode === 'USD' ? (totalValTRY / usdTryRate) : totalValTRY;
+  const totalStockDisplay = currencyMode === 'USD' ? (totalStockValTRY / usdTryRate) : totalStockValTRY;
   const totalCostDisplay = currencyMode === 'USD' ? (totalCostTRY / usdTryRate) : totalCostTRY;
   const totalPnlDisplay = currencyMode === 'USD' ? (totalPnlTRY / usdTryRate) : totalPnlTRY;
   const totalRealizedDisplay = currencyMode === 'USD' ? (totalRealizedPnlTRY / usdTryRate) : totalRealizedPnlTRY;
+  const cashDisplay = currencyMode === 'USD' ? (cashValTRY / usdTryRate) : cashValTRY;
 
   const formatCurr = (val: number, curr?: string) => {
     const c = curr || currencyMode;
@@ -64,7 +71,7 @@ export default function PortfolioView({
         {/* Total Value */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            <span>Total Portfolio Value</span>
+            <span>Total Account Value</span>
             <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <button
                 onClick={() => setCurrencyMode('TRY')}
@@ -84,7 +91,23 @@ export default function PortfolioView({
             {formatCurr(totalValDisplay)}
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            Cost Basis: {formatCurr(totalCostDisplay)}
+            Equity: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • Cost: {formatCurr(totalCostDisplay)}
+          </div>
+        </div>
+
+        {/* Cash Balance */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <span>Cash Balance</span>
+            <span className="text-[10px] bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded">
+              Dry Powder
+            </span>
+          </div>
+          <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
+            {formatCurr(cashDisplay)}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% liquid capital ready for DCA
           </div>
         </div>
 
@@ -119,17 +142,6 @@ export default function PortfolioView({
           </div>
           <div className="text-xs text-gray-500 mt-1">
             {realizedTrades.length} Tranche Sales Executed
-          </div>
-        </div>
-
-        {/* Active Holdings & FX */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Assets</span>
-          <div className="mt-2 text-2xl font-black text-gray-900 dark:text-white">
-            {portfolio.length} Positions
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            USD/TRY Benchmark: <span className="font-bold text-blue-600 dark:text-blue-400">₺{usdTryRate.toFixed(2)}</span>
           </div>
         </div>
       </div>

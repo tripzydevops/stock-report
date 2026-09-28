@@ -1,57 +1,35 @@
 [
   {
-    "symbol": "THYAO",
+    "symbol": "AKBNK",
     "strategy_type": "DIVIDEND",
-    "shares": 100,
-    "entry_price": 310.00,
-    "entry_date": "2026-09-01",
-    "stop_loss": null,
-    "target_price": 350.00,
+    "shares": 35,
+    "entry_price": 71.20,
+    "entry_date": "2026-09-28",
+    "stop_loss": 67.50,
+    "target_price": 82.00,
     "currency": "TRY",
-    "notes": "Core airline compounder - DCA on pullbacks"
+    "notes": "Banking compounder holding"
   },
   {
     "symbol": "ISMEN",
     "strategy_type": "DIVIDEND",
-    "shares": 500,
-    "entry_price": 32.50,
-    "entry_date": "2026-09-15",
-    "stop_loss": null,
-    "target_price": 36.00,
+    "shares": 142,
+    "entry_price": 31.89,
+    "entry_date": "2026-09-28",
+    "stop_loss": 29.50,
+    "target_price": 38.00,
     "currency": "TRY",
     "notes": "High dividend brokerage play"
   },
   {
     "symbol": "TURSG",
     "strategy_type": "DIVIDEND",
-    "shares": 2000,
-    "entry_price": 6.05,
-    "entry_date": "2026-09-18",
-    "stop_loss": null,
-    "target_price": 6.80,
+    "shares": 1263,
+    "entry_price": 5.85,
+    "entry_date": "2026-09-28",
+    "stop_loss": 5.40,
+    "target_price": 7.00,
     "currency": "TRY",
     "notes": "Insurance dividend cash flow"
-  },
-  {
-    "symbol": "ASELS",
-    "strategy_type": "SWING",
-    "shares": 100,
-    "entry_price": 360.00,
-    "entry_date": "2026-09-10",
-    "stop_loss": 345.00,
-    "target_price": 420.00,
-    "currency": "TRY",
-    "notes": "Tactical defense momentum swing"
-  },
-  {
-    "symbol": "AAPL",
-    "strategy_type": "CORE",
-    "shares": 10,
-    "entry_price": 225.00,
-    "entry_date": "2026-08-20",
-    "stop_loss": null,
-    "target_price": 360.00,
-    "currency": "USD",
-    "notes": "Core global tech holding"
   }
 ]
