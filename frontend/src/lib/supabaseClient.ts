@@ -88,3 +88,18 @@ export interface OpeningDirectionItem {
   bias: 'Strong Bullish' | 'Bullish' | 'Neutral' | 'Bearish';
   volumeSpike: boolean;
 }
+
+export interface RealizedTrade {
+  id: string;
+  symbol: string;
+  name: string;
+  market: string;
+  currency: string;
+  sharesSold: number;
+  entryPrice: number;
+  exitPrice: number;
+  realizedPnl: number;
+  realizedPnlPercent: number;
+  closeDate: string;
+}
+

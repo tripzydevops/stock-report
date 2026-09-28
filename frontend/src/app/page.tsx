@@ -8,6 +8,7 @@ import AssetTable, { AssetData } from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
 import AddAssetModal from '../components/AddAssetModal';
 import AddHoldingModal from '../components/AddHoldingModal';
+import TradeHoldingModal from '../components/TradeHoldingModal';
 import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
@@ -18,6 +19,7 @@ import {
   DividendAsset,
   StrategyStat,
   OpeningDirectionItem,
+  RealizedTrade,
 } from '../lib/supabaseClient';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -165,6 +167,23 @@ export default function Home() {
   const [usdTryRate, setUsdTryRate] = useState<number>(34.25);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
+  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([
+    {
+      id: 'trade-init-1',
+      symbol: 'THYAO',
+      name: 'Türk Hava Yolları',
+      market: 'BIST',
+      currency: 'TRY',
+      sharesSold: 50,
+      entryPrice: 280.00,
+      exitPrice: 325.00,
+      realizedPnl: 2250.00,
+      realizedPnlPercent: 16.07,
+      closeDate: '2026-09-20'
+    }
+  ]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch real data from Supabase
@@ -391,6 +410,173 @@ export default function Home() {
     }
   };
 
+  const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number) => {
+    setPortfolio(prev => {
+      return prev.map(item => {
+        if (item.symbol !== symbol) return item;
+        const totalShares = item.shares + additionalShares;
+        const currentCost = item.shares * item.entryPrice;
+        const addedCost = additionalShares * buyPrice;
+        const blendedEntry = totalShares > 0 ? (currentCost + addedCost) / totalShares : item.entryPrice;
+        const newTotalCost = totalShares * blendedEntry;
+        const newCurrentValue = totalShares * item.currentPrice;
+        const newPnlAmount = newCurrentValue - newTotalCost;
+        const newPnlPercent = newTotalCost > 0 ? (newPnlAmount / newTotalCost) * 100 : 0;
+        const distToStop = item.stopLoss > 0 && item.currentPrice > 0 ? ((item.currentPrice - item.stopLoss) / item.currentPrice) * 100 : 0;
+
+        return {
+          ...item,
+          shares: totalShares,
+          entryPrice: blendedEntry,
+          totalCost: newTotalCost,
+          currentValue: newCurrentValue,
+          pnlAmount: newPnlAmount,
+          pnlPercent: newPnlPercent,
+          distanceToStop: distToStop
+        };
+      });
+    });
+
+    // Update dividends if present
+    setDividends(prev => {
+      return prev.map(div => {
+        if (div.symbol !== symbol) return div;
+        const targetHolding = portfolio.find(p => p.symbol === symbol);
+        const oldShares = targetHolding ? targetHolding.shares : div.shares;
+        const oldPrice = targetHolding ? targetHolding.entryPrice : div.entryPrice;
+        const totalShares = oldShares + additionalShares;
+        const blendedEntry = totalShares > 0 ? ((oldShares * oldPrice) + (additionalShares * buyPrice)) / totalShares : oldPrice;
+        const newYoC = blendedEntry > 0 ? ((div.currentPrice * div.dividendYield) / blendedEntry) : div.dividendYield;
+
+        return {
+          ...div,
+          shares: totalShares,
+          entryPrice: blendedEntry,
+          yieldOnCost: newYoC,
+          annualPayout: (totalShares * div.currentPrice * div.dividendYield) / 100,
+          monthlyPayout: (totalShares * div.currentPrice * div.dividendYield) / 1200
+        };
+      });
+    });
+
+    // Persist to Supabase
+    try {
+      const cleanSym = symbol.replace('.IS', '');
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        const target = portfolio.find(p => p.symbol === symbol);
+        if (target) {
+          const totalShares = target.shares + additionalShares;
+          const blendedEntry = ((target.shares * target.entryPrice) + (additionalShares * buyPrice)) / totalShares;
+          await supabase
+            .from('portfolio_positions')
+            .update({ quantity: totalShares, avg_entry_price: blendedEntry })
+            .eq('asset_id', assetData[0].id)
+            .eq('is_open', true);
+        }
+      }
+    } catch (err) {
+      console.warn('Error updating position in Supabase:', err);
+    }
+  };
+
+  const handleSellHolding = async (symbol: string, sharesToSell: number, sellPrice: number) => {
+    const target = portfolio.find(p => p.symbol === symbol);
+    if (!target) return;
+
+    const actualSold = Math.min(sharesToSell, target.shares);
+    const realizedPnl = (sellPrice - target.entryPrice) * actualSold;
+    const realizedPnlPct = target.entryPrice > 0 ? ((sellPrice - target.entryPrice) / target.entryPrice) * 100 : 0;
+
+    // Record realized trade
+    const newRealized: RealizedTrade = {
+      id: `trade-${Date.now()}`,
+      symbol: target.symbol,
+      name: target.name,
+      market: target.market,
+      currency: target.currency,
+      sharesSold: actualSold,
+      entryPrice: target.entryPrice,
+      exitPrice: sellPrice,
+      realizedPnl: realizedPnl,
+      realizedPnlPercent: realizedPnlPct,
+      closeDate: new Date().toISOString().slice(0, 10)
+    };
+
+    setRealizedTrades(prev => [newRealized, ...prev]);
+
+    if (actualSold >= target.shares) {
+      // Full exit
+      setPortfolio(prev => prev.filter(p => p.symbol !== symbol));
+      setDividends(prev => prev.filter(d => d.symbol !== symbol));
+    } else {
+      // Partial sell
+      setPortfolio(prev => {
+        return prev.map(item => {
+          if (item.symbol !== symbol) return item;
+          const remainingShares = item.shares - actualSold;
+          const newTotalCost = remainingShares * item.entryPrice;
+          const newCurrentValue = remainingShares * item.currentPrice;
+          const newPnlAmount = newCurrentValue - newTotalCost;
+          const newPnlPercent = newTotalCost > 0 ? (newPnlAmount / newTotalCost) * 100 : 0;
+
+          return {
+            ...item,
+            shares: remainingShares,
+            totalCost: newTotalCost,
+            currentValue: newCurrentValue,
+            pnlAmount: newPnlAmount,
+            pnlPercent: newPnlPercent
+          };
+        });
+      });
+
+      setDividends(prev => {
+        return prev.map(div => {
+          if (div.symbol !== symbol) return div;
+          const remainingShares = div.shares - actualSold;
+          return {
+            ...div,
+            shares: remainingShares,
+            annualPayout: (remainingShares * div.currentPrice * div.dividendYield) / 100,
+            monthlyPayout: (remainingShares * div.currentPrice * div.dividendYield) / 1200
+          };
+        });
+      });
+    }
+
+    // Persist to Supabase
+    try {
+      const cleanSym = symbol.replace('.IS', '');
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        if (actualSold >= target.shares) {
+          await supabase.from('portfolio_positions').delete().eq('asset_id', assetData[0].id);
+        } else {
+          await supabase
+            .from('portfolio_positions')
+            .update({ quantity: target.shares - actualSold })
+            .eq('asset_id', assetData[0].id)
+            .eq('is_open', true);
+        }
+      }
+    } catch (err) {
+      console.warn('Error updating sold shares in Supabase:', err);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-[#0b0f19] text-gray-900 dark:text-gray-100 pb-20">
       {/* Top Header */}
@@ -470,9 +656,14 @@ export default function Home() {
         {activeTab === 'portfolio' && (
           <PortfolioView
             portfolio={portfolio}
+            realizedTrades={realizedTrades}
             usdTryRate={usdTryRate}
             onRemoveHolding={handleRemoveHolding}
             onAddHoldingClick={() => setIsHoldingModalOpen(true)}
+            onTradeHolding={(item) => {
+              setSelectedHolding(item);
+              setTradeModalOpen(true);
+            }}
           />
         )}
 
@@ -513,6 +704,17 @@ export default function Home() {
         isOpen={isHoldingModalOpen}
         onClose={() => setIsHoldingModalOpen(false)}
         onAddHolding={handleAddHolding}
+      />
+
+      <TradeHoldingModal
+        isOpen={tradeModalOpen}
+        holding={selectedHolding}
+        onClose={() => {
+          setTradeModalOpen(false);
+          setSelectedHolding(null);
+        }}
+        onBuyMore={handleBuyMoreHolding}
+        onSell={handleSellHolding}
       />
     </main>
   );
