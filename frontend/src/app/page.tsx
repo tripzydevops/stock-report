@@ -13,6 +13,7 @@ import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
+import AssetHistoryModal from '../components/AssetHistoryModal';
 import {
   supabase,
   PortfolioItem,
@@ -140,6 +141,7 @@ export default function Home() {
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
+  const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
   const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -616,7 +618,10 @@ export default function Home() {
             </div>
 
             <div className="pt-2">
-              <AssetTable assets={assets} />
+              <AssetTable 
+                assets={assets} 
+                onSelectAsset={(asset) => setSelectedAssetForHistory(asset)}
+              />
             </div>
           </div>
         )}
@@ -685,6 +690,12 @@ export default function Home() {
         }}
         onBuyMore={handleBuyMoreHolding}
         onSell={handleSellHolding}
+      />
+
+      <AssetHistoryModal
+        isOpen={!!selectedAssetForHistory}
+        onClose={() => setSelectedAssetForHistory(null)}
+        asset={selectedAssetForHistory}
       />
     </main>
   );

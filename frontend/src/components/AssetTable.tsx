@@ -16,9 +16,10 @@ export interface AssetData {
 
 interface AssetTableProps {
   assets: AssetData[];
+  onSelectAsset?: (asset: AssetData) => void;
 }
 
-export default function AssetTable({ assets }: AssetTableProps) {
+export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof AssetData; direction: 'asc' | 'desc' } | null>({
@@ -129,11 +130,19 @@ export default function AssetTable({ assets }: AssetTableProps) {
               <th onClick={() => requestSort('volumeRatio')} className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500 hidden md:table-cell">
                 Volume Ratio
               </th>
+              <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                History
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {sortedAssets.map((asset) => (
-              <tr key={asset.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+              <tr 
+                key={asset.id} 
+                onClick={() => onSelectAsset?.(asset)}
+                className="hover:bg-blue-50/50 dark:hover:bg-blue-950/30 cursor-pointer transition-colors group"
+                title={`Click to view ${asset.symbol} daily OHLCV price history & indicators`}
+              >
                 <td className="px-5 py-3.5 whitespace-nowrap font-bold text-gray-900 dark:text-white">
                   {asset.symbol}
                   <div className="text-[11px] text-gray-500 sm:hidden">{asset.name}</div>
@@ -161,11 +170,24 @@ export default function AssetTable({ assets }: AssetTableProps) {
                 <td className="px-5 py-3.5 whitespace-nowrap text-right text-gray-500 dark:text-gray-300 hidden md:table-cell">
                   {asset.volumeRatio > 0 ? `${asset.volumeRatio.toFixed(2)}x` : '-'}
                 </td>
+                <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectAsset?.(asset);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg border border-blue-200 dark:border-blue-800 transition-all inline-flex items-center gap-1 group-hover:shadow-sm"
+                  >
+                    <span>📊</span>
+                    <span>OHLCV</span>
+                  </button>
+                </td>
               </tr>
             ))}
             {sortedAssets.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                   No matching assets found for "{search}".
                 </td>
               </tr>
