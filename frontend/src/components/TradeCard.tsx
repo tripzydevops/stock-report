@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { calculateExitDate } from '../lib/tradeTiming';
 
 export interface TradeSignal {
   symbol: string;
@@ -128,7 +129,21 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize }: TradeC
       
       <div className="bg-gray-50 dark:bg-gray-900 p-3 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
         <span className="px-2 py-0.5 border border-gray-200 dark:border-gray-600 rounded text-[10px] uppercase font-bold">{signal.market}</span>
-        <span>{new Date(signal.date).toLocaleDateString()}</span>
+        {(() => {
+          const timing = calculateExitDate(signal.date, signal.strategy);
+          return (
+            <div className="flex flex-col text-right font-mono">
+              <span className="text-[10px] text-gray-400">📅 In: {signal.date}</span>
+              <span className={`text-[10px] font-bold ${
+                timing.statusColor === 'green' ? 'text-blue-600 dark:text-blue-400' :
+                timing.statusColor === 'amber' ? 'text-amber-600 dark:text-amber-400' :
+                'text-rose-600 dark:text-rose-400'
+              }`}>
+                Exit: {timing.maxExitDate} ({timing.label})
+              </span>
+            </div>
+          );
+        })()}
         <button 
           onClick={() => onCalcSize?.(signal)}
           className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"

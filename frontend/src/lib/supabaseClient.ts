@@ -71,6 +71,8 @@ export interface PortfolioItem {
   isDividend: boolean;
   dcaZone: 'BUY' | 'PAUSE' | 'HOLD';
   dcaRationale: string;
+  entryDate?: string;
+  strategyType?: string;
 }
 
 export interface DividendAsset {

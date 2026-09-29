@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ScannedTradeSignal } from '../lib/supabaseClient';
+import { calculateExitDate } from '../lib/tradeTiming';
 
 interface ScanSignalsLedgerProps {
   signals: ScannedTradeSignal[];
@@ -246,7 +247,7 @@ export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
                 <th className="px-5 py-3 text-right">R:R Ratio</th>
                 <th className="px-5 py-3 text-right">Return %</th>
                 <th className="px-5 py-3 text-right">Trigger Date</th>
-                <th className="px-5 py-3 text-right">Closed Date</th>
+                <th className="px-5 py-3 text-right">Closed / Est. Exit</th>
                 <th className="px-5 py-3 text-center">AI Thesis</th>
               </tr>
             </thead>
@@ -345,9 +346,31 @@ export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
                         {sig.signalDate}
                       </td>
 
-                      {/* Closed Date */}
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs text-gray-500 font-mono">
-                        {sig.closedAt ? sig.closedAt.slice(0, 10) : <span className="text-blue-500">Active</span>}
+                      {/* Closed / Est. Exit Date */}
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-mono">
+                        {sig.closedAt ? (
+                          <span className="text-gray-500 dark:text-gray-400">{sig.closedAt.slice(0, 10)}</span>
+                        ) : (
+                          (() => {
+                            const timing = calculateExitDate(sig.signalDate, sig.strategy);
+                            return (
+                              <div className="inline-flex flex-col items-end">
+                                <span className="font-bold text-gray-900 dark:text-white">
+                                  {timing.maxExitDate}
+                                </span>
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded mt-0.5 ${
+                                  timing.statusColor === 'green'
+                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                    : timing.statusColor === 'amber'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse'
+                                }`}>
+                                  ⏳ {timing.label}
+                                </span>
+                              </div>
+                            );
+                          })()
+                        )}
                       </td>
 
                       {/* AI Thesis Details */}
@@ -451,7 +474,15 @@ export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
 
               <div className="text-[11px] text-gray-400 flex justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
                 <span>Trigger Date: {activeModalSignal.signalDate}</span>
-                <span>Resolved: {activeModalSignal.closedAt ? activeModalSignal.closedAt.slice(0, 10) : 'Open'}</span>
+                <span>
+                  {activeModalSignal.closedAt 
+                    ? `Resolved: ${activeModalSignal.closedAt.slice(0, 10)}` 
+                    : (() => {
+                        const timing = calculateExitDate(activeModalSignal.signalDate, activeModalSignal.strategy);
+                        return `Est. Max Exit: ${timing.maxExitDate} (${timing.label})`;
+                      })()
+                  }
+                </span>
               </div>
             </div>
           </div>

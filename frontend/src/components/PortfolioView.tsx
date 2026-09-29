@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '../lib/supabaseClient';
+import { calculateExitDate } from '../lib/tradeTiming';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -269,6 +270,7 @@ export default function PortfolioView({
                 <th className="px-5 py-3 text-right">Market Value</th>
                 <th className="px-5 py-3 text-right">Unrealized P&L</th>
                 <th className="px-5 py-3 text-center">Stop Loss</th>
+                <th className="px-5 py-3 text-center">Est. Exit / Horizon</th>
                 <th className="px-5 py-3 text-center">DCA Accumulation Zone</th>
                 <th className="px-4 py-3 text-center">Trade / Actions</th>
               </tr>
@@ -327,6 +329,36 @@ export default function PortfolioView({
                           {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}% buffer` : 'Safe'}
                         </span>
                       )}
+                    </td>
+                    <td className="px-5 py-4 text-center whitespace-nowrap">
+                      {(() => {
+                        const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
+                        return timing.isDividend ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
+                              💎 Core Compounder
+                            </span>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                              Indefinite · Yield Focus
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
+                              {timing.maxExitDateFormatted}
+                            </span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full mt-0.5 ${
+                              timing.statusColor === 'green'
+                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                : timing.statusColor === 'amber'
+                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse'
+                            }`}>
+                              ⏳ {timing.label}
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-5 py-4 text-center">
                       {item.dcaZone === 'BUY' ? (

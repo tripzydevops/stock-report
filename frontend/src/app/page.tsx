@@ -58,22 +58,25 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', market: 'BIST',
     shares: 35, entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
     totalCost: 2492.00, currentValue: 2453.50, pnlAmount: -38.50, pnlPercent: -1.54,
-    stopLoss: 67.50, distanceToStop: 3.7, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Major private bank holding; pullback to 50 EMA support.'
+    stopLoss: 67.50, distanceToStop: 3.7, isDividend: false,
+    dcaZone: 'BUY', dcaRationale: 'Major private bank holding; pullback to 50 EMA support.',
+    entryDate: '2026-09-24', strategyType: 'SWING'
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
     shares: 142, entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
     totalCost: 4528.38, currentValue: 4470.16, pnlAmount: -58.72, pnlPercent: -1.30,
     stopLoss: 29.50, distanceToStop: 6.3, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.'
+    dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.',
+    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
     shares: 1263, entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
     totalCost: 7391.85, currentValue: 7148.58, pnlAmount: -243.27, pnlPercent: -3.29,
     stopLoss: 5.40, distanceToStop: 4.6, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.'
+    dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.',
+    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   }
 ];
 
@@ -706,6 +709,10 @@ export default function Home() {
               ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
               : 'Holding core position; maintain disciplined trailing stops.');
 
+            const isCoreDiv = ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSym.toUpperCase());
+            const entryDate = pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24';
+            const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+
             return {
               symbol: cleanSym,
               name: pos.assets?.name || cleanSym,
@@ -720,9 +727,11 @@ export default function Home() {
               currency: (pos.assets?.market === 'US' ? 'USD' : 'TRY'),
               stopLoss: stopLoss,
               distanceToStop: distanceToStop,
-              isDividend: true,
+              isDividend: isCoreDiv,
               dcaZone: dcaZone,
-              dcaRationale: dcaRationale
+              dcaRationale: dcaRationale,
+              entryDate: entryDate,
+              strategyType: strategyType
             };
           });
 
@@ -825,8 +834,16 @@ export default function Home() {
   };
 
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv: boolean, divYield?: number) => {
+    const cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
+    const isCoreDiv = isDiv || ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSymUpper);
+    const enrichedHolding: PortfolioItem = {
+      ...newHolding,
+      entryDate: newHolding.entryDate || new Date().toISOString().slice(0, 10),
+      strategyType: newHolding.strategyType || (isCoreDiv ? 'CORE_DIVIDEND' : 'SWING'),
+      isDividend: isCoreDiv
+    };
     // 1. Immediately update UI state
-    setPortfolio(prev => [newHolding, ...prev]);
+    setPortfolio(prev => [enrichedHolding, ...prev]);
 
     if (isDiv) {
       const yld = divYield || 5.0;
