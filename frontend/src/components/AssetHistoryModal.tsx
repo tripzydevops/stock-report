@@ -3,12 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AssetData } from './AssetTable';
-import TradingViewChart, { getTradingViewSymbol } from './TradingViewChart';
+import InteractiveCanvasChart, { ChartPriceBar } from './InteractiveCanvasChart';
+import { getTradingViewSymbol } from './TradingViewChart';
 
 interface AssetHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: AssetData | null;
+  tradeSignal?: {
+    entryPrice: number;
+    stopLoss: number;
+    targetPrice: number;
+    strategy: string;
+    riskReward?: number;
+  } | null;
 }
 
 interface PriceBarItem {
@@ -31,17 +39,24 @@ interface IndicatorDetails {
   low_52w?: number;
 }
 
-export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHistoryModalProps) {
+export default function AssetHistoryModal({ 
+  isOpen, 
+  onClose, 
+  asset,
+  tradeSignal
+}: AssetHistoryModalProps) {
   const [activeTab, setActiveTab] = useState<'chart' | 'data'>('chart');
-  const [history, setHistory] = useState<PriceBarItem[]>([]);
+  const [chartBars, setChartBars] = useState<ChartPriceBar[]>([]);
+  const [historyTable, setHistoryTable] = useState<PriceBarItem[]>([]);
   const [indicators, setIndicators] = useState<IndicatorDetails | null>(null);
+  const [activeSignal, setActiveSignal] = useState<any>(tradeSignal || null);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !asset) return;
 
-    // Reset to chart tab on new asset selection
     setActiveTab('chart');
+    setActiveSignal(tradeSignal || null);
 
     async function fetchAssetHistory() {
       setIsLoading(true);
@@ -52,7 +67,7 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
         // 1. Find asset in Supabase
         const { data: assetRecords } = await supabase
           .from('assets')
-          .select('id, symbol, name, market, daily_indicators(*)')
+          .select('id, symbol, name, market, daily_indicators(*), trade_signals(*)')
           .or(`symbol.eq.${cleanSym},symbol.eq.${isSym}`)
           .limit(1);
 
@@ -61,56 +76,83 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
           const ind = matched.daily_indicators?.[0] || null;
           setIndicators(ind);
 
-          // 2. Fetch last 20 daily price bars (OHLCV)
+          // If no tradeSignal passed via prop, check if asset has an active signal in database
+          if (!tradeSignal && matched.trade_signals && matched.trade_signals.length > 0) {
+            const openSig = matched.trade_signals.find((s: any) => s.status === 'open') || matched.trade_signals[0];
+            if (openSig) {
+              setActiveSignal({
+                entryPrice: Number(openSig.entry_price),
+                stopLoss: Number(openSig.stop_loss),
+                targetPrice: Number(openSig.target_1),
+                strategy: openSig.strategy,
+                riskReward: Number(openSig.risk_reward_ratio)
+              });
+            }
+          }
+
+          // 2. Fetch up to 60 daily price bars (OHLCV) sorted ascending for canvas chart
           const { data: priceBars } = await supabase
             .from('price_history')
             .select('date, open, high, low, close, volume')
             .eq('asset_id', matched.id)
-            .order('date', { ascending: false })
-            .limit(20);
+            .order('date', { ascending: true })
+            .limit(60);
 
           if (priceBars && priceBars.length > 0) {
-            setHistory(priceBars.map((p: any) => ({
-              date: p.date,
+            const mappedBars: ChartPriceBar[] = priceBars.map((p: any) => ({
+              time: p.date,
               open: Number(p.open) || Number(p.close),
               high: Number(p.high) || Number(p.close),
               low: Number(p.low) || Number(p.close),
               close: Number(p.close),
               volume: Number(p.volume) || 0
-            })));
+            }));
+
+            setChartBars(mappedBars);
+            // Reverse for newest-first table
+            setHistoryTable(
+              [...mappedBars].reverse().map(b => ({
+                date: b.time,
+                open: b.open,
+                high: b.high,
+                low: b.low,
+                close: b.close,
+                volume: b.volume || 0
+              }))
+            );
           } else {
-            generateFallbackHistory(asset!);
+            generateFallbackBars(asset!);
           }
         } else {
-          generateFallbackHistory(asset!);
+          generateFallbackBars(asset!);
         }
       } catch (err) {
         console.warn('Error fetching price history:', err);
-        generateFallbackHistory(asset!);
+        generateFallbackBars(asset!);
       } finally {
         setIsLoading(false);
       }
     }
 
-    function generateFallbackHistory(a: AssetData) {
-      const bars: PriceBarItem[] = [];
+    function generateFallbackBars(a: AssetData) {
+      const bars: ChartPriceBar[] = [];
       let base = a.price;
       const today = new Date();
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 25; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         if (d.getDay() === 0 || d.getDay() === 6) continue;
 
-        const noise = (Math.sin(i) * 0.02);
+        const noise = Math.sin(i * 0.7) * 0.02;
         const close = base * (1 + noise);
-        const open = close * (1 - (Math.cos(i) * 0.015));
-        const high = Math.max(open, close) * 1.012;
-        const low = Math.min(open, close) * 0.988;
-        const vol = Math.floor(100000 + Math.random() * 500000);
+        const open = close * (1 - Math.cos(i * 0.5) * 0.012);
+        const high = Math.max(open, close) * 1.015;
+        const low = Math.min(open, close) * 0.985;
+        const vol = Math.floor(150000 + Math.random() * 600000);
 
         bars.push({
-          date: d.toISOString().split('T')[0],
+          time: d.toISOString().split('T')[0],
           open,
           high,
           low,
@@ -119,11 +161,22 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
         });
         base = close;
       }
-      setHistory(bars);
+
+      setChartBars(bars);
+      setHistoryTable(
+        [...bars].reverse().map(b => ({
+          date: b.time,
+          open: b.open,
+          high: b.high,
+          low: b.low,
+          close: b.close,
+          volume: b.volume || 0
+        }))
+      );
     }
 
     fetchAssetHistory();
-  }, [isOpen, asset]);
+  }, [isOpen, asset, tradeSignal]);
 
   if (!isOpen || !asset) return null;
 
@@ -132,7 +185,8 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
     return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const todayBar = history[0] || {
+  const todayBar = historyTable[0] || {
+    date: 'Today',
     open: asset.price,
     high: asset.price * 1.01,
     low: asset.price * 0.99,
@@ -148,24 +202,22 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
     : `https://www.google.com/finance/quote/${cleanSym}:IST`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div 
-        className="bg-white dark:bg-gray-900 rounded-3xl max-w-5xl w-full border border-gray-200 dark:border-gray-750 shadow-2xl overflow-hidden flex flex-col max-h-[94vh]"
+        className="bg-white dark:bg-gray-900 rounded-3xl max-w-5xl w-full border border-gray-200 dark:border-gray-750 shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
-          <div className="flex items-center space-x-3">
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{asset.symbol}</h2>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                  {asset.market}
-                </span>
-                <span className="text-[11px] font-mono text-gray-400 hidden sm:inline">{tvSymbol}</span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{asset.name}</p>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{asset.symbol}</h2>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                {asset.market}
+              </span>
+              <span className="text-[11px] font-mono text-gray-400">Database Live Feed</span>
             </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{asset.name}</p>
           </div>
 
           {/* Current Price & Close Button */}
@@ -189,7 +241,35 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
           </div>
         </div>
 
-        {/* View Switcher Tabs */}
+        {/* Strategy Trigger Ribbon (if trade signal exists) */}
+        {activeSignal && (
+          <div className="px-5 py-2.5 bg-gradient-to-r from-blue-900/40 via-purple-900/30 to-blue-900/40 border-b border-blue-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm">🎯</span>
+              <span className="font-bold text-white uppercase tracking-wider">
+                Scanner Setup: {activeSignal.strategy?.replace('_', ' ')}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 font-mono">
+              <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-bold">
+                Entry: {formatMoney(activeSignal.entryPrice)}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800 font-bold">
+                Stop: {formatMoney(activeSignal.stopLoss)}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800 font-bold">
+                Target: {formatMoney(activeSignal.targetPrice)}
+              </span>
+              {activeSignal.riskReward && (
+                <span className="text-gray-300">
+                  R:R: <strong className="text-white">{activeSignal.riskReward.toFixed(2)}x</strong>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* View Switcher Tabs & External Links */}
         <div className="px-5 pt-3 pb-2 bg-gray-50/40 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div className="flex space-x-2">
             <button
@@ -201,7 +281,7 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
               }`}
             >
               <span>📈</span>
-              <span>Live TradingView Chart</span>
+              <span>Interactive Candlestick Chart</span>
             </button>
             <button
               onClick={() => setActiveTab('data')}
@@ -212,50 +292,61 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
               }`}
             >
               <span>📊</span>
-              <span>OHLCV History & Indicators</span>
+              <span>OHLCV History Table & Indicators</span>
             </button>
           </div>
 
-          {/* Outbound Chart Links */}
-          <div className="hidden sm:flex items-center space-x-2 text-xs">
+          {/* Outbound Live Chart Links */}
+          <div className="hidden sm:flex items-center space-x-3 text-xs">
             <a 
               href={tradingViewUrl} 
               target="_blank" 
               rel="noreferrer"
               className="text-blue-500 hover:underline flex items-center gap-1 font-semibold"
+              title="Open full TradingView charting website in a new tab"
             >
-              <span>TradingView Pro ↗</span>
+              <span>TradingView Full Site ↗</span>
             </a>
             <span className="text-gray-400">•</span>
             <a 
               href={googleFinanceUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              className="text-gray-400 hover:text-gray-200 flex items-center gap-1"
             >
-              Google Finance ↗
+              <span>Google Finance ↗</span>
             </a>
           </div>
         </div>
 
-        {/* Content Body (Scrollable) */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-5 flex-grow">
+        {/* Content Body */}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-grow">
           {activeTab === 'chart' ? (
             <div className="space-y-4">
-              {/* Embedded Live TradingView Chart */}
-              <TradingViewChart 
-                symbol={asset.symbol} 
-                market={asset.market} 
-                height={500} 
-                theme="dark"
-              />
+              {/* Native HTML5 Canvas Interactive Candlestick Chart */}
+              {isLoading ? (
+                <div className="w-full h-[480px] rounded-2xl bg-gray-950 border border-gray-800 flex flex-col items-center justify-center text-gray-400">
+                  <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                  <p className="text-xs font-mono">Loading candlestick history from database...</p>
+                </div>
+              ) : (
+                <InteractiveCanvasChart 
+                  data={chartBars}
+                  symbol={asset.symbol}
+                  currency={asset.market === 'US' ? 'USD' : 'TRY'}
+                  entryPrice={activeSignal?.entryPrice}
+                  stopLoss={activeSignal?.stopLoss}
+                  targetPrice={activeSignal?.targetPrice}
+                  height={460}
+                />
+              )}
 
-              {/* Quick Indicator Strip Below Live Chart */}
+              {/* Indicator HUD Strip Below Canvas Chart */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
                   <span className="text-gray-400 font-semibold">50 EMA:</span>
                   <span className="font-bold text-gray-900 dark:text-white font-mono">
-                    {indicators?.ema_50 ? formatMoney(indicators.ema_50) : 'Active'}
+                    {indicators?.ema_50 ? formatMoney(indicators.ema_50) : 'Holding Support'}
                   </span>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
@@ -287,7 +378,7 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
               {/* Today's Key Bar Metrics */}
               <div>
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Latest Daily Bar ({todayBar.date || 'Today'})
+                  Latest Daily Bar ({todayBar.date})
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700">
@@ -375,7 +466,7 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    Daily Price History (Last {history.length} Sessions)
+                    Daily Price History (Last {historyTable.length} Sessions)
                   </h4>
                   <span className="text-[11px] text-gray-400">Recorded in Supabase Database</span>
                 </div>
@@ -401,14 +492,14 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
                             Loading historical bars from Supabase...
                           </td>
                         </tr>
-                      ) : history.length === 0 ? (
+                      ) : historyTable.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                             No historical bars recorded yet.
                           </td>
                         </tr>
                       ) : (
-                        history.map((row, i) => {
+                        historyTable.map((row, i) => {
                           const dayChange = row.open > 0 ? ((row.close - row.open) / row.open) * 100 : 0;
                           const isUp = dayChange >= 0;
 
@@ -461,7 +552,7 @@ export default function AssetHistoryModal({ isOpen, onClose, asset }: AssetHisto
         <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
           <div className="text-xs text-gray-400 flex items-center gap-1.5">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Real-time feeds: BIST (15m delay) • US Markets (Real-Time)</span>
+            <span>Real-time Interactive Canvas • Zoom with Mouse Scroll • Drag to Pan</span>
           </div>
 
           <button
