@@ -256,6 +256,8 @@ def sync_all_to_supabase():
                         print(f"ℹ️ Preserving {len(existing_pos.data)} active user-managed positions in Supabase (no overwrite).")
                 except Exception as e:
                     print(f"Error checking/syncing portfolio positions: {e}")
+        except Exception as e:
+            print(f"Error reading portfolio.json: {e}")
 
     print("\n🎉 ALL EXTRACTED DATA IS FULLY RECORDED IN SUPABASE POSTGRESQL!")
 
