@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
+import DividendPortfolioLab from './DividendPortfolioLab';
 
 interface DividendViewProps {
   dividendAssets: DividendAsset[];
   usdTryRate: number;
+  onImportCandidate?: (candidate: { symbol: string; name: string; market: string; shares: number; price: number; isDividend: boolean }) => void;
 }
 
-export default function DividendView({ dividendAssets, usdTryRate }: DividendViewProps) {
+export default function DividendView({ dividendAssets, usdTryRate, onImportCandidate }: DividendViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
-  const [viewMode, setViewMode] = useState<'schedule' | 'table'>('schedule');
+  const [viewMode, setViewMode] = useState<'schedule' | 'table' | 'lab'>('schedule');
 
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
@@ -142,6 +144,17 @@ export default function DividendView({ dividendAssets, usdTryRate }: DividendVie
             <span>📊</span>
             <span>Holdings & YoC Table</span>
           </button>
+          <button
+            onClick={() => setViewMode('lab')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+              viewMode === 'lab'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span>🧪</span>
+            <span>AI Portfolio Lab & Simulator</span>
+          </button>
         </div>
       </div>
 
@@ -244,7 +257,7 @@ export default function DividendView({ dividendAssets, usdTryRate }: DividendVie
       )}
 
       {/* VIEW 2: FULL HOLDINGS & YIELD ON COST TABLE */}
-      <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden ${viewMode === 'schedule' ? 'hidden' : 'block'}`}>
+      <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden ${viewMode === 'table' ? 'block' : 'hidden'}`}>
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Dividend Cash Flow & Yield on Cost (YoC)</h3>
@@ -353,6 +366,14 @@ export default function DividendView({ dividendAssets, usdTryRate }: DividendVie
           </table>
         </div>
       </div>
+
+      {/* VIEW 3: AI PORTFOLIO LAB & BACKTEST SIMULATOR */}
+      {viewMode === 'lab' && (
+        <DividendPortfolioLab
+          usdTryRate={usdTryRate}
+          onImportCandidate={onImportCandidate}
+        />
+      )}
     </div>
   );
 }

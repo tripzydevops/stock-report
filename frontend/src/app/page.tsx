@@ -1447,7 +1447,31 @@ export default function Home() {
 
         {/* TAB 3: DIVIDEND TRACKER */}
         {activeTab === 'dividend' && (
-          <DividendView dividendAssets={dividends} usdTryRate={usdTryRate} />
+          <DividendView
+            dividendAssets={dividends}
+            usdTryRate={usdTryRate}
+            onImportCandidate={(cand) => {
+              handleAddHolding({
+                symbol: cand.symbol,
+                name: cand.name,
+                market: cand.market,
+                shares: cand.shares,
+                entryPrice: cand.price,
+                currentPrice: cand.price,
+                currency: cand.market === 'US' ? 'USD' : 'TRY',
+                totalCost: cand.shares * cand.price,
+                currentValue: cand.shares * cand.price,
+                pnlAmount: 0,
+                pnlPercent: 0,
+                stopLoss: 0,
+                distanceToStop: 0,
+                isDividend: true,
+                dcaZone: 'BUY',
+                dcaRationale: 'Synthesized from AI Dividend Portfolio Lab'
+              }, true);
+              setActiveTab('portfolio');
+            }}
+          />
         )}
 
         {/* TAB 4: STRATEGY SCORECARD & SCAN AUDIT */}
