@@ -89,9 +89,9 @@ export default function AiTradeCoPilotModal({
         ];
       case 'TURSG':
         return [
-          'Failure Trigger 1: Spike in catastrophic claim ratios or sudden regulatory price caps on mandatory traffic insurance.',
-          'Failure Trigger 2: Breakdown below ₺5.40 support base.',
-          'Action Rule: Maintain trailing stop 5% below recent swing lows to protect accumulated multi-quarter gains.'
+          'Failure Trigger 1: Spike in catastrophic claim ratios or sudden regulatory price caps on mandatory insurance.',
+          'Failure Trigger 2: Structural breakdown of multi-month 200 EMA support.',
+          'Action Rule: As a Core Dividend Compounder, price dips into support are accumulation/DCA zones. Do not exit on tight swing stops.'
         ];
       default:
         return [
@@ -182,9 +182,11 @@ export default function AiTradeCoPilotModal({
             </p>
           </div>
           <div>
-            <span className="text-[10px] text-rose-500 uppercase font-semibold">Stop Loss</span>
-            <p className="font-bold text-rose-600 dark:text-rose-400 mt-0.5">
-              {curr}{stop.toFixed(2)}
+            <span className={`text-[10px] uppercase font-semibold ${asset.isDividend ? 'text-purple-500' : 'text-rose-500'}`}>
+              {asset.isDividend ? 'Risk Mode' : 'Stop Loss'}
+            </span>
+            <p className={`font-bold mt-0.5 ${asset.isDividend ? 'text-purple-600 dark:text-purple-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {asset.isDividend ? '💎 DCA Focus' : `${curr}${stop.toFixed(2)}`}
             </p>
           </div>
           <div>
@@ -244,29 +246,49 @@ export default function AiTradeCoPilotModal({
                 </p>
               </div>
 
-              {/* Multi-Target & De-Risking Strategy */}
+              {/* Multi-Target & Strategy Blueprint */}
               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-700 space-y-3">
                 <div className="flex items-center gap-1.5 text-gray-900 dark:text-white font-bold">
                   <span>🎯</span>
-                  <span>Multi-Target Scaling & Breakeven Rule</span>
+                  <span>{asset.isDividend ? 'Core Dividend Accumulation Blueprint' : 'Multi-Target Scaling & Breakeven Rule'}</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold">1. De-Risk Trigger</span>
-                    <p className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">{curr}{breakevenLevel.toFixed(2)}</p>
-                    <span className="text-[10px] text-gray-500 block mt-0.5">Move stop to entry (Risk: ₺0)</span>
+                {asset.isDividend ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-purple-500 uppercase font-semibold">1. DCA Accumulation</span>
+                      <p className="font-bold text-purple-600 dark:text-purple-400 mt-0.5">Dips &lt; Cost</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">Buy tranches on weakness</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-emerald-500 uppercase font-semibold">2. Cash Flow Yield</span>
+                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">Yield on Cost Focus</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">Harvest dividends annually</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-blue-500 uppercase font-semibold">3. Multi-Year Horizon</span>
+                      <p className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">Indefinite Hold</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">No tight swing stops</span>
+                    </div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold">2. Target 1 (50% Trim)</span>
-                    <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{curr}{target1.toFixed(2)}</p>
-                    <span className="text-[10px] text-gray-500 block mt-0.5">Lock 50% profit at R:R 1.5x</span>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">1. De-Risk Trigger</span>
+                      <p className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">{curr}{breakevenLevel.toFixed(2)}</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">Move stop to entry (Risk: ₺0)</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">2. Target 1 (50% Trim)</span>
+                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{curr}{target1.toFixed(2)}</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">Lock 50% profit at R:R 1.5x</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">3. Target 2 (Runner)</span>
+                      <p className="font-bold text-purple-600 dark:text-purple-400 mt-0.5">{curr}{target2.toFixed(2)}</p>
+                      <span className="text-[10px] text-gray-500 block mt-0.5">Trail with 20 EMA close</span>
+                    </div>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold">3. Target 2 (Runner)</span>
-                    <p className="font-bold text-purple-600 dark:text-purple-400 mt-0.5">{curr}{target2.toFixed(2)}</p>
-                    <span className="text-[10px] text-gray-500 block mt-0.5">Trail with 20 EMA close</span>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}

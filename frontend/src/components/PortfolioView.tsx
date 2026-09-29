@@ -364,7 +364,7 @@ export default function PortfolioView({
                 <th className="px-5 py-3 text-right">Current Price</th>
                 <th className="px-5 py-3 text-right">Market Value</th>
                 <th className="px-5 py-3 text-right">Unrealized P&L</th>
-                <th className="px-5 py-3 text-center">Stop Loss</th>
+                <th className="px-5 py-3 text-center">Stop Loss / Mode</th>
                 <th className="px-5 py-3 text-center">Est. Exit / Horizon</th>
                 <th className="px-5 py-3 text-center">DCA Accumulation Zone</th>
                 <th className="px-4 py-3 text-center">Trade / Actions</th>
@@ -412,7 +412,27 @@ export default function PortfolioView({
                       </span>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      {item.stopLoss >= item.entryPrice ? (
+                      {item.isDividend ? (
+                        <div className="inline-flex flex-col items-center">
+                          <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-sm">
+                            <span>💎</span>
+                            <span>DCA Mode</span>
+                          </span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                            Accumulate on Dips
+                          </span>
+                          {item.currentPrice > item.entryPrice && (
+                            <button
+                              type="button"
+                              onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
+                              title="Set stop loss to entry price to eliminate risk (Free Trade)"
+                            >
+                              🛡️ Breakeven
+                            </button>
+                          )}
+                        </div>
+                      ) : item.stopLoss >= item.entryPrice ? (
                         <div className="inline-flex flex-col items-center">
                           <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <span>🛡️</span>

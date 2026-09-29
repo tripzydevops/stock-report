@@ -67,7 +67,7 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
     shares: 142, entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
     totalCost: 4528.38, currentValue: 4470.16, pnlAmount: -58.72, pnlPercent: -1.30,
-    stopLoss: 29.50, distanceToStop: 6.3, isDividend: true,
+    stopLoss: 0, distanceToStop: 0, isDividend: true,
     dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   },
@@ -75,7 +75,7 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
     shares: 1263, entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
     totalCost: 7391.85, currentValue: 7148.58, pnlAmount: -243.27, pnlPercent: -3.29,
-    stopLoss: 5.40, distanceToStop: 4.6, isDividend: true,
+    stopLoss: 0, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   }
@@ -699,7 +699,12 @@ export default function Home() {
             const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
             const shares = Number(pos.quantity);
             const entryPrice = Number(pos.avg_entry_price);
-            const stopLoss = Number(pos.stop_loss) || (entryPrice * 0.95);
+            const isCoreDiv = ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSym.toUpperCase());
+            const entryDate = pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24';
+            const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+            const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
+              ? Number(pos.stop_loss)
+              : (isCoreDiv ? 0 : entryPrice * 0.95);
             const totalCost = shares * entryPrice;
             const currentValue = shares * currPrice;
             const pnlAmount = currentValue - totalCost;
@@ -710,10 +715,6 @@ export default function Home() {
             const dcaRationale = pos.notes || (currPrice <= entryPrice * 0.97 
               ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
               : 'Holding core position; maintain disciplined trailing stops.');
-
-            const isCoreDiv = ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSym.toUpperCase());
-            const entryDate = pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24';
-            const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
 
             return {
               symbol: cleanSym,
