@@ -14,6 +14,7 @@ import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
+import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import {
   supabase,
   PortfolioItem,
@@ -474,6 +475,7 @@ export default function Home() {
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
+  const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const handleSelectTicker = (symbol: string) => {
@@ -1196,6 +1198,72 @@ export default function Home() {
     }
   };
 
+  const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
+    const cleanSym = symbol.replace('.IS', '').toUpperCase();
+    setPortfolio(prev => prev.map(item => {
+      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+      const distToStop = item.currentPrice > 0 ? ((item.currentPrice - newStopPrice) / item.currentPrice) * 100 : 0;
+      return {
+        ...item,
+        stopLoss: newStopPrice,
+        distanceToStop: distToStop
+      };
+    }));
+
+    try {
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        await supabase
+          .from('portfolio_positions')
+          .update({ stop_loss: newStopPrice })
+          .eq('asset_id', assetData[0].id)
+          .eq('is_open', true);
+      }
+    } catch (err) {
+      console.warn('Could not update stop loss in Supabase:', err);
+    }
+  };
+
+  const handleOpenCoPilotForHolding = (h: PortfolioItem) => {
+    setCoPilotAsset({
+      symbol: h.symbol,
+      name: h.name,
+      market: h.market,
+      currentPrice: h.currentPrice,
+      entryPrice: h.entryPrice,
+      stopLoss: h.stopLoss,
+      targetPrice: h.targetPrice,
+      currency: h.currency,
+      strategy: h.strategyType || (h.isDividend ? 'Dividend Accumulation' : 'Swing Momentum'),
+      pnlPercent: h.pnlPercent,
+      isDividend: h.isDividend,
+      notes: h.dcaRationale
+    });
+  };
+
+  const handleOpenCoPilotForSignal = (s: TradeSignal) => {
+    setCoPilotAsset({
+      symbol: s.symbol,
+      name: s.name,
+      market: s.market,
+      currentPrice: s.currentPrice || s.entryPrice,
+      entryPrice: s.entryPrice,
+      stopLoss: s.stopLoss,
+      targetPrice: s.targetPrice,
+      currency: s.currency,
+      strategy: s.strategy,
+      pnlPercent: s.changePercent,
+      isDividend: false,
+      notes: s.rationale
+    });
+  };
+
   return (
     <main className="min-h-screen bg-gray-100 dark:bg-[#0b0f19] text-gray-900 dark:text-gray-100 pb-20">
       {/* Top Header */}
@@ -1275,6 +1343,7 @@ export default function Home() {
                         currency: s.currency as 'USD' | 'TRY',
                         symbol: s.symbol
                       })}
+                      onOpenCoPilot={handleOpenCoPilotForSignal}
                     />
                   ))}
                 </div>
@@ -1310,6 +1379,8 @@ export default function Home() {
               setTradeModalOpen(true);
             }}
             onAddTransfer={handleAddTransfer}
+            onUpdateStopLoss={handleUpdateStopLoss}
+            onOpenCoPilot={handleOpenCoPilotForHolding}
           />
         )}
 
@@ -1367,6 +1438,12 @@ export default function Home() {
         isOpen={!!selectedAssetForHistory}
         onClose={() => setSelectedAssetForHistory(null)}
         asset={selectedAssetForHistory}
+      />
+
+      <AiTradeCoPilotModal
+        isOpen={!!coPilotAsset}
+        onClose={() => setCoPilotAsset(null)}
+        asset={coPilotAsset}
       />
     </main>
   );

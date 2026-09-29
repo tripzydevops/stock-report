@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
+import { calculateSectorRisk } from '../lib/sectorRisk';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -15,6 +16,8 @@ interface PortfolioViewProps {
   onAddHoldingClick?: () => void;
   onTradeHolding?: (holding: PortfolioItem) => void;
   onAddTransfer?: (transfer: CapitalTransfer) => void;
+  onUpdateStopLoss?: (symbol: string, newStopPrice: number) => void;
+  onOpenCoPilot?: (holding: PortfolioItem) => void;
 }
 
 export default function PortfolioView({
@@ -28,12 +31,18 @@ export default function PortfolioView({
   onAddHoldingClick,
   onTradeHolding,
   onAddTransfer,
+  onUpdateStopLoss,
+  onOpenCoPilot,
 }: PortfolioViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [showRealized, setShowRealized] = useState(true);
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showSectorRisk, setShowSectorRisk] = useState(true);
   const [orderSideFilter, setOrderSideFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
   const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
+
+  // Sector concentration and risk profile
+  const sectorRisk = calculateSectorRisk(portfolio, usdTryRate);
 
   // Deposit modal state
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
@@ -237,6 +246,92 @@ export default function PortfolioView({
         </div>
       </div>
 
+      {/* Sector Concentration & Risk Matrix */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-gray-100 dark:border-gray-700">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                <span>📊</span>
+                <span>Sector Risk & Concentration Matrix</span>
+              </h3>
+              {sectorRisk.isHighConcentration ? (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-800 animate-pulse">
+                  ⚠️ High Sector Concentration
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                  ✅ Balanced Exposure
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Risk control threshold: single sector exposure exceeding 35% of total invested capital.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSectorRisk(!showSectorRisk)}
+            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            {showSectorRisk ? 'Collapse Matrix' : 'Expand Matrix'}
+          </button>
+        </div>
+
+        {showSectorRisk && (
+          <div className="space-y-4 pt-1">
+            {sectorRisk.isHighConcentration && sectorRisk.highestSector && (
+              <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs flex items-start gap-2.5">
+                <span className="text-base">⚠️</span>
+                <div className="text-amber-900 dark:text-amber-200 leading-relaxed">
+                  <span className="font-bold">Portfolio Concentration Alert: </span>
+                  Your holdings in <span className="font-black text-amber-950 dark:text-white underline">{sectorRisk.highestSector.sector}</span> represent <span className="font-black text-rose-600 dark:text-rose-400">{sectorRisk.highestSector.weightPercent.toFixed(1)}%</span> of total portfolio equity ({sectorRisk.highestSector.symbols.join(', ')}). A systemic rate or policy shock causes synchronized portfolio drawdown. Consider reallocating cash toward non-correlated sectors (e.g., BIMAS, THYAO, ASELS, TUPRS).
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {sectorRisk.profiles.map((sec, idx) => (
+                <div key={idx} className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-750 border border-gray-200/70 dark:border-gray-700 flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <span className="font-bold text-gray-900 dark:text-white text-xs block">
+                        {sec.sector}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {sec.symbols.join(' · ')}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                      sec.isOverweight
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 font-black'
+                        : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold'
+                    }`}>
+                      {sec.weightPercent.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 mt-1">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, sec.weightPercent)}%`,
+                          backgroundColor: sec.color
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-500">
+                      <span>Allocation Basis:</span>
+                      <span className="font-mono font-semibold">{formatCurr(currencyMode === 'USD' ? sec.totalMarketValTRY / usdTryRate : sec.totalMarketValTRY)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Holdings & DCA Accumulation Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -317,17 +412,40 @@ export default function PortfolioView({
                       </span>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
-                      </div>
-                      {item.distanceToStop < 3 && item.stopLoss > 0 ? (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse">
-                          ⚠️ AT STOP RISK
-                        </span>
+                      {item.stopLoss >= item.entryPrice ? (
+                        <div className="inline-flex flex-col items-center">
+                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <span>🛡️</span>
+                            <span>{formatCurr(item.stopLoss, item.currency)}</span>
+                          </span>
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 mt-0.5 shadow-sm">
+                            FREE TRADE
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-[10px] text-gray-500">
-                          {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}% buffer` : 'Safe'}
-                        </span>
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                          </div>
+                          {item.currentPrice > item.entryPrice ? (
+                            <button
+                              type="button"
+                              onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
+                              title="Set stop loss to entry price to eliminate risk (Free Trade)"
+                            >
+                              🛡️ Breakeven
+                            </button>
+                          ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
+                              ⚠️ AT STOP RISK
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-gray-500 block mt-0.5">
+                              {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}% buffer` : 'Safe'}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-5 py-4 text-center whitespace-nowrap">
@@ -383,6 +501,13 @@ export default function PortfolioView({
                     </td>
                     <td className="px-4 py-4 text-center whitespace-nowrap">
                       <div className="inline-flex items-center space-x-1.5">
+                        <button
+                          onClick={() => onOpenCoPilot?.(item)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 flex items-center space-x-1 cursor-pointer"
+                          title="Open AI Trade Co-Pilot Analysis & Blueprint"
+                        >
+                          <span>💡 Co-Pilot</span>
+                        </button>
                         <button
                           onClick={() => onTradeHolding?.(item)}
                           className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center space-x-1"

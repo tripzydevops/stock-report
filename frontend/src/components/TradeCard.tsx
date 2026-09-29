@@ -21,9 +21,10 @@ interface TradeCardProps {
   signal: TradeSignal;
   onSelectTicker?: (symbol: string) => void;
   onCalcSize?: (signal: TradeSignal) => void;
+  onOpenCoPilot?: (signal: TradeSignal) => void;
 }
 
-export default function TradeCard({ signal, onSelectTicker, onCalcSize }: TradeCardProps) {
+export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCoPilot }: TradeCardProps) {
   const [expanded, setExpanded] = useState(false);
   
   const risk = Math.abs(signal.entryPrice - signal.stopLoss);
@@ -144,12 +145,23 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize }: TradeC
             </div>
           );
         })()}
-        <button 
-          onClick={() => onCalcSize?.(signal)}
-          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"
-        >
-          Calc Size →
-        </button>
+        <div className="flex items-center gap-2">
+          {onOpenCoPilot && (
+            <button
+              onClick={() => onOpenCoPilot(signal)}
+              className="px-2 py-0.5 rounded text-[11px] font-black text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
+              title="Open AI Trade Co-Pilot Blueprint"
+            >
+              💡 Co-Pilot
+            </button>
+          )}
+          <button 
+            onClick={() => onCalcSize?.(signal)}
+            className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"
+          >
+            Calc Size →
+          </button>
+        </div>
       </div>
     </div>
   );
