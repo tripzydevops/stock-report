@@ -42,6 +42,8 @@ export default function PortfolioView({
   const [showSectorRisk, setShowSectorRisk] = useState(true);
   const [orderSideFilter, setOrderSideFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
   const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
+  const [editingStopSymbol, setEditingStopSymbol] = useState<string | null>(null);
+  const [editStopValue, setEditStopValue] = useState<string>('');
 
   // Sector concentration and risk profile
   const sectorRisk = calculateSectorRisk(portfolio, usdTryRate);
@@ -414,7 +416,52 @@ export default function PortfolioView({
                       </span>
                     </td>
                     <td className="px-5 py-4 text-center">
-                      {item.isDividend ? (
+                      {editingStopSymbol === item.symbol ? (
+                        <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
+                          <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editStopValue}
+                            onChange={(e) => setEditStopValue(e.target.value)}
+                            className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const val = parseFloat(editStopValue);
+                                if (!isNaN(val) && val >= 0) {
+                                  onUpdateStopLoss?.(item.symbol, val);
+                                }
+                                setEditingStopSymbol(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingStopSymbol(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = parseFloat(editStopValue);
+                              if (!isNaN(val) && val >= 0) {
+                                onUpdateStopLoss?.(item.symbol, val);
+                              }
+                              setEditingStopSymbol(null);
+                            }}
+                            className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
+                            title="Save Stop Loss"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingStopSymbol(null)}
+                            className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
+                            title="Cancel"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : item.isDividend ? (
                         <div className="inline-flex flex-col items-center">
                           <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-sm">
                             <span>💎</span>
@@ -436,18 +483,52 @@ export default function PortfolioView({
                         </div>
                       ) : item.stopLoss >= item.entryPrice ? (
                         <div className="inline-flex flex-col items-center">
-                          <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                            <span>🛡️</span>
-                            <span>{formatCurr(item.stopLoss, item.currency)}</span>
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <span>🛡️</span>
+                              <span>{formatCurr(item.stopLoss, item.currency)}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingStopSymbol(item.symbol);
+                                setEditStopValue(item.stopLoss.toString());
+                              }}
+                              className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                              title="Edit stop loss price manually"
+                            >
+                              ✏️
+                            </button>
+                          </div>
                           <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 mt-0.5 shadow-sm">
                             FREE TRADE
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateStopLoss?.(item.symbol, Number((item.entryPrice * 0.95).toFixed(2)))}
+                            className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-gray-500 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-200 dark:border-gray-700 shadow-xs cursor-pointer flex items-center gap-0.5"
+                            title="Revert stop loss back to original technical level (5% below entry)"
+                          >
+                            <span>↺ Revert Stop ({formatCurr(item.entryPrice * 0.95, item.currency)})</span>
+                          </button>
                         </div>
                       ) : (
                         <div>
-                          <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                            {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingStopSymbol(item.symbol);
+                                setEditStopValue(item.stopLoss > 0 ? item.stopLoss.toString() : (item.entryPrice * 0.95).toFixed(2));
+                              }}
+                              className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                              title="Edit stop loss price manually"
+                            >
+                              ✏️
+                            </button>
                           </div>
                           {item.currentPrice > item.entryPrice ? (
                             <button
