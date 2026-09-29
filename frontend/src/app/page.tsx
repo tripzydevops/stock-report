@@ -630,22 +630,34 @@ export default function Home() {
           .order('executed_at', { ascending: false });
 
         if (ordersData && ordersData.length > 0) {
-          const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => ({
-            id: o.id,
-            ref: o.order_ref,
-            symbol: o.symbol,
-            name: o.symbol === 'ISMEN' ? 'İş Yatırım Menkul Değerler' : o.symbol === 'TURSG' ? 'Türkiye Sigorta' : o.symbol === 'AKBNK' ? 'Akbank T.A.Ş.' : o.symbol,
-            market: 'BIST',
-            side: o.side,
-            orderType: o.order_type || 'Limit',
-            quantity: Number(o.quantity),
-            price: Number(o.price),
-            totalValue: Number(o.total_amount),
-            currency: o.currency || 'TRY',
-            dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
-            status: o.status || 'Filled',
-            dcaNote: o.notes
-          }));
+          const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => {
+            const clean = o.symbol?.replace('.IS', '').toUpperCase();
+            const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
+            const friendlyName = matched?.name || (
+              clean === 'ISMEN' ? 'İş Yatırım Menkul Değerler' :
+              clean === 'TURSG' ? 'Türkiye Sigorta' :
+              clean === 'AKBNK' ? 'Akbank T.A.Ş.' :
+              clean === 'HALKB' ? 'Halkbank' :
+              clean === 'SOKM' ? 'Şok Marketler' : clean
+            );
+
+            return {
+              id: o.id,
+              ref: o.order_ref,
+              symbol: clean,
+              name: friendlyName,
+              market: (matched?.market || (o.symbol?.endsWith('.IS') ? 'BIST' : 'BIST')) as any,
+              side: o.side,
+              orderType: o.order_type || 'Limit',
+              quantity: Number(o.quantity),
+              price: Number(o.price),
+              totalValue: Number(o.total_amount),
+              currency: o.currency || 'TRY',
+              dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+              status: o.status || 'Filled',
+              dcaNote: o.notes
+            };
+          });
           setExecutedOrders(mappedOrders);
         }
 
@@ -871,6 +883,47 @@ export default function Home() {
           is_open: true,
           notes: newHolding.dcaRationale
         }]);
+
+        // Also record an Executed Order in Supabase and UI state!
+        const totalVal = newHolding.shares * newHolding.entryPrice;
+        const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+        const nowIso = new Date().toISOString();
+
+        try {
+          await supabase.from('portfolio_orders').insert([{
+            order_ref: refCode,
+            symbol: cleanSym,
+            side: 'BUY',
+            order_type: 'Limit',
+            quantity: newHolding.shares,
+            price: newHolding.entryPrice,
+            total_amount: totalVal,
+            currency: newHolding.currency || 'TRY',
+            executed_at: nowIso,
+            status: 'Filled',
+            notes: newHolding.dcaRationale || 'Position initiation'
+          }]);
+        } catch (ordErr) {
+          console.warn('Could not save order log:', ordErr);
+        }
+
+        const newOrder: ExecutedOrder = {
+          id: `ord-${Date.now()}`,
+          ref: refCode,
+          symbol: cleanSym,
+          name: newHolding.name || cleanSym,
+          market: (newHolding.market || 'BIST') as any,
+          side: 'BUY',
+          orderType: 'Limit',
+          quantity: newHolding.shares,
+          price: newHolding.entryPrice,
+          totalValue: totalVal,
+          currency: newHolding.currency || 'TRY',
+          dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+          status: 'Filled',
+          dcaNote: newHolding.dcaRationale || 'Position initiation'
+        };
+        setExecutedOrders(prev => [newOrder, ...prev]);
       }
     } catch (err) {
       console.warn('Could not save holding to Supabase:', err);
@@ -946,6 +999,47 @@ export default function Home() {
             .update({ quantity: totalShares, avg_entry_price: blendedEntry })
             .eq('asset_id', assetData[0].id)
             .eq('is_open', true);
+
+          // Log buy order to portfolio_orders
+          const totalVal = additionalShares * buyPrice;
+          const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+          const nowIso = new Date().toISOString();
+
+          try {
+            await supabase.from('portfolio_orders').insert([{
+              order_ref: refCode,
+              symbol: cleanSym,
+              side: 'BUY',
+              order_type: 'Limit',
+              quantity: additionalShares,
+              price: buyPrice,
+              total_amount: totalVal,
+              currency: target.currency || 'TRY',
+              executed_at: nowIso,
+              status: 'Filled',
+              notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
+            }]);
+          } catch (ordErr) {
+            console.warn('Could not save buy order:', ordErr);
+          }
+
+          const newOrder: ExecutedOrder = {
+            id: `ord-${Date.now()}`,
+            ref: refCode,
+            symbol: cleanSym,
+            name: target.name || cleanSym,
+            market: (target.market || 'BIST') as any,
+            side: 'BUY',
+            orderType: 'Limit',
+            quantity: additionalShares,
+            price: buyPrice,
+            totalValue: totalVal,
+            currency: target.currency || 'TRY',
+            dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+            status: 'Filled',
+            dcaNote: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
+          };
+          setExecutedOrders(prev => [newOrder, ...prev]);
         }
       }
     } catch (err) {
@@ -1039,6 +1133,47 @@ export default function Home() {
             .eq('is_open', true);
         }
       }
+
+      // Log sell order to portfolio_orders
+      const totalVal = actualSold * sellPrice;
+      const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+      const nowIso = new Date().toISOString();
+
+      try {
+        await supabase.from('portfolio_orders').insert([{
+          order_ref: refCode,
+          symbol: cleanSym,
+          side: 'SELL',
+          order_type: 'Limit',
+          quantity: actualSold,
+          price: sellPrice,
+          total_amount: totalVal,
+          currency: target.currency || 'TRY',
+          executed_at: nowIso,
+          status: 'Filled',
+          notes: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`
+        }]);
+      } catch (ordErr) {
+        console.warn('Could not save sell order to Supabase:', ordErr);
+      }
+
+      const newSellOrder: ExecutedOrder = {
+        id: `ord-${Date.now()}`,
+        ref: refCode,
+        symbol: cleanSym,
+        name: target.name || cleanSym,
+        market: (target.market || 'BIST') as any,
+        side: 'SELL',
+        orderType: 'Limit',
+        quantity: actualSold,
+        price: sellPrice,
+        totalValue: totalVal,
+        currency: target.currency || 'TRY',
+        dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+        status: 'Filled',
+        dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})`
+      };
+      setExecutedOrders(prev => [newSellOrder, ...prev]);
     } catch (err) {
       console.warn('Error updating sold shares in Supabase:', err);
     }

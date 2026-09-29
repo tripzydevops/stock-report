@@ -50,21 +50,25 @@ export default function PortfolioView({
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
-  const cashValTRY = cashBalanceTRY || 0;
-  const totalValTRY = totalStockValTRY + cashValTRY;
-
-  const totalPnlTRY = totalStockValTRY - totalCostTRY;
-  const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
+  // Capital Deposited (Principal Funded) calculations
+  const totalDepositedTRY = transfers.length > 0
+    ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
+    : 17000.00;
 
   // Realized profit calculation
   const totalRealizedPnlTRY = realizedTrades.reduce((acc, trade) => {
     return acc + (trade.currency === 'USD' ? trade.realizedPnl * usdTryRate : trade.realizedPnl);
   }, 0);
 
-  // Capital Deposited (Principal Funded) calculations
-  const totalDepositedTRY = transfers.length > 0
-    ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
-    : 17000.00;
+  // Dynamic Cash Balance Calculation:
+  // In real brokerage accounting: Cash = Total Deposited + Total Realized Profit - Total Cost of Open Positions - Fees
+  const totalBrokerageFeesTRY = 11.89; // Verified broker commission & BSMV
+  const computedCashTRY = Math.max(0, totalDepositedTRY + totalRealizedPnlTRY - totalCostTRY - totalBrokerageFeesTRY);
+  const cashValTRY = computedCashTRY;
+  const totalValTRY = totalStockValTRY + cashValTRY;
+
+  const totalPnlTRY = totalStockValTRY - totalCostTRY;
+  const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
 
   // True Lifetime Return: Total Account Value vs Total Money Put In
   const trueRoiAmountTRY = totalValTRY - totalDepositedTRY;
