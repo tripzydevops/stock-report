@@ -66,6 +66,7 @@ export interface PortfolioItem {
   pnlAmount: number;
   pnlPercent: number;
   stopLoss: number;
+  targetPrice?: number;
   distanceToStop: number;
   isDividend: boolean;
   dcaZone: 'BUY' | 'PAUSE' | 'HOLD';

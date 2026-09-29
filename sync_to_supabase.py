@@ -247,13 +247,15 @@ def sync_all_to_supabase():
                 })
             if pos_rows:
                 try:
-                    client.table("portfolio_positions").delete().eq("is_open", True).execute()
-                except Exception:
-                    pass
-                client.table("portfolio_positions").insert(pos_rows).execute()
-                print(f"✅ Recorded {len(pos_rows)} portfolio positions in Supabase.")
-        except Exception as e:
-            print(f"Error syncing portfolio positions: {e}")
+                    # Check if user already has positions in Supabase
+                    existing_pos = client.table("portfolio_positions").select("id").eq("is_open", True).execute()
+                    if not existing_pos.data or len(existing_pos.data) == 0:
+                        client.table("portfolio_positions").insert(pos_rows).execute()
+                        print(f"✅ Initialized {len(pos_rows)} default portfolio positions in Supabase.")
+                    else:
+                        print(f"ℹ️ Preserving {len(existing_pos.data)} active user-managed positions in Supabase (no overwrite).")
+                except Exception as e:
+                    print(f"Error checking/syncing portfolio positions: {e}")
 
     print("\n🎉 ALL EXTRACTED DATA IS FULLY RECORDED IN SUPABASE POSTGRESQL!")
 

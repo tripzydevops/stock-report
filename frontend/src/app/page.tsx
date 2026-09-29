@@ -665,6 +665,56 @@ export default function Home() {
           setTransfers(mappedTrans);
         }
 
+        // 6. Fetch Active Portfolio Positions from Supabase
+        const { data: positionsData } = await supabase
+          .from('portfolio_positions')
+          .select('*, assets(symbol, name, market)')
+          .eq('is_open', true)
+          .order('created_at', { ascending: true });
+
+        if (positionsData && positionsData.length > 0) {
+          const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
+            const rawSym = pos.assets?.symbol || 'UNKNOWN';
+            const cleanSym = rawSym.replace('.IS', '');
+            const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
+            const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
+            const shares = Number(pos.quantity);
+            const entryPrice = Number(pos.avg_entry_price);
+            const stopLoss = Number(pos.stop_loss) || (entryPrice * 0.95);
+            const totalCost = shares * entryPrice;
+            const currentValue = shares * currPrice;
+            const pnlAmount = currentValue - totalCost;
+            const pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
+            const distanceToStop = stopLoss > 0 && currPrice > 0 ? ((currPrice - stopLoss) / currPrice) * 100 : 0;
+
+            const dcaZone: 'BUY' | 'PAUSE' | 'HOLD' = currPrice <= entryPrice * 0.97 ? 'BUY' : 'HOLD';
+            const dcaRationale = pos.notes || (currPrice <= entryPrice * 0.97 
+              ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
+              : 'Holding core position; maintain disciplined trailing stops.');
+
+            return {
+              symbol: cleanSym,
+              name: pos.assets?.name || cleanSym,
+              market: (pos.assets?.market || (rawSym.endsWith('.IS') ? 'BIST' : 'US')) as any,
+              shares: shares,
+              entryPrice: entryPrice,
+              currentPrice: currPrice,
+              totalCost: totalCost,
+              currentValue: currentValue,
+              pnlAmount: pnlAmount,
+              pnlPercent: pnlPercent,
+              currency: (pos.assets?.market === 'US' ? 'USD' : 'TRY'),
+              stopLoss: stopLoss,
+              distanceToStop: distanceToStop,
+              isDividend: true,
+              dcaZone: dcaZone,
+              dcaRationale: dcaRationale
+            };
+          });
+
+          setPortfolio(mappedPortfolio);
+        }
+
       } catch (err) {
         console.warn('Using enriched fallback offline data:', err);
         generateFallbackAssets();
@@ -790,20 +840,32 @@ export default function Home() {
 
     // 2. Persist to Supabase
     try {
-      const cleanSym = newHolding.symbol.replace('.IS', '');
+      const cleanSym = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
       const isSymbol = `${cleanSym}.IS`;
-      const { data: assetData } = await supabase
+      let { data: assetData } = await supabase
         .from('assets')
         .select('id')
-        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol},symbol.ilike.${cleanSym}%`)
         .limit(1);
 
-      if (assetData && assetData.length > 0) {
+      let assetId = assetData && assetData.length > 0 ? assetData[0].id : null;
+      if (!assetId) {
+        const { data: newAsset } = await supabase.from('assets').insert([{
+          symbol: newHolding.market === 'BIST' ? `${cleanSym}.IS` : cleanSym,
+          name: newHolding.name || cleanSym,
+          market: newHolding.market || 'BIST',
+          asset_class: 'stock'
+        }]).select('id').single();
+        if (newAsset) assetId = newAsset.id;
+      }
+
+      if (assetId) {
         await supabase.from('portfolio_positions').insert([{
-          asset_id: assetData[0].id,
+          asset_id: assetId,
           quantity: newHolding.shares,
           avg_entry_price: newHolding.entryPrice,
           stop_loss: newHolding.stopLoss > 0 ? newHolding.stopLoss : null,
+          target_price: (newHolding.targetPrice && newHolding.targetPrice > 0) ? newHolding.targetPrice : null,
           is_open: true,
           notes: newHolding.dcaRationale
         }]);
