@@ -214,10 +214,30 @@ def sync_all_to_supabase():
         
     if signal_rows:
         try:
-            # Clear old open signals before inserting fresh valid signals
+            # Preserve original trigger entry prices for existing open signals so they do not drift with market closes
+            existing_open = client.table("trade_signals").select("asset_id, strategy, signal_date, entry_price, stop_loss, target_1, risk_reward_ratio").eq("status", "open").execute()
+            existing_map = {}
+            if existing_open.data:
+                for row in existing_open.data:
+                    key = (row["asset_id"], row["strategy"])
+                    existing_map[key] = row
+            
+            final_signal_rows = []
+            for sig in signal_rows:
+                key = (sig["asset_id"], sig["strategy"])
+                if key in existing_map:
+                    # Keep original trigger entry price, stop loss, and target!
+                    orig = existing_map[key]
+                    sig["entry_price"] = orig["entry_price"]
+                    sig["stop_loss"] = orig["stop_loss"]
+                    sig["target_1"] = orig["target_1"]
+                    sig["risk_reward_ratio"] = orig["risk_reward_ratio"]
+                    sig["signal_date"] = orig["signal_date"]
+                final_signal_rows.append(sig)
+
             client.table("trade_signals").delete().eq("status", "open").execute()
-            client.table("trade_signals").insert(signal_rows).execute()
-            print(f"✅ Recorded {len(signal_rows)} active trade signals in Supabase.")
+            client.table("trade_signals").insert(final_signal_rows).execute()
+            print(f"✅ Recorded {len(final_signal_rows)} active trade signals in Supabase (original trigger prices preserved).")
         except Exception as e:
             print(f"Error inserting signals: {e}")
 
