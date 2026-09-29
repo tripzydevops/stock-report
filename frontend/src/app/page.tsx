@@ -470,7 +470,28 @@ export default function Home() {
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
+  const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleSelectTicker = (symbol: string) => {
+    const clean = symbol.replace('.IS', '').toUpperCase();
+    const matched = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === clean);
+    if (matched) {
+      setSelectedAssetForHistory(matched);
+    } else {
+      setSelectedAssetForHistory({
+        id: symbol,
+        symbol: symbol,
+        name: symbol,
+        market: symbol.endsWith('.IS') || !['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'SPY', 'QQQ', 'IWM', 'GLD', 'TLT', 'XLF', 'XLE', 'ARKK'].includes(symbol) ? 'BIST' : 'US',
+        price: 0,
+        changePercent: 0,
+        rsi: 50,
+        emaStatus: 'Active Signal',
+        volumeRatio: 1.0
+      });
+    }
+  };
 
   // Fetch real data from Supabase
   useEffect(() => {
@@ -515,6 +536,7 @@ export default function Home() {
           `)
           .limit(150);
 
+        let loadedAssets: AssetData[] = [];
         if (assetsData && assetsData.length > 0) {
           const mapped: AssetData[] = assetsData.map((a: any) => {
             const ind = a.daily_indicators?.[0] || {};
@@ -539,6 +561,7 @@ export default function Home() {
               low52w: ind.low_52w
             };
           });
+          loadedAssets = mapped;
           setAssets(mapped);
         } else {
           // Generate default 117 sample dataset from constituent lists
@@ -574,19 +597,25 @@ export default function Home() {
 
           const openSignals = mappedAll
             .filter(s => s.status === 'open')
-            .map(s => ({
-              symbol: s.symbol,
-              name: s.name,
-              strategy: s.strategy.replace('_', ' ').toUpperCase(),
-              entryPrice: s.entryPrice,
-              stopLoss: s.stopLoss,
-              targetPrice: s.targetPrice,
-              confidence: Math.round(s.confidence),
-              rationale: s.aiRationale,
-              market: s.market,
-              date: s.signalDate,
-              currency: s.currency
-            }));
+            .map(s => {
+              const cleanSym = s.symbol.replace('.IS', '').toUpperCase();
+              const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
+              return {
+                symbol: s.symbol,
+                name: s.name,
+                strategy: s.strategy.replace('_', ' ').toUpperCase(),
+                entryPrice: s.entryPrice,
+                stopLoss: s.stopLoss,
+                targetPrice: s.targetPrice,
+                confidence: Math.round(s.confidence),
+                rationale: s.aiRationale,
+                market: s.market,
+                date: s.signalDate,
+                currency: s.currency,
+                currentPrice: matchedAsset ? matchedAsset.price : s.entryPrice,
+                changePercent: matchedAsset ? matchedAsset.changePercent : 0
+              };
+            });
           if (openSignals.length > 0) {
             setSignals(openSignals);
           }
@@ -1020,13 +1049,23 @@ export default function Home() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {signals.map((sig, idx) => (
-                    <TradeCard key={idx} signal={sig} />
+                    <TradeCard 
+                      key={idx} 
+                      signal={sig} 
+                      onSelectTicker={handleSelectTicker}
+                      onCalcSize={(s) => setCalcTrade({
+                        entryPrice: s.entryPrice,
+                        stopLoss: s.stopLoss,
+                        currency: s.currency as 'USD' | 'TRY',
+                        symbol: s.symbol
+                      })}
+                    />
                   ))}
                 </div>
               </div>
 
               <div className="lg:w-1/3">
-                <PositionCalculator />
+                <PositionCalculator selectedTrade={calcTrade} />
               </div>
             </div>
 

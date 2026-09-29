@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
-export default function PositionCalculator() {
+interface PositionCalculatorProps {
+  selectedTrade?: {
+    entryPrice: number;
+    stopLoss: number;
+    currency: 'USD' | 'TRY';
+    symbol?: string;
+  } | null;
+}
+
+export default function PositionCalculator({ selectedTrade }: PositionCalculatorProps = {}) {
   const [currency, setCurrency] = useState<'USD' | 'TRY'>('USD');
   const [accountSize, setAccountSize] = useState<number>(10000);
   const [riskPct, setRiskPct] = useState<number>(1.0);
@@ -10,6 +19,19 @@ export default function PositionCalculator() {
   const [riskAmount, setRiskAmount] = useState(0);
   const [shares, setShares] = useState(0);
   const [positionValue, setPositionValue] = useState(0);
+
+  useEffect(() => {
+    if (selectedTrade) {
+      setEntryPrice(selectedTrade.entryPrice);
+      setStopLoss(selectedTrade.stopLoss);
+      setCurrency(selectedTrade.currency);
+      if (selectedTrade.currency === 'TRY' && accountSize === 10000) {
+        setAccountSize(300000);
+      } else if (selectedTrade.currency === 'USD' && accountSize === 300000) {
+        setAccountSize(10000);
+      }
+    }
+  }, [selectedTrade]);
 
   useEffect(() => {
     const rAmt = accountSize * (riskPct / 100);

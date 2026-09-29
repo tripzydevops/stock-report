@@ -12,9 +12,17 @@ export interface TradeSignal {
   market: string;
   date: string;
   currency: string;
+  currentPrice?: number;
+  changePercent?: number;
 }
 
-export default function TradeCard({ signal }: { signal: TradeSignal }) {
+interface TradeCardProps {
+  signal: TradeSignal;
+  onSelectTicker?: (symbol: string) => void;
+  onCalcSize?: (signal: TradeSignal) => void;
+}
+
+export default function TradeCard({ signal, onSelectTicker, onCalcSize }: TradeCardProps) {
   const [expanded, setExpanded] = useState(false);
   
   const risk = Math.abs(signal.entryPrice - signal.stopLoss);
@@ -33,12 +41,34 @@ export default function TradeCard({ signal }: { signal: TradeSignal }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl">
-      <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+      <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start gap-2">
         <div>
-          <h3 className="font-bold text-lg text-gray-900 dark:text-white">{signal.symbol}</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{signal.name}</p>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => onSelectTicker?.(signal.symbol)}
+              className="font-black text-lg text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1.5 transition-colors group cursor-pointer text-left"
+              title="Click to view full price history, daily OHLCV and indicators"
+            >
+              <span className="group-hover:underline underline-offset-2">{signal.symbol}</span>
+              <span className="text-xs text-blue-500 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all">📈</span>
+            </button>
+            {signal.currentPrice !== undefined && signal.currentPrice !== null && (
+              <button
+                onClick={() => onSelectTicker?.(signal.symbol)}
+                className={`text-xs px-2 py-0.5 rounded-md font-mono font-bold border transition-all cursor-pointer hover:ring-2 hover:ring-blue-400 ${
+                  (signal.changePercent || 0) >= 0 
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
+                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                }`}
+                title="Current price — click to view price history & live chart"
+              >
+                {formatPrice(signal.currentPrice)} {signal.changePercent !== undefined ? `(${signal.changePercent >= 0 ? '+' : ''}${signal.changePercent.toFixed(2)}%)` : ''}
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
         </div>
-        <span className={`px-2 py-1 rounded text-xs font-semibold ${getStrategyColor(signal.strategy)}`}>
+        <span className={`px-2 py-1 rounded text-xs font-semibold shrink-0 ${getStrategyColor(signal.strategy)}`}>
           {signal.strategy}
         </span>
       </div>
@@ -99,7 +129,12 @@ export default function TradeCard({ signal }: { signal: TradeSignal }) {
       <div className="bg-gray-50 dark:bg-gray-900 p-3 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
         <span className="px-2 py-0.5 border border-gray-200 dark:border-gray-600 rounded text-[10px] uppercase font-bold">{signal.market}</span>
         <span>{new Date(signal.date).toLocaleDateString()}</span>
-        <button className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium">Calc Size →</button>
+        <button 
+          onClick={() => onCalcSize?.(signal)}
+          className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"
+        >
+          Calc Size →
+        </button>
       </div>
     </div>
   );
