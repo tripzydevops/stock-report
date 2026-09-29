@@ -540,9 +540,11 @@ export default function Home() {
         if (assetsData && assetsData.length > 0) {
           const mapped: AssetData[] = assetsData.map((a: any) => {
             const ind = a.daily_indicators?.[0] || {};
-            const recentPrices = a.price_history || [];
-            const latestPrice = recentPrices.length > 0 ? recentPrices[recentPrices.length - 1].close : 100;
-            const prevPrice = recentPrices.length > 1 ? recentPrices[recentPrices.length - 2].close : latestPrice;
+            const recentPrices = [...(a.price_history || [])].sort(
+              (x: any, y: any) => new Date(x.date).getTime() - new Date(y.date).getTime()
+            );
+            const latestPrice = recentPrices.length > 0 ? Number(recentPrices[recentPrices.length - 1].close) : 100;
+            const prevPrice = recentPrices.length > 1 ? Number(recentPrices[recentPrices.length - 2].close) : latestPrice;
             const changePct = prevPrice > 0 ? ((latestPrice - prevPrice) / prevPrice) * 100 : 0;
             const ema200 = ind.ema_200 || latestPrice;
             const emaStatus = latestPrice >= ema200 ? 'Above 200 EMA' : 'Below 200 EMA';
