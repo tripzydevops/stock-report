@@ -18,6 +18,7 @@ interface PortfolioViewProps {
   onAddTransfer?: (transfer: CapitalTransfer) => void;
   onUpdateStopLoss?: (symbol: string, newStopPrice: number) => void;
   onOpenCoPilot?: (holding: PortfolioItem) => void;
+  onToggleStrategyType?: (symbol: string) => void;
 }
 
 export default function PortfolioView({
@@ -33,6 +34,7 @@ export default function PortfolioView({
   onAddTransfer,
   onUpdateStopLoss,
   onOpenCoPilot,
+  onToggleStrategyType,
 }: PortfolioViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [showRealized, setShowRealized] = useState(true);
@@ -473,12 +475,21 @@ export default function PortfolioView({
                         const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
                         return timing.isDividend ? (
                           <div className="inline-flex flex-col items-center">
-                            <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800">
+                            <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 shadow-xs">
                               💎 Core Compounder
                             </span>
                             <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
                               Indefinite · Yield Focus
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => onToggleStrategyType?.(item.symbol)}
+                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/70 border border-blue-200 dark:border-blue-800 transition-colors shadow-xs cursor-pointer flex items-center gap-1"
+                              title="Switch position to normal swing trade mode (with stop loss & target exit date)"
+                            >
+                              <span>⚡</span>
+                              <span>Make Swing Trade</span>
+                            </button>
                           </div>
                         ) : (
                           <div className="inline-flex flex-col items-center">
@@ -494,6 +505,15 @@ export default function PortfolioView({
                             }`}>
                               ⏳ {timing.label}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => onToggleStrategyType?.(item.symbol)}
+                              className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-gray-400 hover:text-purple-600 dark:text-gray-500 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer flex items-center gap-0.5"
+                              title="Promote to Core Dividend Compounder (DCA accumulation mode)"
+                            >
+                              <span>💎</span>
+                              <span>Make Compounder</span>
+                            </button>
                           </div>
                         );
                       })()}

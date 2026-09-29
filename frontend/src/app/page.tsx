@@ -699,12 +699,15 @@ export default function Home() {
             const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
             const shares = Number(pos.quantity);
             const entryPrice = Number(pos.avg_entry_price);
-            const isCoreDiv = ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSym.toUpperCase());
+            const storedOverrides = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('portfolio_strategy_overrides') || '{}') : {};
+            const cleanUpper = cleanSym.toUpperCase();
+            const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
+            const isCoreDiv = overrideStrategy ? (overrideStrategy === 'CORE_DIVIDEND') : ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanUpper);
             const entryDate = pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24';
             const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
             const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
               ? Number(pos.stop_loss)
-              : (isCoreDiv ? 0 : entryPrice * 0.95);
+              : (isCoreDiv ? 0 : Number((entryPrice * 0.95).toFixed(2)));
             const totalCost = shares * entryPrice;
             const currentValue = shares * currPrice;
             const pnlAmount = currentValue - totalCost;
@@ -1231,6 +1234,62 @@ export default function Home() {
     }
   };
 
+  const handleToggleStrategyType = async (symbol: string) => {
+    const cleanSym = symbol.replace('.IS', '').toUpperCase();
+    let newStrategy: 'CORE_DIVIDEND' | 'SWING' = 'SWING';
+    let newStopLoss = 0;
+
+    setPortfolio(prev => prev.map(item => {
+      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+      const willBeSwing = item.strategyType === 'CORE_DIVIDEND' || item.isDividend;
+      newStrategy = willBeSwing ? 'SWING' : 'CORE_DIVIDEND';
+      // When switching to SWING: provide an initial sensible stop loss (e.g. 5% under entry or existing stop)
+      newStopLoss = willBeSwing ? (item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2))) : 0;
+      const distToStop = newStopLoss > 0 && item.currentPrice > 0 ? ((item.currentPrice - newStopLoss) / item.currentPrice) * 100 : 0;
+
+      return {
+        ...item,
+        strategyType: newStrategy,
+        isDividend: newStrategy === 'CORE_DIVIDEND',
+        stopLoss: newStopLoss,
+        distanceToStop: distToStop
+      };
+    }));
+
+    // Cache locally so it immediately persists across sessions
+    try {
+      const stored = localStorage.getItem('portfolio_strategy_overrides');
+      const overrides = stored ? JSON.parse(stored) : {};
+      overrides[cleanSym] = newStrategy;
+      localStorage.setItem('portfolio_strategy_overrides', JSON.stringify(overrides));
+    } catch (e) {
+      // ignore local storage errors
+    }
+
+    // Persist to Supabase
+    try {
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        await supabase
+          .from('portfolio_positions')
+          .update({
+            notes: `Strategy: ${newStrategy}`,
+            stop_loss: newStopLoss > 0 ? newStopLoss : null
+          })
+          .eq('asset_id', assetData[0].id)
+          .eq('is_open', true);
+      }
+    } catch (err) {
+      console.warn('Could not update strategy type in Supabase:', err);
+    }
+  };
+
   const handleOpenCoPilotForHolding = (h: PortfolioItem) => {
     setCoPilotAsset({
       symbol: h.symbol,
@@ -1382,6 +1441,7 @@ export default function Home() {
             onAddTransfer={handleAddTransfer}
             onUpdateStopLoss={handleUpdateStopLoss}
             onOpenCoPilot={handleOpenCoPilotForHolding}
+            onToggleStrategyType={handleToggleStrategyType}
           />
         )}
 
