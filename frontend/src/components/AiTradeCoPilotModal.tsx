@@ -118,27 +118,69 @@ export default function AiTradeCoPilotModal({
       let aiReply = '';
       const lower = userMsg.toLowerCase();
 
-      if (lower.includes('breakeven') || lower.includes('stop')) {
-        aiReply = `For ${cleanSym}, your entry is ${curr}${entry.toFixed(2)}. ${
-          (asset.pnlPercent || 0) >= 3.0
-            ? `Because you are in profit (+${(asset.pnlPercent || 0).toFixed(2)}%), moving your stop loss to ${curr}${breakevenLevel.toFixed(2)} eliminates all downside risk and turns this into a 100% Free Trade.`
-            : `Since the position is currently around entry, keep your initial stop at ${curr}${stop.toFixed(2)}. Move to breakeven once price reaches +3% to +4% profit.`
-        }`;
-      } else if (lower.includes('profit') || lower.includes('target') || lower.includes('sell')) {
-        aiReply = `Institutional rule for ${cleanSym}: Sell 50% at Target 1 (${curr}${target1.toFixed(2)}) to lock in cash and de-risk. Move stop on remaining 50% to entry, then trail Target 2 (${curr}${target2.toFixed(2)}) along the 20-day EMA.`;
-      } else if (lower.includes('pullback') || lower.includes('dca') || lower.includes('buy more')) {
-        aiReply = `${cleanSym} is currently trading at ${curr}${asset.currentPrice.toFixed(2)}. ${
-          asset.isDividend
-            ? 'Because this is a high-yield Core Dividend asset, pullbacks toward key moving averages are ideal DCA tranches.'
-            : 'For short-term swing trades, avoid averaging down if price breaks below the stop loss. Wait for a re-test and volume confirmation before adding shares.'
-        }`;
+      // Flexible semantic matching with typo tolerance (e.g. "accumualte", "accumlate", "dca", "buy more")
+      const isAccumulateQuery = /accum|dca|buy|add|more|tranche|dip|entry|cost basis|average down|when should i/i.test(lower);
+      const isStopQuery = /stop|breakeven|break-even|loss|cut|risk|protect|floor/i.test(lower);
+      const isTargetProfitQuery = /profit|target|sell|trim|exit|take profit|scale out/i.test(lower);
+      const isDividendQuery = /dividend|payout|yield|income|cashflow|cash flow|temett[uü]/i.test(lower);
+
+      if (asset.isDividend) {
+        // --- DIVIDEND / CORE COMPOUNDER REASONING ENGINE ---
+        if (isAccumulateQuery || lower.includes('when')) {
+          const isAtDiscount = asset.currentPrice < entry;
+          const discountPct = isAtDiscount ? (((entry - asset.currentPrice) / entry) * 100).toFixed(1) : '0';
+          const dcaFloor = (entry * 0.90).toFixed(2);
+          const dcaCeil = (entry * 0.97).toFixed(2);
+
+          aiReply = `💡 Accumulation Blueprint for ${cleanSym} (Core Dividend Compounder):
+
+• Current Status: Trading at ${curr}${asset.currentPrice.toFixed(2)} ${isAtDiscount ? `(${discountPct}% below your avg cost of ${curr}${entry.toFixed(2)})` : `(near your avg cost of ${curr}${entry.toFixed(2)})`}.
+• Prime Accumulation Zone: ${curr}${dcaFloor} – ${curr}${dcaCeil}. ${isAtDiscount ? `You are currently right inside the prime accumulation zone!` : `Wait for modest pullbacks to add.`}
+• When to Add Tranches:
+  1. Add on dips below ${curr}${entry.toFixed(2)} to systematically lower your average cost basis.
+  2. Each tranche added at lower prices immediately expands your forward Yield on Cost (YoC).
+  3. Size each DCA tranche at 20-25% of your planned total position allocation so you retain dry powder if price tests deeper support.
+• Golden Rule: Do NOT panic-sell or use tight swing stops. Core dividend assets compound through market cycles.`;
+        } else if (isStopQuery) {
+          aiReply = `🛡️ Risk & Stop Philosophy for ${cleanSym} (Core Dividend Holding):
+
+Because ${cleanSym} is an institutional dividend compounder, traditional tight swing stops do NOT apply.
+• Why No Tight Stop? Short-term price dips increase dividend cash-flow yield and offer DCA accumulation opportunities. Selling on a -5% dip defeats the purpose of dividend compounding.
+• When to Consider Breakeven: A breakeven floor is optional only after a substantial rally (+15% to +20%) to protect accumulated capital.
+• Invalidation Condition: The only true exit trigger for a dividend holding is fundamental deterioration (e.g. collapse in insurance underwriting profits or dividend policy cancellation), NOT short-term technical noise.`;
+        } else if (isTargetProfitQuery) {
+          aiReply = `🎯 Return Realization for ${cleanSym}:
+• Primary Return: Annual dividend cash distributions harvested directly without touching your principal shares.
+• Capital Appreciation: If ${cleanSym} rallies toward Target 1 (${curr}${target1.toFixed(2)}), you may optionally trim a minor tranche (20-25%) to lock in gains and redeploy, while preserving the core compounding engine.`;
+        } else if (isDividendQuery) {
+          aiReply = `📈 Dividend Yield & Compounding for ${cleanSym}:
+• Reliable cash generator designed for steady annual distributions.
+• Buying additional lots at current prices (~${curr}${asset.currentPrice.toFixed(2)}) enhances your future dividend payout yield.
+• Reinvest dividend cash-flows into whichever portfolio holding is currently sitting in its Prime DCA Zone.`;
+        } else {
+          aiReply = `💎 Core Dividend Status for ${cleanSym}:
+${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${asset.currentPrice.toFixed(2)} vs Avg Entry: ${curr}${entry.toFixed(2)}). Capital allocation priority is patient accumulation on weakness and collecting high dividend cash flow, bypassing short-term swing stops.`;
+        }
       } else {
-        aiReply = `Based on current technical indicators for ${cleanSym} (${asset.strategy || 'Momentum Setup'}), the priority is capital preservation. Maintain your stop at ${curr}${stop.toFixed(2)} and watch for follow-through toward ${curr}${target1.toFixed(2)}.`;
+        // --- SWING / MOMENTUM SETUP REASONING ENGINE ---
+        if (isStopQuery || lower.includes('breakeven')) {
+          aiReply = `For ${cleanSym}, your entry is ${curr}${entry.toFixed(2)}. ${
+            (asset.pnlPercent || 0) >= 3.0
+              ? `Because you are in profit (+${(asset.pnlPercent || 0).toFixed(2)}%), moving your stop loss to ${curr}${breakevenLevel.toFixed(2)} eliminates all downside risk and turns this into a 100% Free Trade.`
+              : `Since the position is currently around entry, keep your initial stop at ${curr}${stop.toFixed(2)}. Move to breakeven once price reaches +3% to +4% profit.`
+          }`;
+        } else if (isTargetProfitQuery) {
+          aiReply = `Institutional rule for ${cleanSym}: Sell 50% at Target 1 (${curr}${target1.toFixed(2)}) to lock in cash and de-risk. Move stop on remaining 50% to entry, then trail Target 2 (${curr}${target2.toFixed(2)}) along the 20-day EMA.`;
+        } else if (isAccumulateQuery) {
+          aiReply = `For swing momentum setup ${cleanSym} (Current: ${curr}${asset.currentPrice.toFixed(2)}), avoid averaging down if price breaks below your stop loss (${curr}${stop.toFixed(2)}). Only add to winning positions on confirmed technical breakouts with volume.`;
+        } else {
+          aiReply = `Based on current technical indicators for ${cleanSym} (${asset.strategy || 'Momentum Setup'}), the priority is capital preservation. Maintain your stop at ${curr}${stop.toFixed(2)} and watch for follow-through toward ${curr}${target1.toFixed(2)}.`;
+        }
       }
 
       setChatMessages(prev => [...prev, { sender: 'ai', text: aiReply }]);
       setIsThinking(false);
-    }, 600);
+    }, 500);
   };
 
   return (
@@ -321,27 +363,62 @@ export default function AiTradeCoPilotModal({
             <div className="space-y-3">
               {/* Preset quick question chips */}
               <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuickQuestion('When should I move my stop loss to breakeven?')}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
-                >
-                  🛡️ Breakeven rule?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickQuestion('Should I sell 50% at Target 1?')}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
-                >
-                  🎯 50% Scaling plan?
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickQuestion('Is this a good level for DCA accumulation?')}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
-                >
-                  💰 DCA opportunity?
-                </button>
+                {asset.isDividend ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('When should I accumulate more shares?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-colors"
+                    >
+                      💰 When to accumulate more?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('What is the stop loss rule for this dividend position?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
+                    >
+                      🛡️ Stop loss & risk rule?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('What is the target and profit realization plan?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
+                    >
+                      🎯 Target & trimming plan?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('How does dividend yield compound with this position?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors"
+                    >
+                      📈 Dividend yield compounding?
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('When should I move my stop loss to breakeven?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
+                    >
+                      🛡️ Breakeven rule?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('Should I sell 50% at Target 1?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
+                    >
+                      🎯 50% Scaling plan?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickQuestion('Is this a good level for DCA accumulation?')}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-650 text-gray-700 dark:text-gray-200 transition-colors"
+                    >
+                      💰 DCA opportunity?
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Chat history */}
@@ -357,7 +434,7 @@ export default function AiTradeCoPilotModal({
                       className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
+                        className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-line ${
                           msg.sender === 'user'
                             ? 'bg-blue-600 text-white rounded-tr-none'
                             : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-tl-none shadow-sm'
