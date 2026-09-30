@@ -57,6 +57,16 @@ def sync_all_to_supabase():
     
     # We will upload the most recent 15 days of bars per symbol
     df_prices["Date"] = pd.to_datetime(df_prices["Date"])
+    def _clean_float(val):
+        if pd.isna(val) or val is None or val == "":
+            return None
+        try:
+            f = float(val)
+            import math
+            return None if math.isnan(f) or math.isinf(f) else f
+        except (ValueError, TypeError):
+            return None
+
     recent_prices = df_prices.groupby("Symbol").tail(15).copy()
     
     price_rows = []
@@ -66,16 +76,25 @@ def sync_all_to_supabase():
         if not asset_id:
             continue
             
+        c = _clean_float(row["Close"])
+        if c is None:
+            continue
+            
         dt_str = row["Date"].strftime("%Y-%m-%d")
+        o = _clean_float(row["Open"])
+        h = _clean_float(row["High"])
+        l = _clean_float(row["Low"])
+        v = _clean_float(row["Volume"])
+        
         price_rows.append({
             "asset_id": asset_id,
             "date": dt_str,
-            "open": float(row["Open"]) if pd.notna(row["Open"]) else None,
-            "high": float(row["High"]) if pd.notna(row["High"]) else None,
-            "low": float(row["Low"]) if pd.notna(row["Low"]) else None,
-            "close": float(row["Close"]),
-            "adj_close": float(row["Close"]),
-            "volume": int(row["Volume"]) if pd.notna(row["Volume"]) else 0,
+            "open": o if o is not None else c,
+            "high": h if h is not None else c,
+            "low": l if l is not None else c,
+            "close": c,
+            "adj_close": c,
+            "volume": int(v) if v is not None else 0,
         })
         
     print(f"Upserting {len(price_rows)} price bars to Supabase (chunks of 100)...")
