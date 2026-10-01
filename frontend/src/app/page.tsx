@@ -830,29 +830,31 @@ export default function Home() {
   const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
     try {
       setIsRefreshing(true);
-      if (triggerCloudCrawl) {
-        setSyncFeedback({ message: '🚀 Dispatching cloud market crawler on GitHub Actions...', type: 'info' });
-        try {
-          const res = await fetch('/api/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'cloud_crawl' })
-          });
-          const json = await res.json();
-          if (json.dispatched) {
-            setSyncFeedback({ message: '🚀 Cloud sync started! Live prices will update.', type: 'success' });
-          } else {
-            setSyncFeedback({ message: json.message || 'Reloading live data from database...', type: 'info' });
-          }
-        } catch (e) {
-          console.warn('Sync dispatch warning:', e);
+      setSyncFeedback({
+        message: triggerCloudCrawl ? '⚡ Fetching real-time quotes & crawling market...' : '🔄 Pulling live market quotes from exchange...',
+        type: 'info'
+      });
+
+      // 1. Trigger on-demand quote fetching & database update on /api/sync
+      try {
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: triggerCloudCrawl ? 'cloud_crawl' : 'sync_live' })
+        });
+        const json = await res.json();
+        if (json.message) {
+          setSyncFeedback({ message: json.message, type: 'success' });
         }
+      } catch (e) {
+        console.warn('Sync API request warning:', e);
       }
+
+      // 2. Reload fresh data & recalculate portfolio from Supabase
       await loadData(true);
       const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setLastRefreshedAt(nowStr);
-      setSyncFeedback({ message: `✅ Live data updated (${nowStr})`, type: 'success' });
-      setTimeout(() => setSyncFeedback(null), 4000);
+      setTimeout(() => setSyncFeedback(null), 5000);
     } catch (err: any) {
       setSyncFeedback({ message: `⚠️ Refresh failed: ${err.message || err}`, type: 'error' });
       setTimeout(() => setSyncFeedback(null), 5000);
