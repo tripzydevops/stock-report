@@ -157,3 +157,17 @@ export interface CapitalTransfer {
   notes?: string;
 }
 
+export interface MarketCatalyst {
+  id: string;
+  symbol: string;
+  market: 'BIST' | 'US';
+  category: string;
+  title: string;
+  details?: string;
+  aiVerdict: 'Bullish' | 'Bearish' | 'Neutral';
+  aiTakeaway: string;
+  impactScore: number;
+  sourceUrl?: string;
+  publishedAt: string;
+}
+

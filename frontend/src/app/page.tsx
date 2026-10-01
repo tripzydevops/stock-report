@@ -13,6 +13,7 @@ import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
+import CatalystFeedView from '../components/CatalystFeedView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import {
@@ -25,6 +26,7 @@ import {
   ExecutedOrder,
   CapitalTransfer,
   ScannedTradeSignal,
+  MarketCatalyst,
 } from '../lib/supabaseClient';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -475,6 +477,7 @@ export default function Home() {
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
+  const [catalysts, setCatalysts] = useState<MarketCatalyst[]>([]);
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -633,6 +636,29 @@ export default function Home() {
           if (openSignals.length > 0) {
             setSignals(openSignals);
           }
+        }
+
+        // 3.5 Fetch Market Catalysts & KAP Disclosures
+        const { data: catData } = await supabase
+          .from('market_catalysts')
+          .select('*')
+          .order('published_at', { ascending: false });
+
+        if (catData && catData.length > 0) {
+          const mappedCat: MarketCatalyst[] = catData.map((c: any) => ({
+            id: c.id,
+            symbol: c.symbol,
+            market: c.market || 'BIST',
+            category: c.category,
+            title: c.title,
+            details: c.details,
+            aiVerdict: c.ai_verdict || 'Bullish',
+            aiTakeaway: c.ai_takeaway || 'Positive catalyst.',
+            impactScore: Number(c.impact_score) || 8.0,
+            sourceUrl: c.source_url,
+            publishedAt: c.published_at
+          }));
+          setCatalysts(mappedCat);
         }
 
         // 4. Fetch Executed Orders from Supabase
@@ -1463,7 +1489,7 @@ export default function Home() {
       )}
 
       {/* Tab Navigation */}
-      <NavigationTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <NavigationTabs activeTab={activeTab} onTabChange={setActiveTab} catalystsCount={catalysts.length} />
 
       {/* Regime Banners (Always visible on top) */}
       <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} />
@@ -1587,6 +1613,16 @@ export default function Home() {
               />
             </div>
           </div>
+        )}
+
+        {/* TAB 1.5: CATALYSTS & KAP DISCLOSURES */}
+        {activeTab === 'catalysts' && (
+          <CatalystFeedView
+            catalysts={catalysts}
+            portfolio={portfolio}
+            signals={signals}
+            onSelectTicker={handleSelectTicker}
+          />
         )}
 
         {/* TAB 2: MY PORTFOLIO & DCA */}

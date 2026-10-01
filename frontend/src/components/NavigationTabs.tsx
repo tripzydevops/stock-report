@@ -2,16 +2,18 @@
 
 import React from 'react';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb' | 'catalysts';
 
 interface NavigationTabsProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  catalystsCount?: number;
 }
 
-export default function NavigationTabs({ activeTab, onTabChange }: NavigationTabsProps) {
+export default function NavigationTabs({ activeTab, onTabChange, catalystsCount = 9 }: NavigationTabsProps) {
   const tabs: { id: TabId; label: string; icon: string; count?: string }[] = [
     { id: 'signals', label: 'Market & Signals', icon: '🎯' },
+    { id: 'catalysts', label: '⚡ Catalysts & KAP', icon: '📢', count: `${catalystsCount}` },
     { id: 'portfolio', label: 'My Portfolio & DCA', icon: '💼' },
     { id: 'dividend', label: 'Dividend Cashflow', icon: '💰' },
     { id: 'scorecard', label: 'Strategy Scorecard', icon: '📈', count: '1,173' },
