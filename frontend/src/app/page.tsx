@@ -477,6 +477,9 @@ export default function Home() {
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -499,17 +502,20 @@ export default function Home() {
   };
 
   // Fetch real data from Supabase
-  useEffect(() => {
-    async function loadData() {
-      try {
+  const loadData = async (isManualSync: boolean = false) => {
+    try {
+      if (isManualSync) {
+        setIsRefreshing(true);
+      } else {
         setIsLoading(true);
+      }
 
-        // 1. Fetch Market Regimes specifically by market
-        const [usRes, bistRes, fxRes] = await Promise.all([
-          supabase.from('market_regime').select('*').eq('market', 'US').order('date', { ascending: false }).limit(1),
-          supabase.from('market_regime').select('*').eq('market', 'BIST').order('date', { ascending: false }).limit(1),
-          supabase.from('fx_rates').select('rate').eq('pair', 'USDTRY').order('date', { ascending: false }).limit(1)
-        ]);
+      // 1. Fetch Market Regimes specifically by market
+      const [usRes, bistRes, fxRes] = await Promise.all([
+        supabase.from('market_regime').select('*').eq('market', 'US').order('date', { ascending: false }).limit(1),
+        supabase.from('market_regime').select('*').eq('market', 'BIST').order('date', { ascending: false }).limit(1),
+        supabase.from('fx_rates').select('rate').eq('pair', 'USDTRY').order('date', { ascending: false }).limit(1)
+      ]);
 
         if (usRes.data && usRes.data.length > 0) {
           const us = usRes.data[0];
@@ -749,8 +755,9 @@ export default function Home() {
         generateFallbackAssets();
       } finally {
         setIsLoading(false);
+        setIsRefreshing(false);
       }
-    }
+    };
 
     function generateFallbackAssets() {
       const topSymbols = [
@@ -789,8 +796,43 @@ export default function Home() {
       })));
     }
 
+  useEffect(() => {
     loadData();
   }, []);
+
+  const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
+    try {
+      setIsRefreshing(true);
+      if (triggerCloudCrawl) {
+        setSyncFeedback({ message: '🚀 Dispatching cloud market crawler on GitHub Actions...', type: 'info' });
+        try {
+          const res = await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'cloud_crawl' })
+          });
+          const json = await res.json();
+          if (json.dispatched) {
+            setSyncFeedback({ message: '🚀 Cloud sync started! Live prices will update.', type: 'success' });
+          } else {
+            setSyncFeedback({ message: json.message || 'Reloading live data from database...', type: 'info' });
+          }
+        } catch (e) {
+          console.warn('Sync dispatch warning:', e);
+        }
+      }
+      await loadData(true);
+      const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      setLastRefreshedAt(nowStr);
+      setSyncFeedback({ message: `✅ Live data updated (${nowStr})`, type: 'success' });
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } catch (err: any) {
+      setSyncFeedback({ message: `⚠️ Refresh failed: ${err.message || err}`, type: 'error' });
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleRemoveHolding = async (symbol: string) => {
     // 1. Immediately update UI state
@@ -1344,19 +1386,62 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
             <div className="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
               <span>USD/TRY:</span>
               <span className="text-blue-600 dark:text-blue-400">₺{usdTryRate.toFixed(2)}</span>
             </div>
 
+            {/* In-App Sync & Refresh Action Buttons */}
             <div className="flex items-center space-x-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-xs text-gray-500 font-semibold">Supabase Connected</span>
+              <button
+                onClick={() => handleTriggerSync(false)}
+                disabled={isRefreshing}
+                title="Instantly reload live prices, positions, and indicators from Supabase"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <svg
+                  className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="hidden sm:inline">{isRefreshing ? 'Syncing...' : 'Sync Market Data'}</span>
+                <span className="sm:hidden">{isRefreshing ? '...' : 'Sync'}</span>
+              </button>
+
+              <button
+                onClick={() => handleTriggerSync(true)}
+                disabled={isRefreshing}
+                title="Trigger full on-demand market crawler in GitHub Actions (fetches all 118 tickers)"
+                className="hidden lg:flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <span>⚡ Run Crawler</span>
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">Connected</span>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Floating Sync Notification Toast */}
+      {syncFeedback && (
+        <div className="fixed top-18 right-4 sm:right-8 z-50 animate-bounce duration-300 pointer-events-none">
+          <div className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-xl border flex items-center space-x-2 backdrop-blur-md ${
+            syncFeedback.type === 'success' ? 'bg-emerald-950/90 text-emerald-200 border-emerald-700 shadow-emerald-950/50' :
+            syncFeedback.type === 'info' ? 'bg-blue-950/90 text-blue-200 border-blue-700 shadow-blue-950/50' :
+            'bg-rose-950/90 text-rose-200 border-rose-700 shadow-rose-950/50'
+          }`}>
+            <span>{syncFeedback.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <NavigationTabs activeTab={activeTab} onTabChange={setActiveTab} />
