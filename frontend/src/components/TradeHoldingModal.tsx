@@ -7,8 +7,8 @@ interface TradeHoldingModalProps {
   isOpen: boolean;
   holding: PortfolioItem | null;
   onClose: () => void;
-  onBuyMore: (symbol: string, additionalShares: number, buyPrice: number) => void;
-  onSell: (symbol: string, sharesToSell: number, sellPrice: number) => void;
+  onBuyMore: (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => void;
+  onSell: (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string) => void;
 }
 
 export default function TradeHoldingModal({
@@ -21,11 +21,13 @@ export default function TradeHoldingModal({
   const [tab, setTab] = useState<'BUY' | 'SELL'>('BUY');
   const [sharesInput, setSharesInput] = useState<number>(0);
   const [priceInput, setPriceInput] = useState<number>(0);
+  const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (holding) {
       setSharesInput(tab === 'BUY' ? Math.round(holding.shares * 0.25) || 10 : Math.round(holding.shares * 0.5) || holding.shares);
       setPriceInput(holding.currentPrice || holding.entryPrice);
+      setTradeDate(new Date().toISOString().slice(0, 10));
     }
   }, [holding, tab]);
 
@@ -59,10 +61,10 @@ export default function TradeHoldingModal({
     e.preventDefault();
     if (tab === 'BUY') {
       if (buyAdditionalShares <= 0 || buyExecPrice <= 0) return;
-      onBuyMore(holding.symbol, buyAdditionalShares, buyExecPrice);
+      onBuyMore(holding.symbol, buyAdditionalShares, buyExecPrice, tradeDate);
     } else {
       if (sellShares <= 0 || sellExecPrice <= 0) return;
-      onSell(holding.symbol, sellShares, sellExecPrice);
+      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate);
     }
     onClose();
   };
@@ -154,6 +156,19 @@ export default function TradeHoldingModal({
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  🗓️ Execution Date (Date Bought)
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={tradeDate}
+                  onChange={(e) => setTradeDate(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none text-gray-900 dark:text-white font-medium"
+                />
+              </div>
+
               {/* Dynamic Blended Average Preview Box */}
               <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 space-y-2">
                 <div className="flex justify-between items-center text-xs">
@@ -180,48 +195,63 @@ export default function TradeHoldingModal({
           ) : (
             /* SELL SHARES FLOW */
             <>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    Shares to Sell (Max: {holding.shares})
-                  </label>
-                  <div className="flex space-x-1">
-                    {[25, 50, 75, 100].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => handleQuickPercent(pct)}
-                        className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors"
-                      >
-                        {pct === 100 ? 'MAX' : `${pct}%`}
-                      </button>
-                    ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Shares to Sell
+                    </label>
+                    <div className="flex space-x-1">
+                      {[25, 50, 75, 100].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => handleQuickPercent(pct)}
+                          className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors"
+                        >
+                          {pct === 100 ? 'MAX' : `${pct}%`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <input
+                    type="number"
+                    min="1"
+                    max={holding.shares}
+                    step="any"
+                    required
+                    value={sharesInput}
+                    onChange={(e) => setSharesInput(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 dark:text-white font-bold"
+                  />
                 </div>
-                <input
-                  type="number"
-                  min="1"
-                  max={holding.shares}
-                  step="any"
-                  required
-                  value={sharesInput}
-                  onChange={(e) => setSharesInput(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 dark:text-white font-bold"
-                />
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Selling Price ({currencySymbol})
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    required
+                    value={priceInput}
+                    onChange={(e) => setPriceInput(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 dark:text-white font-bold"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Selling Execution Price ({currencySymbol})
+                  🗓️ Execution Date (Date Sold)
                 </label>
                 <input
-                  type="number"
-                  min="0.01"
-                  step="any"
+                  type="date"
                   required
-                  value={priceInput}
-                  onChange={(e) => setPriceInput(parseFloat(e.target.value) || 0)}
-                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 dark:text-white font-bold"
+                  value={tradeDate}
+                  onChange={(e) => setTradeDate(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-rose-500 outline-none text-gray-900 dark:text-white font-medium"
                 />
               </div>
 

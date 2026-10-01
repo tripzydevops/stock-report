@@ -363,6 +363,7 @@ export default function PortfolioView({
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
                 <th className="px-5 py-3">Asset</th>
+                <th className="px-4 py-3 text-center">Date Bought</th>
                 <th className="px-5 py-3 text-right">Shares</th>
                 <th className="px-5 py-3 text-right">Avg Entry</th>
                 <th className="px-5 py-3 text-right">Current Price</th>
@@ -377,6 +378,13 @@ export default function PortfolioView({
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {portfolio.map((item, idx) => {
                 const isProfit = item.pnlPercent >= 0;
+                const formattedBoughtDate = item.entryDate 
+                  ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                  : '24.09.2026';
+                const daysHeld = item.entryDate
+                  ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
+                  : null;
+
                 return (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                     <td className="px-5 py-4">
@@ -391,7 +399,23 @@ export default function PortfolioView({
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500">{item.name}</div>
+                      <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5">
+                        <span>{item.name}</span>
+                        <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
+                          🗓️ {formattedBoughtDate}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 text-center whitespace-nowrap">
+                      <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-300 font-bold text-xs shadow-sm">
+                        <span>🗓️</span>
+                        <span>{formattedBoughtDate}</span>
+                      </span>
+                      {daysHeld && (
+                        <div className="text-[10px] text-gray-400 font-medium mt-0.5">
+                          {daysHeld}d held
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-right font-medium text-gray-900 dark:text-white">
                       {item.shares.toLocaleString()}
@@ -691,7 +715,7 @@ export default function PortfolioView({
                   <th className="px-5 py-3 text-right">Execution Sell Price</th>
                   <th className="px-5 py-3 text-right">Realized P&L</th>
                   <th className="px-5 py-3 text-right">Return %</th>
-                  <th className="px-5 py-3 text-center">Execution Date</th>
+                  <th className="px-5 py-3 text-center">Date Sold / Closed</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -737,8 +761,11 @@ export default function PortfolioView({
                           {isProfit ? '▲ +' : '▼ '}{trade.realizedPnlPercent.toFixed(2)}%
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-center text-xs text-gray-500">
-                        {trade.closeDate}
+                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
+                          <span>🗓️</span>
+                          <span>{trade.closeDate}</span>
+                        </span>
                       </td>
                     </tr>
                   );
@@ -865,8 +892,11 @@ export default function PortfolioView({
                       <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
                         {ord.dcaNote || '-'}
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs text-gray-500 font-mono">
-                        {ord.dateTime}
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-900/50 font-bold text-xs font-mono shadow-sm">
+                          <span>🗓️</span>
+                          <span>{ord.dateTime}</span>
+                        </span>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-mono text-gray-400">
                         {ord.ref}
@@ -933,8 +963,11 @@ export default function PortfolioView({
                       <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
                         {t.notes || 'Brokerage funding'}
                       </td>
-                      <td className="px-5 py-3.5 text-right text-xs text-gray-500 font-mono">
-                        {t.transferDate}
+                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-xs border border-gray-200 dark:border-gray-600 shadow-sm font-mono">
+                          <span>🗓️</span>
+                          <span>{t.transferDate}</span>
+                        </span>
                       </td>
                     </tr>
                   ))

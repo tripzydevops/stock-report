@@ -709,7 +709,7 @@ export default function Home() {
             const cleanUpper = cleanSym.toUpperCase();
             const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
             const isCoreDiv = overrideStrategy ? (overrideStrategy === 'CORE_DIVIDEND') : ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanUpper);
-            const entryDate = pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24';
+            const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
             const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
             const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
               ? Number(pos.stop_loss)
@@ -939,6 +939,7 @@ export default function Home() {
       }
 
       if (assetId) {
+        const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
         await supabase.from('portfolio_positions').insert([{
           asset_id: assetId,
           quantity: newHolding.shares,
@@ -946,13 +947,19 @@ export default function Home() {
           stop_loss: newHolding.stopLoss > 0 ? newHolding.stopLoss : null,
           target_price: (newHolding.targetPrice && newHolding.targetPrice > 0) ? newHolding.targetPrice : null,
           is_open: true,
+          entry_date: orderDateStr,
           notes: newHolding.dcaRationale
         }]);
 
         // Also record an Executed Order in Supabase and UI state!
         const totalVal = newHolding.shares * newHolding.entryPrice;
         const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-        const nowIso = new Date().toISOString();
+        const chosenIso = orderDateStr
+          ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
+          : new Date().toISOString();
+        const displayDateTime = orderDateStr
+          ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
+          : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
         try {
           await supabase.from('portfolio_orders').insert([{
@@ -964,7 +971,7 @@ export default function Home() {
             price: newHolding.entryPrice,
             total_amount: totalVal,
             currency: newHolding.currency || 'TRY',
-            executed_at: nowIso,
+            executed_at: chosenIso,
             status: 'Filled',
             notes: newHolding.dcaRationale || 'Position initiation'
           }]);
@@ -984,7 +991,7 @@ export default function Home() {
           price: newHolding.entryPrice,
           totalValue: totalVal,
           currency: newHolding.currency || 'TRY',
-          dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+          dateTime: displayDateTime,
           status: 'Filled',
           dcaNote: newHolding.dcaRationale || 'Position initiation'
         };
@@ -995,7 +1002,7 @@ export default function Home() {
     }
   };
 
-  const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number) => {
+  const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {
     setPortfolio(prev => {
       return prev.map(item => {
         if (item.symbol !== symbol) return item;
@@ -1068,7 +1075,12 @@ export default function Home() {
           // Log buy order to portfolio_orders
           const totalVal = additionalShares * buyPrice;
           const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-          const nowIso = new Date().toISOString();
+          const executionIso = tradeDate
+            ? new Date(tradeDate + 'T10:00:00Z').toISOString()
+            : new Date().toISOString();
+          const displayDateTime = tradeDate
+            ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
+            : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
           try {
             await supabase.from('portfolio_orders').insert([{
@@ -1080,7 +1092,7 @@ export default function Home() {
               price: buyPrice,
               total_amount: totalVal,
               currency: target.currency || 'TRY',
-              executed_at: nowIso,
+              executed_at: executionIso,
               status: 'Filled',
               notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
             }]);
@@ -1100,7 +1112,7 @@ export default function Home() {
             price: buyPrice,
             totalValue: totalVal,
             currency: target.currency || 'TRY',
-            dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+            dateTime: displayDateTime,
             status: 'Filled',
             dcaNote: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
           };
@@ -1112,13 +1124,14 @@ export default function Home() {
     }
   };
 
-  const handleSellHolding = async (symbol: string, sharesToSell: number, sellPrice: number) => {
+  const handleSellHolding = async (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string) => {
     const target = portfolio.find(p => p.symbol === symbol);
     if (!target) return;
 
     const actualSold = Math.min(sharesToSell, target.shares);
     const realizedPnl = (sellPrice - target.entryPrice) * actualSold;
     const realizedPnlPct = target.entryPrice > 0 ? ((sellPrice - target.entryPrice) / target.entryPrice) * 100 : 0;
+    const chosenCloseDate = tradeDate || new Date().toISOString().slice(0, 10);
 
     // Record realized trade
     const newRealized: RealizedTrade = {
@@ -1132,7 +1145,7 @@ export default function Home() {
       exitPrice: sellPrice,
       realizedPnl: realizedPnl,
       realizedPnlPercent: realizedPnlPct,
-      closeDate: new Date().toISOString().slice(0, 10)
+      closeDate: chosenCloseDate
     };
 
     setRealizedTrades(prev => [newRealized, ...prev]);
@@ -1202,7 +1215,12 @@ export default function Home() {
       // Log sell order to portfolio_orders
       const totalVal = actualSold * sellPrice;
       const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-      const nowIso = new Date().toISOString();
+      const executionIso = tradeDate
+        ? new Date(tradeDate + 'T10:00:00Z').toISOString()
+        : new Date().toISOString();
+      const displayDateTime = tradeDate
+        ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
+        : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
       try {
         await supabase.from('portfolio_orders').insert([{
@@ -1214,7 +1232,7 @@ export default function Home() {
           price: sellPrice,
           total_amount: totalVal,
           currency: target.currency || 'TRY',
-          executed_at: nowIso,
+          executed_at: executionIso,
           status: 'Filled',
           notes: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`
         }]);
@@ -1234,7 +1252,7 @@ export default function Home() {
         price: sellPrice,
         totalValue: totalVal,
         currency: target.currency || 'TRY',
-        dateTime: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+        dateTime: displayDateTime,
         status: 'Filled',
         dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})`
       };

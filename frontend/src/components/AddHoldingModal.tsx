@@ -20,6 +20,7 @@ export default function AddHoldingModal({
   const [shares, setShares] = useState<number>(100);
   const [entryPrice, setEntryPrice] = useState<number>(100);
   const [currentPrice, setCurrentPrice] = useState<number>(100);
+  const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [stopLoss, setStopLoss] = useState<number | ''>('');
   const [isDividend, setIsDividend] = useState(false);
   const [dividendYield, setDividendYield] = useState<number>(5.0);
@@ -56,7 +57,8 @@ export default function AddHoldingModal({
       distanceToStop: distToStop,
       isDividend: isDividend,
       dcaZone: isDividend ? 'BUY' : 'HOLD',
-      dcaRationale: isDividend ? 'Accumulating on pullback value zones.' : 'Active holding'
+      dcaRationale: isDividend ? 'Accumulating on pullback value zones.' : 'Active holding',
+      entryDate: entryDate || new Date().toISOString().slice(0, 10),
     };
 
     onAddHolding(newHolding, isDividend, isDividend ? Number(dividendYield) : undefined);
@@ -68,6 +70,7 @@ export default function AddHoldingModal({
     setShares(100);
     setEntryPrice(100);
     setCurrentPrice(100);
+    setEntryDate(new Date().toISOString().slice(0, 10));
     setStopLoss('');
     setIsDividend(false);
   };
@@ -113,15 +116,29 @@ export default function AddHoldingModal({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Company / Asset Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Türk Hava Yolları"
-              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Company / Asset Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Türk Hava Yolları"
+                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                🗓️ Date Bought / Added
+              </label>
+              <input
+                type="date"
+                required
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white font-medium"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
