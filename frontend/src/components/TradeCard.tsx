@@ -42,8 +42,8 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl">
-      <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-start gap-2">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl">
+      <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap sm:flex-nowrap justify-between items-start gap-2.5">
         <div>
           <div className="flex items-center gap-2">
             <button 
@@ -70,9 +70,23 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
         </div>
-        <span className={`px-2 py-1 rounded text-xs font-semibold shrink-0 ${getStrategyColor(signal.strategy)}`}>
-          {signal.strategy}
-        </span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-1.5">
+            {signal.date === '2026-10-01' || signal.date === new Date().toISOString().slice(0, 10) ? (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
+                <span>🔥</span>
+                <span>NEW TODAY</span>
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                🗓️ {signal.date}
+              </span>
+            )}
+            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${getStrategyColor(signal.strategy)}`}>
+              {signal.strategy}
+            </span>
+          </div>
+        </div>
       </div>
       
       <div className="p-4 flex-grow">
@@ -128,7 +142,7 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
         </div>
       </div>
       
-      <div className="bg-gray-50 dark:bg-gray-900 p-3 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
+      <div className="bg-gray-50 dark:bg-gray-900 p-3 flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
         <span className="px-2 py-0.5 border border-gray-200 dark:border-gray-600 rounded text-[10px] uppercase font-bold">{signal.market}</span>
         {(() => {
           const timing = calculateExitDate(signal.date, signal.strategy);

@@ -458,6 +458,7 @@ export default function Home() {
     status: 'Neutral', close: 12550.94, trend: 'flat'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
+  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BIST' | 'US'>('ALL');
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
   const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
@@ -1493,22 +1494,84 @@ export default function Home() {
                     </span>
                   </div>
                 </div>
+
+                {/* Quick Filter Bar */}
+                {(() => {
+                  const todayCount = signals.filter(s => s.date === '2026-10-01' || s.date === new Date().toISOString().slice(0, 10)).length;
+                  const bistCount = signals.filter(s => s.market === 'BIST').length;
+                  const usCount = signals.filter(s => s.market === 'US').length;
+
+                  return (
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                      <button
+                        onClick={() => setSignalFilter('ALL')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          signalFilter === 'ALL'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        All Active ({signals.length})
+                      </button>
+                      <button
+                        onClick={() => setSignalFilter('TODAY')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          signalFilter === 'TODAY'
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                        }`}
+                      >
+                        <span>🔥</span>
+                        <span>Today's New ({todayCount})</span>
+                      </button>
+                      <button
+                        onClick={() => setSignalFilter('BIST')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          signalFilter === 'BIST'
+                            ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <span>🇹🇷</span>
+                        <span>BIST ({bistCount})</span>
+                      </button>
+                      <button
+                        onClick={() => setSignalFilter('US')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          signalFilter === 'US'
+                            ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <span>🇺🇸</span>
+                        <span>US Market ({usCount})</span>
+                      </button>
+                    </div>
+                  );
+                })()}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {signals.map((sig, idx) => (
-                    <TradeCard 
-                      key={idx} 
-                      signal={sig} 
-                      onSelectTicker={handleSelectTicker}
-                      onCalcSize={(s) => setCalcTrade({
-                        entryPrice: s.entryPrice,
-                        stopLoss: s.stopLoss,
-                        currency: s.currency as 'USD' | 'TRY',
-                        symbol: s.symbol
-                      })}
-                      onOpenCoPilot={handleOpenCoPilotForSignal}
-                    />
-                  ))}
+                  {signals
+                    .filter(sig => {
+                      if (signalFilter === 'TODAY') return sig.date === '2026-10-01' || sig.date === new Date().toISOString().slice(0, 10);
+                      if (signalFilter === 'BIST') return sig.market === 'BIST';
+                      if (signalFilter === 'US') return sig.market === 'US';
+                      return true;
+                    })
+                    .map((sig, idx) => (
+                      <TradeCard 
+                        key={idx} 
+                        signal={sig} 
+                        onSelectTicker={handleSelectTicker}
+                        onCalcSize={(s) => setCalcTrade({
+                          entryPrice: s.entryPrice,
+                          stopLoss: s.stopLoss,
+                          currency: s.currency as 'USD' | 'TRY',
+                          symbol: s.symbol
+                        })}
+                        onOpenCoPilot={handleOpenCoPilotForSignal}
+                      />
+                    ))}
                 </div>
               </div>
 
