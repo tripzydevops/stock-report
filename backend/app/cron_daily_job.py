@@ -92,18 +92,44 @@ def db_upsert_indicators(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.
 
 
 def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
-    """Insert new signals into trade_signals table."""
+    """Insert new signals into trade_signals table with deduplication."""
+    if not signals:
+        return
+
+    client = get_supabase_client()
+    try:
+        existing_res = client.table("trade_signals").select("asset_id, signal_date, strategy").execute()
+        existing_keys = {
+            (
+                r.get("asset_id"),
+                str(r.get("signal_date"))[:10],
+                r.get("strategy", "").lower().replace(" ", "_")
+            )
+            for r in (existing_res.data or [])
+        }
+    except Exception as e:
+        logger.warning(f"Could not load existing signals for deduplication: {e}")
+        existing_keys = set()
+
     rows = []
     for sig in signals:
         asset_id = asset_id_map.get(sig.get("symbol"))
         if not asset_id:
             continue
 
+        raw_date = sig.get("signal_date")
+        date_str = raw_date.strftime("%Y-%m-%d") if hasattr(raw_date, "strftime") else str(raw_date)[:10]
+        strat_key = sig.get("strategy", "unknown").lower().replace(" ", "_")
+
+        if (asset_id, date_str, strat_key) in existing_keys:
+            logger.info(f"Skipping duplicate signal for {sig.get('symbol')} on {date_str} ({sig.get('strategy')})")
+            continue
+
         ai = sig.get("ai_analysis", {})
         rows.append({
             "asset_id": asset_id,
             "strategy": sig.get("strategy", "unknown"),
-            "signal_date": sig.get("signal_date").isoformat() if hasattr(sig.get("signal_date"), "isoformat") else str(sig.get("signal_date")),
+            "signal_date": date_str,
             "entry_price": float(sig.get("entry_price", 0)),
             "stop_loss": float(sig.get("stop_loss", 0)) if sig.get("stop_loss") else None,
             "target_1": float(sig.get("target_1", 0)) if sig.get("target_1") else None,
@@ -112,6 +138,7 @@ def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
             "ai_rationale": ai.get("thesis", "") + " | " + ai.get("risk_assessment", ""),
             "status": "open",
         })
+        existing_keys.add((asset_id, date_str, strat_key))
 
     if rows:
         try:
@@ -122,7 +149,13 @@ def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
 
 
 def db_update_open_signals(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.DataFrame]):
-    """Check existing open signals for stop-loss hits or target hits and update status."""
+    """
+    Check existing open signals for stop-loss hits or target hits and update status.
+    CRITICAL RULE:
+    Trade signals are entered at the daily close of signal_date.
+    They can ONLY be evaluated against subsequent price bars (bar_date > signal_date).
+    Evaluating against the same day's intraday low falsely triggers premature stop-outs!
+    """
     try:
         result = select_rows("trade_signals", {"status": "open"})
         open_signals = result.data if result.data else []
@@ -143,29 +176,72 @@ def db_update_open_signals(asset_id_map: Dict[str, str], asset_data: Dict[str, p
         if df.empty:
             continue
 
-        latest_low = df["low"].iloc[-1] if "low" in df.columns else df["close"].iloc[-1]
-        latest_high = df["high"].iloc[-1] if "high" in df.columns else df["close"].iloc[-1]
-        latest_close = df["close"].iloc[-1]
+        sig_date_str = str(sig.get("signal_date", ""))[:10]
+        if not sig_date_str:
+            continue
 
-        # Check stop loss hit
-        if sig.get("stop_loss") and latest_low <= sig["stop_loss"]:
-            pnl = ((sig["stop_loss"] - sig["entry_price"]) / sig["entry_price"]) * 100
-            client.table("trade_signals").update({
-                "status": "stopped_out",
-                "outcome_pnl_pct": round(pnl, 2),
-                "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            }).eq("id", sig["id"]).execute()
-            logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT at {sig['stop_loss']}")
+        try:
+            sig_date_obj = datetime.date.fromisoformat(sig_date_str)
+        except Exception:
+            continue
 
-        # Check target hit
-        elif sig.get("target_1") and latest_high >= sig["target_1"]:
-            pnl = ((sig["target_1"] - sig["entry_price"]) / sig["entry_price"]) * 100
-            client.table("trade_signals").update({
-                "status": "target_hit",
-                "outcome_pnl_pct": round(pnl, 2),
-                "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            }).eq("id", sig["id"]).execute()
-            logger.info(f"Signal {sig['id']} for {symbol} TARGET HIT at {sig['target_1']}")
+        dates = []
+        for idx in df.index:
+            ts = pd.to_datetime(idx)
+            if getattr(ts, "tzinfo", None) is not None:
+                ts = ts.tz_localize(None)
+            dates.append(ts.date())
+
+        # Strict future check: only evaluate on bars AFTER the signal date
+        future_indices = [i for i, d in enumerate(dates) if d > sig_date_obj]
+        if not future_indices:
+            # Signal was generated on or after the latest bar in df.
+            # Trade is currently ACTIVE / OPEN; do not evaluate against historical morning dips!
+            continue
+
+        entry = float(sig.get("entry_price") or 0)
+        stop = float(sig.get("stop_loss") or 0) if sig.get("stop_loss") else None
+        target = float(sig.get("target_1") or 0) if sig.get("target_1") else None
+
+        if entry <= 0:
+            continue
+
+        for i in future_indices:
+            bar = df.iloc[i]
+            bar_date = dates[i]
+            high = float(bar.get("high", bar["close"]))
+            low = float(bar.get("low", bar["close"]))
+
+            hit_stop = (stop is not None and low <= stop)
+            hit_target = (target is not None and high >= target)
+
+            if hit_stop and hit_target:
+                pnl = ((stop - entry) / entry) * 100
+                client.table("trade_signals").update({
+                    "status": "stopped_out",
+                    "outcome_pnl_pct": round(pnl, 2),
+                    "closed_at": f"{bar_date}T18:00:00Z",
+                }).eq("id", sig["id"]).execute()
+                logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT on {bar_date} at {stop}")
+                break
+            elif hit_target:
+                pnl = ((target - entry) / entry) * 100
+                client.table("trade_signals").update({
+                    "status": "target_hit",
+                    "outcome_pnl_pct": round(pnl, 2),
+                    "closed_at": f"{bar_date}T18:00:00Z",
+                }).eq("id", sig["id"]).execute()
+                logger.info(f"Signal {sig['id']} for {symbol} TARGET HIT on {bar_date} at {target}")
+                break
+            elif hit_stop:
+                pnl = ((stop - entry) / entry) * 100
+                client.table("trade_signals").update({
+                    "status": "stopped_out",
+                    "outcome_pnl_pct": round(pnl, 2),
+                    "closed_at": f"{bar_date}T18:00:00Z",
+                }).eq("id", sig["id"]).execute()
+                logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT on {bar_date} at {stop}")
+                break
 
 
 def db_upsert_regimes(regimes: Dict[str, Dict]):

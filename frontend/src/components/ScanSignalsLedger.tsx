@@ -6,9 +6,10 @@ import { calculateExitDate } from '../lib/tradeTiming';
 
 interface ScanSignalsLedgerProps {
   signals: ScannedTradeSignal[];
+  onSelectTicker?: (symbol: string) => void;
 }
 
-export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
+export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSignalsLedgerProps) {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'target_hit' | 'stopped_out' | 'open'>('ALL');
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US'>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<string>('ALL');
@@ -274,9 +275,17 @@ export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
                       {/* Asset */}
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
-                          <span className="font-bold text-gray-900 dark:text-white group-hover:text-blue-500 transition-colors">
-                            {sig.symbol}
-                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectTicker?.(sig.symbol);
+                            }}
+                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors"
+                            title={`Click to view ${sig.symbol} chart & indicators`}
+                          >
+                            <span>{sig.symbol}</span>
+                            <span className="text-[10px] text-blue-500 opacity-60 hover:opacity-100">📈</span>
+                          </button>
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             {sig.market}
                           </span>
@@ -401,9 +410,17 @@ export default function ScanSignalsLedger({ signals }: ScanSignalsLedgerProps) {
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl relative">
             <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-700">
               <div className="flex items-center space-x-2">
-                <span className="text-xl font-black text-gray-900 dark:text-white">
-                  {activeModalSignal.symbol}
-                </span>
+                <button
+                  onClick={() => {
+                    onSelectTicker?.(activeModalSignal.symbol);
+                    setActiveModalSignal(null);
+                  }}
+                  className="text-xl font-black text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1.5 cursor-pointer text-left transition-colors group"
+                  title={`Click to view ${activeModalSignal.symbol} full chart & indicators`}
+                >
+                  <span className="group-hover:underline">{activeModalSignal.symbol}</span>
+                  <span className="text-xs text-blue-500 opacity-70 group-hover:opacity-100">📈</span>
+                </button>
                 <span className="text-xs px-2 py-0.5 rounded font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                   {activeModalSignal.market}
                 </span>

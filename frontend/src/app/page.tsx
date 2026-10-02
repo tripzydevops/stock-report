@@ -1646,6 +1646,7 @@ export default function Home() {
             onUpdateStopLoss={handleUpdateStopLoss}
             onOpenCoPilot={handleOpenCoPilotForHolding}
             onToggleStrategyType={handleToggleStrategyType}
+            onSelectTicker={handleSelectTicker}
           />
         )}
 
@@ -1654,6 +1655,7 @@ export default function Home() {
           <DividendView
             dividendAssets={dividends}
             usdTryRate={usdTryRate}
+            onSelectTicker={handleSelectTicker}
             onImportCandidate={(cand) => {
               handleAddHolding({
                 symbol: cand.symbol,
@@ -1680,12 +1682,19 @@ export default function Home() {
 
         {/* TAB 4: STRATEGY SCORECARD & SCAN AUDIT */}
         {activeTab === 'scorecard' && (
-          <ScorecardView strategies={strategies} scannedSignals={scannedSignals} />
+          <ScorecardView 
+            strategies={strategies} 
+            scannedSignals={scannedSignals}
+            onSelectTicker={handleSelectTicker}
+          />
         )}
 
         {/* TAB 5: OPENING DIRECTION (ORB) */}
         {activeTab === 'orb' && (
-          <OpeningDirectionView items={orbItems} />
+          <OpeningDirectionView 
+            items={orbItems}
+            onSelectTicker={handleSelectTicker}
+          />
         )}
       </div>
 

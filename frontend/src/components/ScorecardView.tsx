@@ -7,9 +7,10 @@ import ScanSignalsLedger from './ScanSignalsLedger';
 interface ScorecardViewProps {
   strategies: StrategyStat[];
   scannedSignals?: ScannedTradeSignal[];
+  onSelectTicker?: (symbol: string) => void;
 }
 
-export default function ScorecardView({ strategies, scannedSignals = [] }: ScorecardViewProps) {
+export default function ScorecardView({ strategies, scannedSignals = [], onSelectTicker }: ScorecardViewProps) {
   const totalTrades = strategies.reduce((acc, s) => acc + s.totalTrades, 0);
   const weightedWinRate = totalTrades > 0
     ? strategies.reduce((acc, s) => acc + s.winRate * s.totalTrades, 0) / totalTrades
@@ -131,7 +132,7 @@ export default function ScorecardView({ strategies, scannedSignals = [] }: Score
       </div>
 
       {/* Historical Signals & Outcome Audit Ledger */}
-      <ScanSignalsLedger signals={scannedSignals} />
+      <ScanSignalsLedger signals={scannedSignals} onSelectTicker={onSelectTicker} />
 
       {/* Rationale & Edge Guide */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

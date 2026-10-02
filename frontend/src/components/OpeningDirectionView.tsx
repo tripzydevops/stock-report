@@ -5,9 +5,10 @@ import { OpeningDirectionItem } from '../lib/supabaseClient';
 
 interface OpeningDirectionViewProps {
   items: OpeningDirectionItem[];
+  onSelectTicker?: (symbol: string) => void;
 }
 
-export default function OpeningDirectionView({ items }: OpeningDirectionViewProps) {
+export default function OpeningDirectionView({ items, onSelectTicker }: OpeningDirectionViewProps) {
   const bullishCount = items.filter(i => i.bias.includes('Bullish')).length;
   const bearishCount = items.filter(i => i.bias.includes('Bearish')).length;
   const brokenHighCount = items.filter(i => i.orbStatus === 'Broke High').length;
@@ -83,7 +84,14 @@ export default function OpeningDirectionView({ items }: OpeningDirectionViewProp
                 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-gray-900 dark:text-white">{row.symbol}</span>
+                      <button
+                        onClick={() => onSelectTicker?.(row.symbol)}
+                        className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                        title={`Click to view ${row.symbol} chart & indicators`}
+                      >
+                        <span className="group-hover:underline">{row.symbol}</span>
+                        <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                      </button>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                         {row.market}
                       </span>

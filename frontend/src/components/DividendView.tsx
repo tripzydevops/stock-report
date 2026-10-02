@@ -8,9 +8,10 @@ interface DividendViewProps {
   dividendAssets: DividendAsset[];
   usdTryRate: number;
   onImportCandidate?: (candidate: { symbol: string; name: string; market: string; shares: number; price: number; isDividend: boolean }) => void;
+  onSelectTicker?: (symbol: string) => void;
 }
 
-export default function DividendView({ dividendAssets, usdTryRate, onImportCandidate }: DividendViewProps) {
+export default function DividendView({ dividendAssets, usdTryRate, onImportCandidate, onSelectTicker }: DividendViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [viewMode, setViewMode] = useState<'schedule' | 'table' | 'lab'>('schedule');
 
@@ -297,7 +298,14 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-gray-900 dark:text-white">{asset.symbol}</span>
+                        <button
+                          onClick={() => onSelectTicker?.(asset.symbol)}
+                          className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                          title={`Click to view ${asset.symbol} chart & indicators`}
+                        >
+                          <span className="group-hover:underline">{asset.symbol}</span>
+                          <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                        </button>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                           {asset.currency}
                         </span>
@@ -372,6 +380,7 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
         <DividendPortfolioLab
           usdTryRate={usdTryRate}
           onImportCandidate={onImportCandidate}
+          onSelectTicker={onSelectTicker}
         />
       )}
     </div>

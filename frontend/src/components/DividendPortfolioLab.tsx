@@ -23,13 +23,15 @@ export interface EvaluatedDividendAsset {
 interface DividendPortfolioLabProps {
   usdTryRate: number;
   onImportCandidate?: (candidate: { symbol: string; name: string; market: string; shares: number; price: number; isDividend: boolean }) => void;
+  onSelectTicker?: (symbol: string) => void;
 }
 
 export type StrategyPresetId = 'MAX_CASHFLOW' | 'DEFENSIVE_ARISTOCRATS' | 'MONTHLY_SMOOTH' | 'GROWTH_COMPOUND';
 
 export default function DividendPortfolioLab({
   usdTryRate,
-  onImportCandidate
+  onImportCandidate,
+  onSelectTicker
 }: DividendPortfolioLabProps) {
   // Config state
   const [budgetCurrency, setBudgetCurrency] = useState<'TRY' | 'USD'>('TRY');
@@ -584,7 +586,14 @@ export default function DividendPortfolioLab({
                 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900 dark:text-white">{item.symbol}</span>
+                      <button
+                        onClick={() => onSelectTicker?.(item.symbol)}
+                        className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                        title={`Click to view ${item.symbol} chart & indicators`}
+                      >
+                        <span className="group-hover:underline">{item.symbol}</span>
+                        <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                      </button>
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300">
                         {item.market}
                       </span>

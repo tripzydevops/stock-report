@@ -19,6 +19,7 @@ interface PortfolioViewProps {
   onUpdateStopLoss?: (symbol: string, newStopPrice: number) => void;
   onOpenCoPilot?: (holding: PortfolioItem) => void;
   onToggleStrategyType?: (symbol: string) => void;
+  onSelectTicker?: (symbol: string) => void;
 }
 
 export default function PortfolioView({
@@ -35,6 +36,7 @@ export default function PortfolioView({
   onUpdateStopLoss,
   onOpenCoPilot,
   onToggleStrategyType,
+  onSelectTicker,
 }: PortfolioViewProps) {
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [showRealized, setShowRealized] = useState(true);
@@ -299,11 +301,20 @@ export default function PortfolioView({
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <span className="font-bold text-gray-900 dark:text-white text-xs block">
-                        {sec.sector}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        {sec.symbols.join(' · ')}
-                      </span>
+                         {sec.sector}
+                       </span>
+                       <div className="text-[10px] text-gray-400 flex flex-wrap gap-1 mt-0.5">
+                         {sec.symbols.map((sym, sIdx) => (
+                           <button
+                             key={sIdx}
+                             onClick={() => onSelectTicker?.(sym)}
+                             className="hover:text-blue-500 hover:underline cursor-pointer transition-colors"
+                             title={`Click to view ${sym} chart & indicators`}
+                           >
+                             {sym}{sIdx < sec.symbols.length - 1 ? ' ·' : ''}
+                           </button>
+                         ))}
+                       </div>
                     </div>
                     <span className={`text-xs font-black px-2 py-0.5 rounded-md ${
                       sec.isOverweight
@@ -389,7 +400,14 @@ export default function PortfolioView({
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-gray-900 dark:text-white">{item.symbol}</span>
+                        <button
+                          onClick={() => onSelectTicker?.(item.symbol)}
+                          className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                          title={`Click to view ${item.symbol} chart & indicators`}
+                        >
+                          <span className="group-hover:underline">{item.symbol}</span>
+                          <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                        </button>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                           {item.market}
                         </span>
@@ -733,7 +751,14 @@ export default function PortfolioView({
                     <tr key={trade.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center space-x-2">
-                          <span className="font-bold text-gray-900 dark:text-white">{trade.symbol}</span>
+                          <button
+                            onClick={() => onSelectTicker?.(trade.symbol)}
+                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                            title={`Click to view ${trade.symbol} chart & indicators`}
+                          >
+                            <span className="group-hover:underline">{trade.symbol}</span>
+                            <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                          </button>
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             {trade.market}
                           </span>
@@ -859,7 +884,14 @@ export default function PortfolioView({
                     <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
-                          <span className="font-bold text-gray-900 dark:text-white">{ord.symbol}</span>
+                          <button
+                            onClick={() => onSelectTicker?.(ord.symbol)}
+                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                            title={`Click to view ${ord.symbol} chart & indicators`}
+                          >
+                            <span className="group-hover:underline">{ord.symbol}</span>
+                            <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                          </button>
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             {ord.market}
                           </span>
