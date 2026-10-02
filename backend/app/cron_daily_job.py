@@ -98,7 +98,7 @@ def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
 
     client = get_supabase_client()
     try:
-        existing_res = client.table("trade_signals").select("asset_id, signal_date, strategy").execute()
+        existing_res = client.table("trade_signals").select("id, asset_id, signal_date, strategy, status, ai_rationale").execute()
         existing_keys = {
             (
                 r.get("asset_id"),
@@ -107,9 +107,19 @@ def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
             )
             for r in (existing_res.data or [])
         }
+        # Map of currently open signals: (asset_id, strategy_key) -> row
+        open_signals_map = {
+            (
+                r.get("asset_id"),
+                r.get("strategy", "").lower().replace(" ", "_")
+            ): r
+            for r in (existing_res.data or [])
+            if r.get("status") == "open"
+        }
     except Exception as e:
         logger.warning(f"Could not load existing signals for deduplication: {e}")
         existing_keys = set()
+        open_signals_map = {}
 
     rows = []
     for sig in signals:
@@ -121,8 +131,26 @@ def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
         date_str = raw_date.strftime("%Y-%m-%d") if hasattr(raw_date, "strftime") else str(raw_date)[:10]
         strat_key = sig.get("strategy", "unknown").lower().replace(" ", "_")
 
+        # 1. Exact duplicate check for the same date
         if (asset_id, date_str, strat_key) in existing_keys:
             logger.info(f"Skipping duplicate signal for {sig.get('symbol')} on {date_str} ({sig.get('strategy')})")
+            continue
+
+        # 2. CONTINUATION CHECK: Is there an existing open signal from an earlier date?
+        open_sig = open_signals_map.get((asset_id, strat_key))
+        if open_sig and str(open_sig.get("signal_date"))[:10] < date_str:
+            # Re-confirmation of ongoing setup! Update rationale rather than creating a duplicate trade
+            orig_date = str(open_sig.get("signal_date"))[:10]
+            ai = sig.get("ai_analysis", {})
+            updated_rationale = f"🔄 RE-CONFIRMED on {date_str} (Still in Buy Zone · Orig: {orig_date}) | {ai.get('thesis', '')} | {ai.get('risk_assessment', '')}"
+            try:
+                client.table("trade_signals").update({
+                    "ai_rationale": updated_rationale,
+                    "confidence_score": ai.get("conviction_score"),
+                }).eq("id", open_sig["id"]).execute()
+                logger.info(f"Re-confirmed existing open signal {open_sig['id']} for {sig.get('symbol')} on {date_str}")
+            except Exception as upd_err:
+                logger.warning(f"Could not update re-confirmation: {upd_err}")
             continue
 
         ai = sig.get("ai_analysis", {})

@@ -15,6 +15,9 @@ export interface TradeSignal {
   currency: string;
   currentPrice?: number;
   changePercent?: number;
+  isReconfirmed?: boolean;
+  lastConfirmedDate?: string;
+  daysInZone?: number;
 }
 
 interface TradeCardProps {
@@ -69,10 +72,24 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
+          {signal.isReconfirmed && (
+            <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
+              <span>🔄</span>
+              <span>Continuation: Triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1.5">
             {(() => {
+              if (signal.isReconfirmed) {
+                return (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-600 text-white shadow-xs flex items-center gap-1">
+                    <span>🔄</span>
+                    <span>RE-CONFIRMED (DAY {signal.daysInZone || 2})</span>
+                  </span>
+                );
+              }
               const todayStr = new Date().toISOString().slice(0, 10);
               const isRecent = signal.date === todayStr || Math.abs((new Date(todayStr).getTime() - new Date(signal.date).getTime()) / 86400000) <= 1;
               return isRecent ? (

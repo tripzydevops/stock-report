@@ -612,27 +612,52 @@ export default function Home() {
           }));
           setScannedSignals(mappedAll);
 
-          const openSignals = mappedAll
+          // Group open signals by (cleanSymbol, strategy) to merge consecutive daily triggers into one active trade
+          const signalGroups: Record<string, typeof mappedAll> = {};
+          mappedAll
             .filter(s => s.status === 'open')
-            .map(s => {
+            .forEach(s => {
               const cleanSym = s.symbol.replace('.IS', '').toUpperCase();
-              const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
-              return {
-                symbol: s.symbol,
-                name: s.name,
-                strategy: s.strategy.replace('_', ' ').toUpperCase(),
-                entryPrice: s.entryPrice,
-                stopLoss: s.stopLoss,
-                targetPrice: s.targetPrice,
-                confidence: Math.round(s.confidence),
-                rationale: s.aiRationale,
-                market: s.market,
-                date: s.signalDate,
-                currency: s.currency,
-                currentPrice: matchedAsset ? matchedAsset.price : s.entryPrice,
-                changePercent: matchedAsset ? matchedAsset.changePercent : 0
-              };
+              const stratKey = s.strategy.replace('_', ' ').toUpperCase();
+              const key = `${cleanSym}_${stratKey}`;
+              if (!signalGroups[key]) signalGroups[key] = [];
+              signalGroups[key].push(s);
             });
+
+          const openSignals = Object.values(signalGroups).map(group => {
+            // Sort by signalDate ascending: earliest is original trigger, latest is recent
+            group.sort((a, b) => new Date(a.signalDate).getTime() - new Date(b.signalDate).getTime());
+            const earliest = group[0];
+            const latest = group[group.length - 1];
+
+            const cleanSym = earliest.symbol.replace('.IS', '').toUpperCase();
+            const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
+
+            const isMultiDay = Boolean(group.length > 1 || (earliest.aiRationale && earliest.aiRationale.includes('RE-CONFIRMED')));
+            const originalDate = earliest.signalDate;
+            const lastDate = latest.signalDate;
+            const diffDays = Math.max(1, Math.round((new Date(lastDate).getTime() - new Date(originalDate).getTime()) / 86400000));
+            const daysInZone = isMultiDay ? (diffDays + 1) : 1;
+
+            return {
+              symbol: earliest.symbol,
+              name: earliest.name,
+              strategy: earliest.strategy.replace('_', ' ').toUpperCase(),
+              entryPrice: earliest.entryPrice, // Keep initial entry price of the setup
+              stopLoss: earliest.stopLoss,
+              targetPrice: earliest.targetPrice,
+              confidence: Math.round(latest.confidence),
+              rationale: latest.aiRationale,
+              market: earliest.market,
+              date: originalDate,
+              lastConfirmedDate: lastDate,
+              isReconfirmed: isMultiDay,
+              daysInZone: daysInZone,
+              currency: earliest.currency,
+              currentPrice: matchedAsset ? matchedAsset.price : latest.entryPrice,
+              changePercent: matchedAsset ? matchedAsset.changePercent : 0
+            };
+          });
           if (openSignals.length > 0) {
             setSignals(openSignals);
           }
@@ -1533,8 +1558,19 @@ export default function Home() {
 
                 {/* Quick Filter Bar */}
                 {(() => {
-                  const latestDate = signals.length > 0 ? [...signals.map(s => s.date)].sort().reverse()[0] : '';
-                  const todayCount = signals.filter(s => s.date === latestDate || s.date === new Date().toISOString().slice(0, 10)).length;
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const latestDate = signals.length > 0 
+                    ? [...signals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] 
+                    : todayStr;
+
+                  const isFromToday = (s: any) => (
+                    s.date === latestDate || 
+                    s.lastConfirmedDate === latestDate || 
+                    s.date === todayStr || 
+                    s.lastConfirmedDate === todayStr
+                  );
+
+                  const todayCount = signals.filter(isFromToday).length;
                   const bistCount = signals.filter(s => s.market === 'BIST').length;
                   const usCount = signals.filter(s => s.market === 'US').length;
 
@@ -1559,7 +1595,7 @@ export default function Home() {
                         }`}
                       >
                         <span>🔥</span>
-                        <span>Today's New ({todayCount})</span>
+                        <span>Today's Setups ({todayCount})</span>
                       </button>
                       <button
                         onClick={() => setSignalFilter('BIST')}
@@ -1591,8 +1627,9 @@ export default function Home() {
                   {signals
                     .filter(sig => {
                       if (signalFilter === 'TODAY') {
-                        const latestDate = signals.length > 0 ? [...signals.map(s => s.date)].sort().reverse()[0] : '';
-                        return sig.date === latestDate || sig.date === new Date().toISOString().slice(0, 10);
+                        const todayStr = new Date().toISOString().slice(0, 10);
+                        const latestDate = signals.length > 0 ? [...signals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] : '';
+                        return sig.date === latestDate || sig.lastConfirmedDate === latestDate || sig.date === todayStr || sig.lastConfirmedDate === todayStr;
                       }
                       if (signalFilter === 'BIST') return sig.market === 'BIST';
                       if (signalFilter === 'US') return sig.market === 'US';
