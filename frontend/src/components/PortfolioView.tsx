@@ -349,21 +349,22 @@ export default function PortfolioView({
 
       {/* Holdings & DCA Accumulation Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-row justify-between items-center gap-2">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Active Portfolio Holdings & DCA Zones</h3>
-            <p className="text-xs text-gray-500">Buy additional lots (DCA), sell tranches at different prices, or manage stop-loss risk.</p>
+            <h3 className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white">Active Holdings & DCA Zones</h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 hidden sm:block">Buy additional lots (DCA), sell tranches at different prices, or manage stop-loss risk.</p>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hidden md:inline-block">
               🟢 Multi-Lot Tracking Active
             </span>
             {onAddHoldingClick && (
               <button
                 onClick={onAddHoldingClick}
-                className="px-3.5 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/30 flex items-center space-x-1"
+                className="px-3.5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all shadow-md shadow-blue-500/30 flex items-center space-x-1 cursor-pointer shrink-0"
               >
-                <span>+ Add Position</span>
+                <span>➕</span>
+                <span>Add Holding</span>
               </button>
             )}
           </div>
@@ -422,6 +423,22 @@ export default function PortfolioView({
                         <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
                           🗓️ {formattedBoughtDate}
                         </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2 lg:hidden">
+                        <button
+                          type="button"
+                          onClick={() => onTradeHolding?.(item)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>⚡ Trade / Buy</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenCoPilot?.(item)}
+                          className="px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>💡 Co-Pilot</span>
+                        </button>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-center whitespace-nowrap">

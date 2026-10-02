@@ -1032,9 +1032,11 @@ export default function Home() {
   };
 
   const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {
+    const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
+    
     setPortfolio(prev => {
       return prev.map(item => {
-        if (item.symbol !== symbol) return item;
+        if (item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return item;
         const totalShares = item.shares + additionalShares;
         const currentCost = item.shares * item.entryPrice;
         const addedCost = additionalShares * buyPrice;
@@ -1058,11 +1060,16 @@ export default function Home() {
       });
     });
 
+    setSyncFeedback({
+      message: `Successfully added ${additionalShares} shares of ${cleanSymUpper} (DCA Lot)!`,
+      type: 'success'
+    });
+
     // Update dividends if present
     setDividends(prev => {
       return prev.map(div => {
-        if (div.symbol !== symbol) return div;
-        const targetHolding = portfolio.find(p => p.symbol === symbol);
+        if (div.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return div;
+        const targetHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
         const oldShares = targetHolding ? targetHolding.shares : div.shares;
         const oldPrice = targetHolding ? targetHolding.entryPrice : div.entryPrice;
         const totalShares = oldShares + additionalShares;
@@ -1082,7 +1089,7 @@ export default function Home() {
 
     // Persist to Supabase
     try {
-      const cleanSym = symbol.replace('.IS', '');
+      const cleanSym = cleanSymUpper;
       const isSymbol = `${cleanSym}.IS`;
       const { data: assetData } = await supabase
         .from('assets')
@@ -1091,7 +1098,7 @@ export default function Home() {
         .limit(1);
 
       if (assetData && assetData.length > 0) {
-        const target = portfolio.find(p => p.symbol === symbol);
+        const target = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
         if (target) {
           const totalShares = target.shares + additionalShares;
           const blendedEntry = ((target.shares * target.entryPrice) + (additionalShares * buyPrice)) / totalShares;
@@ -1154,7 +1161,8 @@ export default function Home() {
   };
 
   const handleSellHolding = async (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string) => {
-    const target = portfolio.find(p => p.symbol === symbol);
+    const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
+    const target = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
     if (!target) return;
 
     const actualSold = Math.min(sharesToSell, target.shares);
