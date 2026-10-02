@@ -1525,7 +1525,8 @@ export default function Home() {
 
                 {/* Quick Filter Bar */}
                 {(() => {
-                  const todayCount = signals.filter(s => s.date === '2026-10-01' || s.date === new Date().toISOString().slice(0, 10)).length;
+                  const latestDate = signals.length > 0 ? [...signals.map(s => s.date)].sort().reverse()[0] : '';
+                  const todayCount = signals.filter(s => s.date === latestDate || s.date === new Date().toISOString().slice(0, 10)).length;
                   const bistCount = signals.filter(s => s.market === 'BIST').length;
                   const usCount = signals.filter(s => s.market === 'US').length;
 
@@ -1581,7 +1582,10 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {signals
                     .filter(sig => {
-                      if (signalFilter === 'TODAY') return sig.date === '2026-10-01' || sig.date === new Date().toISOString().slice(0, 10);
+                      if (signalFilter === 'TODAY') {
+                        const latestDate = signals.length > 0 ? [...signals.map(s => s.date)].sort().reverse()[0] : '';
+                        return sig.date === latestDate || sig.date === new Date().toISOString().slice(0, 10);
+                      }
                       if (signalFilter === 'BIST') return sig.market === 'BIST';
                       if (signalFilter === 'US') return sig.market === 'US';
                       return true;

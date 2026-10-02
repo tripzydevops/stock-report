@@ -72,16 +72,20 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1.5">
-            {signal.date === '2026-10-01' || signal.date === new Date().toISOString().slice(0, 10) ? (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
-                <span>🔥</span>
-                <span>NEW TODAY</span>
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                🗓️ {signal.date}
-              </span>
-            )}
+            {(() => {
+              const todayStr = new Date().toISOString().slice(0, 10);
+              const isRecent = signal.date === todayStr || Math.abs((new Date(todayStr).getTime() - new Date(signal.date).getTime()) / 86400000) <= 1;
+              return isRecent ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
+                  <span>🔥</span>
+                  <span>NEW TODAY</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                  🗓️ {signal.date}
+                </span>
+              );
+            })()}
             <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${getStrategyColor(signal.strategy)}`}>
               {signal.strategy}
             </span>
