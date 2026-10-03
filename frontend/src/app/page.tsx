@@ -1061,6 +1061,32 @@ export default function Home() {
           dcaNote: newHolding.dcaRationale || 'Position initiation'
         };
         setExecutedOrders(prev => [newOrder, ...prev]);
+
+        // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
+        const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
+        const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
+        if (shortfall > 0) {
+          const autoTransfer: CapitalTransfer = {
+            id: `trans-${Date.now()}`,
+            transferType: 'DEPOSIT',
+            amount: shortfall,
+            currency: 'TRY',
+            transferDate: orderDateStr,
+            notes: `Auto-deposit: Funded position ${cleanSym} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
+          };
+          setTransfers(prev => [autoTransfer, ...prev]);
+          try {
+            await supabase.from('portfolio_transfers').insert([{
+              transfer_type: 'DEPOSIT',
+              amount: shortfall,
+              currency: 'TRY',
+              transfer_date: autoTransfer.transferDate,
+              notes: autoTransfer.notes
+            }]);
+          } catch (trErr) {
+            console.warn('Could not auto-save capital transfer:', trErr);
+          }
+        }
       }
     } catch (err) {
       console.warn('Could not save holding to Supabase:', err);
@@ -1189,6 +1215,32 @@ export default function Home() {
             dcaNote: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
           };
           setExecutedOrders(prev => [newOrder, ...prev]);
+
+          // USER RULE: When buying more shares without adding cash, assume cash was added (do NOT assume it came from profit)
+          const additionalCostTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
+          const shortfall = Math.max(0, additionalCostTRY - cashBalance);
+          if (shortfall > 0) {
+            const autoTransfer: CapitalTransfer = {
+              id: `trans-${Date.now()}`,
+              transferType: 'DEPOSIT',
+              amount: shortfall,
+              currency: 'TRY',
+              transferDate: tradeDate || new Date().toISOString().slice(0, 10),
+              notes: `Auto-deposit: DCA tranche for ${cleanSym} (+${additionalShares} shares @ ₺${buyPrice.toFixed(2)})`
+            };
+            setTransfers(prev => [autoTransfer, ...prev]);
+            try {
+              await supabase.from('portfolio_transfers').insert([{
+                transfer_type: 'DEPOSIT',
+                amount: shortfall,
+                currency: 'TRY',
+                transfer_date: autoTransfer.transferDate,
+                notes: autoTransfer.notes
+              }]);
+            } catch (trErr) {
+              console.warn('Could not auto-save capital transfer for DCA:', trErr);
+            }
+          }
         }
       }
     } catch (err) {

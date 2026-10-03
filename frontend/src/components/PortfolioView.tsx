@@ -122,9 +122,14 @@ export default function PortfolioView({
   }, 0);
 
   // Capital Deposited (Principal Funded) calculations
-  const totalDepositedTRY = transfers.length > 0
+  const recordedDepositsTRY = transfers.length > 0
     ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
     : 17000.00;
+
+  // USER RULE: When adding a new holding without adding cash, assume cash was added (do NOT assume it came from profit)
+  // If total cost of open positions exceeds recorded deposits, the excess was funded by new cash injection:
+  const autoInjectedCapitalTRY = Math.max(0, totalCostTRY - recordedDepositsTRY);
+  const totalDepositedTRY = recordedDepositsTRY + autoInjectedCapitalTRY;
 
   // Realized profit calculation
   const totalRealizedPnlTRY = realizedTrades.reduce((acc, trade) => {
@@ -132,16 +137,18 @@ export default function PortfolioView({
   }, 0);
 
   // Dynamic Cash Balance Calculation:
-  // In real brokerage accounting: Cash = Total Deposited + Total Realized Profit - Total Cost of Open Positions - Fees
+  // Liquid cash is unallocated deposit capital minus brokerage fees. Realized gains sit as available cash.
   const totalBrokerageFeesTRY = 11.89; // Verified broker commission & BSMV
-  const computedCashTRY = Math.max(0, totalDepositedTRY + totalRealizedPnlTRY - totalCostTRY - totalBrokerageFeesTRY);
+  const unallocatedDepositCash = Math.max(0, recordedDepositsTRY - totalCostTRY);
+  const computedCashTRY = Math.max(0, unallocatedDepositCash - totalBrokerageFeesTRY);
   const cashValTRY = computedCashTRY;
   const totalValTRY = totalStockValTRY + cashValTRY;
 
   const totalPnlTRY = totalStockValTRY - totalCostTRY;
   const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
 
-  // True Lifetime Return: Total Account Value vs Total Money Put In
+  // True Lifetime Return: Total Account Value vs Total Money Put In (Total Deposited)
+  // Reflects real market gains on invested principal without distorting new stock additions as profit
   const trueRoiAmountTRY = totalValTRY - totalDepositedTRY;
   const trueRoiPercent = totalDepositedTRY > 0 ? (trueRoiAmountTRY / totalDepositedTRY) * 100 : 0;
 
@@ -237,7 +244,11 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
-            <span>Capital Injected</span>
+            <span>
+              {autoInjectedCapitalTRY > 0 
+                ? `Injected (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)} funded)` 
+                : 'Capital Injected'}
+            </span>
             <button
               onClick={() => setShowTransfers(!showTransfers)}
               className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
