@@ -639,6 +639,16 @@ export default function Home() {
             const diffDays = Math.max(1, Math.round((new Date(lastDate).getTime() - new Date(originalDate).getTime()) / 86400000));
             const daysInZone = isMultiDay ? (diffDays + 1) : 1;
 
+            const triggerHistory = group.map((item, idx) => ({
+              id: item.id || `trig-${idx}`,
+              date: item.signalDate,
+              entryPrice: item.entryPrice,
+              stopLoss: item.stopLoss,
+              targetPrice: item.targetPrice,
+              confidence: Math.round(item.confidence),
+              rationale: item.aiRationale
+            }));
+
             return {
               symbol: earliest.symbol,
               name: earliest.name,
@@ -655,7 +665,8 @@ export default function Home() {
               daysInZone: daysInZone,
               currency: earliest.currency,
               currentPrice: matchedAsset ? matchedAsset.price : latest.entryPrice,
-              changePercent: matchedAsset ? matchedAsset.changePercent : 0
+              changePercent: matchedAsset ? matchedAsset.changePercent : 0,
+              triggerHistory: triggerHistory
             };
           });
           if (openSignals.length > 0) {

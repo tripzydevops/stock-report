@@ -46,6 +46,61 @@ export default function PortfolioView({
   const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
   const [editingStopSymbol, setEditingStopSymbol] = useState<string | null>(null);
   const [editStopValue, setEditStopValue] = useState<string>('');
+  const [expandedLots, setExpandedLots] = useState<{ [symbol: string]: boolean }>({});
+  const toggleLots = (sym: string) => {
+    setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
+  };
+
+  const getBuyLotsForHolding = (item: PortfolioItem) => {
+    const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+    const buyOrders = orders
+      .filter(o => o.side === 'BUY' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym)
+      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+
+    if (buyOrders.length > 0) {
+      return buyOrders.map((bo, idx) => {
+        const lotValue = bo.quantity * item.currentPrice;
+        const lotCost = bo.quantity * bo.price;
+        const lotPnl = lotValue - lotCost;
+        const lotPnlPct = lotCost > 0 ? (lotPnl / lotCost) * 100 : 0;
+        return {
+          id: bo.id,
+          ref: bo.ref,
+          lotNumber: idx + 1,
+          isInitial: idx === 0,
+          date: bo.dateTime,
+          shares: bo.quantity,
+          price: bo.price,
+          totalCost: lotCost,
+          currentValue: lotValue,
+          pnl: lotPnl,
+          pnlPct: lotPnlPct,
+          note: bo.dcaNote || (idx === 0 ? 'Initial Position Outlay' : `DCA Accumulation Tranche #${idx + 1}`)
+        };
+      });
+    }
+
+    const lotCost = item.shares * item.entryPrice;
+    const lotValue = item.shares * item.currentPrice;
+    const lotPnl = lotValue - lotCost;
+    const lotPnlPct = lotCost > 0 ? (lotPnl / lotCost) * 100 : 0;
+    return [{
+      id: `lot-init-${item.symbol}`,
+      ref: `#INIT-${cleanSym}`,
+      lotNumber: 1,
+      isInitial: true,
+      date: item.entryDate 
+        ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : 'Initial',
+      shares: item.shares,
+      price: item.entryPrice,
+      totalCost: lotCost,
+      currentValue: lotValue,
+      pnl: lotPnl,
+      pnlPct: lotPnlPct,
+      note: 'Initial Position Base'
+    }];
+  };
 
   // Sector concentration and risk profile
   const sectorRisk = calculateSectorRisk(portfolio, usdTryRate);
@@ -398,32 +453,57 @@ export default function PortfolioView({
                   : null;
 
                 return (
-                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => onSelectTicker?.(item.symbol)}
-                          className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
-                          title={`Click to view ${item.symbol} chart & indicators`}
-                        >
-                          <span className="group-hover:underline">{item.symbol}</span>
-                          <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
-                        </button>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                          {item.market}
-                        </span>
-                        {item.isDividend && (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                            DIV
+                  <React.Fragment key={item.symbol || idx}>
+                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => onSelectTicker?.(item.symbol)}
+                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                            title={`Click to view ${item.symbol} chart & indicators`}
+                          >
+                            <span className="group-hover:underline">{item.symbol}</span>
+                            <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                          </button>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            {item.market}
                           </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5">
-                        <span>{item.name}</span>
-                        <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
-                          🗓️ {formattedBoughtDate}
-                        </span>
-                      </div>
+                          {item.isDividend && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                              DIV
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5">
+                          <span>{item.name}</span>
+                          <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
+                            🗓️ {formattedBoughtDate}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {(() => {
+                            const lots = getBuyLotsForHolding(item);
+                            const isExpanded = !!expandedLots[item.symbol];
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => toggleLots(item.symbol)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer shadow-xs ${
+                                  isExpanded
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 border-blue-200 dark:border-blue-800'
+                                }`}
+                                title="Click to view all purchase lots, execution dates, and fill prices"
+                              >
+                                <span>📦</span>
+                                <span>{isExpanded ? 'Hide Lots' : `${lots.length} Buy Lot${lots.length > 1 ? 's' : ''}`}</span>
+                                <svg className={`w-2.5 h-2.5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                            );
+                          })()}
+                        </div>
                       <div className="flex items-center gap-1.5 mt-2 lg:hidden">
                         <button
                           type="button"
@@ -707,16 +787,107 @@ export default function PortfolioView({
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-              {portfolio.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                    <p className="text-base font-semibold">No active holdings in portfolio.</p>
-                    <p className="text-xs mt-1">Use the "+ Add Position" button above to add positions.</p>
-                  </td>
-                </tr>
-              )}
+                  {expandedLots[item.symbol] && (
+                    <tr key={`${item.symbol}-lots`} className="bg-blue-50/25 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+                      <td colSpan={11} className="px-3 py-3 sm:px-5">
+                        <div className="bg-white dark:bg-gray-850 rounded-xl p-3 sm:p-4 border border-blue-200 dark:border-blue-800/70 shadow-xs space-y-3">
+                          <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 dark:border-gray-750 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
+                                <span>📦</span>
+                                <span>Purchase Tranches & Buy Lots Breakdown: <span className="text-blue-600 dark:text-blue-400 font-mono">{item.symbol}</span></span>
+                              </span>
+                              <span className="text-[11px] text-gray-500">
+                                Total: <strong className="text-gray-900 dark:text-white">{item.shares.toLocaleString()} shares</strong> @ avg <strong className="text-gray-900 dark:text-white">{formatCurr(item.entryPrice, item.currency)}</strong>
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onTradeHolding?.(item)}
+                              className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>+ Buy More / Scale In</span>
+                            </button>
+                          </div>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-750">
+                                <tr>
+                                  <th className="py-1.5 px-2">Tranche / Lot</th>
+                                  <th className="py-1.5 px-2">Execution Date</th>
+                                  <th className="py-1.5 px-2 text-right">Shares</th>
+                                  <th className="py-1.5 px-2 text-right">Fill Price</th>
+                                  <th className="py-1.5 px-2 text-right">Cost Outlay</th>
+                                  <th className="py-1.5 px-2 text-right">Current Value</th>
+                                  <th className="py-1.5 px-2 text-right">Tranche P&L</th>
+                                  <th className="py-1.5 px-2">DCA Note / Purpose</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                {getBuyLotsForHolding(item).map((lot) => {
+                                  const isLotProfit = lot.pnl >= 0;
+                                  return (
+                                    <tr key={lot.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/20 transition-colors">
+                                      <td className="py-2 px-2 whitespace-nowrap">
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black ${
+                                          lot.isInitial
+                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
+                                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
+                                        }`}>
+                                          <span>{lot.isInitial ? '🟢' : '🎯'}</span>
+                                          <span>Lot #{lot.lotNumber} {lot.isInitial ? '(Initial)' : '(DCA Tranche)'}</span>
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-2 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300 text-[11px]">
+                                        {lot.date}
+                                      </td>
+                                      <td className="py-2 px-2 text-right font-bold text-gray-900 dark:text-white">
+                                        +{lot.shares.toLocaleString()}
+                                      </td>
+                                      <td className="py-2 px-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                        {formatCurr(lot.price, item.currency)}
+                                      </td>
+                                      <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                                        {formatCurr(lot.totalCost, item.currency)}
+                                      </td>
+                                      <td className="py-2 px-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                        {formatCurr(lot.currentValue, item.currency)}
+                                      </td>
+                                      <td className="py-2 px-2 text-right whitespace-nowrap">
+                                        <span className={`font-mono font-bold ${isLotProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                          {isLotProfit ? '+' : ''}{formatCurr(lot.pnl, item.currency)}
+                                        </span>
+                                        <span className={`ml-1 text-[10px] font-bold px-1 py-0.2 rounded ${
+                                          isLotProfit ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                                        }`}>
+                                          {isLotProfit ? '+' : ''}{lot.pnlPct.toFixed(2)}%
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs">
+                                        {lot.note}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {portfolio.length === 0 && (
+              <tr>
+                <td colSpan={11} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  <p className="text-base font-semibold">No active holdings in portfolio.</p>
+                  <p className="text-xs mt-1">Use the "+ Add Position" button above to add positions.</p>
+                </td>
+              </tr>
+            )}
             </tbody>
           </table>
         </div>

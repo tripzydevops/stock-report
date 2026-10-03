@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
 
+export interface TriggerHistoryItem {
+  id?: string;
+  date: string;
+  entryPrice: number;
+  stopLoss: number;
+  targetPrice: number;
+  confidence: number;
+  rationale?: string;
+}
+
 export interface TradeSignal {
   symbol: string;
   name: string;
@@ -18,6 +28,7 @@ export interface TradeSignal {
   isReconfirmed?: boolean;
   lastConfirmedDate?: string;
   daysInZone?: number;
+  triggerHistory?: TriggerHistoryItem[];
 }
 
 interface TradeCardProps {
@@ -29,6 +40,7 @@ interface TradeCardProps {
 
 export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCoPilot }: TradeCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   
   const risk = Math.abs(signal.entryPrice - signal.stopLoss);
   const reward = Math.abs(signal.targetPrice - signal.entryPrice);
@@ -147,20 +159,97 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
           </div>
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <button 
             onClick={() => setExpanded(!expanded)} 
-            className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center"
+            className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center cursor-pointer"
           >
             {expanded ? 'Hide Rationale' : 'Show AI Rationale'}
-            <svg className={`w-3 h-3 ml-1 transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            <svg className={`w-3 h-3 ml-1 transform transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           </button>
-          {expanded && (
-            <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2 rounded">
-              {signal.rationale}
-            </div>
+
+          {(signal.isReconfirmed || (signal.triggerHistory && signal.triggerHistory.length > 1)) && (
+            <button
+              type="button"
+              onClick={() => setShowHistory(!showHistory)}
+              className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <span>🕒 {showHistory ? 'Hide Scan History' : `View Daily Scans (${signal.triggerHistory?.length || signal.daysInZone || 2})`}</span>
+              <svg className={`w-3 h-3 transform transition-transform ${showHistory ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
           )}
         </div>
+
+        {expanded && (
+          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800">
+            {signal.rationale}
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs space-y-2 animate-in fade-in duration-150">
+            <div className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300 flex justify-between items-center">
+              <span>Scan Timeline ({signal.triggerHistory?.length || signal.daysInZone || 2} Sessions in Buy Zone)</span>
+              <span className="text-[9px] font-semibold text-purple-600 dark:text-purple-400">All Buy Triggers</span>
+            </div>
+            <div className="space-y-1.5 divide-y divide-purple-100 dark:divide-purple-900/40">
+              {signal.triggerHistory && signal.triggerHistory.length > 1 ? (
+                signal.triggerHistory.map((item, i) => (
+                  <div key={item.id || i} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+                        i === 0 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
+                          : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
+                      }`}>
+                        {i === 0 ? 'Day 1 (Trigger)' : `Day ${i + 1} (Re-confirm)`}
+                      </span>
+                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{item.date}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 font-mono text-[11px]">
+                      <span className="text-gray-900 dark:text-white font-bold">
+                        Entry: {formatPrice(item.entryPrice)}
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 text-[10px] hidden sm:inline">
+                        SL: {formatPrice(item.stopLoss)}
+                      </span>
+                      <span className="text-amber-500 font-bold text-[10px]">
+                        ⭐ {item.confidence}/10
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                        Day 1 (Initial Setup)
+                      </span>
+                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.date}</span>
+                    </div>
+                    <span className="text-gray-900 dark:text-white font-bold font-mono text-[11px]">
+                      Entry: {formatPrice(signal.entryPrice)}
+                    </span>
+                  </div>
+                  <div className="pt-1.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                        Day {signal.daysInZone || 2} (Re-confirmed)
+                      </span>
+                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.lastConfirmedDate || signal.date}</span>
+                    </div>
+                    <span className="text-purple-600 dark:text-purple-300 font-bold text-[10px]">
+                      Consolidating in 20/50 EMA Buy Zone
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="bg-gray-50 dark:bg-gray-900 p-3 flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
