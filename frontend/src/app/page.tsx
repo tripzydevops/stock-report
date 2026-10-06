@@ -733,6 +733,45 @@ export default function Home() {
             };
           });
           setExecutedOrders(mappedOrders);
+
+          // Reconstruct all Realized Trades dynamically from database SELL orders
+          const reconstructedRealized: RealizedTrade[] = [];
+          const sellOrders = ordersData.filter((o: any) => o.side === 'SELL');
+          sellOrders.forEach((so: any) => {
+            const clean = so.symbol?.replace('.IS', '').toUpperCase();
+            const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
+            const friendlyName = matched?.name || (clean === 'KRDMD' ? 'Kardemir D' : clean);
+
+            // Find matching buy order(s) for that symbol to determine entry cost basis
+            const buyOrders = ordersData.filter((b: any) => b.side === 'BUY' && b.symbol?.replace('.IS', '').toUpperCase() === clean);
+            const avgEntry = buyOrders.length > 0 ? Number(buyOrders[0].price) : Number(so.price);
+            const qty = Number(so.quantity);
+            const exitPr = Number(so.price);
+            const calcPnl = (exitPr - avgEntry) * qty;
+            const calcPnlPct = avgEntry > 0 ? ((exitPr - avgEntry) / avgEntry) * 100 : 0;
+            const cDate = so.executed_at ? so.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+            reconstructedRealized.push({
+              id: `realized-${so.id || so.order_ref}`,
+              symbol: clean,
+              name: friendlyName,
+              market: (matched?.market || (clean.endsWith('.IS') || so.currency === 'TRY' ? 'BIST' : 'US')) as any,
+              currency: so.currency || 'TRY',
+              sharesSold: qty,
+              entryPrice: avgEntry,
+              exitPrice: exitPr,
+              realizedPnl: calcPnl,
+              realizedPnlPercent: calcPnlPct,
+              closeDate: cDate
+            });
+          });
+
+          // Merge with initial historical realized trades (e.g. SISE) if not already present
+          const mergedRealized = [
+            ...reconstructedRealized,
+            ...INITIAL_REALIZED_TRADES.filter(init => !reconstructedRealized.some(r => r.symbol === init.symbol))
+          ];
+          setRealizedTrades(mergedRealized);
         }
 
         // 5. Fetch Capital Transfers from Supabase
@@ -1339,6 +1378,8 @@ export default function Home() {
 
       // Log sell order to portfolio_orders
       const totalVal = actualSold * sellPrice;
+      const totalValTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
+      setCashBalance(prev => prev + totalValTRY);
       const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       const executionIso = tradeDate
         ? new Date(tradeDate + 'T10:00:00Z').toISOString()
@@ -1559,9 +1600,11 @@ export default function Home() {
                 onClick={() => handleTriggerSync(true)}
                 disabled={isRefreshing}
                 title="Trigger full on-demand market crawler in GitHub Actions (fetches all 118 tickers)"
-                className="hidden lg:flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
               >
-                <span>⚡ Run Crawler</span>
+                <span>⚡</span>
+                <span className="hidden sm:inline">Run Crawler</span>
+                <span className="sm:hidden">Crawler</span>
               </button>
             </div>
 

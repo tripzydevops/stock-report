@@ -137,10 +137,10 @@ export default function PortfolioView({
   }, 0);
 
   // Dynamic Cash Balance Calculation:
-  // Liquid cash is unallocated deposit capital minus brokerage fees. Realized gains sit as available cash.
+  // Liquid cash includes unallocated capital from deposits/exits plus realized profits from closed trades, minus brokerage fees.
   const totalBrokerageFeesTRY = 11.89; // Verified broker commission & BSMV
-  const unallocatedDepositCash = Math.max(0, recordedDepositsTRY - totalCostTRY);
-  const computedCashTRY = Math.max(0, unallocatedDepositCash - totalBrokerageFeesTRY);
+  const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
+  const computedCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
   const cashValTRY = computedCashTRY;
   const totalValTRY = totalStockValTRY + cashValTRY;
 
