@@ -742,12 +742,39 @@ export default function Home() {
             const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
             const friendlyName = matched?.name || (clean === 'KRDMD' ? 'Kardemir D' : clean);
 
-            // Find matching buy order(s) for that symbol to determine entry cost basis
-            const buyOrders = ordersData.filter((b: any) => b.side === 'BUY' && b.symbol?.replace('.IS', '').toUpperCase() === clean);
-            const avgEntry = buyOrders.length > 0 ? Number(buyOrders[0].price) : Number(so.price);
             const qty = Number(so.quantity);
             const exitPr = Number(so.price);
-            const calcPnl = (exitPr - avgEntry) * qty;
+            const sellTime = so.executed_at ? new Date(so.executed_at).getTime() : Date.now();
+
+            // Find matching buy order(s) for that symbol that executed ON OR BEFORE this sell order
+            const priorBuyOrders = ordersData.filter((b: any) => 
+              b.side === 'BUY' && 
+              b.symbol?.replace('.IS', '').toUpperCase() === clean &&
+              (b.executed_at ? new Date(b.executed_at).getTime() : 0) <= sellTime
+            );
+
+            // Sort chronological ascending (oldest first for FIFO)
+            priorBuyOrders.sort((a: any, b: any) => new Date(a.executed_at).getTime() - new Date(b.executed_at).getTime());
+
+            // Match exact quantity tranche if available, else nearest prior buy order
+            const matchingBuy = priorBuyOrders.find((b: any) => Math.abs(Number(b.quantity) - qty) < 0.01) ||
+                                (priorBuyOrders.length > 0 ? priorBuyOrders[priorBuyOrders.length - 1] : null);
+
+            let avgEntry = matchingBuy ? Number(matchingBuy.price) : exitPr;
+            let calcPnl = (exitPr - avgEntry) * qty;
+
+            // Also check if notes contains verified P&L or cost basis (e.g. "Full swing profit taking (+₺376.38 / +7.56%)" or "Realized P&L: ₺+32.56")
+            const notePnlMatch = so.notes?.match(/Realized P&L:\s*₺?([+-]?[\d,.]+)/i) || 
+                                 so.notes?.match(/\(\+?₺?([+-]?[\d,.]+)\s*\/\s*([+-]?[\d,.]+)%\)/i);
+
+            if (notePnlMatch && notePnlMatch[1]) {
+              const parsedNotePnl = parseFloat(notePnlMatch[1].replace(',', ''));
+              if (!isNaN(parsedNotePnl) && parsedNotePnl !== 0) {
+                calcPnl = parsedNotePnl;
+                avgEntry = Number(((exitPr * qty - calcPnl) / qty).toFixed(2));
+              }
+            }
+
             const calcPnlPct = avgEntry > 0 ? ((exitPr - avgEntry) / avgEntry) * 100 : 0;
             const cDate = so.executed_at ? so.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
 
@@ -766,12 +793,7 @@ export default function Home() {
             });
           });
 
-          // Merge with initial historical realized trades (e.g. SISE) if not already present
-          const mergedRealized = [
-            ...reconstructedRealized,
-            ...INITIAL_REALIZED_TRADES.filter(init => !reconstructedRealized.some(r => r.symbol === init.symbol))
-          ];
-          setRealizedTrades(mergedRealized);
+          setRealizedTrades(reconstructedRealized);
         }
 
         // 5. Fetch Capital Transfers from Supabase
