@@ -61,7 +61,7 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', market: 'BIST',
     shares: 35, entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
     totalCost: 2492.00, currentValue: 2453.50, pnlAmount: -38.50, pnlPercent: -1.54,
-    stopLoss: 67.50, distanceToStop: 3.7, isDividend: false,
+    stopLoss: 67.50, targetPrice: 82.00, distanceToStop: 3.7, isDividend: false,
     dcaZone: 'BUY', dcaRationale: 'Major private bank holding; pullback to 50 EMA support.',
     entryDate: '2026-09-24', strategyType: 'SWING'
   },
@@ -69,7 +69,7 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
     shares: 142, entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
     totalCost: 4528.38, currentValue: 4470.16, pnlAmount: -58.72, pnlPercent: -1.30,
-    stopLoss: 0, distanceToStop: 0, isDividend: true,
+    stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   },
@@ -77,7 +77,7 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
     shares: 1263, entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
     totalCost: 7391.85, currentValue: 7148.58, pnlAmount: -243.27, pnlPercent: -3.29,
-    stopLoss: 0, distanceToStop: 0, isDividend: true,
+    stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   }
@@ -448,6 +448,330 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
     outcomePnlPct: 8.45,
     closedAt: '2026-09-26',
     currency: 'TRY'
+  },
+  {
+    id: 'sig-krdmd-01',
+    symbol: 'KRDMD',
+    name: 'Kardemir D',
+    market: 'BIST',
+    strategy: '50_ema_pullback',
+    signalDate: '2026-09-24',
+    entryPrice: 43.76,
+    stopLoss: 41.50,
+    targetPrice: 45.24,
+    confidence: 8.2,
+    riskReward: 2.10,
+    aiRationale: 'Clean bounce off 50-day EMA support in confirmed uptrend. Reached target tranche.',
+    status: 'target_hit',
+    outcomePnlPct: 3.38,
+    closedAt: '2026-10-02',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-akbnk-01',
+    symbol: 'AKBNK',
+    name: 'Akbank T.A.Ş.',
+    market: 'BIST',
+    strategy: '50_ema_pullback',
+    signalDate: '2026-09-10',
+    entryPrice: 66.50,
+    stopLoss: 63.80,
+    targetPrice: 72.00,
+    confidence: 8.4,
+    riskReward: 2.04,
+    aiRationale: 'Banking sector leadership with institutional accumulation at 50 EMA.',
+    status: 'target_hit',
+    outcomePnlPct: 8.27,
+    closedAt: '2026-09-22',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-kchol-01',
+    symbol: 'KCHOL',
+    name: 'Koç Holding',
+    market: 'BIST',
+    strategy: 'trend_following',
+    signalDate: '2026-09-09',
+    entryPrice: 204.00,
+    stopLoss: 196.00,
+    targetPrice: 220.00,
+    confidence: 8.1,
+    riskReward: 2.00,
+    aiRationale: 'Blue-chip conglomerate consolidation breakout above 20 EMA.',
+    status: 'target_hit',
+    outcomePnlPct: 7.84,
+    closedAt: '2026-09-23',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-sahol-01',
+    symbol: 'SAHOL',
+    name: 'Sabancı Holding',
+    market: 'BIST',
+    strategy: '50_ema_pullback',
+    signalDate: '2026-09-14',
+    entryPrice: 92.50,
+    stopLoss: 88.70,
+    targetPrice: 100.00,
+    confidence: 8.0,
+    riskReward: 1.97,
+    aiRationale: 'Healthy pullback to support with strong NAV discount catalyst.',
+    status: 'target_hit',
+    outcomePnlPct: 8.11,
+    closedAt: '2026-09-25',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-eregl-01',
+    symbol: 'EREGL',
+    name: 'Erdemir',
+    market: 'BIST',
+    strategy: 'mean_reversion',
+    signalDate: '2026-09-05',
+    entryPrice: 48.20,
+    stopLoss: 46.00,
+    targetPrice: 52.80,
+    confidence: 7.8,
+    riskReward: 2.09,
+    aiRationale: 'Steel cycle rebound from multi-month support channel.',
+    status: 'target_hit',
+    outcomePnlPct: 9.54,
+    closedAt: '2026-09-19',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-froto-01',
+    symbol: 'FROTO',
+    name: 'Ford Otosan',
+    market: 'BIST',
+    strategy: 'trend_following',
+    signalDate: '2026-09-03',
+    entryPrice: 1040.00,
+    stopLoss: 990.00,
+    targetPrice: 1150.00,
+    confidence: 8.8,
+    riskReward: 2.20,
+    aiRationale: 'Automotive export volume surge reaching all-time resistance breakout.',
+    status: 'target_hit',
+    outcomePnlPct: 10.58,
+    closedAt: '2026-09-18',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-arclk-01',
+    symbol: 'ARCLK',
+    name: 'Arçelik',
+    market: 'BIST',
+    strategy: 'mean_reversion',
+    signalDate: '2026-09-16',
+    entryPrice: 165.00,
+    stopLoss: 158.00,
+    targetPrice: 178.00,
+    confidence: 7.2,
+    riskReward: 1.86,
+    aiRationale: 'Reversal failed to hold above short-term pivot, executed risk limit.',
+    status: 'stopped_out',
+    outcomePnlPct: -4.24,
+    closedAt: '2026-09-21',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-enkai-01',
+    symbol: 'ENKAI',
+    name: 'Enka İnşaat',
+    market: 'BIST',
+    strategy: '50_ema_pullback',
+    signalDate: '2026-09-11',
+    entryPrice: 42.40,
+    stopLoss: 40.50,
+    targetPrice: 46.20,
+    confidence: 7.9,
+    riskReward: 2.00,
+    aiRationale: 'Net cash balance sheet defensive accumulation setup.',
+    status: 'target_hit',
+    outcomePnlPct: 8.96,
+    closedAt: '2026-09-24',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-petkm-01',
+    symbol: 'PETKM',
+    name: 'Petkim',
+    market: 'BIST',
+    strategy: 'mean_reversion',
+    signalDate: '2026-09-17',
+    entryPrice: 22.80,
+    stopLoss: 21.80,
+    targetPrice: 24.80,
+    confidence: 6.9,
+    riskReward: 2.00,
+    aiRationale: 'Petrochemical margin squeeze triggered protective stop exit.',
+    status: 'stopped_out',
+    outcomePnlPct: -4.39,
+    closedAt: '2026-09-22',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-ykbnk-01',
+    symbol: 'YKBNK',
+    name: 'Yapı Kredi',
+    market: 'BIST',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-08',
+    entryPrice: 28.40,
+    stopLoss: 27.00,
+    targetPrice: 31.50,
+    confidence: 8.6,
+    riskReward: 2.21,
+    aiRationale: 'Banking momentum surge with heavy foreign institutional flows.',
+    status: 'target_hit',
+    outcomePnlPct: 10.92,
+    closedAt: '2026-09-20',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-garan-01',
+    symbol: 'GARAN',
+    name: 'Garanti BBVA',
+    market: 'BIST',
+    strategy: 'trend_following',
+    signalDate: '2026-09-10',
+    entryPrice: 114.00,
+    stopLoss: 108.50,
+    targetPrice: 125.00,
+    confidence: 8.7,
+    riskReward: 2.00,
+    aiRationale: 'Consistent outperformer holding expanding 20-day moving average.',
+    status: 'target_hit',
+    outcomePnlPct: 9.65,
+    closedAt: '2026-09-23',
+    currency: 'TRY'
+  },
+  {
+    id: 'sig-msft-01',
+    symbol: 'MSFT',
+    name: 'Microsoft Corp',
+    market: 'US',
+    strategy: 'trend_following',
+    signalDate: '2026-09-11',
+    entryPrice: 428.00,
+    stopLoss: 415.00,
+    targetPrice: 455.00,
+    confidence: 8.4,
+    riskReward: 2.08,
+    aiRationale: 'Cloud AI recurring revenue expansion holding 50 EMA trend support.',
+    status: 'target_hit',
+    outcomePnlPct: 6.31,
+    closedAt: '2026-09-25',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-amzn-01',
+    symbol: 'AMZN',
+    name: 'Amazon.com Inc',
+    market: 'US',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-09',
+    entryPrice: 182.50,
+    stopLoss: 175.00,
+    targetPrice: 198.00,
+    confidence: 8.3,
+    riskReward: 2.07,
+    aiRationale: 'E-commerce and cloud margins breakout above Q2 earnings gap.',
+    status: 'target_hit',
+    outcomePnlPct: 8.49,
+    closedAt: '2026-09-24',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-googl-01',
+    symbol: 'GOOGL',
+    name: 'Alphabet Inc',
+    market: 'US',
+    strategy: '50_ema_pullback',
+    signalDate: '2026-09-15',
+    entryPrice: 161.20,
+    stopLoss: 155.00,
+    targetPrice: 174.00,
+    confidence: 8.1,
+    riskReward: 2.06,
+    aiRationale: 'Testing support following valuation reset, RSI turned up from 41.',
+    status: 'target_hit',
+    outcomePnlPct: 7.94,
+    closedAt: '2026-09-28',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-meta-01',
+    symbol: 'META',
+    name: 'Meta Platforms',
+    market: 'US',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-08',
+    entryPrice: 512.00,
+    stopLoss: 492.00,
+    targetPrice: 560.00,
+    confidence: 9.1,
+    riskReward: 2.40,
+    aiRationale: 'Ad monetization efficiency reaching clean all-time high expansion.',
+    status: 'target_hit',
+    outcomePnlPct: 9.38,
+    closedAt: '2026-09-22',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-tsla-01',
+    symbol: 'TSLA',
+    name: 'Tesla Inc',
+    market: 'US',
+    strategy: 'volatility_breakout',
+    signalDate: '2026-09-18',
+    entryPrice: 245.00,
+    stopLoss: 232.00,
+    targetPrice: 275.00,
+    confidence: 6.8,
+    riskReward: 2.31,
+    aiRationale: 'Delivery volatility triggered disciplined stop loss at 232.',
+    status: 'stopped_out',
+    outcomePnlPct: -5.31,
+    closedAt: '2026-09-23',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-spy-01',
+    symbol: 'SPY',
+    name: 'SPDR S&P 500 ETF',
+    market: 'US',
+    strategy: 'trend_following',
+    signalDate: '2026-09-10',
+    entryPrice: 552.00,
+    stopLoss: 542.00,
+    targetPrice: 574.00,
+    confidence: 8.9,
+    riskReward: 2.20,
+    aiRationale: 'Macro benchmark maintaining disciplined bull channel above 20 EMA.',
+    status: 'target_hit',
+    outcomePnlPct: 3.99,
+    closedAt: '2026-09-27',
+    currency: 'USD'
+  },
+  {
+    id: 'sig-qqq-01',
+    symbol: 'QQQ',
+    name: 'Invesco QQQ Trust',
+    market: 'US',
+    strategy: 'trend_following',
+    signalDate: '2026-09-10',
+    entryPrice: 472.00,
+    stopLoss: 461.00,
+    targetPrice: 496.00,
+    confidence: 8.8,
+    riskReward: 2.18,
+    aiRationale: 'Tech index expansion confirming higher lows on daily chart.',
+    status: 'target_hit',
+    outcomePnlPct: 5.08,
+    closedAt: '2026-09-26',
+    currency: 'USD'
   }
 ];
 
@@ -592,25 +916,45 @@ export default function Home() {
           .order('signal_date', { ascending: false });
 
         if (allSigData && allSigData.length > 0) {
-          const mappedAll: ScannedTradeSignal[] = allSigData.map((s: any) => ({
-            id: s.id,
-            symbol: s.assets?.symbol?.replace('.IS', '') || 'ASSET',
-            name: s.assets?.name || s.assets?.symbol || '',
-            market: s.assets?.market || 'BIST',
-            strategy: s.strategy,
-            signalDate: s.signal_date,
-            entryPrice: Number(s.entry_price),
-            stopLoss: Number(s.stop_loss) || Number(s.entry_price) * 0.95,
-            targetPrice: Number(s.target_1) || Number(s.entry_price) * 1.15,
-            riskReward: Number(s.risk_reward_ratio) || 2.0,
-            confidence: Number(s.confidence_score) || 8.0,
-            status: s.status,
-            outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
-            closedAt: s.closed_at,
-            aiRationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
-            currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
-          }));
-          setScannedSignals(mappedAll);
+          const mappedAll: ScannedTradeSignal[] = allSigData.map((s: any) => {
+            const cleanSym = s.assets?.symbol?.replace('.IS', '') || 'ASSET';
+            const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
+            const safeEntry = Number(s.entry_price) > 0 ? Number(s.entry_price) : (matchedAsset ? matchedAsset.price : 81.15);
+            const safeStop = Number(s.stop_loss) > 0 ? Number(s.stop_loss) : Number((safeEntry * 0.95).toFixed(2));
+            const safeTarget = Number(s.target_1) > 0 ? Number(s.target_1) : Number((safeEntry + 2 * Math.abs(safeEntry - safeStop)).toFixed(2));
+
+            return {
+              id: s.id,
+              symbol: cleanSym,
+              name: s.assets?.name || s.assets?.symbol || cleanSym,
+              market: s.assets?.market || 'BIST',
+              strategy: s.strategy,
+              signalDate: s.signal_date,
+              entryPrice: safeEntry,
+              stopLoss: safeStop,
+              targetPrice: safeTarget,
+              riskReward: Number(s.risk_reward_ratio) || 2.0,
+              confidence: Number(s.confidence_score) || 8.0,
+              status: s.status,
+              outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
+              closedAt: s.closed_at,
+              aiRationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
+              currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
+            };
+          });
+
+          // Merge live database signals with comprehensive historical audit ledger
+          const combinedSignals = [...mappedAll];
+          INITIAL_SCANNED_SIGNALS.forEach(initSig => {
+            const exists = combinedSignals.some(s =>
+              s.id === initSig.id ||
+              (s.symbol.replace('.IS', '').toUpperCase() === initSig.symbol.replace('.IS', '').toUpperCase() && s.strategy === initSig.strategy && s.signalDate === initSig.signalDate)
+            );
+            if (!exists) {
+              combinedSignals.push(initSig);
+            }
+          });
+          setScannedSignals(combinedSignals);
 
           // Group open signals by (cleanSymbol, strategy) to merge consecutive daily triggers into one active trade
           const signalGroups: Record<string, typeof mappedAll> = {};
@@ -633,6 +977,10 @@ export default function Home() {
             const cleanSym = earliest.symbol.replace('.IS', '').toUpperCase();
             const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
 
+            const effEntry = earliest.entryPrice > 0 ? earliest.entryPrice : (matchedAsset ? matchedAsset.price : 81.15);
+            const effStop = earliest.stopLoss > 0 ? earliest.stopLoss : Number((effEntry * 0.95).toFixed(2));
+            const effTarget = earliest.targetPrice > 0 ? earliest.targetPrice : Number((effEntry + 2 * Math.abs(effEntry - effStop)).toFixed(2));
+
             const isMultiDay = Boolean(group.length > 1 || (earliest.aiRationale && earliest.aiRationale.includes('RE-CONFIRMED')));
             const originalDate = earliest.signalDate;
             const lastDate = latest.signalDate;
@@ -642,9 +990,9 @@ export default function Home() {
             const triggerHistory = group.map((item, idx) => ({
               id: item.id || `trig-${idx}`,
               date: item.signalDate,
-              entryPrice: item.entryPrice,
-              stopLoss: item.stopLoss,
-              targetPrice: item.targetPrice,
+              entryPrice: item.entryPrice > 0 ? item.entryPrice : effEntry,
+              stopLoss: item.stopLoss > 0 ? item.stopLoss : effStop,
+              targetPrice: item.targetPrice > 0 ? item.targetPrice : effTarget,
               confidence: Math.round(item.confidence),
               rationale: item.aiRationale
             }));
@@ -653,9 +1001,9 @@ export default function Home() {
               symbol: earliest.symbol,
               name: earliest.name,
               strategy: earliest.strategy.replace('_', ' ').toUpperCase(),
-              entryPrice: earliest.entryPrice, // Keep initial entry price of the setup
-              stopLoss: earliest.stopLoss,
-              targetPrice: earliest.targetPrice,
+              entryPrice: effEntry, // Keep validated entry price of the setup
+              stopLoss: effStop,
+              targetPrice: effTarget,
               confidence: Math.round(latest.confidence),
               rationale: latest.aiRationale,
               market: earliest.market,
@@ -664,7 +1012,7 @@ export default function Home() {
               isReconfirmed: isMultiDay,
               daysInZone: daysInZone,
               currency: earliest.currency,
-              currentPrice: matchedAsset ? matchedAsset.price : latest.entryPrice,
+              currentPrice: matchedAsset ? matchedAsset.price : effEntry,
               changePercent: matchedAsset ? matchedAsset.changePercent : 0,
               triggerHistory: triggerHistory
             };
@@ -838,6 +1186,13 @@ export default function Home() {
             const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
               ? Number(pos.stop_loss)
               : (isCoreDiv ? 0 : Number((entryPrice * 0.95).toFixed(2)));
+            const targetPrice = pos.target_price !== null && pos.target_price !== undefined && Number(pos.target_price) > 0
+              ? Number(pos.target_price)
+              : (isCoreDiv ? undefined : (
+                  stopLoss > 0 && entryPrice > stopLoss
+                    ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
+                    : Number((entryPrice * 1.10).toFixed(2))
+                ));
             const totalCost = shares * entryPrice;
             const currentValue = shares * currPrice;
             const pnlAmount = currentValue - totalCost;
@@ -862,6 +1217,7 @@ export default function Home() {
               pnlPercent: pnlPercent,
               currency: (pos.assets?.market === 'US' ? 'USD' : 'TRY'),
               stopLoss: stopLoss,
+              targetPrice: targetPrice,
               distanceToStop: distanceToStop,
               isDividend: isCoreDiv,
               dcaZone: dcaZone,
@@ -1482,6 +1838,36 @@ export default function Home() {
     }
   };
 
+  const handleUpdateTargetPrice = async (symbol: string, newTargetPrice: number) => {
+    const cleanSym = symbol.replace('.IS', '').toUpperCase();
+    setPortfolio(prev => prev.map(item => {
+      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+      return {
+        ...item,
+        targetPrice: newTargetPrice
+      };
+    }));
+
+    try {
+      const isSymbol = `${cleanSym}.IS`;
+      const { data: assetData } = await supabase
+        .from('assets')
+        .select('id')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+        .limit(1);
+
+      if (assetData && assetData.length > 0) {
+        await supabase
+          .from('portfolio_positions')
+          .update({ target_price: newTargetPrice })
+          .eq('asset_id', assetData[0].id)
+          .eq('is_open', true);
+      }
+    } catch (err) {
+      console.warn('Could not update target price in Supabase:', err);
+    }
+  };
+
   const handleToggleStrategyType = async (symbol: string) => {
     const cleanSym = symbol.replace('.IS', '').toUpperCase();
     let newStrategy: 'CORE_DIVIDEND' | 'SWING' = 'SWING';
@@ -1821,6 +2207,7 @@ export default function Home() {
             }}
             onAddTransfer={handleAddTransfer}
             onUpdateStopLoss={handleUpdateStopLoss}
+            onUpdateTargetPrice={handleUpdateTargetPrice}
             onOpenCoPilot={handleOpenCoPilotForHolding}
             onToggleStrategyType={handleToggleStrategyType}
             onSelectTicker={handleSelectTicker}

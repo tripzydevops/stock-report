@@ -20,6 +20,7 @@ interface PortfolioViewProps {
   onOpenCoPilot?: (holding: PortfolioItem) => void;
   onToggleStrategyType?: (symbol: string) => void;
   onSelectTicker?: (symbol: string) => void;
+  onUpdateTargetPrice?: (symbol: string, newTargetPrice: number) => void;
 }
 
 export default function PortfolioView({
@@ -34,6 +35,7 @@ export default function PortfolioView({
   onTradeHolding,
   onAddTransfer,
   onUpdateStopLoss,
+  onUpdateTargetPrice,
   onOpenCoPilot,
   onToggleStrategyType,
   onSelectTicker,
@@ -46,6 +48,8 @@ export default function PortfolioView({
   const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
   const [editingStopSymbol, setEditingStopSymbol] = useState<string | null>(null);
   const [editStopValue, setEditStopValue] = useState<string>('');
+  const [editingTargetSymbol, setEditingTargetSymbol] = useState<string | null>(null);
+  const [editTargetValue, setEditTargetValue] = useState<string>('');
   const [expandedLots, setExpandedLots] = useState<{ [symbol: string]: boolean }>({});
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
@@ -448,6 +452,7 @@ export default function PortfolioView({
                 <th className="px-5 py-3 text-right">Market Value</th>
                 <th className="px-5 py-3 text-right">Unrealized P&L</th>
                 <th className="px-5 py-3 text-center">Stop Loss / Mode</th>
+                <th className="px-5 py-3 text-center">Target / Exit Price</th>
                 <th className="px-5 py-3 text-center">Est. Exit / Horizon</th>
                 <th className="px-5 py-3 text-center">DCA Accumulation Zone</th>
                 <th className="px-4 py-3 text-center">Trade / Actions</th>
@@ -485,11 +490,16 @@ export default function PortfolioView({
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5">
+                        <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5 flex-wrap gap-1">
                           <span>{item.name}</span>
                           <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
                             🗓️ {formattedBoughtDate}
                           </span>
+                          {item.targetPrice ? (
+                            <span className="lg:hidden text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
+                              🎯 Exit: {formatCurr(item.targetPrice, item.currency)}
+                            </span>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2 mt-1.5">
                           {(() => {
@@ -702,6 +712,133 @@ export default function PortfolioView({
                       )}
                     </td>
                     <td className="px-5 py-4 text-center whitespace-nowrap">
+                      {editingTargetSymbol === item.symbol ? (
+                        <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
+                          <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editTargetValue}
+                            onChange={(e) => setEditTargetValue(e.target.value)}
+                            className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const val = parseFloat(editTargetValue);
+                                if (!isNaN(val) && val >= 0) {
+                                  onUpdateTargetPrice?.(item.symbol, val);
+                                }
+                                setEditingTargetSymbol(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingTargetSymbol(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const val = parseFloat(editTargetValue);
+                              if (!isNaN(val) && val >= 0) {
+                                onUpdateTargetPrice?.(item.symbol, val);
+                              }
+                              setEditingTargetSymbol(null);
+                            }}
+                            className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
+                            title="Save Target Exit Price"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTargetSymbol(null)}
+                            className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
+                            title="Cancel"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : item.isDividend ? (
+                        <div className="inline-flex flex-col items-center">
+                          {item.targetPrice && item.targetPrice > 0 ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-bold text-purple-700 dark:text-purple-300 font-mono">
+                                  🎯 {formatCurr(item.targetPrice, item.currency)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTargetSymbol(item.symbol);
+                                    setEditTargetValue(item.targetPrice!.toString());
+                                  }}
+                                  className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                  title="Edit target exit price"
+                                >
+                                  ✏️
+                                </button>
+                              </div>
+                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold mt-0.5">
+                                +{(((item.targetPrice - item.entryPrice) / item.entryPrice) * 100).toFixed(1)}% target
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
+                                <span>💎</span>
+                                <span>Yield / Core</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTargetSymbol(item.symbol);
+                                  setEditTargetValue(item.entryPrice > 0 ? (item.entryPrice * 1.25).toFixed(2) : '');
+                                }}
+                                className="text-[10px] text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:underline mt-0.5 cursor-pointer"
+                                title="Set an optional take-profit target for this compounder"
+                              >
+                                + Set Exit Target
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        (() => {
+                          const effTarget = item.targetPrice && item.targetPrice > 0
+                            ? item.targetPrice
+                            : (item.stopLoss > 0 && item.entryPrice > item.stopLoss
+                                ? Number((item.entryPrice + 2 * (item.entryPrice - item.stopLoss)).toFixed(2))
+                                : Number((item.entryPrice * 1.10).toFixed(2)));
+                          const upsidePct = item.entryPrice > 0 ? ((effTarget - item.entryPrice) / item.entryPrice) * 100 : 0;
+                          const distFromCurr = item.currentPrice > 0 ? ((effTarget - item.currentPrice) / item.currentPrice) * 100 : 0;
+
+                          return (
+                            <div className="inline-flex flex-col items-center">
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1">
+                                  <span>🎯</span>
+                                  <span>{formatCurr(effTarget, item.currency)}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingTargetSymbol(item.symbol);
+                                    setEditTargetValue(effTarget.toString());
+                                  }}
+                                  className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                  title="Edit target exit price"
+                                >
+                                  ✏️
+                                </button>
+                              </div>
+                              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
+                                +{upsidePct.toFixed(1)}% target {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
+                              </span>
+                            </div>
+                          );
+                        })()
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-center whitespace-nowrap">
                       {(() => {
                         const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
                         return timing.isDividend ? (
@@ -800,7 +937,7 @@ export default function PortfolioView({
                   </tr>
                   {expandedLots[item.symbol] && (
                     <tr key={`${item.symbol}-lots`} className="bg-blue-50/25 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
-                      <td colSpan={11} className="px-3 py-3 sm:px-5">
+                      <td colSpan={12} className="px-3 py-3 sm:px-5">
                         <div className="bg-white dark:bg-gray-850 rounded-xl p-3 sm:p-4 border border-blue-200 dark:border-blue-800/70 shadow-xs space-y-3">
                           <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 dark:border-gray-750 pb-2.5">
                             <div className="flex items-center gap-2">
@@ -893,7 +1030,7 @@ export default function PortfolioView({
             })}
             {portfolio.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan={12} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                   <p className="text-base font-semibold">No active holdings in portfolio.</p>
                   <p className="text-xs mt-1">Use the "+ Add Position" button above to add positions.</p>
                 </td>
