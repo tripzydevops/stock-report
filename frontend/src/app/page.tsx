@@ -956,16 +956,14 @@ export default function Home() {
           });
           setScannedSignals(combinedSignals);
 
-          // Group open signals by (cleanSymbol, strategy) to merge consecutive daily triggers into one active trade
+          // Group open signals by cleanSymbol to merge multi-day triggers into persistent active trade setups
           const signalGroups: Record<string, typeof mappedAll> = {};
           mappedAll
             .filter(s => s.status === 'open')
             .forEach(s => {
               const cleanSym = s.symbol.replace('.IS', '').toUpperCase();
-              const stratKey = s.strategy.replace('_', ' ').toUpperCase();
-              const key = `${cleanSym}_${stratKey}`;
-              if (!signalGroups[key]) signalGroups[key] = [];
-              signalGroups[key].push(s);
+              if (!signalGroups[cleanSym]) signalGroups[cleanSym] = [];
+              signalGroups[cleanSym].push(s);
             });
 
           const openSignals = Object.values(signalGroups).map(group => {
@@ -981,11 +979,12 @@ export default function Home() {
             const effStop = earliest.stopLoss > 0 ? earliest.stopLoss : Number((effEntry * 0.95).toFixed(2));
             const effTarget = earliest.targetPrice > 0 ? earliest.targetPrice : Number((effEntry + 2 * Math.abs(effEntry - effStop)).toFixed(2));
 
-            const isMultiDay = Boolean(group.length > 1 || (earliest.aiRationale && earliest.aiRationale.includes('RE-CONFIRMED')));
+            const todayStr = new Date().toISOString().slice(0, 10);
             const originalDate = earliest.signalDate;
             const lastDate = latest.signalDate;
-            const diffDays = Math.max(1, Math.round((new Date(lastDate).getTime() - new Date(originalDate).getTime()) / 86400000));
-            const daysInZone = isMultiDay ? (diffDays + 1) : 1;
+            const diffDays = Math.max(0, Math.round((new Date(todayStr).getTime() - new Date(originalDate).getTime()) / 86400000));
+            const isMultiDay = Boolean(group.length > 1 || diffDays >= 1 || (earliest.aiRationale && earliest.aiRationale.includes('RE-CONFIRMED')));
+            const daysInZone = isMultiDay ? Math.max(2, diffDays + 1) : 1;
 
             const triggerHistory = group.map((item, idx) => ({
               id: item.id || `trig-${idx}`,
@@ -1043,6 +1042,62 @@ export default function Home() {
             publishedAt: c.published_at
           }));
           setCatalysts(mappedCat);
+        }
+
+        // 3.6 Fetch Opening Range Breakout (15m ORB) & Gaps from Supabase
+        try {
+          const { data: orbData } = await supabase
+            .from('opening_direction')
+            .select('*')
+            .order('date', { ascending: false });
+
+          if (orbData && orbData.length > 0) {
+            const sortedOrb = [...orbData].sort((a: any, b: any) => Math.abs(Number(b.gap_percent)) - Math.abs(Number(a.gap_percent)));
+            const mappedOrb: OpeningDirectionItem[] = sortedOrb.map((item: any) => ({
+              symbol: item.symbol,
+              market: item.market || 'BIST',
+              gapPercent: Number(item.gap_percent) || 0,
+              gapType: item.gap_type || 'Flat Open',
+              orbStatus: item.orb_status || 'Inside Range',
+              bias: item.bias || 'Neutral',
+              volumeSpike: Boolean(item.volume_spike)
+            }));
+            setOrbItems(mappedOrb);
+          } else if (loadedAssets.length > 0) {
+            const dynamicOrb: OpeningDirectionItem[] = loadedAssets.map(a => {
+              const gapPct = a.changePercent || 0;
+              let gapType: 'Gap Up & Go' | 'Gap & Fade' | 'Flat Open' | 'Gap Down' = 'Flat Open';
+              let orbStatus: 'Broke High' | 'Broke Low' | 'Inside Range' = 'Inside Range';
+              let bias: 'Strong Bullish' | 'Bullish' | 'Neutral' | 'Bearish' = 'Neutral';
+
+              if (gapPct >= 0.75) {
+                gapType = 'Gap Up & Go';
+                orbStatus = 'Broke High';
+                bias = 'Strong Bullish';
+              } else if (gapPct <= -0.75) {
+                gapType = 'Gap Down';
+                orbStatus = 'Broke Low';
+                bias = 'Bearish';
+              } else if (gapPct > 0.2) {
+                gapType = 'Gap Up & Go';
+                orbStatus = 'Broke High';
+                bias = 'Bullish';
+              }
+
+              return {
+                symbol: a.symbol,
+                market: a.market,
+                gapPercent: Number(gapPct.toFixed(2)),
+                gapType,
+                orbStatus,
+                bias,
+                volumeSpike: Boolean((a.volumeRatio && a.volumeRatio >= 1.5) || Math.abs(gapPct) > 1.0)
+              };
+            }).sort((x, y) => Math.abs(y.gapPercent) - Math.abs(x.gapPercent));
+            setOrbItems(dynamicOrb);
+          }
+        } catch (e) {
+          console.warn('Error fetching opening direction:', e);
         }
 
         // 4. Fetch Executed Orders from Supabase

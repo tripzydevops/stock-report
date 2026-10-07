@@ -195,6 +195,70 @@ def sync_all_to_supabase():
     except Exception as e:
         print(f"Error syncing FX rates: {e}")
 
+    # 4c. Sync Opening Direction & 15m ORB
+    try:
+        xl = pd.ExcelFile(excel_path)
+        if "🔔 Opening Direction" in xl.sheet_names:
+            print("📥 Syncing Opening Direction (15m ORB)...")
+            df_orb = pd.read_excel(excel_path, sheet_name="🔔 Opening Direction")
+            orb_rows = []
+            for _, r in df_orb.iterrows():
+                sym = str(r['Symbol']).replace('.IS', '').strip()
+                aid = symbol_to_id.get(sym) or symbol_to_id.get(f"{sym}.IS")
+                gap_pct = float(r['Gap %']) if pd.notna(r['Gap %']) else 0.0
+                pat = str(r.get('Pattern', ''))
+                bias_raw = str(r.get('Direction Bias', '')).upper()
+
+                if 'GAP & GO' in pat.upper():
+                    gap_type = 'Gap Up & Go'
+                    orb_stat = 'Broke High'
+                elif 'BREAKOUT' in pat.upper():
+                    gap_type = 'Gap Up & Go' if gap_pct >= 0.5 else 'Flat Open'
+                    orb_stat = 'Broke High'
+                elif 'FADE' in pat.upper():
+                    gap_type = 'Gap & Fade'
+                    orb_stat = 'Inside Range'
+                elif 'BREAKDOWN' in pat.upper():
+                    gap_type = 'Gap Down' if gap_pct <= -0.5 else 'Flat Open'
+                    orb_stat = 'Broke Low'
+                else:
+                    gap_type = 'Flat Open'
+                    orb_stat = 'Inside Range'
+
+                if 'STRONGLY' in bias_raw or 'STRONG' in bias_raw:
+                    bias = 'Strong Bullish'
+                elif 'BULLISH' in bias_raw:
+                    bias = 'Bullish'
+                elif 'BEARISH' in bias_raw:
+                    bias = 'Bearish'
+                else:
+                    bias = 'Neutral'
+
+                vol_spike = ('GAP & GO' in pat.upper() or 'BREAKOUT' in pat.upper() or abs(gap_pct) >= 5.0)
+
+                orb_rows.append({
+                    'asset_id': aid,
+                    'symbol': sym,
+                    'market': str(r.get('Market', 'BIST')),
+                    'date': today_str,
+                    'prev_close': float(r['Prev Close']) if pd.notna(r['Prev Close']) else None,
+                    'open_price': float(r['Open Price']) if pd.notna(r['Open Price']) else None,
+                    'current_price': float(r['Current Price']) if pd.notna(r['Current Price']) else None,
+                    'gap_percent': gap_pct,
+                    'gap_type': gap_type,
+                    'orb_status': orb_stat,
+                    'bias': bias,
+                    'volume_spike': vol_spike,
+                    'recommended_action': str(r.get('Recommended Action', ''))
+                })
+
+            if orb_rows:
+                for i in range(0, len(orb_rows), 100):
+                    client.table("opening_direction").upsert(orb_rows[i:i+100], on_conflict="symbol,date").execute()
+                print(f"✅ Recorded {len(orb_rows)} opening direction (15m ORB) setups in Supabase.")
+    except Exception as e:
+        print(f"Error syncing opening direction: {e}")
+
     # 5. Sync Trade Signals
     print("📥 Syncing Trade Signals...")
     df_sig = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
@@ -233,30 +297,40 @@ def sync_all_to_supabase():
         
     if signal_rows:
         try:
-            # Preserve original trigger entry prices for existing open signals so they do not drift with market closes
-            existing_open = client.table("trade_signals").select("asset_id, strategy, signal_date, entry_price, stop_loss, target_1, risk_reward_ratio").eq("status", "open").execute()
+            # Preserve original trigger entry prices, stop-loss, targets, and trigger dates for existing open trades
+            existing_open = client.table("trade_signals").select("*").eq("status", "open").execute()
             existing_map = {}
             if existing_open.data:
                 for row in existing_open.data:
-                    key = (row["asset_id"], row["strategy"])
-                    existing_map[key] = row
+                    existing_map[row["asset_id"]] = row
             
             final_signal_rows = []
+            seen_assets = set()
             for sig in signal_rows:
-                key = (sig["asset_id"], sig["strategy"])
-                if key in existing_map:
-                    # Keep original trigger entry price, stop loss, and target!
-                    orig = existing_map[key]
+                aid = sig["asset_id"]
+                if aid in existing_map:
+                    # Keep original trigger setup and original trigger date
+                    orig = existing_map[aid]
                     sig["entry_price"] = orig["entry_price"]
                     sig["stop_loss"] = orig["stop_loss"]
                     sig["target_1"] = orig["target_1"]
-                    sig["risk_reward_ratio"] = orig["risk_reward_ratio"]
+                    sig["risk_reward_ratio"] = orig.get("risk_reward_ratio") or sig.get("risk_reward_ratio")
                     sig["signal_date"] = orig["signal_date"]
+                    orig_rat = orig.get("ai_rationale", "")
+                    sig["ai_rationale"] = orig_rat if "RE-CONFIRMED" in orig_rat else f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
                 final_signal_rows.append(sig)
+                seen_assets.add(aid)
+
+            # Preserve existing open trades that did not trigger again today (they remain active until target/stop hit)
+            for aid, orig in existing_map.items():
+                if aid not in seen_assets:
+                    clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
+                    final_signal_rows.append(clean_orig)
+                    seen_assets.add(aid)
 
             client.table("trade_signals").delete().eq("status", "open").execute()
             client.table("trade_signals").insert(final_signal_rows).execute()
-            print(f"✅ Recorded {len(final_signal_rows)} active trade signals in Supabase (original trigger prices preserved).")
+            print(f"✅ Recorded {len(final_signal_rows)} active trade signals in Supabase (multi-day active setups & original trigger dates preserved).")
         except Exception as e:
             print(f"Error inserting signals: {e}")
 

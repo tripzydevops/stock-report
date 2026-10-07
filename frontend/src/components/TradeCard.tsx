@@ -84,34 +84,39 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
-          {signal.isReconfirmed && (
+          {signal.isReconfirmed ? (
             <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
               <span>🔄</span>
-              <span>Continuation: Triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
+              <span>Active Setup: Originally triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
             </div>
-          )}
+          ) : signal.date < new Date().toISOString().slice(0, 10) ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 w-fit">
+              <span>🗓️</span>
+              <span>Active Swing: Triggered <strong>{signal.date}</strong></span>
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1.5">
             {(() => {
-              if (signal.isReconfirmed) {
+              if (signal.isReconfirmed || (signal.daysInZone && signal.daysInZone > 1)) {
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-600 text-white shadow-xs flex items-center gap-1">
                     <span>🔄</span>
-                    <span>RE-CONFIRMED (DAY {signal.daysInZone || 2})</span>
+                    <span>ACTIVE (DAY {signal.daysInZone || 2})</span>
                   </span>
                 );
               }
               const todayStr = new Date().toISOString().slice(0, 10);
-              const isRecent = signal.date === todayStr || Math.abs((new Date(todayStr).getTime() - new Date(signal.date).getTime()) / 86400000) <= 1;
-              return isRecent ? (
+              const isToday = signal.date === todayStr;
+              return isToday ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
                   <span>🔥</span>
                   <span>NEW TODAY</span>
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  🗓️ {signal.date}
+                  🗓️ SINCE {signal.date}
                 </span>
               );
             })()}

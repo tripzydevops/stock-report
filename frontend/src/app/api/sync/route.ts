@@ -128,6 +128,57 @@ export async function POST(request: Request) {
         .upsert(priceRows, { onConflict: 'asset_id,date' });
     }
 
+    // 4b. Batch upsert into opening_direction (15m ORB)
+    const orbRows: any[] = [];
+    for (const q of quotes) {
+      if (q.symbol === 'TRY=X' || q.symbol === 'XU100.IS') continue;
+      const cleanSym = q.symbol.replace('.IS', '').toUpperCase();
+      const aid = assetMap.get(cleanSym);
+      const prevClose = q.prevClose || q.price;
+      const currPrice = q.price;
+      const gapPct = prevClose > 0 ? ((currPrice - prevClose) / prevClose) * 100 : 0;
+
+      let gapType = 'Flat Open';
+      let orbStatus = 'Inside Range';
+      let bias = 'Neutral';
+
+      if (gapPct >= 0.75) {
+        gapType = 'Gap Up & Go';
+        orbStatus = 'Broke High';
+        bias = 'Strong Bullish';
+      } else if (gapPct <= -0.75) {
+        gapType = 'Gap Down';
+        orbStatus = 'Broke Low';
+        bias = 'Bearish';
+      } else if (gapPct > 0.2) {
+        gapType = 'Gap Up & Go';
+        orbStatus = 'Broke High';
+        bias = 'Bullish';
+      }
+
+      orbRows.push({
+        asset_id: aid,
+        symbol: cleanSym,
+        market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
+        date: today,
+        prev_close: prevClose,
+        open_price: prevClose,
+        current_price: currPrice,
+        gap_percent: Number(gapPct.toFixed(2)),
+        gap_type: gapType,
+        orb_status: orbStatus,
+        bias: bias,
+        volume_spike: Boolean((q.volume && q.volume > 500000) || Math.abs(gapPct) > 1.0),
+        recommended_action: gapPct >= 0.75 ? 'Gapping strong & holding above open' : 'Consolidating in session range'
+      });
+    }
+
+    if (orbRows.length > 0) {
+      await supabase
+        .from('opening_direction')
+        .upsert(orbRows, { onConflict: 'symbol,date' });
+    }
+
     // 5. Update FX Rates
     if (updatedFxRate) {
       await supabase
