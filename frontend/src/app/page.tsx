@@ -1285,6 +1285,9 @@ export default function Home() {
           setPortfolio(mappedPortfolio);
         }
 
+        const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        setLastRefreshedAt(nowStr);
+
       } catch (err) {
         console.warn('Using enriched fallback offline data:', err);
         generateFallbackAssets();
@@ -1333,6 +1336,29 @@ export default function Home() {
 
   useEffect(() => {
     loadData();
+
+    // Auto-refresh when user switches back to tab or unlocks phone
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    };
+
+    // Auto-sync polling every 45s while user is viewing the app
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadData(true);
+      }
+    }, 45000);
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
@@ -2033,19 +2059,19 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5 sm:space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
             <div className="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
               <span>USD/TRY:</span>
               <span className="text-blue-600 dark:text-blue-400">₺{usdTryRate.toFixed(2)}</span>
             </div>
 
             {/* In-App Sync & Refresh Action Buttons */}
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center space-x-1.5 shrink-0">
               <button
                 onClick={() => handleTriggerSync(false)}
                 disabled={isRefreshing}
                 title="Instantly reload live prices, positions, and indicators from Supabase"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 <svg
                   className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -2063,7 +2089,7 @@ export default function Home() {
                 onClick={() => handleTriggerSync(true)}
                 disabled={isRefreshing}
                 title="Trigger full on-demand market crawler in GitHub Actions (fetches all 118 tickers)"
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
+                className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
               >
                 <span>⚡</span>
                 <span className="hidden sm:inline">Run Crawler</span>
@@ -2071,9 +2097,13 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center space-x-1 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">Connected</span>
+              {lastRefreshedAt ? (
+                <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">{lastRefreshedAt}</span>
+              ) : (
+                <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">Connected</span>
+              )}
             </div>
           </div>
         </div>
