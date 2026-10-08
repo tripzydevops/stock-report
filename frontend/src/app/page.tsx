@@ -2199,7 +2199,19 @@ export default function Home() {
                       <span>Scan Audit & Outcome History ({scannedSignals.length}) →</span>
                     </button>
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50">
-                      {signals.length} Active
+                      {(() => {
+                        const count = signals.filter(sig => {
+                          const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
+                          const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
+                          const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
+                          const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                          const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+                          if (isTargetHit && !userHasShares) return false;
+                          if (isStoppedOut && !userHasShares) return false;
+                          return true;
+                        }).length;
+                        return `${count} Active`;
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -2207,8 +2219,26 @@ export default function Home() {
                 {/* Quick Filter Bar */}
                 {(() => {
                   const todayStr = new Date().toISOString().slice(0, 10);
-                  const latestDate = signals.length > 0 
-                    ? [...signals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] 
+                  
+                  // USER RULE: Filter signals so that:
+                  // - If a trade hits target and user kept shares for Target 2 -> it stays!
+                  // - If user sold all shares (or has 0 shares) -> it disappears from active trades!
+                  // - If a trade stopped out and user has 0 shares -> it disappears from active trades!
+                  const activeDisplaySignals = signals.filter(sig => {
+                    const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
+                    const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
+                    const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
+
+                    const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                    const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+
+                    if (isTargetHit && !userHasShares) return false;
+                    if (isStoppedOut && !userHasShares) return false;
+                    return true;
+                  });
+
+                  const latestDate = activeDisplaySignals.length > 0 
+                    ? [...activeDisplaySignals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] 
                     : todayStr;
 
                   const isFromToday = (s: any) => (
@@ -2218,11 +2248,11 @@ export default function Home() {
                     s.lastConfirmedDate === todayStr
                   );
 
-                  const todayCount = signals.filter(isFromToday).length;
-                  const bistCount = signals.filter(s => s.market === 'BIST').length;
-                  const usCount = signals.filter(s => s.market === 'US').length;
-                  const targetHitCount = signals.filter(s => Boolean(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice)).length;
-                  const buyZoneCount = signals.filter(s => !(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice) && !(s.currentPrice && s.stopLoss && s.currentPrice <= s.stopLoss)).length;
+                  const todayCount = activeDisplaySignals.filter(isFromToday).length;
+                  const bistCount = activeDisplaySignals.filter(s => s.market === 'BIST').length;
+                  const usCount = activeDisplaySignals.filter(s => s.market === 'US').length;
+                  const runnerCount = activeDisplaySignals.filter(s => Boolean(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice)).length;
+                  const buyZoneCount = activeDisplaySignals.filter(s => !(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice) && !(s.currentPrice && s.stopLoss && s.currentPrice <= s.stopLoss)).length;
 
                   return (
                     <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -2234,7 +2264,7 @@ export default function Home() {
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                         }`}
                       >
-                        All Active ({signals.length})
+                        All Active ({activeDisplaySignals.length})
                       </button>
                       <button
                         onClick={() => setSignalFilter('BUY_ZONE')}
@@ -2247,17 +2277,19 @@ export default function Home() {
                         <span>🟢</span>
                         <span>In Buy Zone ({buyZoneCount})</span>
                       </button>
-                      <button
-                        onClick={() => setSignalFilter('TARGET_HIT')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
-                          signalFilter === 'TARGET_HIT'
-                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400'
-                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
-                        }`}
-                      >
-                        <span>🏆</span>
-                        <span>Target Hit ({targetHitCount})</span>
-                      </button>
+                      {runnerCount > 0 && (
+                        <button
+                          onClick={() => setSignalFilter('TARGET_HIT')}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                            signalFilter === 'TARGET_HIT'
+                              ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-400'
+                              : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
+                          }`}
+                        >
+                          <span>🚀</span>
+                          <span>T2 Runners ({runnerCount})</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => setSignalFilter('TODAY')}
                         className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
@@ -2296,8 +2328,21 @@ export default function Home() {
                 })()}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {signals
-                    .filter(sig => {
+                  {(() => {
+                    const activeDisplaySignals = signals.filter(sig => {
+                      const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
+                      const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
+                      const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
+
+                      const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                      const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+
+                      if (isTargetHit && !userHasShares) return false;
+                      if (isStoppedOut && !userHasShares) return false;
+                      return true;
+                    });
+
+                    const filtered = activeDisplaySignals.filter(sig => {
                       if (signalFilter === 'BUY_ZONE') {
                         return !(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice) && !(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
                       }
@@ -2306,14 +2351,34 @@ export default function Home() {
                       }
                       if (signalFilter === 'TODAY') {
                         const todayStr = new Date().toISOString().slice(0, 10);
-                        const latestDate = signals.length > 0 ? [...signals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] : '';
+                        const latestDate = activeDisplaySignals.length > 0 ? [...activeDisplaySignals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] : '';
                         return sig.date === latestDate || sig.lastConfirmedDate === latestDate || sig.date === todayStr || sig.lastConfirmedDate === todayStr;
                       }
                       if (signalFilter === 'BIST') return sig.market === 'BIST';
                       if (signalFilter === 'US') return sig.market === 'US';
                       return true;
-                    })
-                    .map((sig, idx) => {
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="col-span-1 md:col-span-2 p-8 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2">
+                          <span className="text-3xl block">🎯</span>
+                          <h3 className="text-base font-bold text-gray-900 dark:text-white">No Active Trades in this View</h3>
+                          <p className="text-xs text-gray-500 max-w-md mx-auto">
+                            All completed setups where targets were reached and shares were fully exited have graduated to the Scan Audit & Scorecard ledger.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setSignalFilter('ALL')}
+                            className="mt-2 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer"
+                          >
+                            Reset Filter to All
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((sig, idx) => {
                       const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
                       const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
 
@@ -2337,7 +2402,8 @@ export default function Home() {
                           }}
                         />
                       );
-                    })}
+                    });
+                  })()}
                 </div>
               </div>
 
