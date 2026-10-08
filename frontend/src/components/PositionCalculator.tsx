@@ -4,6 +4,7 @@ interface PositionCalculatorProps {
   selectedTrade?: {
     entryPrice: number;
     stopLoss: number;
+    targetPrice?: number;
     currency: 'USD' | 'TRY';
     symbol?: string;
   } | null;
@@ -15,6 +16,7 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
   const [riskPct, setRiskPct] = useState<number>(1.0);
   const [entryPrice, setEntryPrice] = useState<number>(0);
   const [stopLoss, setStopLoss] = useState<number>(0);
+  const [targetPrice, setTargetPrice] = useState<number>(0);
   
   const [riskAmount, setRiskAmount] = useState(0);
   const [shares, setShares] = useState(0);
@@ -24,6 +26,7 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
     if (selectedTrade) {
       setEntryPrice(selectedTrade.entryPrice);
       setStopLoss(selectedTrade.stopLoss);
+      setTargetPrice(selectedTrade.targetPrice || 0);
       setCurrency(selectedTrade.currency);
       if (selectedTrade.currency === 'TRY' && accountSize === 10000) {
         setAccountSize(300000);
@@ -137,6 +140,69 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
               ({((positionValue / accountSize) * 100).toFixed(1)}% of account)
             </div>
           </div>
+
+          {shares > 0 && (
+            <div className="col-span-2 pt-3 border-t border-blue-200 dark:border-blue-800/50">
+              {(() => {
+                const t1Shares = Math.max(1, Math.ceil(shares * 0.5));
+                const t2Shares = Math.max(0, shares - t1Shares);
+                const calcT2 = entryPrice > 0 && stopLoss > 0 && entryPrice > stopLoss
+                  ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
+                  : 0;
+                const effT1 = targetPrice > 0 ? targetPrice : Number((entryPrice * 1.05).toFixed(2));
+                const effT2 = calcT2 > 0 ? calcT2 : Number((entryPrice * 1.10).toFixed(2));
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                        <span>🎯</span> Target Exit Allocation ({shares} shares):
+                      </span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">50/50 Rule</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
+                        <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Target 1 (50%)</span>
+                          <span>50%</span>
+                        </div>
+                        <div className="text-base font-black text-gray-900 dark:text-white mt-0.5">
+                          Sell {t1Shares} shares
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between font-mono">
+                          <span>@ {currencySymbol}{effT1.toFixed(2)}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                            +{currencySymbol}{((effT1 - entryPrice) * t1Shares).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800/60 shadow-xs">
+                        <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
+                          <span className="font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Target 2 (50%)</span>
+                          <span>Runner</span>
+                        </div>
+                        <div className="text-base font-black text-gray-900 dark:text-white mt-0.5">
+                          Sell {t2Shares} shares
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between font-mono">
+                          <span>@ {currencySymbol}{effT2.toFixed(2)}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                            +{currencySymbol}{((effT2 - entryPrice) * t2Shares).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      💡 <em>Scale-out rule: After selling Target 1 ({t1Shares} shares), move stop loss on remaining {t2Shares} shares to breakeven ({currencySymbol}{entryPrice.toFixed(2)}) for a risk-free runner.</em>
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -802,7 +802,7 @@ export default function Home() {
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
   const [catalysts, setCatalysts] = useState<MarketCatalyst[]>([]);
-  const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
+  const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2264,20 +2264,31 @@ export default function Home() {
                       if (signalFilter === 'US') return sig.market === 'US';
                       return true;
                     })
-                    .map((sig, idx) => (
-                      <TradeCard 
-                        key={idx} 
-                        signal={sig} 
-                        onSelectTicker={handleSelectTicker}
-                        onCalcSize={(s) => setCalcTrade({
-                          entryPrice: s.entryPrice,
-                          stopLoss: s.stopLoss,
-                          currency: s.currency as 'USD' | 'TRY',
-                          symbol: s.symbol
-                        })}
-                        onOpenCoPilot={handleOpenCoPilotForSignal}
-                      />
-                    ))}
+                    .map((sig, idx) => {
+                      const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
+                      const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
+
+                      return (
+                        <TradeCard 
+                          key={idx} 
+                          signal={sig} 
+                          userHolding={matchedHolding}
+                          onSelectTicker={handleSelectTicker}
+                          onCalcSize={(s) => setCalcTrade({
+                            entryPrice: s.entryPrice,
+                            stopLoss: s.stopLoss,
+                            targetPrice: s.targetPrice,
+                            currency: s.currency as 'USD' | 'TRY',
+                            symbol: s.symbol
+                          })}
+                          onOpenCoPilot={handleOpenCoPilotForSignal}
+                          onTradeHolding={(h) => {
+                            setSelectedHolding(h);
+                            setTradeModalOpen(true);
+                          }}
+                        />
+                      );
+                    })}
                 </div>
               </div>
 

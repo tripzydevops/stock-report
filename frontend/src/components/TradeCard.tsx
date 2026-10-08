@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
+import { PortfolioItem } from '../lib/supabaseClient';
 
 export interface TriggerHistoryItem {
   id?: string;
@@ -33,12 +34,14 @@ export interface TradeSignal {
 
 interface TradeCardProps {
   signal: TradeSignal;
+  userHolding?: PortfolioItem | null;
   onSelectTicker?: (symbol: string) => void;
   onCalcSize?: (signal: TradeSignal) => void;
   onOpenCoPilot?: (signal: TradeSignal) => void;
+  onTradeHolding?: (holding: PortfolioItem) => void;
 }
 
-export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCoPilot }: TradeCardProps) {
+export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   
@@ -227,6 +230,86 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
             ))}
           </div>
         </div>
+
+        {/* SCALE-OUT TARGET EXIT PLAN */}
+        {(() => {
+          const isHolding = Boolean(userHolding && userHolding.shares > 0);
+          const t1Shares = isHolding ? Math.max(1, Math.ceil(userHolding!.shares * 0.5)) : 0;
+          const t2Shares = isHolding ? userHolding!.shares - t1Shares : 0;
+          const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+          const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+
+          if (isHolding) {
+            return (
+              <div className="my-3 p-3 rounded-xl bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800/70">
+                <div className="flex justify-between items-center mb-1.5">
+                  <div className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                    <span>💼</span>
+                    <span>Your Position: <strong>{userHolding!.shares} shares</strong> held (@ avg {formatPrice(userHolding!.entryPrice)})</span>
+                  </div>
+                  {onTradeHolding && (
+                    <button
+                      type="button"
+                      onClick={() => onTradeHolding(userHolding!)}
+                      className="px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 hover:bg-blue-100 border border-blue-300 dark:border-blue-700 shadow-xs cursor-pointer"
+                    >
+                      Trade / Sell ⚡
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={`p-2 rounded-lg border ${
+                    isTargetHit 
+                      ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-700' 
+                      : 'bg-white/90 dark:bg-gray-800/90 border-blue-100 dark:border-blue-900/60'
+                  }`}>
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="font-bold text-gray-600 dark:text-gray-300">Target 1 Exit (50%)</span>
+                      {isTargetHit && <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">✓ In Zone</span>}
+                    </div>
+                    <div className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
+                      Sell <strong>{t1Shares}</strong> shares
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between">
+                      <span>@ {formatPrice(signal.targetPrice)}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                        +{formatPrice((signal.targetPrice - userHolding!.entryPrice) * t1Shares)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-white/90 dark:bg-gray-800/90 border border-blue-100 dark:border-blue-900/60">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="font-bold text-gray-600 dark:text-gray-300">Target 2 Runner (50%)</span>
+                      <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">Runner</span>
+                    </div>
+                    <div className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
+                      Sell <strong>{t2Shares > 0 ? t2Shares : userHolding!.shares}</strong> shares
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between">
+                      <span>@ {formatPrice(t2Price)}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                        +{formatPrice((t2Price - userHolding!.entryPrice) * (t2Shares > 0 ? t2Shares : userHolding!.shares))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="my-2.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-300 flex items-center justify-between">
+              <span className="font-bold flex items-center gap-1 text-gray-700 dark:text-gray-200">
+                <span>🎯</span> 50/50 Scale-Out Rule:
+              </span>
+              <span className="font-mono text-[10px]">
+                Sell <strong>50%</strong> @ {formatPrice(signal.targetPrice)} · Sell <strong>50%</strong> @ {formatPrice(t2Price)}
+              </span>
+            </div>
+          );
+        })()}
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <button 

@@ -232,6 +232,97 @@ export default function TradeHoldingModal({
             ) : (
               /* SELL SHARES FLOW */
               <>
+                {/* Institutional Scale-Out Tranches Quick Selector */}
+                {(() => {
+                  const t1Shares = Math.max(1, Math.ceil(holding.shares * 0.5));
+                  const t2Shares = Math.max(0, holding.shares - t1Shares);
+                  const defaultStop = holding.stopLoss > 0 ? holding.stopLoss : Number((holding.entryPrice * 0.95).toFixed(2));
+                  const calcT2 = Number((holding.entryPrice + 2 * Math.abs(holding.entryPrice - defaultStop)).toFixed(2));
+                  const t2Price = holding.targetPrice && holding.targetPrice > 0 ? holding.targetPrice : calcT2;
+                  const t1Price = holding.targetPrice && holding.targetPrice > 0 && holding.targetPrice < t2Price
+                    ? holding.targetPrice
+                    : Number((holding.entryPrice + Math.abs(holding.entryPrice - defaultStop)).toFixed(2));
+
+                  const isT1Hit = Boolean(holding.currentPrice >= t1Price);
+
+                  return (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800/80 rounded-2xl p-3.5 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                          <span>🎯</span>
+                          <span>Target Exit Tranches ({holding.shares} shs held):</span>
+                        </span>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">
+                          50/50 Scale-Out Rule
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Target 1 Tranche Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSharesStr(String(t1Shares));
+                            setPriceStr(String(holding.currentPrice >= t1Price ? holding.currentPrice : t1Price));
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer shadow-xs ${
+                            isT1Hit
+                              ? 'bg-emerald-500/10 border-emerald-400 dark:border-emerald-600 hover:bg-emerald-500/20'
+                              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-600'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              Target 1 (50%)
+                            </span>
+                            {isT1Hit && (
+                              <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-600 text-white animate-pulse">
+                                ✓ IN ZONE
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm font-black text-gray-900 dark:text-white mt-1">
+                            Sell {t1Shares} shares
+                          </div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            @ {currencySymbol}{t1Price.toFixed(2)} target
+                          </div>
+                        </button>
+
+                        {/* Target 2 Tranche Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const exitQty = t2Shares > 0 ? t2Shares : holding.shares;
+                            setSharesStr(String(exitQty));
+                            setPriceStr(String(holding.currentPrice >= t2Price ? holding.currentPrice : t2Price));
+                          }}
+                          className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-600 text-left transition-all cursor-pointer shadow-xs"
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                              Target 2 (50%)
+                            </span>
+                            <span className="text-[9px] font-bold text-gray-400">
+                              Runner
+                            </span>
+                          </div>
+                          <div className="text-sm font-black text-gray-900 dark:text-white mt-1">
+                            Sell {t2Shares > 0 ? t2Shares : holding.shares} shares
+                          </div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            @ {currencySymbol}{t2Price.toFixed(2)} runner
+                          </div>
+                        </button>
+                      </div>
+
+                      <p className="text-[10px] text-blue-700 dark:text-blue-300">
+                        💡 <em>Tip: Selling Target 1 locks in gains. Always trail stop to breakeven ({currencySymbol}{holding.entryPrice.toFixed(2)}) on remaining shares.</em>
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex justify-between items-center mb-1">

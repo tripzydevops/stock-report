@@ -499,11 +499,24 @@ export default function PortfolioView({
                           <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
                             🗓️ {formattedBoughtDate}
                           </span>
-                          {item.targetPrice ? (
-                            <span className="lg:hidden text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800">
-                              🎯 Exit: {formatCurr(item.targetPrice, item.currency)}
-                            </span>
-                          ) : null}
+                          {(() => {
+                            const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+                            const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+                            const defaultStop = item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2));
+                            const calcT2 = Number((item.entryPrice + 2 * Math.abs(item.entryPrice - defaultStop)).toFixed(2));
+                            const effT2 = item.targetPrice && item.targetPrice > 0 ? item.targetPrice : calcT2;
+                            const effT1 = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null;
+                            const t1Shares = Math.max(1, Math.ceil(item.shares * 0.5));
+                            const t2Shares = Math.max(0, item.shares - t1Shares);
+
+                            return (
+                              <div className="lg:hidden text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 flex-wrap">
+                                <span>🎯 T1: Sell {t1Shares} shs {effT1 ? `(${formatCurr(effT1, item.currency)})` : ''}</span>
+                                <span>·</span>
+                                <span>T2: Sell {t2Shares > 0 ? t2Shares : item.shares} shs ({formatCurr(effT2, item.currency)})</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center gap-2 mt-1.5">
                           {(() => {
@@ -858,6 +871,37 @@ export default function PortfolioView({
                               <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
                                 +{upsidePct.toFixed(1)}% {hasT1 ? 'T2 runner' : 'target'} {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
                               </span>
+
+                              {/* Scale-Out Exit Shares Specification */}
+                              {(() => {
+                                const t1Shares = Math.max(1, Math.ceil(item.shares * 0.5));
+                                const t2Shares = Math.max(0, item.shares - t1Shares);
+
+                                return (
+                                  <div className="mt-1 text-[10px] bg-gray-50 dark:bg-gray-900/60 px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700/60 text-center w-full">
+                                    <div className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">Scale-Out ({item.shares} shs):</div>
+                                    <div className="flex items-center justify-center gap-1.5 font-mono mt-0.5">
+                                      <span className={isT1Hit ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-gray-300"}>
+                                        T1: <strong>{t1Shares}</strong> shs {isT1Hit && '✓'}
+                                      </span>
+                                      <span className="text-gray-400">|</span>
+                                      <span className="text-purple-600 dark:text-purple-400 font-medium">
+                                        T2: <strong>{t2Shares > 0 ? t2Shares : item.shares}</strong> shs
+                                      </span>
+                                    </div>
+                                    {isT1Hit && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onTradeHolding?.(item)}
+                                        className="mt-1 w-full px-1.5 py-0.5 rounded text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-700 transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                                        title={`Target 1 reached! Take profit on ${t1Shares} shares`}
+                                      >
+                                        <span>⚡ Sell T1 ({t1Shares} shs)</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
 
                               {isT1Hit && (
                                 <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
