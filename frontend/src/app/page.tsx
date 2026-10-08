@@ -68,8 +68,8 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
-    shares: 142, entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
-    totalCost: 4528.38, currentValue: 4470.16, pnlAmount: -58.72, pnlPercent: -1.30,
+    shares: 215, entryPrice: 31.09, currentPrice: 31.48, currency: 'TRY',
+    totalCost: 6684.68, currentValue: 6768.20, pnlAmount: 83.52, pnlPercent: 1.25,
     stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
@@ -95,12 +95,12 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
     payoutMonth: 'March 2027', paymentStatus: 'Estimated'
   },
   {
-    symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 142,
-    entryPrice: 31.89, currentPrice: 31.48, currency: 'TRY',
-    dividendYield: 7.82, yieldOnCost: 7.72, annualPayout: 349.60, monthlyPayout: 29.13,
+    symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 215,
+    entryPrice: 31.09, currentPrice: 31.48, currency: 'TRY',
+    dividendYield: 7.82, yieldOnCost: 7.92, annualPayout: 529.27, monthlyPayout: 44.11,
     payoutRatio: 58.4, safetyRating: 'A', frequency: 'Annual',
     nextExDate: '2027-03-29', nextPaymentDate: '2027-04-02',
-    estimatedNextDPS: 2.462, estimatedNextPayout: 349.60,
+    estimatedNextDPS: 2.462, estimatedNextPayout: 529.33,
     payoutMonth: 'March / April 2027', paymentStatus: 'Estimated'
   },
   {
@@ -148,6 +148,38 @@ const INITIAL_REALIZED_TRADES: RealizedTrade[] = [
 ];
 
 const INITIAL_ORDERS: ExecutedOrder[] = [
+  {
+    id: 'ord-0006RC',
+    ref: '#0006RC',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 20,
+    price: 29.20,
+    totalValue: 584.00,
+    currency: 'TRY',
+    dateTime: '08.10.26 - 13:15',
+    status: 'Filled',
+    dcaNote: 'DCA Accumulation Tranche - Filled @ ₺29.20'
+  },
+  {
+    id: 'ord-0006RA',
+    ref: '#0006RA',
+    symbol: 'ISMEN',
+    name: 'İş Yatırım Menkul Değerler',
+    market: 'BIST',
+    side: 'BUY',
+    orderType: 'Limit',
+    quantity: 20,
+    price: 29.30,
+    totalValue: 586.00,
+    currency: 'TRY',
+    dateTime: '08.10.26 - 13:14',
+    status: 'Filled',
+    dcaNote: 'DCA Accumulation Tranche - Filled @ ₺29.30'
+  },
   {
     id: 'ord-0003I3',
     ref: '#0003I3',

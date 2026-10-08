@@ -13,13 +13,13 @@
   {
     "symbol": "ISMEN",
     "strategy_type": "DIVIDEND",
-    "shares": 142,
-    "entry_price": 31.89,
+    "shares": 215,
+    "entry_price": 31.09,
     "entry_date": "2026-09-28",
     "stop_loss": null,
     "target_price": 38.00,
     "currency": "TRY",
-    "notes": "High dividend brokerage play"
+    "notes": "Strategy: CORE_DIVIDEND"
   },
   {
     "symbol": "TURSG",
