@@ -775,8 +775,23 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
   }
 ];
 
+const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'orb', 'catalysts'];
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
+
+  const handleTabChange = (newTab: TabId) => {
+    setActiveTab(newTab);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('market_pulse_active_tab', newTab);
+        window.history.replaceState(null, '', `#${newTab}`);
+      } catch (e) {
+        // Ignore
+      }
+    }
+  };
+
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
     status: 'Bullish', close: 771.35, trend: 'up'
   });
@@ -1335,12 +1350,44 @@ export default function Home() {
     }
 
   useEffect(() => {
+    // 1. Restore persistent active tab from URL hash, query param, or localStorage
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
+      const params = new URLSearchParams(window.location.search);
+      const queryTab = params.get('tab')?.trim().toLowerCase() as TabId;
+      const savedTab = localStorage.getItem('market_pulse_active_tab')?.trim().toLowerCase() as TabId;
+
+      const targetTab = (VALID_TABS.includes(hash) ? hash : null) ||
+                        (VALID_TABS.includes(queryTab) ? queryTab : null) ||
+                        (VALID_TABS.includes(savedTab) ? savedTab : null);
+
+      if (targetTab) {
+        setActiveTab(targetTab);
+        window.history.replaceState(null, '', `#${targetTab}`);
+      }
+    }
+
     loadData();
 
     // Auto-refresh when user switches back to tab or unlocks phone
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
         loadData(true);
+      }
+    };
+
+    // Listen to browser Back/Forward or manual hash changes
+    const handleHashChange = () => {
+      if (typeof window !== 'undefined') {
+        const currentHash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
+        if (VALID_TABS.includes(currentHash)) {
+          setActiveTab(currentHash);
+          try {
+            localStorage.setItem('market_pulse_active_tab', currentHash);
+          } catch (e) {
+            // Ignore
+          }
+        }
       }
     };
 
@@ -1353,10 +1400,12 @@ export default function Home() {
 
     window.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('hashchange', handleHashChange);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('hashchange', handleHashChange);
       clearInterval(interval);
     };
   }, []);
@@ -2123,7 +2172,7 @@ export default function Home() {
       )}
 
       {/* Tab Navigation */}
-      <NavigationTabs activeTab={activeTab} onTabChange={setActiveTab} catalystsCount={catalysts.length} />
+      <NavigationTabs activeTab={activeTab} onTabChange={handleTabChange} catalystsCount={catalysts.length} />
 
       {/* Regime Banners (Always visible on top) */}
       <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} />
@@ -2142,7 +2191,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setActiveTab('scorecard')}
+                      onClick={() => handleTabChange('scorecard')}
                       className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors inline-flex items-center gap-1.5 shadow-sm"
                       title="View all historical scanned trades and outcomes"
                     >
@@ -2366,7 +2415,7 @@ export default function Home() {
                 dcaZone: 'BUY',
                 dcaRationale: 'Synthesized from AI Dividend Portfolio Lab'
               }, true);
-              setActiveTab('portfolio');
+              handleTabChange('portfolio');
             }}
           />
         )}
