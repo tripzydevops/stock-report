@@ -1180,6 +1180,7 @@ export default function Home() {
               totalValue: Number(o.total_amount),
               currency: o.currency || 'TRY',
               dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+              executedAt: o.executed_at,
               status: o.status || 'Filled',
               dcaNote: o.notes
             };
@@ -1638,6 +1639,7 @@ export default function Home() {
           totalValue: totalVal,
           currency: newHolding.currency || 'TRY',
           dateTime: displayDateTime,
+          executedAt: chosenIso,
           status: 'Filled',
           dcaNote: newHolding.dcaRationale || 'Position initiation'
         };
@@ -1792,6 +1794,7 @@ export default function Home() {
             totalValue: totalVal,
             currency: target.currency || 'TRY',
             dateTime: displayDateTime,
+            executedAt: executionIso,
             status: 'Filled',
             dcaNote: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
           };
@@ -1961,6 +1964,7 @@ export default function Home() {
         totalValue: totalVal,
         currency: target.currency || 'TRY',
         dateTime: displayDateTime,
+        executedAt: executionIso,
         status: 'Filled',
         dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})`
       };

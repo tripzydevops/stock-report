@@ -57,37 +57,96 @@ export default function PortfolioView({
   const [editingTargetSymbol, setEditingTargetSymbol] = useState<string | null>(null);
   const [editTargetValue, setEditTargetValue] = useState<string>('');
   const [expandedLots, setExpandedLots] = useState<{ [symbol: string]: boolean }>({});
+  const [lotSortOrder, setLotSortOrder] = useState<'asc' | 'desc'>('asc');
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
   };
 
+  const parseOrderTimestamp = (order: ExecutedOrder): number => {
+    if (order.executedAt) {
+      const t = new Date(order.executedAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (order.dateTime) {
+      const direct = new Date(order.dateTime).getTime();
+      if (!isNaN(direct) && direct > 0) return direct;
+
+      // Match 'DD.MM.YY - HH:mm' or 'DD.MM.YYYY HH:mm'
+      const match = order.dateTime.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})(?:[^\d]+(\d{1,2}):(\d{1,2}))?/);
+      if (match) {
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        let year = parseInt(match[3], 10);
+        if (year < 100) year += 2000;
+        const hour = match[4] ? parseInt(match[4], 10) : 0;
+        const min = match[5] ? parseInt(match[5], 10) : 0;
+        return new Date(year, month, day, hour, min).getTime();
+      }
+    }
+    return 0;
+  };
+
   const getBuyLotsForHolding = (item: PortfolioItem) => {
     const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
-    const buyOrders = orders
-      .filter(o => o.side === 'BUY' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym)
-      .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
 
-    if (buyOrders.length > 0) {
-      return buyOrders.map((bo, idx) => {
-        const lotValue = bo.quantity * item.currentPrice;
-        const lotCost = bo.quantity * bo.price;
+    // 1. Sort all BUY orders by timestamp ASCENDING (oldest to newest)
+    const allBuys = orders
+      .filter(o => o.side === 'BUY' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym)
+      .sort((a, b) => parseOrderTimestamp(a) - parseOrderTimestamp(b));
+
+    // 2. Sort all SELL orders by timestamp ASCENDING
+    const allSells = orders
+      .filter(o => o.side === 'SELL' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym)
+      .sort((a, b) => parseOrderTimestamp(a) - parseOrderTimestamp(b));
+
+    // 3. FIFO consumption: exclude shares that have already been liquidated in past closed trades
+    let totalSold = allSells.reduce((acc, s) => acc + s.quantity, 0);
+
+    const activeBuys: { order: ExecutedOrder; activeShares: number }[] = [];
+    for (const bo of allBuys) {
+      if (totalSold >= bo.quantity) {
+        totalSold -= bo.quantity;
+      } else if (totalSold > 0) {
+        const remaining = bo.quantity - totalSold;
+        totalSold = 0;
+        activeBuys.push({ order: bo, activeShares: remaining });
+      } else {
+        activeBuys.push({ order: bo, activeShares: bo.quantity });
+      }
+    }
+
+    if (activeBuys.length > 0) {
+      // Map lots with chronological identity: Lot #1 is ALWAYS the earliest initial entry
+      const mappedLots = activeBuys.map((entry, idx) => {
+        const bo = entry.order;
+        const lotShares = entry.activeShares;
+        const lotValue = lotShares * item.currentPrice;
+        const lotCost = lotShares * bo.price;
         const lotPnl = lotValue - lotCost;
         const lotPnlPct = lotCost > 0 ? (lotPnl / lotCost) * 100 : 0;
+        const isInitial = idx === 0;
+        const isLatest = idx === activeBuys.length - 1 && activeBuys.length > 1;
+
         return {
           id: bo.id,
           ref: bo.ref,
-          lotNumber: idx + 1,
-          isInitial: idx === 0,
+          lotNumber: idx + 1, // Lot #1 is ALWAYS the initial purchase
+          isInitial: isInitial,
+          isLatest: isLatest,
           date: bo.dateTime,
-          shares: bo.quantity,
+          shares: lotShares,
           price: bo.price,
           totalCost: lotCost,
           currentValue: lotValue,
           pnl: lotPnl,
           pnlPct: lotPnlPct,
-          note: bo.dcaNote || (idx === 0 ? 'Initial Position Outlay' : `DCA Accumulation Tranche #${idx + 1}`)
+          note: bo.dcaNote || (isInitial ? 'Initial Position Outlay' : `DCA Accumulation Tranche #${idx + 1}`),
+          timestamp: parseOrderTimestamp(bo)
         };
       });
+
+      // Display according to chosen sort order
+      return lotSortOrder === 'desc' ? [...mappedLots].reverse() : mappedLots;
     }
 
     const lotCost = item.shares * item.entryPrice;
@@ -99,6 +158,7 @@ export default function PortfolioView({
       ref: `#INIT-${cleanSym}`,
       lotNumber: 1,
       isInitial: true,
+      isLatest: false,
       date: item.entryDate 
         ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
         : 'Initial',
@@ -108,7 +168,8 @@ export default function PortfolioView({
       currentValue: lotValue,
       pnl: lotPnl,
       pnlPct: lotPnlPct,
-      note: 'Initial Position Base'
+      note: 'Initial Position Base',
+      timestamp: 0
     }];
   };
 
@@ -542,7 +603,7 @@ export default function PortfolioView({
                                 title="Click to view all purchase lots, execution dates, and fill prices"
                               >
                                 <span>📦</span>
-                                <span>{isExpanded ? 'Hide Lots' : `${lots.length} Buy Lot${lots.length > 1 ? 's' : ''}`}</span>
+                                <span>{isExpanded ? (language === 'tr' ? 'Lotları Gizle' : 'Hide Lots') : (language === 'tr' ? `${lots.length} Alım Lotu` : `${lots.length} Buy Lot${lots.length > 1 ? 's' : ''}`)}</span>
                                 <svg className={`w-2.5 h-2.5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
                                 </svg>
@@ -1023,36 +1084,52 @@ export default function PortfolioView({
                       <td colSpan={12} className="px-3 py-3 sm:px-5">
                         <div className="bg-white dark:bg-gray-850 rounded-xl p-3 sm:p-4 border border-blue-200 dark:border-blue-800/70 shadow-xs space-y-3">
                           <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 dark:border-gray-750 pb-2.5">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
                                 <span>📦</span>
-                                <span>Purchase Tranches & Buy Lots Breakdown: <span className="text-blue-600 dark:text-blue-400 font-mono">{item.symbol}</span></span>
+                                <span>{language === 'tr' ? 'Alım Kademeleri & Lot Dağılımı' : 'Purchase Tranches & Buy Lots Breakdown'}: <span className="text-blue-600 dark:text-blue-400 font-mono">{item.symbol}</span></span>
                               </span>
                               <span className="text-[11px] text-gray-500">
-                                Total: <strong className="text-gray-900 dark:text-white">{item.shares.toLocaleString()} shares</strong> @ avg <strong className="text-gray-900 dark:text-white">{formatCurr(item.entryPrice, item.currency)}</strong>
+                                {language === 'tr' ? 'Toplam' : 'Total'}: <strong className="text-gray-900 dark:text-white">{item.shares.toLocaleString()} {language === 'tr' ? 'lot' : 'shares'}</strong> @ {language === 'tr' ? 'ort.' : 'avg'} <strong className="text-gray-900 dark:text-white">{formatCurr(item.entryPrice, item.currency)}</strong>
                               </span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => onTradeHolding?.(item)}
-                              className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>+ Buy More / Scale In</span>
-                            </button>
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => setLotSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                className="text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-750 hover:bg-gray-200 dark:hover:bg-gray-700 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                title={language === 'tr' ? 'Sıralamayı değiştir' : 'Change sort order'}
+                              >
+                                <span>{lotSortOrder === 'asc' ? '⬆️' : '⬇️'}</span>
+                                <span>
+                                  {language === 'tr'
+                                    ? (lotSortOrder === 'asc' ? 'Kronolojik (İlk Alım Üstte)' : 'En Yeni Alım Üstte')
+                                    : (lotSortOrder === 'asc' ? 'Chronological (Oldest First)' : 'Newest First')
+                                  }
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onTradeHolding?.(item)}
+                                className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>+ {language === 'tr' ? 'Kademeli Ekle / Al' : 'Buy More / Scale In'}</span>
+                              </button>
+                            </div>
                           </div>
 
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs">
                               <thead className="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-750">
                                 <tr>
-                                  <th className="py-1.5 px-2">Tranche / Lot</th>
-                                  <th className="py-1.5 px-2">Execution Date</th>
-                                  <th className="py-1.5 px-2 text-right">Shares</th>
-                                  <th className="py-1.5 px-2 text-right">Fill Price</th>
-                                  <th className="py-1.5 px-2 text-right">Cost Outlay</th>
-                                  <th className="py-1.5 px-2 text-right">Current Value</th>
-                                  <th className="py-1.5 px-2 text-right">Tranche P&L</th>
-                                  <th className="py-1.5 px-2">DCA Note / Purpose</th>
+                                  <th className="py-1.5 px-2">{language === 'tr' ? 'Kademe / Lot' : 'Tranche / Lot'}</th>
+                                  <th className="py-1.5 px-2">{language === 'tr' ? 'İşlem Tarihi' : 'Execution Date'}</th>
+                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Lot Adedi' : 'Shares'}</th>
+                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Alış Fiyatı' : 'Fill Price'}</th>
+                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Maliyet Tutarı' : 'Cost Outlay'}</th>
+                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Güncel Değer' : 'Current Value'}</th>
+                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Kademe K/Z' : 'Tranche P&L'}</th>
+                                  <th className="py-1.5 px-2">{language === 'tr' ? 'DCA Notu / Gerekçe' : 'DCA Note / Purpose'}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1064,10 +1141,20 @@ export default function PortfolioView({
                                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black ${
                                           lot.isInitial
                                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
+                                            : lot.isLatest
+                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
                                             : 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
                                         }`}>
-                                          <span>{lot.isInitial ? '🟢' : '🎯'}</span>
-                                          <span>Lot #{lot.lotNumber} {lot.isInitial ? '(Initial)' : '(DCA Tranche)'}</span>
+                                          <span>{lot.isInitial ? '🟢' : lot.isLatest ? '⚡' : '🎯'}</span>
+                                          <span>
+                                            Lot #{lot.lotNumber} {
+                                              lot.isInitial
+                                                ? (language === 'tr' ? '(İlk Alım)' : '(Initial)')
+                                                : lot.isLatest
+                                                ? (language === 'tr' ? '(Son Kademeli Alım)' : '(Latest DCA)')
+                                                : (language === 'tr' ? '(Kademeli Alım)' : '(DCA Tranche)')
+                                            }
+                                          </span>
                                         </span>
                                       </td>
                                       <td className="py-2 px-2 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300 text-[11px]">

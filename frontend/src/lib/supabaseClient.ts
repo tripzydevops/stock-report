@@ -144,6 +144,7 @@ export interface ExecutedOrder {
   totalValue: number;
   currency: string;
   dateTime: string;
+  executedAt?: string;
   status: 'Filled';
   dcaNote?: string;
 }
