@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ScannedTradeSignal } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ScanSignalsLedgerProps {
   signals: ScannedTradeSignal[];
@@ -10,6 +11,7 @@ interface ScanSignalsLedgerProps {
 }
 
 export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSignalsLedgerProps) {
+  const { t, language } = useLanguage();
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'target_hit' | 'stopped_out' | 'open'>('ALL');
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US'>('ALL');
   const [strategyFilter, setStrategyFilter] = useState<string>('ALL');
@@ -60,14 +62,14 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
             <span>🎯</span>
-            <span>HIT TARGET</span>
+            <span>{language === 'tr' ? 'HEDEF ALINDI' : 'HIT TARGET'}</span>
           </span>
         );
       case 'stopped_out':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400 border border-rose-300 dark:border-rose-800">
             <span>🛑</span>
-            <span>STOPPED OUT</span>
+            <span>{language === 'tr' ? 'ZARAR KES OLDU' : 'STOPPED OUT'}</span>
           </span>
         );
       case 'open':
@@ -75,7 +77,7 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/70 dark:text-blue-400 border border-blue-300 dark:border-blue-800">
             <span>⏳</span>
-            <span>ACTIVE / IN PROGRESS</span>
+            <span>{language === 'tr' ? 'AKTİF / DEVAM EDİYOR' : 'ACTIVE / IN PROGRESS'}</span>
           </span>
         );
     }

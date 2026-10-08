@@ -16,6 +16,7 @@ import OpeningDirectionView from '../components/OpeningDirectionView';
 import CatalystFeedView from '../components/CatalystFeedView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
+import { useLanguage } from '../context/LanguageContext';
 import {
   supabase,
   PortfolioItem,
@@ -778,6 +779,7 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
 const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'orb', 'catalysts'];
 
 export default function Home() {
+  const { language, setLanguage, t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabId>('signals');
 
   const handleTabChange = (newTab: TabId) => {
@@ -2104,7 +2106,7 @@ export default function Home() {
                   LIVE 2.0
                 </span>
               </div>
-              <p className="text-[10px] text-gray-400 hidden sm:block">Autonomous Travel & Market Intelligence Engine</p>
+              <p className="text-[10px] text-gray-400 hidden sm:block">{t.header.subtitle}</p>
             </div>
           </div>
 
@@ -2119,7 +2121,7 @@ export default function Home() {
               <button
                 onClick={() => handleTriggerSync(false)}
                 disabled={isRefreshing}
-                title="Instantly reload live prices, positions, and indicators from Supabase"
+                title={t.header.syncTooltip}
                 className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 <svg
@@ -2130,19 +2132,49 @@ export default function Home() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span className="hidden sm:inline">{isRefreshing ? 'Syncing...' : 'Sync Market Data'}</span>
-                <span className="sm:hidden">{isRefreshing ? '...' : 'Sync'}</span>
+                <span className="hidden sm:inline">{isRefreshing ? t.header.syncing : t.header.syncData}</span>
+                <span className="sm:hidden">{isRefreshing ? '...' : t.header.syncShort}</span>
               </button>
 
               <button
                 onClick={() => handleTriggerSync(true)}
                 disabled={isRefreshing}
-                title="Trigger full on-demand market crawler in GitHub Actions (fetches all 118 tickers)"
+                title={t.header.crawlerTooltip}
                 className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
               >
                 <span>⚡</span>
-                <span className="hidden sm:inline">Run Crawler</span>
-                <span className="sm:hidden">Crawler</span>
+                <span className="hidden sm:inline">{t.header.runCrawler}</span>
+                <span className="sm:hidden">{t.header.crawlerShort}</span>
+              </button>
+            </div>
+
+            {/* Language Switcher Toggle */}
+            <div className="flex items-center p-0.5 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setLanguage('tr')}
+                className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  language === 'tr'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                }`}
+                title="Türkçe"
+              >
+                <span>🇹🇷</span>
+                <span className="text-[11px]">TR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  language === 'en'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                }`}
+                title="English"
+              >
+                <span>🇬🇧</span>
+                <span className="text-[11px]">EN</span>
               </button>
             </div>
 
@@ -2151,7 +2183,7 @@ export default function Home() {
               {lastRefreshedAt ? (
                 <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">{lastRefreshedAt}</span>
               ) : (
-                <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">Connected</span>
+                <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">{t.common.connected}</span>
               )}
             </div>
           </div>
@@ -2186,17 +2218,17 @@ export default function Home() {
               <div className="lg:w-2/3 space-y-4">
                 <div className="flex justify-between items-end flex-wrap gap-2">
                   <div>
-                    <h2 className="text-xl font-black text-gray-900 dark:text-white">Active Trade Setups & Signals</h2>
-                    <p className="text-xs text-gray-500">Autonomous scanner triggers with calculated targets, stop-losses, and AI rationales.</p>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white">{t.signals.title}</h2>
+                    <p className="text-xs text-gray-500">{t.signals.subtitle}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleTabChange('scorecard')}
-                      className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors inline-flex items-center gap-1.5 shadow-sm"
-                      title="View all historical scanned trades and outcomes"
+                      className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      title={language === 'tr' ? "Tüm taranan geçmiş işlemleri ve başarı karnesini inceleyin" : "View all historical scanned trades and outcomes"}
                     >
                       <span>📜</span>
-                      <span>Scan Audit & Outcome History ({scannedSignals.length}) →</span>
+                      <span>{t.signals.scanAuditBtn} ({scannedSignals.length}) →</span>
                     </button>
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50">
                       {(() => {
@@ -2210,7 +2242,7 @@ export default function Home() {
                           if (isStoppedOut && !userHasShares) return false;
                           return true;
                         }).length;
-                        return `${count} Active`;
+                        return `${count} ${t.common.active}`;
                       })()}
                     </span>
                   </div>
@@ -2264,7 +2296,7 @@ export default function Home() {
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                         }`}
                       >
-                        All Active ({activeDisplaySignals.length})
+                        {t.signals.filterAll} ({activeDisplaySignals.length})
                       </button>
                       <button
                         onClick={() => setSignalFilter('BUY_ZONE')}
@@ -2275,7 +2307,7 @@ export default function Home() {
                         }`}
                       >
                         <span>🟢</span>
-                        <span>In Buy Zone ({buyZoneCount})</span>
+                        <span>{t.signals.filterBuyZone} ({buyZoneCount})</span>
                       </button>
                       {runnerCount > 0 && (
                         <button
@@ -2287,7 +2319,7 @@ export default function Home() {
                           }`}
                         >
                           <span>🚀</span>
-                          <span>T2 Runners ({runnerCount})</span>
+                          <span>{t.signals.filterRunners} ({runnerCount})</span>
                         </button>
                       )}
                       <button
@@ -2299,7 +2331,7 @@ export default function Home() {
                         }`}
                       >
                         <span>🔥</span>
-                        <span>Today's Setups ({todayCount})</span>
+                        <span>{t.signals.filterToday} ({todayCount})</span>
                       </button>
                       <button
                         onClick={() => setSignalFilter('BIST')}
@@ -2321,7 +2353,7 @@ export default function Home() {
                         }`}
                       >
                         <span>🇺🇸</span>
-                        <span>US Market ({usCount})</span>
+                        <span>{t.signals.filterUs} ({usCount})</span>
                       </button>
                     </div>
                   );
@@ -2363,16 +2395,16 @@ export default function Home() {
                       return (
                         <div className="col-span-1 md:col-span-2 p-8 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2">
                           <span className="text-3xl block">🎯</span>
-                          <h3 className="text-base font-bold text-gray-900 dark:text-white">No Active Trades in this View</h3>
+                          <h3 className="text-base font-bold text-gray-900 dark:text-white">{t.signals.noActiveTrades}</h3>
                           <p className="text-xs text-gray-500 max-w-md mx-auto">
-                            All completed setups where targets were reached and shares were fully exited have graduated to the Scan Audit & Scorecard ledger.
+                            {t.signals.noActiveDesc}
                           </p>
                           <button
                             type="button"
                             onClick={() => setSignalFilter('ALL')}
                             className="mt-2 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer"
                           >
-                            Reset Filter to All
+                            {t.signals.resetFilter}
                           </button>
                         </div>
                       );

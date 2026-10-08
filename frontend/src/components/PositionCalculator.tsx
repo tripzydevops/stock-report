@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface PositionCalculatorProps {
   selectedTrade?: {
@@ -11,6 +14,7 @@ interface PositionCalculatorProps {
 }
 
 export default function PositionCalculator({ selectedTrade }: PositionCalculatorProps = {}) {
+  const { t, language } = useLanguage();
   const [currency, setCurrency] = useState<'USD' | 'TRY'>('USD');
   const [accountSize, setAccountSize] = useState<number>(10000);
   const [riskPct, setRiskPct] = useState<number>(1.0);
@@ -58,7 +62,7 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
           <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-          Position Calculator
+          {t.calculator.title}
         </h2>
         <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           <button 
@@ -78,7 +82,9 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
 
       <div className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Account Size ({currencySymbol})</label>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t.calculator.accountSize} ({currencySymbol})
+          </label>
           <input 
             type="number" 
             value={accountSize || ''} 
@@ -89,7 +95,9 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
 
         <div>
           <div className="flex justify-between mb-1">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">Risk Percentage</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              {t.calculator.riskPct}
+            </label>
             <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{riskPct.toFixed(1)}%</span>
           </div>
           <input 
@@ -103,7 +111,9 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Entry Price</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t.calculator.entryPrice}
+            </label>
             <input 
               type="number" 
               value={entryPrice || ''} 
@@ -112,7 +122,9 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Stop Loss</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t.calculator.stopLoss}
+            </label>
             <input 
               type="number" 
               value={stopLoss || ''} 
@@ -126,18 +138,18 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
       <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100 dark:border-blue-800/30">
         <div className="grid grid-cols-2 gap-y-3">
           <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Risk Amount</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t.calculator.maxCapitalLoss}</div>
             <div className="font-bold text-lg text-gray-900 dark:text-white">{currencySymbol}{riskAmount.toFixed(2)}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">Shares / Units</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t.calculator.recommendedShares}</div>
             <div className="font-bold text-lg text-blue-600 dark:text-blue-400">{shares}</div>
           </div>
           <div className="col-span-2 pt-2 border-t border-blue-200 dark:border-blue-800/50">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Total Position Value</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t.calculator.totalCapitalRequired}</div>
             <div className="font-bold text-xl text-gray-900 dark:text-white">{currencySymbol}{positionValue.toFixed(2)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              ({((positionValue / accountSize) * 100).toFixed(1)}% of account)
+              ({((positionValue / accountSize) * 100).toFixed(1)}% {language === 'tr' ? 'hesap büyüklüğü' : 'of account'})
             </div>
           </div>
 
@@ -156,19 +168,19 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1">
-                        <span>🎯</span> Target Exit Allocation ({shares} shares):
+                        <span>🎯</span> {language === 'tr' ? `Hedef Çıkış Dağılımı (${shares} adet):` : `Target Exit Allocation (${shares} shares):`}
                       </span>
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">50/50 Rule</span>
+                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">{language === 'tr' ? '50/50 Kuralı' : '50/50 Rule'}</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-emerald-200 dark:border-emerald-800/60 shadow-xs">
                         <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Target 1 (50%)</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">{t.calculator.t1ScaleOut}</span>
                           <span>50%</span>
                         </div>
                         <div className="text-base font-black text-gray-900 dark:text-white mt-0.5">
-                          Sell {t1Shares} shares
+                          {language === 'tr' ? `${t1Shares} adet sat` : `Sell ${t1Shares} shares`}
                         </div>
                         <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between font-mono">
                           <span>@ {currencySymbol}{effT1.toFixed(2)}</span>
@@ -180,11 +192,11 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
 
                       <div className="p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800/60 shadow-xs">
                         <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400">
-                          <span className="font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Target 2 (50%)</span>
-                          <span>Runner</span>
+                          <span className="font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">{t.calculator.t2Runner}</span>
+                          <span>{language === 'tr' ? 'Koşucu' : 'Runner'}</span>
                         </div>
                         <div className="text-base font-black text-gray-900 dark:text-white mt-0.5">
-                          Sell {t2Shares} shares
+                          {language === 'tr' ? `${t2Shares} adet sat` : `Sell ${t2Shares} shares`}
                         </div>
                         <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between font-mono">
                           <span>@ {currencySymbol}{effT2.toFixed(2)}</span>
@@ -196,7 +208,9 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
                     </div>
 
                     <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                      💡 <em>Scale-out rule: After selling Target 1 ({t1Shares} shares), move stop loss on remaining {t2Shares} shares to breakeven ({currencySymbol}{entryPrice.toFixed(2)}) for a risk-free runner.</em>
+                      💡 <em>{language === 'tr' 
+                        ? `Kısmi çıkış kuralı: Hedef 1 (${t1Shares} adet) satıldıktan sonra, kalan ${t2Shares} adedin zarar kes seviyesini başabaşa (${currencySymbol}${entryPrice.toFixed(2)}) çekerek risksiz şekilde Hedef 2'ye bırakın.` 
+                        : `Scale-out rule: After selling Target 1 (${t1Shares} shares), move stop loss on remaining ${t2Shares} shares to breakeven (${currencySymbol}${entryPrice.toFixed(2)}) for a risk-free runner.`}</em>
                     </p>
                   </div>
                 );

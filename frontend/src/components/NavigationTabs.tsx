@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb' | 'catalysts';
 
@@ -11,13 +12,15 @@ interface NavigationTabsProps {
 }
 
 export default function NavigationTabs({ activeTab, onTabChange, catalystsCount = 9 }: NavigationTabsProps) {
+  const { t } = useLanguage();
+
   const tabs: { id: TabId; label: string; icon: string; count?: string }[] = [
-    { id: 'signals', label: 'Market & Signals', icon: '🎯' },
-    { id: 'catalysts', label: '⚡ Catalysts & KAP', icon: '📢', count: `${catalystsCount}` },
-    { id: 'portfolio', label: 'My Portfolio & DCA', icon: '💼' },
-    { id: 'dividend', label: 'Dividend Cashflow', icon: '💰' },
-    { id: 'scorecard', label: 'Strategy Scorecard', icon: '📈', count: '1,173' },
-    { id: 'orb', label: 'Opening Direction', icon: '🔔' },
+    { id: 'signals', label: t.tabs.signals, icon: '🎯' },
+    { id: 'catalysts', label: t.tabs.catalysts, icon: '📢', count: `${catalystsCount}` },
+    { id: 'portfolio', label: t.tabs.portfolio, icon: '💼' },
+    { id: 'dividend', label: t.tabs.dividend, icon: '💰' },
+    { id: 'scorecard', label: t.tabs.scorecard, icon: '📈', count: '1,173' },
+    { id: 'orb', label: t.tabs.orb, icon: '🔔' },
   ];
 
   return (

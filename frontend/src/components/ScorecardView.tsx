@@ -3,6 +3,7 @@
 import React from 'react';
 import { StrategyStat, ScannedTradeSignal } from '../lib/supabaseClient';
 import ScanSignalsLedger from './ScanSignalsLedger';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ScorecardViewProps {
   strategies: StrategyStat[];
@@ -11,6 +12,7 @@ interface ScorecardViewProps {
 }
 
 export default function ScorecardView({ strategies, scannedSignals = [], onSelectTicker }: ScorecardViewProps) {
+  const { t, language } = useLanguage();
   const totalTrades = strategies.reduce((acc, s) => acc + s.totalTrades, 0);
   const weightedWinRate = totalTrades > 0
     ? strategies.reduce((acc, s) => acc + s.winRate * s.totalTrades, 0) / totalTrades
@@ -21,42 +23,42 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
       {/* Top Level System KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Evaluated Trades</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.totalTrades}</span>
           <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
-            {totalTrades.toLocaleString()} Trades
+            {totalTrades.toLocaleString()} {language === 'tr' ? 'İşlem' : 'Trades'}
           </div>
           <div className="text-xs text-emerald-500 font-semibold mt-1">
-            ● 1-Year Backtest Across 117 Assets
+            ● {language === 'tr' ? '117 Varlık Üzerinde 1 Yıllık Test' : '1-Year Backtest Across 117 Assets'}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Overall System Win Rate</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.winRate}</span>
           <div className="mt-2 text-2xl font-black text-emerald-500">
             {weightedWinRate.toFixed(1)}%
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            Standard 1.5 - 2.5 R:R Targets
+            {language === 'tr' ? 'Standart 1.5 - 2.5 R:R Hedefleri' : 'Standard 1.5 - 2.5 R:R Targets'}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Top Strategy Win Rate</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.topStrategy}</span>
           <div className="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
             68.4%
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            50 EMA Pullback in Confirmed Trend
+            {language === 'tr' ? 'Onaylanmış Trendde 50 EMA Geri Çekilme' : '50 EMA Pullback in Confirmed Trend'}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">System Profit Factor</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.profitFactor}</span>
           <div className="mt-2 text-2xl font-black text-emerald-500">
             1.82
           </div>
           <div className="text-xs text-emerald-500 font-semibold mt-1">
-            ● Gross Profit / Gross Loss &gt; 1.5
+            ● {language === 'tr' ? 'Toplam Kâr / Toplam Zarar > 1.5' : 'Gross Profit / Gross Loss > 1.5'}
           </div>
         </div>
       </div>
@@ -64,22 +66,26 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
       {/* Strategy Comparison Breakdown */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Strategy Performance Scorecard</h3>
-          <p className="text-xs text-gray-500">Empirical 1-year backtest outcomes across BIST 100, US Equities, and ETFs.</p>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t.scorecard.title}</h3>
+          <p className="text-xs text-gray-500">
+            {language === 'tr' 
+              ? 'BIST 100, ABD Hisseleri ve ETF modellerinde 1 yıllık deneysel test sonuçları.' 
+              : 'Empirical 1-year backtest outcomes across BIST 100, US Equities, and ETFs.'}
+          </p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">Strategy Name</th>
-                <th className="px-5 py-3 text-right">Sample Size</th>
-                <th className="px-5 py-3">Win Rate Visual</th>
-                <th className="px-5 py-3 text-right">Win Rate %</th>
-                <th className="px-5 py-3 text-right">Profit Factor</th>
-                <th className="px-5 py-3 text-right">Avg Gain</th>
-                <th className="px-5 py-3 text-right">Avg Loss</th>
-                <th className="px-5 py-3 text-right">Expectancy</th>
+                <th className="px-5 py-3">{language === 'tr' ? 'Strateji Adı' : 'Strategy Name'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Örneklem Sayısı' : 'Sample Size'}</th>
+                <th className="px-5 py-3">{language === 'tr' ? 'Kazanma Oranı Grafiği' : 'Win Rate Visual'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Kazanma %' : 'Win Rate %'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Kâr Faktörü' : 'Profit Factor'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Ort. Kazanç' : 'Avg Gain'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Ort. Kayıp' : 'Avg Loss'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Beklenti (R)' : 'Expectancy'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -89,7 +95,7 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
                     {stat.strategy}
                   </td>
                   <td className="px-5 py-4 text-right font-medium text-gray-600 dark:text-gray-300">
-                    {stat.totalTrades} trades
+                    {stat.totalTrades} {language === 'tr' ? 'işlem' : 'trades'}
                   </td>
                   <td className="px-5 py-4 w-44">
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
@@ -139,20 +145,24 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h4 className="font-bold text-gray-900 dark:text-white flex items-center space-x-2">
             <span>🎯</span>
-            <span>Why 50 EMA Pullbacks Outperform in Bull Markets</span>
+            <span>{language === 'tr' ? '50 EMA Geri Çekilmeleri Boğa Piyasasında Neden Başarılıdır?' : 'Why 50 EMA Pullbacks Outperform in Bull Markets'}</span>
           </h4>
           <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
-            When an asset is trading above its 200-day EMA, a pullback to the rising 50-day EMA represents an optimal risk-to-reward entry point. Risk is clearly bounded just below the recent swing low, yielding a 68.4% win rate with an average profit factor of 2.14.
+            {language === 'tr' 
+              ? 'Bir varlık 200 günlük EMA üzerinde seyrederken, yükselen 50 günlük EMA seviyesine çekilme ideal bir risk-ödül fırsatı sunar. Risk, son dip seviyesinin hemen altına net şekilde sınırlandırılır ve %68.4 kazanma oranı ile 2.14 kâr faktörü üretir.'
+              : 'When an asset is trading above its 200-day EMA, a pullback to the rising 50-day EMA represents an optimal risk-to-reward entry point. Risk is clearly bounded just below the recent swing low, yielding a 68.4% win rate with an average profit factor of 2.14.'}
           </p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h4 className="font-bold text-gray-900 dark:text-white flex items-center space-x-2">
             <span>🛡️</span>
-            <span>Stop-Loss Execution vs Holding Through Drawdowns</span>
+            <span>{language === 'tr' ? 'Zarar Kes Uygulaması ve Düşüş Yönetimi' : 'Stop-Loss Execution vs Holding Through Drawdowns'}</span>
           </h4>
           <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
-            The data demonstrates that for swing trades, cutting losses at 1.5 - 2.0x ATR preserves capital for the next high-probability setup. For dividend holdings, stop losses are replaced by automated DCA Value Zone alerts when RSI falls below 40.
+            {language === 'tr'
+              ? 'Veriler, swing işlemlerde zararların 1.5 - 2.0x ATR seviyesinde kesilmesinin bir sonraki yüksek olasılıklı işlem için sermayeyi koruduğunu göstermektedir. Temettü pozisyonlarında ise stop loss yerine RSI 40 altına indiğinde otomatik Kademeli Alım (DCA) uyarıları devreye girer.'
+              : 'The data demonstrates that for swing trades, cutting losses at 1.5 - 2.0x ATR preserves capital for the next high-probability setup. For dividend holdings, stop losses are replaced by automated DCA Value Zone alerts when RSI falls below 40.'}
           </p>
         </div>
       </div>

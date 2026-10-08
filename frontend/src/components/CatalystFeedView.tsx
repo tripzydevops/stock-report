@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { MarketCatalyst, PortfolioItem } from '../lib/supabaseClient';
 import { TradeSignal } from './TradeCard';
+import { useLanguage } from '../context/LanguageContext';
 
 interface CatalystFeedViewProps {
   catalysts: MarketCatalyst[];
@@ -17,6 +18,7 @@ export default function CatalystFeedView({
   signals,
   onSelectTicker,
 }: CatalystFeedViewProps) {
+  const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'MACRO'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -27,30 +29,30 @@ export default function CatalystFeedView({
   const getCategoryMeta = (cat: string) => {
     switch (cat) {
       case 'KAP_BUYBACK':
-        return { label: 'Share Buyback (Geri Alım)', icon: '💎', color: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' };
+        return { label: language === 'tr' ? 'Hisse Geri Alımı' : 'Share Buyback', icon: '💎', color: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' };
       case 'KAP_DIVIDEND':
-        return { label: 'Dividend (Temettü)', icon: '💰', color: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' };
+        return { label: language === 'tr' ? 'Temettü Bildirimi' : 'Dividend', icon: '💰', color: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' };
       case 'KAP_CONTRACT':
-        return { label: 'New Contract (Yeni İş)', icon: '📜', color: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' };
+        return { label: language === 'tr' ? 'Yeni İş İlişkisi' : 'New Contract', icon: '📜', color: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' };
       case 'KAP_EARNINGS':
-        return { label: 'Financials & Volume', icon: '📊', color: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' };
+        return { label: language === 'tr' ? 'Finansal Rapor' : 'Financials & Volume', icon: '📊', color: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800' };
       case 'MACRO_TCMB':
-        return { label: 'Central Bank (TCMB)', icon: '🏛️', color: 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800' };
+        return { label: language === 'tr' ? 'Merkez Bankası (TCMB)' : 'Central Bank (TCMB)', icon: '🏛️', color: 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800' };
       case 'MACRO_FED':
-        return { label: 'Fed & Global Macro', icon: '🌐', color: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' };
+        return { label: language === 'tr' ? 'Fed & Küresel Makro' : 'Fed & Global Macro', icon: '🌐', color: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800' };
       default:
-        return { label: 'Disclosure', icon: '📑', color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700' };
+        return { label: language === 'tr' ? 'KAP Bildirimi' : 'Disclosure', icon: '📑', color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700' };
     }
   };
 
   const getVerdictStyle = (verdict: string) => {
     switch (verdict.toLowerCase()) {
       case 'bullish':
-        return { bg: 'bg-emerald-500 text-white', text: '🟢 BULLISH', ring: 'ring-emerald-500/20' };
+        return { bg: 'bg-emerald-500 text-white', text: language === 'tr' ? '🟢 POZİTİF' : '🟢 BULLISH', ring: 'ring-emerald-500/20' };
       case 'bearish':
-        return { bg: 'bg-rose-500 text-white', text: '🔴 BEARISH', ring: 'ring-rose-500/20' };
+        return { bg: 'bg-rose-500 text-white', text: language === 'tr' ? '🔴 NEGATİF' : '🔴 BEARISH', ring: 'ring-rose-500/20' };
       default:
-        return { bg: 'bg-amber-500 text-white', text: '🟡 NEUTRAL', ring: 'ring-amber-500/20' };
+        return { bg: 'bg-amber-500 text-white', text: language === 'tr' ? '🟡 NÖTR' : '🟡 NEUTRAL', ring: 'ring-amber-500/20' };
     }
   };
 
@@ -60,7 +62,9 @@ export default function CatalystFeedView({
       const isToday = d.toDateString() === new Date().toDateString();
       const timeStr = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       const dateStr = d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' });
-      return isToday ? `Today ${timeStr}` : `${dateStr} ${timeStr}`;
+      return isToday 
+        ? (language === 'tr' ? `Bugün ${timeStr}` : `Today ${timeStr}`) 
+        : `${dateStr} ${timeStr}`;
     } catch {
       return iso;
     }
@@ -104,14 +108,14 @@ export default function CatalystFeedView({
           <div className="flex items-center space-x-2">
             <span className="text-2xl">⚡</span>
             <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-              KAP Disclosures & AI Catalyst Feed
+              {t.catalysts.title}
             </h2>
             <span className="px-2 py-0.5 text-[10px] font-black uppercase rounded bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-              100% Signal · Zero Noise
+              {language === 'tr' ? '%100 Sinyal · Sıfır Gürültü' : '100% Signal · Zero Noise'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Official regulatory disclosures (KAP / SEC) & central bank events synthesized into 1-line actionable takeaways.
+            {t.catalysts.subtitle}
           </p>
         </div>
 
@@ -122,7 +126,7 @@ export default function CatalystFeedView({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search ticker, buyback, etc..."
+              placeholder={t.catalysts.searchPlaceholder}
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
             <span className="absolute left-2.5 top-2 text-gray-400 text-xs">🔍</span>
@@ -140,7 +144,7 @@ export default function CatalystFeedView({
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
           }`}
         >
-          All Catalysts ({catalysts.length})
+          {t.catalysts.filterAll} ({catalysts.length})
         </button>
 
         <button
@@ -152,7 +156,7 @@ export default function CatalystFeedView({
           }`}
         >
           <span>💼</span>
-          <span>My Portfolio ({portfolioCatalystsCount})</span>
+          <span>{t.catalysts.filterPortfolio} ({portfolioCatalystsCount})</span>
         </button>
 
         <button
@@ -164,7 +168,7 @@ export default function CatalystFeedView({
           }`}
         >
           <span>🎯</span>
-          <span>Today's Setups ({signalCatalystsCount})</span>
+          <span>{t.catalysts.filterSignals} ({signalCatalystsCount})</span>
         </button>
 
         <button
@@ -176,7 +180,7 @@ export default function CatalystFeedView({
           }`}
         >
           <span>💎</span>
-          <span>Share Buybacks ({buybackCatalystsCount})</span>
+          <span>{t.catalysts.filterBuyback} ({buybackCatalystsCount})</span>
         </button>
 
         <button
@@ -188,7 +192,7 @@ export default function CatalystFeedView({
           }`}
         >
           <span>🏛️</span>
-          <span>Central Bank & Macro ({macroCatalystsCount})</span>
+          <span>{t.catalysts.filterMacro} ({macroCatalystsCount})</span>
         </button>
       </div>
 
@@ -196,8 +200,10 @@ export default function CatalystFeedView({
       {filteredCatalysts.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center border border-gray-200 dark:border-gray-700">
           <span className="text-4xl mb-3 block">📭</span>
-          <h3 className="text-base font-bold text-gray-900 dark:text-white">No Disclosures Match Current Filter</h3>
-          <p className="text-xs text-gray-500 mt-1">Try switching to "All Catalysts" or clearing your search term.</p>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">{t.catalysts.noCatalystsFound}</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            {language === 'tr' ? 'Filtreyi "Tümü" olarak değiştirmeyi veya arama kelimesini temizlemeyi deneyin.' : 'Try switching to "All Catalysts" or clearing your search term.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -219,7 +225,7 @@ export default function CatalystFeedView({
                       <button
                         onClick={() => onSelectTicker?.(item.symbol)}
                         className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center space-x-1"
-                        title="Click to view full price chart & indicators"
+                        title={language === 'tr' ? "Fiyat ve grafiği görüntüleyin" : "Click to view full price chart & indicators"}
                       >
                         <span>{item.symbol}</span>
                         <span className="text-xs text-blue-500 opacity-60">📈</span>
@@ -227,13 +233,13 @@ export default function CatalystFeedView({
 
                       {isPortfolioStock && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                          💼 PORTFOLIO
+                          💼 {language === 'tr' ? 'PORTFÖY' : 'PORTFOLIO'}
                         </span>
                       )}
 
                       {isScannedStock && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                          🎯 ACTIVE SETUP
+                          🎯 {language === 'tr' ? 'AKTİF SİNYAL' : 'ACTIVE SETUP'}
                         </span>
                       )}
                     </div>
@@ -270,7 +276,7 @@ export default function CatalystFeedView({
                       <div className="flex items-center space-x-2">
                         <span className="text-xs font-black text-gray-700 dark:text-gray-300 flex items-center space-x-1">
                           <span>🤖</span>
-                          <span>AI Synthesis:</span>
+                          <span>{language === 'tr' ? 'Yapay Zeka Özeti:' : 'AI Synthesis:'}</span>
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${verdict.bg}`}>
                           {verdict.text}
@@ -278,7 +284,7 @@ export default function CatalystFeedView({
                       </div>
 
                       <div className="flex items-center space-x-1 text-[11px] font-bold text-gray-500">
-                        <span>⚡ Catalyst Impact:</span>
+                        <span>⚡ {language === 'tr' ? 'Etki Derecesi:' : 'Catalyst Impact:'}</span>
                         <span className="font-mono text-gray-900 dark:text-white">{item.impactScore}/10</span>
                       </div>
                     </div>
@@ -297,18 +303,18 @@ export default function CatalystFeedView({
                         rel="noreferrer"
                         className="text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1 font-semibold"
                       >
-                        <span>Official KAP Disclosure</span>
+                        <span>{language === 'tr' ? 'Resmi KAP Bildirimi' : 'Official KAP Disclosure'}</span>
                         <span>↗</span>
                       </a>
                     ) : (
-                      <span className="text-gray-400">Official Filing</span>
+                      <span className="text-gray-400">{language === 'tr' ? 'Resmi Bildirim' : 'Official Filing'}</span>
                     )}
 
                     <button
                       onClick={() => onSelectTicker?.(item.symbol)}
-                      className="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-colors"
+                      className="text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 font-bold transition-colors cursor-pointer"
                     >
-                      Inspect Price Action →
+                      {language === 'tr' ? 'Fiyat Hareketini İncele →' : 'Inspect Price Action →'}
                     </button>
                   </div>
                 </div>

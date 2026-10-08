@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface AssetData {
   id: string;
@@ -20,6 +23,7 @@ interface AssetTableProps {
 }
 
 export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
+  const { t, language } = useLanguage();
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof AssetData; direction: 'asc' | 'desc' } | null>({
@@ -61,6 +65,13 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
     return 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400';
   };
 
+  const getEmaLabel = (status: string) => {
+    if (status.includes('Above 200')) return t.assetTable.above200Ema;
+    if (status.includes('Below 200')) return t.assetTable.below200Ema;
+    if (status.includes('Near 50')) return t.assetTable.near50Ema;
+    return status;
+  };
+
   const getRsiBadge = (rsi: number) => {
     if (rsi >= 70) return 'text-amber-500 font-bold';
     if (rsi <= 35) return 'text-emerald-500 font-bold';
@@ -71,14 +82,16 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
     <div className="w-full bg-white dark:bg-gray-800 shadow-sm rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-gray-50/50 dark:bg-gray-800/50">
         <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Tracked Assets Universe ({assets.length} Total)</h2>
-          <p className="text-xs text-gray-500">Real-time indicators across BIST 100, US Equities, and ETFs.</p>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            {language === 'tr' ? `Takip Edilen Varlık Evreni (${assets.length} Toplam)` : `Tracked Assets Universe (${assets.length} Total)`}
+          </h2>
+          <p className="text-xs text-gray-500">{t.assetTable.subtitle}</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <input
             type="text"
-            placeholder="Search symbol or name..."
+            placeholder={t.assetTable.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-48"
@@ -89,13 +102,13 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
               <button
                 key={m}
                 onClick={() => setFilter(m)}
-                className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all ${
+                className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer ${
                   filter === m 
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30' 
                     : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                 }`}
               >
-                {m}
+                {m === 'All' ? t.common.all : m}
               </button>
             ))}
           </div>
@@ -107,31 +120,31 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
           <thead className="bg-gray-50 dark:bg-gray-900/80 sticky top-0 z-10 backdrop-blur">
             <tr>
               <th onClick={() => requestSort('symbol')} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500">
-                Symbol {sortConfig?.key === 'symbol' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                {language === 'tr' ? 'Sembol' : 'Symbol'} {sortConfig?.key === 'symbol' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th onClick={() => requestSort('name')} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500 hidden sm:table-cell">
-                Company Name
+                {language === 'tr' ? 'Şirket Adı' : 'Company Name'}
               </th>
               <th onClick={() => requestSort('market')} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500 hidden md:table-cell">
-                Market
+                {language === 'tr' ? 'Piyasa' : 'Market'}
               </th>
               <th onClick={() => requestSort('price')} className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500">
-                Price {sortConfig?.key === 'price' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                {t.assetTable.colPrice} {sortConfig?.key === 'price' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th onClick={() => requestSort('changePercent')} className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500">
-                Change % {sortConfig?.key === 'changePercent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                {t.assetTable.colChange} {sortConfig?.key === 'changePercent' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th onClick={() => requestSort('rsi')} className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500">
-                RSI (14) {sortConfig?.key === 'rsi' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                {t.assetTable.colRsi} {sortConfig?.key === 'rsi' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th onClick={() => requestSort('emaStatus')} className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500 hidden sm:table-cell">
-                200 EMA Status
+                {t.assetTable.colEma}
               </th>
               <th onClick={() => requestSort('volumeRatio')} className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-blue-500 hidden md:table-cell">
-                Volume Ratio
+                {t.assetTable.colVolume}
               </th>
               <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                History
+                {language === 'tr' ? 'Geçmiş' : 'History'}
               </th>
             </tr>
           </thead>
@@ -141,7 +154,7 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
                 key={asset.id} 
                 onClick={() => onSelectAsset?.(asset)}
                 className="hover:bg-blue-50/50 dark:hover:bg-blue-950/30 cursor-pointer transition-colors group"
-                title={`Click to view ${asset.symbol} daily OHLCV price history & indicators`}
+                title={language === 'tr' ? `${asset.symbol} fiyat geçmişi ve indikatörleri görüntüleyin` : `Click to view ${asset.symbol} daily OHLCV price history & indicators`}
               >
                 <td className="px-5 py-3.5 whitespace-nowrap font-bold text-gray-900 dark:text-white">
                   {asset.symbol}
@@ -164,7 +177,7 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
                 </td>
                 <td className="px-5 py-3.5 whitespace-nowrap text-center hidden sm:table-cell">
                   <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getEmaBadge(asset.emaStatus)}`}>
-                    {asset.emaStatus}
+                    {getEmaLabel(asset.emaStatus)}
                   </span>
                 </td>
                 <td className="px-5 py-3.5 whitespace-nowrap text-right text-gray-500 dark:text-gray-300 hidden md:table-cell">
@@ -177,7 +190,7 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
                       e.stopPropagation();
                       onSelectAsset?.(asset);
                     }}
-                    className="px-2.5 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg border border-blue-200 dark:border-blue-800 transition-all inline-flex items-center gap-1 group-hover:shadow-sm"
+                    className="px-2.5 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg border border-blue-200 dark:border-blue-800 transition-all inline-flex items-center gap-1 group-hover:shadow-sm cursor-pointer"
                   >
                     <span>📊</span>
                     <span>OHLCV</span>
@@ -188,7 +201,7 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
             {sortedAssets.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                  No matching assets found for "{search}".
+                  {language === 'tr' ? `"${search}" için eşleşen varlık bulunamadı.` : `No matching assets found for "${search}".`}
                 </td>
               </tr>
             )}

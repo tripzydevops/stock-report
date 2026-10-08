@@ -1,6 +1,9 @@
+'use client';
+
 import React, { useState } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { PortfolioItem } from '../lib/supabaseClient';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface TriggerHistoryItem {
   id?: string;
@@ -42,6 +45,7 @@ interface TradeCardProps {
 }
 
 export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
+  const { t, language } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   
@@ -50,7 +54,10 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
   const rrRatio = risk > 0 ? (reward / risk).toFixed(2) : 'N/A';
   
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: signal.currency }).format(price);
+    return new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+      style: 'currency',
+      currency: signal.currency
+    }).format(price);
   };
 
   const getStrategyColor = (strategy: string) => {
@@ -67,7 +74,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             <button 
               onClick={() => onSelectTicker?.(signal.symbol)}
               className="font-black text-lg text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1.5 transition-colors group cursor-pointer text-left"
-              title="Click to view full price history, daily OHLCV and indicators"
+              title={language === 'tr' ? "Fiyat geçmişi ve indikatörleri görüntüleyin" : "Click to view full price history, daily OHLCV and indicators"}
             >
               <span className="group-hover:underline underline-offset-2">{signal.symbol}</span>
               <span className="text-xs text-blue-500 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all">📈</span>
@@ -80,7 +87,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                     ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
                     : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
                 }`}
-                title="Current price — click to view price history & live chart"
+                title={language === 'tr' ? "Anlık fiyat — grafiği açmak için tıklayın" : "Current price — click to view price history & live chart"}
               >
                 {formatPrice(signal.currentPrice)} {signal.changePercent !== undefined ? `(${signal.changePercent >= 0 ? '+' : ''}${signal.changePercent.toFixed(2)}%)` : ''}
               </button>
@@ -96,7 +103,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return (
                 <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60 mt-1.5 w-fit">
                   <span>🏆</span>
-                  <span>Target 1 Hit at <strong>{formatPrice(signal.targetPrice)}</strong> (+{targetGainPct}%) · In Take-Profit Zone (Trail Stop to Breakeven)</span>
+                  <span>{t.tradeCard.target1Hit} <strong>{formatPrice(signal.targetPrice)}</strong> (+{targetGainPct}%) · {t.tradeCard.inTakeProfitZone}</span>
                 </div>
               );
             }
@@ -104,7 +111,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return (
                 <div className="flex items-center gap-1.5 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/60 mt-1.5 w-fit">
                   <span>🛑</span>
-                  <span>Dipped below stop loss at <strong>{formatPrice(signal.stopLoss)}</strong> · Setup Invalidated</span>
+                  <span>{t.tradeCard.stoppedOut} <strong>{formatPrice(signal.stopLoss)}</strong> · {t.tradeCard.setupInvalidated}</span>
                 </div>
               );
             }
@@ -112,7 +119,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return (
                 <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
                   <span>🔄</span>
-                  <span>Active Setup: Originally triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
+                  <span>{t.tradeCard.activeSetup} <strong>{signal.date}</strong> · {t.tradeCard.holdingInBuyZone}</span>
                 </div>
               );
             }
@@ -120,7 +127,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return (
                 <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 w-fit">
                   <span>🗓️</span>
-                  <span>Active Swing: Triggered <strong>{signal.date}</strong></span>
+                  <span>{t.tradeCard.activeSwing} <strong>{signal.date}</strong></span>
                 </div>
               );
             }
@@ -138,7 +145,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs animate-pulse flex items-center gap-1">
                     <span>🏆</span>
-                    <span>TARGET HIT (+{currentGainPct}%)</span>
+                    <span>{language === 'tr' ? `HEDEF ALINDI (+%${currentGainPct})` : `TARGET HIT (+${currentGainPct}%)`}</span>
                   </span>
                 );
               }
@@ -146,7 +153,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs flex items-center gap-1">
                     <span>🛑</span>
-                    <span>STOPPED OUT</span>
+                    <span>{language === 'tr' ? 'ZARAR KES OLDU' : 'STOPPED OUT'}</span>
                   </span>
                 );
               }
@@ -154,7 +161,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-600 text-white shadow-xs flex items-center gap-1">
                     <span>🔄</span>
-                    <span>ACTIVE (DAY {signal.daysInZone || 2})</span>
+                    <span>{language === 'tr' ? `AKTİF (${signal.daysInZone || 2}. GÜN)` : `ACTIVE (DAY ${signal.daysInZone || 2})`}</span>
                   </span>
                 );
               }
@@ -163,11 +170,11 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return isToday ? (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
                   <span>🔥</span>
-                  <span>NEW TODAY</span>
+                  <span>{language === 'tr' ? 'BUGÜN YENİ' : 'NEW TODAY'}</span>
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-                  🗓️ SINCE {signal.date}
+                  🗓️ {language === 'tr' ? `${signal.date} TARİHİNDEN BERİ` : `SINCE ${signal.date}`}
                 </span>
               );
             })()}
@@ -181,11 +188,11 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
       <div className="p-4 flex-grow">
         <div className="grid grid-cols-3 gap-2 mb-4 text-sm">
           <div className="flex flex-col">
-            <span className="text-gray-500 dark:text-gray-400 text-xs">Entry</span>
+            <span className="text-gray-500 dark:text-gray-400 text-xs">{t.tradeCard.entry}</span>
             <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.entryPrice)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-red-500 dark:text-red-400 text-xs">Stop Loss</span>
+            <span className="text-red-500 dark:text-red-400 text-xs">{t.tradeCard.stopLoss}</span>
             <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.stopLoss)}</span>
           </div>
           <div className="flex flex-col">
@@ -195,12 +202,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               return (
                 <>
                   <span className="text-green-500 dark:text-green-400 text-xs flex items-center gap-1">
-                    <span>Target 1</span>
-                    {isTargetHit && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1 rounded font-bold">✓ Hit</span>}
+                    <span>{t.tradeCard.target1}</span>
+                    {isTargetHit && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1 rounded font-bold">✓ {language === 'tr' ? 'Alındı' : 'Hit'}</span>}
                   </span>
                   <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.targetPrice)}</span>
                   {t2Price > signal.targetPrice && (
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title="Extended 2.0x Risk:Reward Runner Target">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title={language === 'tr' ? "2.0x Risk:Ödül Koşucu Hedefi" : "Extended 2.0x Risk:Reward Runner Target"}>
                       T2: {formatPrice(t2Price)}
                     </span>
                   )}
@@ -212,7 +219,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
         <div className="mb-4">
           <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-600 dark:text-gray-300">Risk/Reward ({rrRatio})</span>
+            <span className="text-gray-600 dark:text-gray-300">{t.tradeCard.riskReward} ({rrRatio})</span>
           </div>
           <div className="w-full h-2 flex rounded-full overflow-hidden">
             <div className="bg-red-500 h-full" style={{ width: '33%' }}></div>
@@ -221,7 +228,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         </div>
 
         <div className="mb-2 flex items-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">Confidence:</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">{t.tradeCard.confidence}:</span>
           <div className="flex">
             {[...Array(10)].map((_, i) => (
               <svg key={i} className={`w-3 h-3 ${i < signal.confidence ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
@@ -245,7 +252,13 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 <div className="flex justify-between items-center mb-1.5">
                   <div className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
                     <span>💼</span>
-                    <span>Your Position: <strong>{userHolding!.shares} shares</strong> held (@ avg {formatPrice(userHolding!.entryPrice)})</span>
+                    <span>
+                      {language === 'tr' ? (
+                        <>Mevcut Pozisyonunuz: <strong>{userHolding!.shares} adet</strong> (Ort. {formatPrice(userHolding!.entryPrice)})</>
+                      ) : (
+                        <>Your Position: <strong>{userHolding!.shares} shares</strong> held (@ avg {formatPrice(userHolding!.entryPrice)})</>
+                      )}
+                    </span>
                   </div>
                   {onTradeHolding && (
                     <button
@@ -253,7 +266,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                       onClick={() => onTradeHolding(userHolding!)}
                       className="px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-white dark:bg-gray-800 hover:bg-blue-100 border border-blue-300 dark:border-blue-700 shadow-xs cursor-pointer"
                     >
-                      Trade / Sell ⚡
+                      {t.tradeCard.tradeSell} ⚡
                     </button>
                   )}
                 </div>
@@ -265,11 +278,21 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                       : 'bg-white/90 dark:bg-gray-800/90 border-blue-100 dark:border-blue-900/60'
                   }`}>
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="font-bold text-gray-600 dark:text-gray-300">Target 1 Exit (50%)</span>
-                      {isTargetHit && <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">✓ In Zone</span>}
+                      <span className="font-bold text-gray-600 dark:text-gray-300">
+                        {language === 'tr' ? 'Hedef 1 Çıkışı (%50)' : 'Target 1 Exit (50%)'}
+                      </span>
+                      {isTargetHit && (
+                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400">
+                          {language === 'tr' ? '✓ Bölgede' : '✓ In Zone'}
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
-                      Sell <strong>{t1Shares}</strong> shares
+                      {language === 'tr' ? (
+                        <><strong>{t1Shares}</strong> adet sat</>
+                      ) : (
+                        <>Sell <strong>{t1Shares}</strong> shares</>
+                      )}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between">
                       <span>@ {formatPrice(signal.targetPrice)}</span>
@@ -281,11 +304,19 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
                   <div className="p-2 rounded-lg bg-white/90 dark:bg-gray-800/90 border border-blue-100 dark:border-blue-900/60">
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="font-bold text-gray-600 dark:text-gray-300">Target 2 Runner (50%)</span>
-                      <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">Runner</span>
+                      <span className="font-bold text-gray-600 dark:text-gray-300">
+                        {language === 'tr' ? 'Hedef 2 Koşucu (%50)' : 'Target 2 Runner (50%)'}
+                      </span>
+                      <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">
+                        {language === 'tr' ? 'Koşucu' : 'Runner'}
+                      </span>
                     </div>
                     <div className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
-                      Sell <strong>{t2Shares > 0 ? t2Shares : userHolding!.shares}</strong> shares
+                      {language === 'tr' ? (
+                        <><strong>{t2Shares > 0 ? t2Shares : userHolding!.shares}</strong> adet sat</>
+                      ) : (
+                        <>Sell <strong>{t2Shares > 0 ? t2Shares : userHolding!.shares}</strong> shares</>
+                      )}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between">
                       <span>@ {formatPrice(t2Price)}</span>
@@ -302,10 +333,14 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           return (
             <div className="my-2.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-300 flex items-center justify-between">
               <span className="font-bold flex items-center gap-1 text-gray-700 dark:text-gray-200">
-                <span>🎯</span> 50/50 Scale-Out Rule:
+                <span>🎯</span> {language === 'tr' ? '50/50 Kısmi Çıkış Kuralı:' : '50/50 Scale-Out Rule:'}
               </span>
               <span className="font-mono text-[10px]">
-                Sell <strong>50%</strong> @ {formatPrice(signal.targetPrice)} · Sell <strong>50%</strong> @ {formatPrice(t2Price)}
+                {language === 'tr' ? (
+                  <><strong>%50</strong> @ {formatPrice(signal.targetPrice)} · <strong>%50</strong> @ {formatPrice(t2Price)}</>
+                ) : (
+                  <>Sell <strong>50%</strong> @ {formatPrice(signal.targetPrice)} · Sell <strong>50%</strong> @ {formatPrice(t2Price)}</>
+                )}
               </span>
             </div>
           );
@@ -316,7 +351,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             onClick={() => setExpanded(!expanded)} 
             className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center cursor-pointer"
           >
-            {expanded ? 'Hide Rationale' : 'Show AI Rationale'}
+            {expanded 
+              ? (language === 'tr' ? 'Gerekçeyi Gizle' : 'Hide Rationale') 
+              : (language === 'tr' ? 'Yapay Zeka Analizini Göster' : 'Show AI Rationale')}
             <svg className={`w-3 h-3 ml-1 transform transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
           </button>
 
@@ -326,7 +363,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               onClick={() => setShowHistory(!showHistory)}
               className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 font-bold flex items-center gap-1 cursor-pointer transition-colors"
             >
-              <span>🕒 {showHistory ? 'Hide Scan History' : `View Daily Scans (${signal.triggerHistory?.length || signal.daysInZone || 2})`}</span>
+              <span>🕒 {showHistory 
+                ? (language === 'tr' ? 'Tarama Geçmişini Gizle' : 'Hide Scan History') 
+                : (language === 'tr' ? `Günlük Taramaları Gör (${signal.triggerHistory?.length || signal.daysInZone || 2})` : `View Daily Scans (${signal.triggerHistory?.length || signal.daysInZone || 2})`)}</span>
               <svg className={`w-3 h-3 transform transition-transform ${showHistory ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
               </svg>
@@ -343,8 +382,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         {showHistory && (
           <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs space-y-2 animate-in fade-in duration-150">
             <div className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300 flex justify-between items-center">
-              <span>Scan Timeline ({signal.triggerHistory?.length || signal.daysInZone || 2} Sessions in Buy Zone)</span>
-              <span className="text-[9px] font-semibold text-purple-600 dark:text-purple-400">All Buy Triggers</span>
+              <span>{language === 'tr' 
+                ? `Tarama Zaman Çizelgesi (Alım Bölgesinde ${signal.triggerHistory?.length || signal.daysInZone || 2} Seans)` 
+                : `Scan Timeline (${signal.triggerHistory?.length || signal.daysInZone || 2} Sessions in Buy Zone)`}</span>
+              <span className="text-[9px] font-semibold text-purple-600 dark:text-purple-400">
+                {language === 'tr' ? 'Tüm Alım Tetikleyicileri' : 'All Buy Triggers'}
+              </span>
             </div>
             <div className="space-y-1.5 divide-y divide-purple-100 dark:divide-purple-900/40">
               {signal.triggerHistory && signal.triggerHistory.length > 1 ? (
@@ -356,13 +399,15 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                           ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
                           : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
                       }`}>
-                        {i === 0 ? 'Day 1 (Trigger)' : `Day ${i + 1} (Re-confirm)`}
+                        {i === 0 
+                          ? (language === 'tr' ? '1. Gün (Tetik)' : 'Day 1 (Trigger)') 
+                          : (language === 'tr' ? `${i + 1}. Gün (Onay)` : `Day ${i + 1} (Re-confirm)`)}
                       </span>
                       <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{item.date}</span>
                     </div>
                     <div className="flex items-center gap-2.5 font-mono text-[11px]">
                       <span className="text-gray-900 dark:text-white font-bold">
-                        Entry: {formatPrice(item.entryPrice)}
+                        {t.tradeCard.entry}: {formatPrice(item.entryPrice)}
                       </span>
                       <span className="text-gray-500 dark:text-gray-400 text-[10px] hidden sm:inline">
                         SL: {formatPrice(item.stopLoss)}
@@ -378,23 +423,23 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                        Day 1 (Initial Setup)
+                        {language === 'tr' ? '1. Gün (İlk Kurulum)' : 'Day 1 (Initial Setup)'}
                       </span>
                       <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.date}</span>
                     </div>
                     <span className="text-gray-900 dark:text-white font-bold font-mono text-[11px]">
-                      Entry: {formatPrice(signal.entryPrice)}
+                      {t.tradeCard.entry}: {formatPrice(signal.entryPrice)}
                     </span>
                   </div>
                   <div className="pt-1.5 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
-                        Day {signal.daysInZone || 2} (Re-confirmed)
+                        {language === 'tr' ? `${signal.daysInZone || 2}. Gün (Yeniden Doğrulandı)` : `Day ${signal.daysInZone || 2} (Re-confirmed)`}
                       </span>
                       <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.lastConfirmedDate || signal.date}</span>
                     </div>
                     <span className="text-purple-600 dark:text-purple-300 font-bold text-[10px]">
-                      Consolidating in 20/50 EMA Buy Zone
+                      {language === 'tr' ? '20/50 EMA Alım Bölgesinde Güçleniyor' : 'Consolidating in 20/50 EMA Buy Zone'}
                     </span>
                   </div>
                 </>
@@ -410,13 +455,13 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           const timing = calculateExitDate(signal.date, signal.strategy);
           return (
             <div className="flex flex-col text-right font-mono">
-              <span className="text-[10px] text-gray-400">📅 In: {signal.date}</span>
+              <span className="text-[10px] text-gray-400">📅 {language === 'tr' ? 'Giriş' : 'In'}: {signal.date}</span>
               <span className={`text-[10px] font-bold ${
                 timing.statusColor === 'green' ? 'text-blue-600 dark:text-blue-400' :
                 timing.statusColor === 'amber' ? 'text-amber-600 dark:text-amber-400' :
                 'text-rose-600 dark:text-rose-400'
               }`}>
-                Exit: {timing.maxExitDate} ({timing.label})
+                {language === 'tr' ? 'Çıkış' : 'Exit'}: {timing.maxExitDate} ({timing.label})
               </span>
             </div>
           );
@@ -426,16 +471,16 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             <button
               onClick={() => onOpenCoPilot(signal)}
               className="px-2 py-0.5 rounded text-[11px] font-black text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
-              title="Open AI Trade Co-Pilot Blueprint"
+              title={language === 'tr' ? "Yapay Zeka İşlem Planı ve Yol Haritası" : "Open AI Trade Co-Pilot Blueprint"}
             >
-              💡 Co-Pilot
+              💡 {t.tradeCard.coPilot}
             </button>
           )}
           <button 
             onClick={() => onCalcSize?.(signal)}
             className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"
           >
-            Calc Size →
+            {t.tradeCard.positionSize} →
           </button>
         </div>
       </div>

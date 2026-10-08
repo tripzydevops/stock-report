@@ -1,4 +1,7 @@
+'use client';
+
 import React from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface RegimeStatus {
   status: 'Bullish' | 'Neutral' | 'Bearish';
@@ -28,33 +31,43 @@ const getTrendArrow = (trend: string) => {
 };
 
 export default function MarketRegimeBanner({ usRegime, bistRegime }: MarketRegimeBannerProps) {
+  const { t } = useLanguage();
+
+  const getStatusLabel = (status: 'Bullish' | 'Neutral' | 'Bearish') => {
+    switch (status) {
+      case 'Bullish': return t.regime.bullish;
+      case 'Bearish': return t.regime.bearish;
+      default: return t.regime.neutral;
+    }
+  };
+
   return (
     <div className="w-full bg-gray-900 text-white py-3 px-4 flex flex-col sm:flex-row justify-between items-center text-sm">
       <div className="flex items-center space-x-4 mb-2 sm:mb-0">
-        <span className="font-semibold text-gray-300">US Market (SPY)</span>
+        <span className="font-semibold text-gray-300">{t.regime.usMarket}</span>
         {usRegime ? (
           <>
             <span className={`px-2 py-1 rounded text-xs font-bold ${getBadgeColor(usRegime.status)}`}>
-              {usRegime.status}
+              {getStatusLabel(usRegime.status)}
             </span>
             <span>{usRegime.close.toFixed(2)} {getTrendArrow(usRegime.trend)}</span>
           </>
         ) : (
-          <span className="text-gray-500 animate-pulse">Loading...</span>
+          <span className="text-gray-500 animate-pulse">{t.regime.loading}</span>
         )}
       </div>
       
       <div className="flex items-center space-x-4">
-        <span className="font-semibold text-gray-300">Turkish Market (BIST 100)</span>
+        <span className="font-semibold text-gray-300">{t.regime.bistMarket}</span>
         {bistRegime ? (
           <>
             <span className={`px-2 py-1 rounded text-xs font-bold ${getBadgeColor(bistRegime.status)}`}>
-              {bistRegime.status}
+              {getStatusLabel(bistRegime.status)}
             </span>
             <span>{bistRegime.close.toFixed(2)} {getTrendArrow(bistRegime.trend)}</span>
           </>
         ) : (
-          <span className="text-gray-500 animate-pulse">Loading...</span>
+          <span className="text-gray-500 animate-pulse">{t.regime.loading}</span>
         )}
       </div>
     </div>

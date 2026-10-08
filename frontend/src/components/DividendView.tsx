@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
 import DividendPortfolioLab from './DividendPortfolioLab';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DividendViewProps {
   dividendAssets: DividendAsset[];
@@ -12,6 +13,7 @@ interface DividendViewProps {
 }
 
 export default function DividendView({ dividendAssets, usdTryRate, onImportCandidate, onSelectTicker }: DividendViewProps) {
+  const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [viewMode, setViewMode] = useState<'schedule' | 'table' | 'lab'>('schedule');
 
@@ -42,7 +44,7 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
   const formatCurr = (val: number, curr?: string) => {
     const c = curr || currencyMode;
     const symbol = c === 'USD' ? '$' : '₺';
-    return `${symbol}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${symbol}${val.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // Sort upcoming payouts by next ex-dividend date
@@ -58,7 +60,7 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
           <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            <span>Annual Projected Payout</span>
+            <span>{t.dividend.annualIncome}</span>
             <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
               <button
                 onClick={() => setCurrencyMode('TRY')}
@@ -78,37 +80,37 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
             {formatCurr(totalAnnualDisplay)}
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            Annual Cash Flow (Estimated)
+            {language === 'tr' ? 'Yıllık Nakit Akışı (Tahmini)' : 'Annual Cash Flow (Estimated)'}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Monthly Passive Income</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dividend.monthlyIncome}</span>
           <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
-            {formatCurr(totalMonthlyDisplay)}/mo
+            {formatCurr(totalMonthlyDisplay)}/{language === 'tr' ? 'ay' : 'mo'}
           </div>
           <div className="text-xs text-emerald-500 font-semibold mt-1">
-            ● Average monthly passive dividend
+            ● {language === 'tr' ? 'Ortalama aylık pasif temettü geliri' : 'Average monthly passive dividend'}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Yield on Cost (YoC)</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dividend.yieldOnCost}</span>
           <div className="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
             {avgYieldOnCost.toFixed(2)}%
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            Current Mkt Yield: {avgCurrentYield.toFixed(2)}%
+            {language === 'tr' ? 'Güncel Piyasa Verimi: ' : 'Current Mkt Yield: '}{avgCurrentYield.toFixed(2)}%
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Dividend Sustainability</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{language === 'tr' ? 'Temettü Güvenilirliği' : 'Dividend Sustainability'}</span>
           <div className="mt-2 text-2xl font-black text-emerald-500">
             A- Grade
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            Low dividend cut probability across all 3 assets
+            {language === 'tr' ? 'Tüm varlıklarda düşük temettü kesinti riski' : 'Low dividend cut probability across all 3 assets'}
           </div>
         </div>
       </div>
@@ -118,43 +120,43 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
         <div>
           <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
             <span>📅</span>
-            <span>Dividend Schedule & Yield Intelligence</span>
+            <span>{t.dividend.title}</span>
           </h3>
-          <p className="text-xs text-gray-500">Track exact upcoming payment dates, expected net payouts, and yield-on-cost expansion.</p>
+          <p className="text-xs text-gray-500">{t.dividend.subtitle}</p>
         </div>
         <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700/60 p-1 border border-gray-200 dark:border-gray-600">
           <button
             onClick={() => setViewMode('schedule')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
               viewMode === 'schedule'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             <span>🗓️</span>
-            <span>Upcoming Schedule</span>
+            <span>{t.dividend.tabSchedule}</span>
           </button>
           <button
             onClick={() => setViewMode('table')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
               viewMode === 'table'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             <span>📊</span>
-            <span>Holdings & YoC Table</span>
+            <span>{t.dividend.tabTable}</span>
           </button>
           <button
             onClick={() => setViewMode('lab')}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
               viewMode === 'lab'
                 ? 'bg-purple-600 text-white shadow-sm'
                 : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             <span>🧪</span>
-            <span>AI Portfolio Lab & Simulator</span>
+            <span>{t.dividend.tabLab}</span>
           </button>
         </div>
       </div>
@@ -182,55 +184,57 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
                         <div className="flex items-center space-x-2">
                           <span className="text-lg font-black text-gray-900 dark:text-white">{asset.symbol}</span>
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                            {asset.payoutMonth || 'Spring 2027'}
+                            {asset.payoutMonth || (language === 'tr' ? 'Bahar 2027' : 'Spring 2027')}
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 truncate max-w-[200px]">{asset.name}</p>
                       </div>
                       <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
-                        {asset.shares.toLocaleString()} shares
+                        {asset.shares.toLocaleString()} {t.common.shares}
                       </span>
                     </div>
 
                     {/* Cash Inflow KPI */}
                     <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/50 rounded-xl p-3.5 my-3">
                       <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                        Estimated Cash Inflow
+                        {language === 'tr' ? 'Tahmini Nakit Girişi' : 'Estimated Cash Inflow'}
                       </div>
                       <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
                         +{formatCurr(payoutDisplay)}
                       </div>
                       <div className="text-[11px] text-gray-500 mt-1">
-                        Est. Net DPS: <span className="font-bold text-gray-700 dark:text-gray-300">₺{dps.toFixed(3)}</span> per share
+                        {t.dividend.estDPS}: <span className="font-bold text-gray-700 dark:text-gray-300">₺{dps.toFixed(3)}</span> / {language === 'tr' ? 'hisse' : 'share'}
                       </div>
                     </div>
 
                     {/* Timeline & Details */}
                     <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300 pt-1">
                       <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
-                        <span className="text-gray-500">Est. Ex-Dividend Date:</span>
-                        <span className="font-bold text-gray-900 dark:text-white">{asset.nextExDate || 'Late March 2027'}</span>
+                        <span className="text-gray-500">{t.dividend.nextExDate}:</span>
+                        <span className="font-bold text-gray-900 dark:text-white">{asset.nextExDate || '2027'}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
-                        <span className="text-gray-500">Est. Payment Date:</span>
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">{asset.nextPaymentDate || 'Early April 2027'}</span>
+                        <span className="text-gray-500">{t.dividend.nextPayDate}:</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">{asset.nextPaymentDate || '2027'}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
-                        <span className="text-gray-500">Dividend Yield:</span>
+                        <span className="text-gray-500">{t.dividend.portfolioYield}:</span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">{asset.dividendYield.toFixed(2)}%</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-500">Payout Frequency:</span>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">{asset.frequency}</span>
+                        <span className="text-gray-500">{t.dividend.frequency}:</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">
+                          {asset.frequency === 'Annual' ? (language === 'tr' ? 'Yıllık' : 'Annual') : asset.frequency}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-[11px]">
-                    <span className="text-gray-400">Payment Status:</span>
+                    <span className="text-gray-400">{language === 'tr' ? 'Ödeme Durumu:' : 'Payment Status:'}</span>
                     <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center space-x-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                      <span>{asset.paymentStatus || 'Estimated'}</span>
+                      <span>{asset.paymentStatus === 'Estimated' ? (language === 'tr' ? 'Tahmini' : 'Estimated') : (asset.paymentStatus || 'Estimated')}</span>
                     </span>
                   </div>
                 </div>
@@ -243,14 +247,18 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xl">💰</span>
-                <h4 className="text-base font-bold">Annual Passive Cash Flow Forecast</h4>
+                <h4 className="text-base font-bold">
+                  {language === 'tr' ? 'Yıllık Pasif Nakit Akışı Tahmini' : 'Annual Passive Cash Flow Forecast'}
+                </h4>
               </div>
               <p className="text-xs text-blue-100 mt-1">
-                Your portfolio will generate an estimated <span className="font-bold text-white">₺921.00</span> in cash payouts over the next dividend season without selling any shares.
+                {language === 'tr' 
+                  ? 'Portföyünüz yaklaşan temettü sezonunda tek bir hisse satmadan düzenli nakit getiri üretir.'
+                  : 'Your portfolio will generate steady cash payouts over the upcoming dividend season without selling any shares.'}
               </p>
             </div>
             <div className="text-right sm:text-right w-full sm:w-auto border-t sm:border-t-0 border-blue-400/40 pt-3 sm:pt-0">
-              <div className="text-xs text-blue-200 font-semibold uppercase">Total Annual Forecast</div>
+              <div className="text-xs text-blue-200 font-semibold uppercase">{language === 'tr' ? 'Toplam Yıllık Beklenti' : 'Total Annual Forecast'}</div>
               <div className="text-2xl font-black text-white">{formatCurr(totalAnnualDisplay)}</div>
             </div>
           </div>
@@ -261,12 +269,16 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
       <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden ${viewMode === 'table' ? 'block' : 'hidden'}`}>
         <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Dividend Cash Flow & Yield on Cost (YoC)</h3>
-            <p className="text-xs text-gray-500">Track passive dividend earnings, yield expansion from original cost, and dividend health safety ratings.</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              {language === 'tr' ? 'Temettü Nakit Akışı & Maliyete Göre Verim (YoC)' : 'Dividend Cash Flow & Yield on Cost (YoC)'}
+            </h3>
+            <p className="text-xs text-gray-500">
+              {language === 'tr' ? 'Pasif temettü gelirleri, maliyete göre verim artışı ve temettü güvenilirlik notları.' : 'Track passive dividend earnings, yield expansion from original cost, and dividend health safety ratings.'}
+            </p>
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2.5 py-1 rounded-lg border border-purple-200 dark:border-purple-800">
-              💎 YoC Expands With Share Growth
+              💎 {language === 'tr' ? 'Hisse Büyüdükçe YoC Artar' : 'YoC Expands With Share Growth'}
             </span>
           </div>
         </div>
@@ -275,16 +287,16 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">Asset</th>
-                <th className="px-5 py-3 text-right">Shares</th>
-                <th className="px-5 py-3 text-right">Market Price</th>
-                <th className="px-5 py-3 text-right">Current Yield</th>
-                <th className="px-5 py-3 text-right">Yield on Cost (YoC)</th>
-                <th className="px-5 py-3 text-center">Est. Next Ex-Date</th>
-                <th className="px-5 py-3 text-right">Est. Next Payout</th>
-                <th className="px-5 py-3 text-right">Annual Total</th>
-                <th className="px-5 py-3 text-center">Payout Ratio</th>
-                <th className="px-5 py-3 text-center">Safety</th>
+                <th className="px-5 py-3">{language === 'tr' ? 'Varlık' : 'Asset'}</th>
+                <th className="px-5 py-3 text-right">{t.common.shares}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Piyasa Fiyatı' : 'Market Price'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Güncel Verim' : 'Current Yield'}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Maliyete Göre Verim (YoC)' : 'Yield on Cost (YoC)'}</th>
+                <th className="px-5 py-3 text-center">{t.dividend.nextExDate}</th>
+                <th className="px-5 py-3 text-right">{t.dividend.estTotal}</th>
+                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Yıllık Toplam' : 'Annual Total'}</th>
+                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Dağıtma Oranı' : 'Payout Ratio'}</th>
+                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Güvenilirlik' : 'Safety'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -301,7 +313,7 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
                         <button
                           onClick={() => onSelectTicker?.(asset.symbol)}
                           className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
-                          title={`Click to view ${asset.symbol} chart & indicators`}
+                          title={language === 'tr' ? `${asset.symbol} grafik ve indikatörleri` : `Click to view ${asset.symbol} chart & indicators`}
                         >
                           <span className="group-hover:underline">{asset.symbol}</span>
                           <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
@@ -310,7 +322,7 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
                           {asset.currency}
                         </span>
                         <span className="text-[10px] text-gray-500">
-                          ({asset.frequency})
+                          ({asset.frequency === 'Annual' ? (language === 'tr' ? 'Yıllık' : 'Annual') : asset.frequency})
                         </span>
                       </div>
                       <div className="text-xs text-gray-500">{asset.name}</div>
@@ -330,13 +342,13 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
                       </span>
                       {yocGain > 0 && (
                         <div className="text-[10px] font-semibold text-emerald-500">
-                          +{yocGain.toFixed(2)}% expansion
+                          +{yocGain.toFixed(2)}% {language === 'tr' ? 'artış' : 'expansion'}
                         </div>
                       )}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                        {asset.nextExDate ? asset.nextExDate : 'Spring 2027'}
+                        {asset.nextExDate ? asset.nextExDate : (language === 'tr' ? 'Bahar 2027' : 'Spring 2027')}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right font-black text-emerald-600 dark:text-emerald-400">

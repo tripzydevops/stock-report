@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { calculateSectorRisk } from '../lib/sectorRisk';
+import { useLanguage } from '../context/LanguageContext';
 
 import { TradeSignal } from './TradeCard';
 
@@ -44,6 +45,7 @@ export default function PortfolioView({
   onToggleStrategyType,
   onSelectTicker,
 }: PortfolioViewProps) {
+  const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [showRealized, setShowRealized] = useState(true);
   const [showTransfers, setShowTransfers] = useState(false);
@@ -209,7 +211,7 @@ export default function PortfolioView({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>Total Account Value</span>
+              <span>{language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}</span>
               <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                 <button
                   onClick={() => setCurrencyMode('TRY')}
@@ -230,7 +232,7 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            Equity: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • Cash: {formatCurr(cashDisplay)}
+            {language === 'tr' ? 'Hisseler:' : 'Equity:'} <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • {language === 'tr' ? 'Nakit:' : 'Cash:'} {formatCurr(cashDisplay)}
           </div>
         </div>
 
@@ -238,13 +240,13 @@ export default function PortfolioView({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>Total Deposited</span>
+              <span>{language === 'tr' ? 'Yatırılan Ana Para' : 'Total Deposited'}</span>
               <button
                 onClick={() => setIsDepositModalOpen(true)}
                 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
-                title="Record new capital deposit or withdrawal"
+                title={language === 'tr' ? "Sermaye girişi veya çekimi kaydet" : "Record new capital deposit or withdrawal"}
               >
-                <span>+ Deposit</span>
+                <span>{language === 'tr' ? '+ Para Yatır' : '+ Deposit'}</span>
               </button>
             </div>
             <div className="mt-2 text-2xl font-black text-gray-900 dark:text-white">
@@ -254,14 +256,14 @@ export default function PortfolioView({
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
             <span>
               {autoInjectedCapitalTRY > 0 
-                ? `Injected (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)} funded)` 
-                : 'Capital Injected'}
+                ? (language === 'tr' ? `Aktarılan (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)})` : `Injected (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)} funded)`)
+                : (language === 'tr' ? 'Net Sermaye Girişi' : 'Capital Injected')}
             </span>
             <button
               onClick={() => setShowTransfers(!showTransfers)}
               className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
             >
-              {showTransfers ? 'Hide Inflows' : 'View Inflows'}
+              {showTransfers ? (language === 'tr' ? 'Girişleri Gizle' : 'Hide Inflows') : (language === 'tr' ? 'Girişleri Gör' : 'View Inflows')}
             </button>
           </div>
         </div>
@@ -270,7 +272,7 @@ export default function PortfolioView({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>All-Time Net ROI</span>
+              <span>{language === 'tr' ? 'Toplam Net Getiri' : 'All-Time Net ROI'}</span>
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                 trueRoiAmountTRY >= 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
               }`}>
@@ -282,7 +284,7 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            vs <span>{formatCurr(totalDepositedDisplay)}</span> principal put in
+            {language === 'tr' ? 'Yatırılan ana para: ' : 'vs '}<span>{formatCurr(totalDepositedDisplay)}</span>
           </div>
         </div>
 
@@ -290,9 +292,9 @@ export default function PortfolioView({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>Cash Balance</span>
+              <span>{language === 'tr' ? 'Nakit Bakiye (Boşta)' : 'Cash Balance'}</span>
               <span className="text-[10px] bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded">
-                Dry Powder
+                {language === 'tr' ? 'Boşta' : 'Dry Powder'}
               </span>
             </div>
             <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
@@ -300,7 +302,7 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% liquid capital ready for DCA
+            {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% {language === 'tr' ? 'likit alıma hazır sermaye' : 'liquid capital ready for DCA'}
           </div>
         </div>
 
@@ -308,12 +310,12 @@ export default function PortfolioView({
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>Realized Gains</span>
+              <span>{language === 'tr' ? 'Kapatılan Kârlar' : 'Realized Gains'}</span>
               <button
                 onClick={() => setShowRealized(!showRealized)}
                 className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
               >
-                {showRealized ? 'Hide Log' : 'View History'}
+                {showRealized ? (language === 'tr' ? 'Gizle' : 'Hide Log') : (language === 'tr' ? 'Geçmişi Gör' : 'View History')}
               </button>
             </div>
             <div className={`mt-2 text-2xl font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
@@ -321,7 +323,9 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            {realizedTrades.length > 0 ? `${realizedTrades.length} Trade Locked In` : 'No Closed Trades Yet'}
+            {realizedTrades.length > 0 
+              ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trade Locked In`) 
+              : (language === 'tr' ? 'Henüz Kapatılan İşlem Yok' : 'No Closed Trades Yet')}
           </div>
         </div>
       </div>
@@ -425,12 +429,16 @@ export default function PortfolioView({
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-row justify-between items-center gap-2">
           <div>
-            <h3 className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white">Active Holdings & DCA Zones</h3>
-            <p className="text-[11px] sm:text-xs text-gray-500 hidden sm:block">Buy additional lots (DCA), sell tranches at different prices, or manage stop-loss risk.</p>
+            <h3 className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white">
+              {t.portfolio.title}
+            </h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 hidden sm:block">
+              {t.portfolio.subtitle}
+            </p>
           </div>
           <div className="flex items-center space-x-2 shrink-0">
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hidden md:inline-block">
-              🟢 Multi-Lot Tracking Active
+              🟢 {language === 'tr' ? 'Çoklu Dilim Takibi Aktif' : 'Multi-Lot Tracking Active'}
             </span>
             {onAddHoldingClick && (
               <button
@@ -438,7 +446,7 @@ export default function PortfolioView({
                 className="px-3.5 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl transition-all shadow-md shadow-blue-500/30 flex items-center space-x-1 cursor-pointer shrink-0"
               >
                 <span>➕</span>
-                <span>Add Holding</span>
+                <span>{language === 'tr' ? '+ Pozisyon Ekle' : '+ Add Holding'}</span>
               </button>
             )}
           </div>
@@ -448,18 +456,18 @@ export default function PortfolioView({
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">Asset</th>
-                <th className="px-4 py-3 text-center">Date Bought</th>
-                <th className="px-5 py-3 text-right">Shares</th>
-                <th className="px-5 py-3 text-right">Avg Entry</th>
-                <th className="px-5 py-3 text-right">Current Price</th>
-                <th className="px-5 py-3 text-right">Market Value</th>
-                <th className="px-5 py-3 text-right">Unrealized P&L</th>
-                <th className="px-5 py-3 text-center">Stop Loss / Mode</th>
-                <th className="px-5 py-3 text-center">Target / Exit Price</th>
-                <th className="px-5 py-3 text-center">Est. Exit / Horizon</th>
-                <th className="px-5 py-3 text-center">DCA Accumulation Zone</th>
-                <th className="px-4 py-3 text-center">Trade / Actions</th>
+                <th className="px-5 py-3">{t.portfolio.holdingsTable.symbol}</th>
+                <th className="px-4 py-3 text-center">{language === 'tr' ? 'Alış Tarihi' : 'Date Bought'}</th>
+                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.shares}</th>
+                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.entryPrice}</th>
+                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentPrice}</th>
+                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentValue}</th>
+                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.pnl}</th>
+                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Zarar Kes / Mod' : 'Stop Loss / Mode'}</th>
+                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Hedef / Çıkış' : 'Target / Exit Price'}</th>
+                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Tahmini Çıkış / Vade' : 'Est. Exit / Horizon'}</th>
+                <th className="px-5 py-3 text-center">{t.portfolio.holdingsTable.statusDca}</th>
+                <th className="px-4 py-3 text-center">{t.portfolio.holdingsTable.actions}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
