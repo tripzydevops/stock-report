@@ -5,8 +5,11 @@ import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '..
 import { calculateExitDate } from '../lib/tradeTiming';
 import { calculateSectorRisk } from '../lib/sectorRisk';
 
+import { TradeSignal } from './TradeCard';
+
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
+  signals?: TradeSignal[];
   realizedTrades?: RealizedTrade[];
   orders?: ExecutedOrder[];
   transfers?: CapitalTransfer[];
@@ -25,6 +28,7 @@ interface PortfolioViewProps {
 
 export default function PortfolioView({
   portfolio,
+  signals = [],
   realizedTrades = [],
   orders = [],
   transfers = [],
@@ -803,6 +807,9 @@ export default function PortfolioView({
                         </div>
                       ) : (
                         (() => {
+                          const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+                          const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+
                           const effTarget = item.targetPrice && item.targetPrice > 0
                             ? item.targetPrice
                             : (item.stopLoss > 0 && item.entryPrice > item.stopLoss
@@ -810,12 +817,14 @@ export default function PortfolioView({
                                 : Number((item.entryPrice * 1.10).toFixed(2)));
                           const upsidePct = item.entryPrice > 0 ? ((effTarget - item.entryPrice) / item.entryPrice) * 100 : 0;
                           const distFromCurr = item.currentPrice > 0 ? ((effTarget - item.currentPrice) / item.currentPrice) * 100 : 0;
+                          const hasT1 = Boolean(matchedSig && matchedSig.targetPrice > 0 && Math.abs(matchedSig.targetPrice - effTarget) > 0.05);
+                          const isT1Hit = Boolean(hasT1 && item.currentPrice >= matchedSig!.targetPrice);
 
                           return (
                             <div className="inline-flex flex-col items-center">
                               <div className="flex items-center gap-1">
                                 <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1">
-                                  <span>🎯</span>
+                                  <span>🎯 {hasT1 ? 'T2:' : ''}</span>
                                   <span>{formatCurr(effTarget, item.currency)}</span>
                                 </span>
                                 <button
@@ -830,9 +839,31 @@ export default function PortfolioView({
                                   ✏️
                                 </button>
                               </div>
+
+                              {hasT1 && (
+                                <div className="text-[10px] flex items-center gap-1 mt-0.5">
+                                  <span className="text-gray-500 dark:text-gray-400 font-medium">T1: {formatCurr(matchedSig!.targetPrice, item.currency)}</span>
+                                  {isT1Hit ? (
+                                    <span className="px-1 py-0.2 rounded text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                      ✓ Hit
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 text-[9px]">
+                                      ({((matchedSig!.targetPrice - item.currentPrice) / item.currentPrice * 100).toFixed(1)}%)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
-                                +{upsidePct.toFixed(1)}% target {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
+                                +{upsidePct.toFixed(1)}% {hasT1 ? 'T2 runner' : 'target'} {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
                               </span>
+
+                              {isT1Hit && (
+                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                  🛡️ Trail Stop to Breakeven
+                                </span>
+                              )}
                             </div>
                           );
                         })()

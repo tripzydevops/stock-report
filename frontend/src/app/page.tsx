@@ -784,7 +784,7 @@ export default function Home() {
     status: 'Neutral', close: 12550.94, trend: 'flat'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
-  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BIST' | 'US'>('ALL');
+  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'BIST' | 'US'>('ALL');
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
   const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
@@ -2172,6 +2172,8 @@ export default function Home() {
                   const todayCount = signals.filter(isFromToday).length;
                   const bistCount = signals.filter(s => s.market === 'BIST').length;
                   const usCount = signals.filter(s => s.market === 'US').length;
+                  const targetHitCount = signals.filter(s => Boolean(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice)).length;
+                  const buyZoneCount = signals.filter(s => !(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice) && !(s.currentPrice && s.stopLoss && s.currentPrice <= s.stopLoss)).length;
 
                   return (
                     <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -2184,6 +2186,28 @@ export default function Home() {
                         }`}
                       >
                         All Active ({signals.length})
+                      </button>
+                      <button
+                        onClick={() => setSignalFilter('BUY_ZONE')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          signalFilter === 'BUY_ZONE'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                        }`}
+                      >
+                        <span>🟢</span>
+                        <span>In Buy Zone ({buyZoneCount})</span>
+                      </button>
+                      <button
+                        onClick={() => setSignalFilter('TARGET_HIT')}
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          signalFilter === 'TARGET_HIT'
+                            ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400'
+                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                        }`}
+                      >
+                        <span>🏆</span>
+                        <span>Target Hit ({targetHitCount})</span>
                       </button>
                       <button
                         onClick={() => setSignalFilter('TODAY')}
@@ -2225,6 +2249,12 @@ export default function Home() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {signals
                     .filter(sig => {
+                      if (signalFilter === 'BUY_ZONE') {
+                        return !(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice) && !(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+                      }
+                      if (signalFilter === 'TARGET_HIT') {
+                        return Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                      }
                       if (signalFilter === 'TODAY') {
                         const todayStr = new Date().toISOString().slice(0, 10);
                         const latestDate = signals.length > 0 ? [...signals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] : '';
@@ -2279,6 +2309,7 @@ export default function Home() {
         {activeTab === 'portfolio' && (
           <PortfolioView
             portfolio={portfolio}
+            signals={signals}
             realizedTrades={realizedTrades}
             orders={executedOrders}
             transfers={transfers}

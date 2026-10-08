@@ -84,21 +84,69 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
-          {signal.isReconfirmed ? (
-            <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
-              <span>🔄</span>
-              <span>Active Setup: Originally triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
-            </div>
-          ) : signal.date < new Date().toISOString().slice(0, 10) ? (
-            <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 w-fit">
-              <span>🗓️</span>
-              <span>Active Swing: Triggered <strong>{signal.date}</strong></span>
-            </div>
-          ) : null}
+          {(() => {
+            const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+            const isStoppedOut = Boolean(signal.currentPrice && signal.stopLoss && signal.currentPrice <= signal.stopLoss);
+            const targetGainPct = signal.entryPrice > 0 ? (((signal.targetPrice - signal.entryPrice) / signal.entryPrice) * 100).toFixed(1) : '0';
+
+            if (isTargetHit) {
+              return (
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60 mt-1.5 w-fit">
+                  <span>🏆</span>
+                  <span>Target 1 Hit at <strong>{formatPrice(signal.targetPrice)}</strong> (+{targetGainPct}%) · In Take-Profit Zone (Trail Stop to Breakeven)</span>
+                </div>
+              );
+            }
+            if (isStoppedOut) {
+              return (
+                <div className="flex items-center gap-1.5 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/60 mt-1.5 w-fit">
+                  <span>🛑</span>
+                  <span>Dipped below stop loss at <strong>{formatPrice(signal.stopLoss)}</strong> · Setup Invalidated</span>
+                </div>
+              );
+            }
+            if (signal.isReconfirmed) {
+              return (
+                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
+                  <span>🔄</span>
+                  <span>Active Setup: Originally triggered <strong>{signal.date}</strong> · Holding in Buy Zone</span>
+                </div>
+              );
+            }
+            if (signal.date < new Date().toISOString().slice(0, 10)) {
+              return (
+                <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 w-fit">
+                  <span>🗓️</span>
+                  <span>Active Swing: Triggered <strong>{signal.date}</strong></span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-1.5">
             {(() => {
+              const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+              const isStoppedOut = Boolean(signal.currentPrice && signal.stopLoss && signal.currentPrice <= signal.stopLoss);
+              const currentGainPct = signal.entryPrice > 0 && signal.currentPrice ? (((signal.currentPrice - signal.entryPrice) / signal.entryPrice) * 100).toFixed(1) : '0';
+
+              if (isTargetHit) {
+                return (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs animate-pulse flex items-center gap-1">
+                    <span>🏆</span>
+                    <span>TARGET HIT (+{currentGainPct}%)</span>
+                  </span>
+                );
+              }
+              if (isStoppedOut) {
+                return (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs flex items-center gap-1">
+                    <span>🛑</span>
+                    <span>STOPPED OUT</span>
+                  </span>
+                );
+              }
               if (signal.isReconfirmed || (signal.daysInZone && signal.daysInZone > 1)) {
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-600 text-white shadow-xs flex items-center gap-1">
@@ -138,8 +186,24 @@ export default function TradeCard({ signal, onSelectTicker, onCalcSize, onOpenCo
             <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.stopLoss)}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-green-500 dark:text-green-400 text-xs">Target</span>
-            <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.targetPrice)}</span>
+            {(() => {
+              const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+              const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+              return (
+                <>
+                  <span className="text-green-500 dark:text-green-400 text-xs flex items-center gap-1">
+                    <span>Target 1</span>
+                    {isTargetHit && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1 rounded font-bold">✓ Hit</span>}
+                  </span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.targetPrice)}</span>
+                  {t2Price > signal.targetPrice && (
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title="Extended 2.0x Risk:Reward Runner Target">
+                      T2: {formatPrice(t2Price)}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
