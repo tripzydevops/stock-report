@@ -47,6 +47,8 @@ export function calculateExitDate(
     targetTradingDays = 15;
   } else if (stratUpper.includes('PULLBACK')) {
     targetTradingDays = 20;
+  } else if (stratUpper.includes('REVERSION') || stratUpper.includes('MEAN')) {
+    targetTradingDays = 10;
   }
 
   const start = startDateStr ? new Date(startDateStr) : new Date();

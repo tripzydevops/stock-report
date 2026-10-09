@@ -35,6 +35,7 @@ class StrategyName(str, Enum):
     trend_pullback = "trend_pullback"
     volatility_squeeze = "volatility_squeeze"
     fund_momentum = "fund_momentum"
+    mean_reversion = "mean_reversion"
 
 class AssetCreate(BaseModel):
     symbol: str = Field(max_length=20)

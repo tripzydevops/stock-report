@@ -11,7 +11,8 @@ from typing import Dict, List, Tuple, Any
 from app.services.screener import (
     screen_momentum_breakout,
     screen_trend_pullback,
-    screen_volatility_squeeze
+    screen_volatility_squeeze,
+    screen_mean_reversion
 )
 
 def evaluate_signal_outcome(signal: Dict, price_df: pd.DataFrame, max_hold_days: int = 20) -> Dict:
@@ -179,6 +180,11 @@ def backtest_all_historical_signals(all_enriched: Dict[str, pd.DataFrame], lookb
             sig_sq = screen_volatility_squeeze(sub_df, symbol)
             if sig_sq:
                 evaluated_trades.append(evaluate_signal_outcome(sig_sq, df))
+
+            # Check Mean Reversion
+            sig_mr = screen_mean_reversion(sub_df, symbol)
+            if sig_mr:
+                evaluated_trades.append(evaluate_signal_outcome(sig_mr, df))
 
     # Deduplicate closely spaced duplicate signals for same symbol and strategy
     unique_trades = []

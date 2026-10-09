@@ -14,6 +14,7 @@ from app.services.screener import (
     screen_trend_pullback,
     screen_volatility_squeeze,
     screen_fund_momentum,
+    screen_mean_reversion,
     run_all_screens,
 )
 from app.services.risk_manager import (
@@ -119,6 +120,42 @@ class TestVolatilitySqueeze:
         df = compute_all_indicators(df)
         signal = screen_volatility_squeeze(df, "SHORT")
         assert signal is None
+
+
+class TestMeanReversion:
+    def test_insufficient_data_returns_none(self):
+        n = 10
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        close = np.full(n, 100.0)
+        df = pd.DataFrame(
+            {"open": close, "high": close + 1, "low": close - 1, "close": close, "adj_close": close,
+             "volume": np.full(n, 1_000_000)},
+            index=dates,
+        )
+        df = compute_all_indicators(df)
+        signal = screen_mean_reversion(df, "SHORT")
+        assert signal is None
+
+    def test_oversold_bounce_signal_structure(self):
+        n = 60
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        # Steady decline to oversold RSI, then a green reversal bar
+        close = np.concatenate([np.linspace(100, 50, 58), [48.0, 51.0]])
+        open_p = np.concatenate([np.linspace(100, 50, 58), [49.0, 48.5]])
+        high_p = close + 1.0
+        low_p = open_p - 1.0
+        df = pd.DataFrame(
+            {"open": open_p, "high": high_p, "low": low_p, "close": close, "adj_close": close,
+             "volume": np.full(n, 1_000_000)},
+            index=dates,
+        )
+        df = compute_all_indicators(df)
+        signal = screen_mean_reversion(df, "DIP")
+        if signal is not None:
+            assert signal["strategy"] == "Mean Reversion"
+            assert signal["entry_price"] > signal["stop_loss"]
+            assert signal["target_1"] > signal["entry_price"]
+            assert signal["risk_reward_ratio"] >= 1.5
 
 
 # ── Risk Manager Tests ───────────────────────────────────────────────────

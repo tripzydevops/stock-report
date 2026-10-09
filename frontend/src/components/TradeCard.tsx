@@ -61,8 +61,11 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
   };
 
   const getStrategyColor = (strategy: string) => {
-    if (strategy.toLowerCase().includes('breakout')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-    if (strategy.toLowerCase().includes('pullback')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+    const s = strategy.toLowerCase();
+    if (s.includes('breakout')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    if (s.includes('pullback')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+    if (s.includes('squeeze')) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+    if (s.includes('reversion') || s.includes('mean')) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
 

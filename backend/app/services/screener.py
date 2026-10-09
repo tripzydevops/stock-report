@@ -4,7 +4,10 @@ import numpy as np
 
 def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     """
-    Triggers when: close > 20-day high AND volume_ratio > 2.0 AND rsi_14 > 55 AND close > ema_50.
+    Momentum Breakout:
+    Triggers when: close > 20-day high AND volume_ratio >= 1.35 AND rsi_14 > 52 AND close > ema_50.
+    Calibrated volume hurdle (1.35x vs previous 2.0x) allows strong institutional breakouts
+    to trigger without requiring unrealistic volume outliers.
     """
     if len(df) < 50:
         return None
@@ -12,21 +15,25 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     last = df.iloc[-1]
     prev_high_20 = df['high'].shift(1).rolling(20).max().iloc[-1]
     
+    vol_ratio = last.get('volume_ratio', 1.0)
+    rsi = last.get('rsi_14', 50)
+    ema_50 = last.get('ema_50', 0)
+    
     if (last['close'] > prev_high_20 and 
-        last['volume_ratio'] > 2.0 and 
-        last['rsi_14'] > 55 and 
-        last['close'] > last['ema_50']):
+        vol_ratio >= 1.35 and 
+        rsi > 52 and 
+        last['close'] > ema_50):
         
         entry = last['close']
-        atr = last['atr_14']
-        stop = entry - (2 * atr)
-        target = entry + 2 * (entry - stop)
+        atr = last.get('atr_14', entry * 0.03)
+        stop = round(entry - (2 * atr), 2)
+        target = round(entry + 2 * (entry - stop), 2)
         
         return {
             'symbol': symbol,
             'strategy': 'Momentum Breakout',
             'signal_date': df.index[-1],
-            'entry_price': entry,
+            'entry_price': round(entry, 2),
             'stop_loss': stop,
             'target_1': target,
             'risk_reward_ratio': 2.0
@@ -35,40 +42,112 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
 
 def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     """
-    Triggers when: close > ema_200 AND close is within 1.5% of ema_20 or ema_50 AND rsi_14 between 40-55.
+    Trend Pullback:
+    Triggers when:
+    1. Macro uptrend: close > ema_200.
+    2. Retracement: close is within 1.5% of ema_20 or ema_50.
+    3. RSI between 40-55.
+    4. Candle stabilization confirmation: green/neutral candle or RSI holding support,
+       avoiding stocks free-falling through moving averages.
     """
     if len(df) < 200:
         return None
         
     last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
     close = last['close']
-    ema_20 = last['ema_20']
-    ema_50 = last['ema_50']
+    open_p = last.get('open', close)
+    ema_20 = last.get('ema_20', close)
+    ema_50 = last.get('ema_50', close)
+    ema_200 = last.get('ema_200', close)
+    rsi = last.get('rsi_14', 50)
     
     near_ema_20 = abs(close - ema_20) / ema_20 <= 0.015
     near_ema_50 = abs(close - ema_50) / ema_50 <= 0.015
     
-    if (close > last['ema_200'] and 
+    # Candle stabilization: close not crashing below open, or bouncing from previous bar
+    is_stabilizing = (close >= open_p * 0.998) or (close >= prev['close']) or (rsi >= prev.get('rsi_14', rsi) - 0.5)
+    
+    if (close > ema_200 and 
         (near_ema_20 or near_ema_50) and 
-        40 <= last['rsi_14'] <= 55):
+        40 <= rsi <= 55 and
+        is_stabilizing):
         
         entry = close
-        stop = min(ema_20, ema_50) * 0.98 # Stop 2% below the EMAs
+        stop = round(min(ema_20, ema_50) * 0.98, 2) # Stop 2% below the EMAs
         target = df['high'].rolling(10).max().iloc[-1]
         
+        # Ensure minimum 1.5:1 reward to risk
+        if target <= entry * 1.03:
+            target = entry + 2.0 * (entry - stop)
+            
         risk = entry - stop
         reward = target - entry
         rr = reward / risk if risk > 0 else 0
         
-        return {
-            'symbol': symbol,
-            'strategy': 'Trend Pullback',
-            'signal_date': df.index[-1],
-            'entry_price': entry,
-            'stop_loss': stop,
-            'target_1': target,
-            'risk_reward_ratio': round(rr, 2)
-        }
+        if rr >= 1.5 and stop < entry:
+            return {
+                'symbol': symbol,
+                'strategy': 'Trend Pullback',
+                'signal_date': df.index[-1],
+                'entry_price': round(entry, 2),
+                'stop_loss': stop,
+                'target_1': round(target, 2),
+                'risk_reward_ratio': round(rr, 2)
+            }
+    return None
+
+def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+    """
+    Mean Reversion (Oversold Dip-Buy / Exhaustion Rebound):
+    Triggers when:
+    1. Asset is technically oversold: RSI(14) <= 36 OR price is touching/below the lower Bollinger Band.
+    2. Reversal confirmation: green candle (close >= open) OR close > prev_close (bounce initiated).
+    3. Target: Mean reversion back towards the 20-day EMA (minimum 1.5:1 R:R).
+    4. Stop Loss: Placed below recent swing low / lower band.
+    """
+    if len(df) < 30:
+        return None
+
+    last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
+
+    close = last['close']
+    open_p = last.get('open', close)
+    low_p = last.get('low', close)
+    high_p = last.get('high', close)
+    rsi = last.get('rsi_14', 50)
+    bb_lower = last.get('bb_lower', 0)
+    ema_20 = last.get('ema_20', close)
+    atr = last.get('atr_14', close * 0.03)
+
+    is_oversold = (rsi <= 36) or (bb_lower > 0 and close <= bb_lower * 1.015) or (low_p <= bb_lower and close > low_p)
+
+    # Reversal confirmation: green candle or higher close or hammer rejection wick
+    has_bounce = (close >= open_p) or (close > prev['close']) or ((close - low_p) >= (high_p - close) * 1.5)
+
+    if is_oversold and has_bounce and close > 0:
+        entry = close
+        recent_low = min(low_p, prev.get('low', low_p))
+        stop = max(recent_low * 0.98, entry - (1.5 * atr))
+        
+        # Target: Mean reversion to 20 EMA
+        target = max(ema_20, entry + (2.0 * (entry - stop)))
+        
+        risk = entry - stop
+        reward = target - entry
+        rr = reward / risk if risk > 0 else 0
+
+        if rr >= 1.5 and stop < entry:
+            return {
+                'symbol': symbol,
+                'strategy': 'Mean Reversion',
+                'signal_date': df.index[-1],
+                'entry_price': round(entry, 2),
+                'stop_loss': round(stop, 2),
+                'target_1': round(target, 2),
+                'risk_reward_ratio': round(rr, 2)
+            }
     return None
 
 def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
@@ -167,6 +246,9 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
             if sig: signals.append(sig)
             
             sig = screen_volatility_squeeze(df, symbol)
+            if sig: signals.append(sig)
+            
+            sig = screen_mean_reversion(df, symbol)
             if sig: signals.append(sig)
             
         if asset_type in ['fund', 'mutual_fund', 'etf']:
