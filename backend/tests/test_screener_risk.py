@@ -227,3 +227,36 @@ class TestPositionRecommendation:
         )
         assert isinstance(result, str)
         assert "₺" in result or "TRY" in result
+
+
+class TestStage2AndTargets:
+    def test_breakout_two_tier_targets(self):
+        df = _make_breakout_df()
+        signal = screen_momentum_breakout(df, "T2TEST")
+        if signal is not None:
+            assert "target_1" in signal
+            assert "target_2" in signal
+            assert signal["target_2"] > signal["target_1"]
+            assert signal["target_1"] > signal["entry_price"]
+
+    def test_breakout_stage2_rejection(self):
+        # Create 250 bars where stock is trading under its 200 EMA
+        n = 250
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        # Long downtrend from 100 to 40, then a small bounce to 42
+        trend = np.linspace(100, 40, 240)
+        bounce = np.linspace(40, 42, 10)
+        close = np.concatenate([trend, bounce])
+        high = close + 0.5
+        low = close - 0.5
+        volume = np.array([1_000_000] * 249 + [5_000_000])
+
+        df = pd.DataFrame(
+            {"open": close, "high": high, "low": low, "close": close, "adj_close": close, "volume": volume},
+            index=dates,
+        )
+        df = compute_all_indicators(df)
+        signal = screen_momentum_breakout(df, "BEAR")
+        # Must be rejected because stock is far below 200 EMA
+        assert signal is None
+

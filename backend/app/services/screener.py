@@ -6,8 +6,10 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     """
     Momentum Breakout:
     Triggers when: close > 20-day high AND volume_ratio >= 1.35 AND rsi_14 > 52 AND close > ema_50.
-    Calibrated volume hurdle (1.35x vs previous 2.0x) allows strong institutional breakouts
-    to trigger without requiring unrealistic volume outliers.
+    Stage 2 Filter: If len(df) >= 200, close must be above ema_200 (avoids overhead trapped supply).
+    Two-Tier Targets:
+      - target_1: High-probability strike zone (~1.25x R:R) for 50% scale-out.
+      - target_2: Runner zone (~2.25x R:R) for the remaining position.
     """
     if len(df) < 50:
         return None
@@ -18,16 +20,25 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     vol_ratio = last.get('volume_ratio', 1.0)
     rsi = last.get('rsi_14', 50)
     ema_50 = last.get('ema_50', 0)
+    ema_200 = last.get('ema_200', 0)
+    close = last['close']
     
-    if (last['close'] > prev_high_20 and 
+    # Stage 2 filter: reject breakouts happening below the 200 EMA
+    if len(df) >= 200 and ema_200 > 0 and close <= ema_200:
+        return None
+    
+    if (close > prev_high_20 and 
         vol_ratio >= 1.35 and 
         rsi > 52 and 
-        last['close'] > ema_50):
+        close > ema_50):
         
-        entry = last['close']
+        entry = close
         atr = last.get('atr_14', entry * 0.03)
-        stop = round(entry - (2 * atr), 2)
-        target = round(entry + 2 * (entry - stop), 2)
+        stop = round(entry - (1.8 * atr), 2)
+        
+        risk = entry - stop
+        target_1 = round(entry + (1.25 * risk), 2)
+        target_2 = round(entry + (2.25 * risk), 2)
         
         return {
             'symbol': symbol,
@@ -35,8 +46,9 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             'signal_date': df.index[-1],
             'entry_price': round(entry, 2),
             'stop_loss': stop,
-            'target_1': target,
-            'risk_reward_ratio': 2.0
+            'target_1': target_1,
+            'target_2': target_2,
+            'risk_reward_ratio': 1.25
         }
     return None
 
@@ -47,8 +59,8 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     1. Macro uptrend: close > ema_200.
     2. Retracement: close is within 1.5% of ema_20 or ema_50.
     3. RSI between 40-55.
-    4. Candle stabilization confirmation: green/neutral candle or RSI holding support,
-       avoiding stocks free-falling through moving averages.
+    4. Candle stabilization confirmation: green/neutral candle or RSI holding support.
+    5. ATR-buffered stop: gives proper breathing room against morning dips.
     """
     if len(df) < 200:
         return None
@@ -61,6 +73,7 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     ema_50 = last.get('ema_50', close)
     ema_200 = last.get('ema_200', close)
     rsi = last.get('rsi_14', 50)
+    atr = last.get('atr_14', close * 0.03)
     
     near_ema_20 = abs(close - ema_20) / ema_20 <= 0.015
     near_ema_50 = abs(close - ema_50) / ema_50 <= 0.015
@@ -74,25 +87,27 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         is_stabilizing):
         
         entry = close
-        stop = round(min(ema_20, ema_50) * 0.98, 2) # Stop 2% below the EMAs
-        target = df['high'].rolling(10).max().iloc[-1]
-        
-        # Ensure minimum 1.5:1 reward to risk
-        if target <= entry * 1.03:
-            target = entry + 2.0 * (entry - stop)
+        # ATR-buffered stop below the EMAs so normal intraday noise doesn't stop out
+        stop = round(min(ema_20, ema_50) - (1.0 * atr), 2)
+        if stop >= entry * 0.975:
+            stop = round(entry * 0.965, 2)
             
+        swing_high = df['high'].rolling(10).max().iloc[-1]
         risk = entry - stop
-        reward = target - entry
-        rr = reward / risk if risk > 0 else 0
+        target_1 = round(max(swing_high, entry + (1.25 * risk)), 2)
+        target_2 = round(entry + (2.0 * risk), 2)
         
-        if rr >= 1.5 and stop < entry:
+        rr = (target_1 - entry) / risk if risk > 0 else 0
+        
+        if rr >= 1.2 and stop < entry:
             return {
                 'symbol': symbol,
                 'strategy': 'Trend Pullback',
                 'signal_date': df.index[-1],
                 'entry_price': round(entry, 2),
                 'stop_loss': stop,
-                'target_1': round(target, 2),
+                'target_1': target_1,
+                'target_2': target_2,
                 'risk_reward_ratio': round(rr, 2)
             }
     return None
@@ -103,8 +118,8 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     Triggers when:
     1. Asset is technically oversold: RSI(14) <= 36 OR price is touching/below the lower Bollinger Band.
     2. Reversal confirmation: green candle (close >= open) OR close > prev_close (bounce initiated).
-    3. Target: Mean reversion back towards the 20-day EMA (minimum 1.5:1 R:R).
-    4. Stop Loss: Placed below recent swing low / lower band.
+    3. Macro Regime Gating: If below 200 EMA (bear drift), requires deep capitulation (RSI <= 30)
+       AND positive momentum shift (MACD histogram turning up) to eliminate falling knives.
     """
     if len(df) < 30:
         return None
@@ -119,6 +134,7 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     rsi = last.get('rsi_14', 50)
     bb_lower = last.get('bb_lower', 0)
     ema_20 = last.get('ema_20', close)
+    ema_200 = last.get('ema_200', 0)
     atr = last.get('atr_14', close * 0.03)
 
     is_oversold = (rsi <= 36) or (bb_lower > 0 and close <= bb_lower * 1.015) or (low_p <= bb_lower and close > low_p)
@@ -126,26 +142,32 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     # Reversal confirmation: green candle or higher close or hammer rejection wick
     has_bounce = (close >= open_p) or (close > prev['close']) or ((close - low_p) >= (high_p - close) * 1.5)
 
+    # Macro trend gate: prevent falling knives when stuck in extended bear trends
+    if len(df) >= 200 and ema_200 > 0 and close < ema_200 * 0.95:
+        macd_improving = last.get('macd_histogram', 0) > prev.get('macd_histogram', 0)
+        if rsi > 30 or not macd_improving:
+            return None
+
     if is_oversold and has_bounce and close > 0:
         entry = close
         recent_low = min(low_p, prev.get('low', low_p))
-        stop = max(recent_low * 0.98, entry - (1.5 * atr))
-        
-        # Target: Mean reversion to 20 EMA
-        target = max(ema_20, entry + (2.0 * (entry - stop)))
+        stop = max(round(recent_low * 0.98, 2), round(entry - (1.5 * atr), 2))
         
         risk = entry - stop
-        reward = target - entry
-        rr = reward / risk if risk > 0 else 0
+        target_1 = round(max(ema_20, entry + (1.25 * risk)), 2)
+        target_2 = round(entry + (2.0 * risk), 2)
+        
+        rr = (target_1 - entry) / risk if risk > 0 else 0
 
-        if rr >= 1.5 and stop < entry:
+        if rr >= 1.2 and stop < entry:
             return {
                 'symbol': symbol,
                 'strategy': 'Mean Reversion',
                 'signal_date': df.index[-1],
                 'entry_price': round(entry, 2),
                 'stop_loss': round(stop, 2),
-                'target_1': round(target, 2),
+                'target_1': target_1,
+                'target_2': target_2,
                 'risk_reward_ratio': round(rr, 2)
             }
     return None
@@ -154,6 +176,7 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     """
     Triggers when: squeeze just released (previous bar was squeezed, current bar is not).
     Squeeze: bb_upper < kc_upper AND bb_lower > kc_lower.
+    Stage 2 Filter: Requires close > ema_50 (and close > ema_200 when available).
     """
     if len(df) < 20:
         return None
@@ -167,29 +190,38 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     if prev_squeeze and not curr_squeeze:
         last = df.iloc[-1]
         entry = last['close']
+        ema_50 = last.get('ema_50', 0)
+        ema_200 = last.get('ema_200', 0)
+        atr = last.get('atr_14', entry * 0.03)
         
-        # Spot equities are Long-only. Only trigger on bullish breakout (positive momentum)
-        if last['macd_histogram'] > 0:
-            stop = last['kc_lower']
-            if stop >= entry:
-                stop = entry * 0.95  # Fallback 5% stop if Keltner lower is at or above entry
-            target = entry + 2 * (entry - stop)
-            
+        # Stage 2 trend confirmation: avoid buying upward blips in deep bear downtrends
+        if (ema_50 > 0 and entry <= ema_50) or (len(df) >= 200 and ema_200 > 0 and entry <= ema_200):
+            return None
+        
+        # Bullish momentum release
+        if last.get('macd_histogram', 0) > 0:
+            stop = last.get('kc_lower', entry - (1.5 * atr))
+            if stop >= entry * 0.98 or pd.isna(stop):
+                stop = round(entry - (1.5 * atr), 2)
+            else:
+                stop = round(stop, 2)
+                
             risk = entry - stop
-            reward = target - entry
-            rr = reward / risk if risk > 0 else 0
+            target_1 = round(entry + (1.25 * risk), 2)
+            target_2 = round(entry + (2.25 * risk), 2)
+            
+            rr = (target_1 - entry) / risk if risk > 0 else 0
             
             return {
                 'symbol': symbol,
                 'strategy': 'Volatility Squeeze',
                 'signal_date': df.index[-1],
-                'entry_price': entry,
+                'entry_price': round(entry, 2),
                 'stop_loss': stop,
-                'target_1': target,
+                'target_1': target_1,
+                'target_2': target_2,
                 'risk_reward_ratio': round(rr, 2)
             }
-        # If MACD histogram <= 0, it is a bearish breakdown (short setup).
-        # We reject short setups since spot equities do not support short-selling.
         return None
     return None
 

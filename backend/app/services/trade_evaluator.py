@@ -38,6 +38,7 @@ def evaluate_signal_outcome(signal: Dict, price_df: pd.DataFrame, max_hold_days:
     entry = float(signal.get("entry_price", 0))
     stop = float(signal.get("stop_loss", 0)) if signal.get("stop_loss") else None
     target = float(signal.get("target_1", 0)) if signal.get("target_1") else None
+    target_2 = float(signal.get("target_2", 0)) if signal.get("target_2") else None
     
     result = {
         "symbol": symbol,
@@ -46,6 +47,7 @@ def evaluate_signal_outcome(signal: Dict, price_df: pd.DataFrame, max_hold_days:
         "entry_price": entry,
         "stop_loss": stop,
         "target": target,
+        "target_2": target_2,
         "status": "ACTIVE 🟢",
         "pnl_pct": 0.0,
         "exit_price": entry,
