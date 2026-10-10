@@ -43,8 +43,28 @@ def analyze_asset_opening(symbol: str, df_daily: pd.DataFrame, df_intraday: pd.D
         orb_high = float(open_bars["high"].max())
         orb_low = float(open_bars["low"].min())
     
-    # Classification Logic
-    if gap_pct >= 0.75 and curr_price >= today_open:
+    # Classification Logic (incorporating BIST ±5% circuit breaker and +9.99% daily ceiling limit)
+    is_bist = clean_sym not in ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AMD", "SPY", "QQQ", "IWM", "GLD", "TLT", "XLF", "XLE", "ARKK"]
+    max_ceiling = round(prev_close * 1.0999, 2) if is_bist else None
+    max_floor = round(prev_close * 0.9001, 2) if is_bist else None
+
+    if is_bist and total_pct >= 9.85:
+        pattern = "🔥 Tavan / Limit-Up (+9.99%)"
+        bias = "CEILING / MAX BULLISH"
+        action = "Tavan kilitli (+9.99%). Günlük maksimum prim marjına ulaşıldı."
+    elif is_bist and total_pct <= -9.85:
+        pattern = "🛑 Taban / Limit-Down (-9.99%)"
+        bias = "FLOOR / MAX BEARISH"
+        action = "Taban kilitli (-9.99%). Düşen bıçak riski, taban çözülene kadar kaçınılmalı."
+    elif total_pct >= 5.0:
+        pattern = "⚡ Yukarı Devre Kesici (+%5+ Yükseliş)"
+        bias = "VERY BULLISH"
+        action = "Yukarı yönlü devre kesici bölgesi / güçlü momentum."
+    elif total_pct <= -5.0:
+        pattern = "⚠️ Aşağı Devre Kesici (-%5+ Düşüş)"
+        bias = "VERY BEARISH"
+        action = "Aşağı yönlü devre kesici / panik satış baskısı."
+    elif gap_pct >= 0.75 and curr_price >= today_open:
         pattern = "🚀 Gap & Go"
         bias = "STRONGLY BULLISH"
         action = "Gapping strong & holding above open"
@@ -74,6 +94,8 @@ def analyze_asset_opening(symbol: str, df_daily: pd.DataFrame, df_intraday: pd.D
         "Prev Close": round(prev_close, 2),
         "Open Price": round(today_open, 2),
         "Current Price": round(curr_price, 2),
+        "Max Ceiling (+9.99%)": max_ceiling,
+        "Max Floor (-9.99%)": max_floor,
         "ORB High (15m)": round(orb_high, 2),
         "ORB Low (15m)": round(orb_low, 2),
         "Gap %": round(gap_pct, 2),

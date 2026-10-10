@@ -857,6 +857,7 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [turmoilGuard, setTurmoilGuard] = useState<boolean>(true);
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -2302,6 +2303,12 @@ export default function Home() {
 
                     if (isTargetHit && !userHasShares) return false;
                     if (isStoppedOut && !userHasShares) return false;
+
+                    // Turmoil Guard: When active, suppress dangerous Mean Reversion falling-knife trades
+                    if (turmoilGuard && sig.strategy.toLowerCase().includes('reversion')) {
+                      return false;
+                    }
+
                     return true;
                   });
 
@@ -2390,6 +2397,20 @@ export default function Home() {
                       >
                         <span>🇺🇸</span>
                         <span>{t.signals.filterUs} ({usCount})</span>
+                      </button>
+                      <button
+                        onClick={() => setTurmoilGuard(!turmoilGuard)}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ml-auto border shadow-sm ${
+                          turmoilGuard
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20 ring-2 ring-emerald-400'
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                        }`}
+                        title={language === 'tr' 
+                          ? "Piyasa çalkantısında dip arama (Mean Reversion) tuzaklarını engeller, sadece güçlü trend kırılımlarını gösterir." 
+                          : "Filters out knife-catching mean reversion setups during market turmoil."}
+                      >
+                        <span>🛡️</span>
+                        <span>{turmoilGuard ? (language === 'tr' ? 'Güvenli Mod: AÇIK' : 'Turmoil Guard: ON') : (language === 'tr' ? 'Güvenli Mod: KAPALI' : 'Turmoil Guard: OFF')}</span>
                       </button>
                     </div>
                   );

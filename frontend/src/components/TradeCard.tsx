@@ -202,6 +202,10 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             {(() => {
               const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
               const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+              const isBist = signal.market === 'BIST' || signal.currency === 'TRY';
+              const tavanCeiling = isBist ? Number((signal.entryPrice * 1.0999).toFixed(2)) : null;
+              const isWithinSingleDayCeiling = tavanCeiling ? signal.targetPrice <= tavanCeiling : false;
+
               return (
                 <>
                   <span className="text-green-500 dark:text-green-400 text-xs flex items-center gap-1">
@@ -212,6 +216,21 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   {t2Price > signal.targetPrice && (
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title={language === 'tr' ? "2.0x Risk:Ödül Koşucu Hedefi" : "Extended 2.0x Risk:Reward Runner Target"}>
                       T2: {formatPrice(t2Price)}
+                    </span>
+                  )}
+                  {isBist && tavanCeiling && (
+                    <span 
+                      className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 font-mono flex items-center gap-1"
+                      title={language === 'tr' ? "BIST Günlük Maksimum Tavan (+%9.99) Fiyat Marjı" : "Borsa Istanbul Daily Maximum +9.99% Ceiling Margin"}
+                    >
+                      <span>⚡ Tavan: {formatPrice(tavanCeiling)}</span>
+                      <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                        isWithinSingleDayCeiling 
+                          ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                          : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                      }`}>
+                        {isWithinSingleDayCeiling ? (language === 'tr' ? '1 Seans' : '1 Day') : (language === 'tr' ? 'Çoklu Seans' : 'Multi-Day')}
+                      </span>
                     </span>
                   )}
                 </>
