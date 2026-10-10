@@ -835,6 +835,7 @@ export default function Home() {
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'BIST' | 'US'>('ALL');
+  const [selectedStrategyFilter, setSelectedStrategyFilter] = useState<string>('ALL');
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
   const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
@@ -2294,6 +2295,18 @@ export default function Home() {
                   // - If a trade hits target and user kept shares for Target 2 -> it stays!
                   // - If user sold all shares (or has 0 shares) -> it disappears from active trades!
                   // - If a trade stopped out and user has 0 shares -> it disappears from active trades!
+                  // Helper to match trade types across variations
+                  const matchesStrategy = (sigStrategy: string, filterKey: string): boolean => {
+                    if (!filterKey || filterKey === 'ALL') return true;
+                    const s = (sigStrategy || '').toUpperCase();
+                    if (filterKey === 'MEAN_REVERSION') return s.includes('REVERSION');
+                    if (filterKey === 'TREND_PULLBACK') return s.includes('PULLBACK') || s.includes('EMA');
+                    if (filterKey === 'MOMENTUM_BREAKOUT') return s.includes('BREAKOUT') || (s.includes('MOMENTUM') && !s.includes('FUND'));
+                    if (filterKey === 'VOLATILITY_SQUEEZE') return s.includes('SQUEEZE');
+                    if (filterKey === 'FUND_MOMENTUM') return s.includes('FUND');
+                    return s === filterKey.toUpperCase();
+                  };
+
                   const activeDisplaySignals = signals.filter(sig => {
                     const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
                     const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
@@ -2306,12 +2319,21 @@ export default function Home() {
                     if (isStoppedOut && !userHasShares) return false;
 
                     // Turmoil Guard: When active, suppress dangerous Mean Reversion falling-knife trades
-                    if (turmoilGuard && sig.strategy.toLowerCase().includes('reversion')) {
+                    // BUT if the user explicitly selected 'MEAN_REVERSION' in the Trade Type dropdown, allow viewing them!
+                    if (turmoilGuard && selectedStrategyFilter !== 'MEAN_REVERSION' && sig.strategy.toLowerCase().includes('reversion')) {
                       return false;
                     }
 
                     return true;
                   });
+
+                  const strategyOptions = [
+                    { key: 'MEAN_REVERSION', icon: '🔄', label: language === 'tr' ? 'Ortalamaya Dönüş' : 'Mean Reversion', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'MEAN_REVERSION')).length },
+                    { key: 'TREND_PULLBACK', icon: '📈', label: language === 'tr' ? 'Trend Düzeltmesi' : 'Trend Pullback', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'TREND_PULLBACK')).length },
+                    { key: 'MOMENTUM_BREAKOUT', icon: '⚡', label: language === 'tr' ? 'Momentum Kırılımı' : 'Momentum Breakout', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'MOMENTUM_BREAKOUT')).length },
+                    { key: 'VOLATILITY_SQUEEZE', icon: '💥', label: language === 'tr' ? 'Sıkışma Patlaması' : 'Volatility Squeeze', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'VOLATILITY_SQUEEZE')).length },
+                    { key: 'FUND_MOMENTUM', icon: '🏦', label: language === 'tr' ? 'Fon Momentumu' : 'Fund Momentum', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'FUND_MOMENTUM')).length },
+                  ].filter(opt => opt.count > 0 || opt.key === selectedStrategyFilter);
 
                   const latestDate = activeDisplaySignals.length > 0 
                     ? [...activeDisplaySignals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] 
@@ -2331,10 +2353,46 @@ export default function Home() {
                   const buyZoneCount = activeDisplaySignals.filter(s => !(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice) && !(s.currentPrice && s.stopLoss && s.currentPrice <= s.stopLoss)).length;
 
                   return (
-                    <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                      {/* TRADE TYPE DROPDOWN FILTER */}
+                      <div className="relative shrink-0">
+                        <div className={`flex items-center rounded-xl px-2.5 py-1 border shadow-xs transition-all ${
+                          selectedStrategyFilter !== 'ALL'
+                            ? 'bg-blue-50 dark:bg-blue-950/70 border-blue-500 text-blue-700 dark:text-blue-300 ring-2 ring-blue-400/30 font-bold'
+                            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'
+                        }`}>
+                          <span className="text-xs mr-1.5 select-none">🎯</span>
+                          <select
+                            value={selectedStrategyFilter}
+                            onChange={(e) => setSelectedStrategyFilter(e.target.value)}
+                            className="bg-transparent text-xs font-black focus:outline-none cursor-pointer pr-1 text-gray-900 dark:text-white"
+                            aria-label={language === 'tr' ? 'İşlem Tipi Filtresi' : 'Trade Type Filter'}
+                          >
+                            <option value="ALL" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                              {language === 'tr' ? 'Tüm İşlem Tipleri' : 'All Trade Types'} ({activeDisplaySignals.length})
+                            </option>
+                            {strategyOptions.map(opt => (
+                              <option key={opt.key} value={opt.key} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                {opt.icon} {opt.label} ({opt.count})
+                              </option>
+                            ))}
+                          </select>
+                          {selectedStrategyFilter !== 'ALL' && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSelectedStrategyFilter('ALL'); }}
+                              className="ml-1 text-[10px] text-gray-400 hover:text-rose-500 cursor-pointer font-bold px-0.5"
+                              title={language === 'tr' ? 'İşlem tipi filtresini temizle' : 'Clear trade type filter'}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
                       <button
                         onClick={() => setSignalFilter('ALL')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           signalFilter === 'ALL'
                             ? 'bg-blue-600 text-white shadow-sm'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -2344,7 +2402,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setSignalFilter('BUY_ZONE')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
                           signalFilter === 'BUY_ZONE'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
@@ -2356,7 +2414,7 @@ export default function Home() {
                       {runnerCount > 0 && (
                         <button
                           onClick={() => setSignalFilter('TARGET_HIT')}
-                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
                             signalFilter === 'TARGET_HIT'
                               ? 'bg-purple-600 text-white shadow-sm ring-2 ring-purple-400'
                               : 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 hover:bg-purple-100'
@@ -2368,7 +2426,7 @@ export default function Home() {
                       )}
                       <button
                         onClick={() => setSignalFilter('TODAY')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
                           signalFilter === 'TODAY'
                             ? 'bg-amber-500 text-white shadow-sm'
                             : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
@@ -2379,7 +2437,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setSignalFilter('BIST')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
                           signalFilter === 'BIST'
                             ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -2390,7 +2448,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setSignalFilter('US')}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
                           signalFilter === 'US'
                             ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-sm'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -2401,7 +2459,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => setTurmoilGuard(!turmoilGuard)}
-                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ml-auto border shadow-sm ${
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center space-x-1.5 ml-auto border shadow-sm whitespace-nowrap ${
                           turmoilGuard
                             ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20 ring-2 ring-emerald-400'
                             : 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
@@ -2419,6 +2477,17 @@ export default function Home() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {(() => {
+                    const matchesStrategy = (sigStrategy: string, filterKey: string): boolean => {
+                      if (!filterKey || filterKey === 'ALL') return true;
+                      const s = (sigStrategy || '').toUpperCase();
+                      if (filterKey === 'MEAN_REVERSION') return s.includes('REVERSION');
+                      if (filterKey === 'TREND_PULLBACK') return s.includes('PULLBACK') || s.includes('EMA');
+                      if (filterKey === 'MOMENTUM_BREAKOUT') return s.includes('BREAKOUT') || (s.includes('MOMENTUM') && !s.includes('FUND'));
+                      if (filterKey === 'VOLATILITY_SQUEEZE') return s.includes('SQUEEZE');
+                      if (filterKey === 'FUND_MOMENTUM') return s.includes('FUND');
+                      return s === filterKey.toUpperCase();
+                    };
+
                     const activeDisplaySignals = signals.filter(sig => {
                       const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
                       const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
@@ -2429,23 +2498,41 @@ export default function Home() {
 
                       if (isTargetHit && !userHasShares) return false;
                       if (isStoppedOut && !userHasShares) return false;
+
+                      // Turmoil Guard: When active, suppress dangerous Mean Reversion falling-knife trades
+                      // BUT if the user explicitly selected 'MEAN_REVERSION' in the Trade Type dropdown, allow viewing them!
+                      if (turmoilGuard && selectedStrategyFilter !== 'MEAN_REVERSION' && sig.strategy.toLowerCase().includes('reversion')) {
+                        return false;
+                      }
+
                       return true;
                     });
 
                     const filtered = activeDisplaySignals.filter(sig => {
                       if (signalFilter === 'BUY_ZONE') {
-                        return !(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice) && !(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+                        const inBuyZone = !(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice) && !(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
+                        if (!inBuyZone) return false;
                       }
                       if (signalFilter === 'TARGET_HIT') {
-                        return Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                        const isHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
+                        if (!isHit) return false;
                       }
                       if (signalFilter === 'TODAY') {
                         const todayStr = new Date().toISOString().slice(0, 10);
                         const latestDate = activeDisplaySignals.length > 0 ? [...activeDisplaySignals.map(s => s.lastConfirmedDate || s.date)].sort().reverse()[0] : '';
-                        return sig.date === latestDate || sig.lastConfirmedDate === latestDate || sig.date === todayStr || sig.lastConfirmedDate === todayStr;
+                        const isToday = sig.date === latestDate || sig.lastConfirmedDate === latestDate || sig.date === todayStr || sig.lastConfirmedDate === todayStr;
+                        if (!isToday) return false;
                       }
-                      if (signalFilter === 'BIST') return sig.market === 'BIST';
-                      if (signalFilter === 'US') return sig.market === 'US';
+                      if (signalFilter === 'BIST' && sig.market !== 'BIST') return false;
+                      if (signalFilter === 'US' && sig.market !== 'US') return false;
+
+                      // TRADE TYPE / STRATEGY FILTER
+                      if (selectedStrategyFilter !== 'ALL') {
+                        if (!matchesStrategy(sig.strategy, selectedStrategyFilter)) {
+                          return false;
+                        }
+                      }
+
                       return true;
                     });
 
@@ -2455,15 +2542,28 @@ export default function Home() {
                           <span className="text-3xl block">🎯</span>
                           <h3 className="text-base font-bold text-gray-900 dark:text-white">{t.signals.noActiveTrades}</h3>
                           <p className="text-xs text-gray-500 max-w-md mx-auto">
-                            {t.signals.noActiveDesc}
+                            {selectedStrategyFilter !== 'ALL'
+                              ? (language === 'tr' ? 'Seçilen işlem tipine uygun aktif kurulum bulunamadı.' : 'No active setups found matching the selected trade type.')
+                              : t.signals.noActiveDesc}
                           </p>
-                          <button
-                            type="button"
-                            onClick={() => setSignalFilter('ALL')}
-                            className="mt-2 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer"
-                          >
-                            {t.signals.resetFilter}
-                          </button>
+                          <div className="flex justify-center gap-2 pt-1">
+                            {selectedStrategyFilter !== 'ALL' && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedStrategyFilter('ALL')}
+                                className="px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-100"
+                              >
+                                {language === 'tr' ? 'Tüm İşlem Tiplerini Göster' : 'Show All Trade Types'}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { setSignalFilter('ALL'); setSelectedStrategyFilter('ALL'); }}
+                              className="px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200"
+                            >
+                              {t.signals.resetFilter}
+                            </button>
+                          </div>
                         </div>
                       );
                     }
