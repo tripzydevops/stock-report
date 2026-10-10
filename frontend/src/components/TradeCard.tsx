@@ -205,6 +205,10 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               const isBist = signal.market === 'BIST' || signal.currency === 'TRY';
               const tavanCeiling = isBist ? Number((signal.entryPrice * 1.0999).toFixed(2)) : null;
               const isWithinSingleDayCeiling = tavanCeiling ? signal.targetPrice <= tavanCeiling : false;
+              const minSessionsNeeded = isBist && signal.entryPrice > 0 && signal.targetPrice > signal.entryPrice
+                ? Math.ceil(Math.log(signal.targetPrice / signal.entryPrice) / Math.log(1.0999))
+                : 1;
+              const isUnreachable = isBist && minSessionsNeeded > 15;
 
               return (
                 <>
@@ -221,15 +225,23 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   {isBist && tavanCeiling && (
                     <span 
                       className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5 font-mono flex items-center gap-1"
-                      title={language === 'tr' ? "BIST Günlük Maksimum Tavan (+%9.99) Fiyat Marjı" : "Borsa Istanbul Daily Maximum +9.99% Ceiling Margin"}
+                      title={language === 'tr' 
+                        ? `BIST Günlük Maksimum Tavan (+%9.99). Bu hedefe tavan serisi ile minimum ${minSessionsNeeded} seansta ulaşılabilir.` 
+                        : `Borsa Istanbul Daily +9.99% Ceiling. Min ${minSessionsNeeded} consecutive ceiling sessions needed.`}
                     >
                       <span>⚡ Tavan: {formatPrice(tavanCeiling)}</span>
                       <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
-                        isWithinSingleDayCeiling 
-                          ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
-                          : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                        isUnreachable
+                          ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                          : isWithinSingleDayCeiling 
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' 
+                            : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
                       }`}>
-                        {isWithinSingleDayCeiling ? (language === 'tr' ? '1 Seans' : '1 Day') : (language === 'tr' ? 'Çoklu Seans' : 'Multi-Day')}
+                        {isUnreachable 
+                          ? (language === 'tr' ? `⚠️ >${minSessionsNeeded} Seans` : `⚠️ >${minSessionsNeeded} Days`)
+                          : isWithinSingleDayCeiling 
+                            ? (language === 'tr' ? '⚡ 1 Seans' : '⚡ 1 Day') 
+                            : (language === 'tr' ? `🗓️ ~${minSessionsNeeded} Seans` : `🗓️ ~${minSessionsNeeded} Days`)}
                       </span>
                     </span>
                   )}

@@ -260,3 +260,65 @@ class TestStage2AndTargets:
         # Must be rejected because stock is far below 200 EMA
         assert signal is None
 
+
+class TestTabanAndHoldingFeasibility:
+    def test_mean_reversion_taban_limit_down_rejected(self):
+        """Simulate ODINE situation: stock crashes -9.98% locked at Taban (open=high=low=close)."""
+        n = 50
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        # Steady price at 150, then drops to 106.2, then last day locked at taban 95.6
+        close = np.array([150.0] * 40 + list(np.linspace(150, 106.2, 9)) + [95.6])
+        open_p = close.copy()
+        high_p = close.copy()
+        low_p = close.copy()
+        # On previous day (106.2), on current day (95.6 -> -9.98%)
+        df = pd.DataFrame(
+            {"open": open_p, "high": high_p, "low": low_p, "close": close, "adj_close": close, "volume": np.full(n, 50000)},
+            index=dates
+        )
+        df = compute_all_indicators(df)
+        signal = screen_mean_reversion(df, "ODINE")
+        assert signal is None, "Stock locked at Taban (-9.98%) must NEVER generate a buy signal!"
+
+    def test_mean_reversion_downward_circuit_breaker_rejected(self):
+        """Stock drops 5% on the day (circuit breaker territory)."""
+        n = 50
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        close = np.array([100.0] * 48 + [100.0, 95.0]) # dropped 5% on last day
+        open_p = np.array([100.0] * 48 + [100.0, 95.0])
+        high_p = np.array([100.0] * 48 + [100.0, 96.0])
+        low_p = np.array([100.0] * 48 + [100.0, 94.5])
+        df = pd.DataFrame(
+            {"open": open_p, "high": high_p, "low": low_p, "close": close, "adj_close": close, "volume": np.full(n, 50000)},
+            index=dates
+        )
+        df = compute_all_indicators(df)
+        signal = screen_mean_reversion(df, "CRASH")
+        assert signal is None, "Circuit breaker crash bar (-5%) must be rejected!"
+
+    def test_mean_reversion_target_feasibility_with_lagging_ema(self):
+        """When EMA 20 is far above current price (e.g. 400 vs 95), target_1 must NOT equal EMA 20."""
+        n = 60
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        # Steady decline to oversold RSI, then a green reversal bar
+        close = np.concatenate([np.linspace(100, 50, 58), [48.0, 51.0]])
+        open_p = np.concatenate([np.linspace(100, 50, 58), [49.0, 48.5]])
+        high_p = close + 1.0
+        low_p = open_p - 1.0
+        df = pd.DataFrame(
+            {"open": open_p, "high": high_p, "low": low_p, "close": close, "adj_close": close, "volume": np.full(n, 100000)},
+            index=dates
+        )
+        df = compute_all_indicators(df)
+        # Manually simulate an extreme lagging EMA 20 (like ODINE at 410.17)
+        df.loc[df.index[-1], 'ema_20'] = 410.17
+        
+        signal = screen_mean_reversion(df, "FEASIBLE")
+        if signal is not None:
+            # Target 1 must NOT be 410.17!
+            assert signal["target_1"] < 400.0, "Target 1 cannot be a detached lagging EMA hundreds of percent away!"
+            assert signal["target_1"] <= signal["entry_price"] * 1.25, "Target 1 must be feasible within holding horizon!"
+            assert signal["target_2"] > signal["target_1"], "Target 2 must be greater than Target 1!"
+            assert signal["risk_reward_ratio"] < 10.0, f"R:R should be realistic, got {signal['risk_reward_ratio']}"
+
+

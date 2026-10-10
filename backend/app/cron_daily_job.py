@@ -270,6 +270,20 @@ def db_update_open_signals(asset_id_map: Dict[str, str], asset_data: Dict[str, p
                 }).eq("id", sig["id"]).execute()
                 logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT on {bar_date} at {stop}")
                 break
+        else:
+            # Holding Period Constraint: Maximum holding horizon is 20 trading sessions (1 month).
+            # If neither target nor stop was touched after 20 sessions, expire the trade at Day 20 close.
+            if len(future_indices) >= 20:
+                bar_20 = df.iloc[future_indices[19]]
+                bar_date_20 = dates[future_indices[19]]
+                exit_price = float(bar_20["close"])
+                pnl = ((exit_price - entry) / entry) * 100
+                client.table("trade_signals").update({
+                    "status": "expired",
+                    "outcome_pnl_pct": round(pnl, 2),
+                    "closed_at": f"{bar_date_20}T18:00:00Z",
+                }).eq("id", sig["id"]).execute()
+                logger.info(f"Signal {sig['id']} for {symbol} EXPIRED after 20 sessions (1 month) on {bar_date_20} at {exit_price}")
 
 
 def db_upsert_regimes(regimes: Dict[str, Dict]):

@@ -94,12 +94,21 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             
         swing_high = df['high'].rolling(10).max().iloc[-1]
         risk = entry - stop
-        target_1 = round(max(swing_high, entry + (1.25 * risk)), 2)
-        target_2 = round(entry + (2.0 * risk), 2)
+        if risk <= 0 or stop >= entry:
+            return None
+
+        # Holding horizon reachability: swing high capped at realistic swing boundary (+15% max for T1)
+        if entry < swing_high <= entry * 1.15:
+            target_1_candidate = max(swing_high, entry + (1.25 * risk))
+        else:
+            target_1_candidate = entry + (1.25 * risk)
+
+        target_1 = round(min(entry * 1.15, target_1_candidate), 2)
+        target_2 = round(max(target_1 * 1.04, min(entry * 1.25, entry + (2.25 * risk))), 2)
         
         rr = (target_1 - entry) / risk if risk > 0 else 0
         
-        if rr >= 1.2 and stop < entry:
+        if rr >= 1.2 and stop < entry and target_1 > entry and target_2 > target_1:
             return {
                 'symbol': symbol,
                 'strategy': 'Trend Pullback',
@@ -117,9 +126,12 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     Mean Reversion (Oversold Dip-Buy / Exhaustion Rebound):
     Triggers when:
     1. Asset is technically oversold: RSI(14) <= 36 OR price is touching/below the lower Bollinger Band.
-    2. Reversal confirmation: green candle (close >= open) OR close > prev_close (bounce initiated).
-    3. Macro Regime Gating: If below 200 EMA (bear drift), requires deep capitulation (RSI <= 30)
-       AND positive momentum shift (MACD histogram turning up) to eliminate falling knives.
+    2. Taban / Circuit-Breaker Guard: Reject falling knives dropping >= 4.5% or locked at limit-down (-9.99%).
+    3. Reversal confirmation: Genuine green candle OR higher close OR hammer rejection wick.
+    4. Macro Regime Gating: If below 200 EMA (bear drift), requires deep capitulation (RSI <= 30)
+       AND positive momentum shift (MACD histogram turning up).
+    5. Feasible Holding Horizon Targets: Target 1 must be achievable within 5-10 sessions under BIST +9.99% limits.
+       If EMA 20 is detached (> 20% above entry due to preceding crash), use standard 1.5x R-multiple.
     """
     if len(df) < 30:
         return None
@@ -137,10 +149,29 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     ema_200 = last.get('ema_200', 0)
     atr = last.get('atr_14', close * 0.03)
 
+    prev_close = prev.get('close', close)
+    pct_change = (close - prev_close) / prev_close if prev_close > 0 else 0
+
+    # 1. Taban (Limit-Down) & Downward Circuit Breaker Protection
+    # Stocks in Borsa Istanbul have +/-9.99% daily limits and -5% circuit breakers.
+    # Never buy an asset that dropped >= 4.5% today or closed at the absolute floor.
+    if pct_change <= -0.045:
+        return None
+
+    candle_range = high_p - low_p
+    # Limit-down lock: 0-range bar on negative day (open == high == low == close)
+    if pct_change < 0 and (candle_range == 0 or low_p == close):
+        return None
+
     is_oversold = (rsi <= 36) or (bb_lower > 0 and close <= bb_lower * 1.015) or (low_p <= bb_lower and close > low_p)
 
-    # Reversal confirmation: green candle or higher close or hammer rejection wick
-    has_bounce = (close >= open_p) or (close > prev['close']) or ((close - low_p) >= (high_p - close) * 1.5)
+    # 2. Genuine Reversal Confirmation
+    # Flat bar at open == close on a down day is NOT a green bounce
+    is_green_candle = (close > open_p * 1.002) and (close >= prev_close * 0.995)
+    higher_close = close > prev_close * 1.002
+    hammer_wick = (candle_range > 0) and ((close - low_p) >= candle_range * 0.6) and (close > low_p * 1.008) and (pct_change > -0.035)
+
+    has_bounce = is_green_candle or higher_close or hammer_wick
 
     # Macro trend gate: prevent falling knives when stuck in extended bear trends
     if len(df) >= 200 and ema_200 > 0 and close < ema_200 * 0.95:
@@ -154,12 +185,28 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         stop = max(round(recent_low * 0.98, 2), round(entry - (1.5 * atr), 2))
         
         risk = entry - stop
-        target_1 = round(max(ema_20, entry + (1.25 * risk)), 2)
-        target_2 = round(entry + (2.0 * risk), 2)
+        if risk <= 0 or stop >= entry:
+            return None
+
+        # 3. Holding Horizon Reachability Constraint:
+        # Mean Reversion holding horizon is 5 to 10 trading sessions.
+        # Target 1 is the 20 EMA ONLY if EMA 20 is within realistic reach (<= +20% from entry).
+        # Otherwise, use standard 1.5x risk expansion.
+        if entry < ema_20 <= entry * 1.20:
+            target_1_raw = max(ema_20, entry + (1.25 * risk))
+        else:
+            target_1_raw = entry + (1.5 * risk)
+
+        # Cap Target 1 at +20% maximum gain for 5-10 session swing
+        target_1 = round(min(entry * 1.20, target_1_raw), 2)
+        
+        # Target 2 (Runner) must always exceed Target 1 and provide at least 2.0x risk
+        target_2_raw = max(target_1 * 1.04, entry + (2.0 * risk))
+        target_2 = round(min(entry * 1.30, target_2_raw), 2)
         
         rr = (target_1 - entry) / risk if risk > 0 else 0
 
-        if rr >= 1.2 and stop < entry:
+        if rr >= 1.2 and stop < entry and target_1 > entry and target_2 > target_1:
             return {
                 'symbol': symbol,
                 'strategy': 'Mean Reversion',
