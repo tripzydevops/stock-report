@@ -8,6 +8,7 @@ from app.api.prices import router as prices_router
 from app.api.scanner import router as scanner_router
 from app.api.portfolio import router as portfolio_router
 from app.api.regime import router as regime_router
+from app.api.quant import router as quant_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ app.include_router(prices_router, prefix="/api")
 app.include_router(scanner_router, prefix="/api")
 app.include_router(portfolio_router, prefix="/api")
 app.include_router(regime_router, prefix="/api")
+app.include_router(quant_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():

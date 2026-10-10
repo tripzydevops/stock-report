@@ -3,7 +3,7 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb' | 'catalysts';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb' | 'catalysts' | 'quant';
 
 interface NavigationTabsProps {
   activeTab: TabId;
@@ -17,6 +17,7 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
   const tabs: { id: TabId; label: string; icon: string; count?: string }[] = [
     { id: 'signals', label: t.tabs.signals, icon: '🎯' },
     { id: 'catalysts', label: t.tabs.catalysts, icon: '📢', count: `${catalystsCount}` },
+    { id: 'quant', label: t.tabs.quant, icon: '🏛️', count: 'Stat-Arb' },
     { id: 'portfolio', label: t.tabs.portfolio, icon: '💼' },
     { id: 'dividend', label: t.tabs.dividend, icon: '💰' },
     { id: 'scorecard', label: t.tabs.scorecard, icon: '📈', count: '1,173' },

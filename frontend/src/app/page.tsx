@@ -14,6 +14,7 @@ import DividendView from '../components/DividendView';
 import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
 import CatalystFeedView from '../components/CatalystFeedView';
+import QuantHubView from '../components/QuantHubView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import { useLanguage } from '../context/LanguageContext';
@@ -808,7 +809,7 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
   }
 ];
 
-const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'orb', 'catalysts'];
+const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'orb', 'catalysts', 'quant'];
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
@@ -2518,6 +2519,11 @@ export default function Home() {
             signals={signals}
             onSelectTicker={handleSelectTicker}
           />
+        )}
+
+        {/* TAB 1.8: INSTITUTIONAL QUANT & PAIRS STAT-ARB */}
+        {activeTab === 'quant' && (
+          <QuantHubView />
         )}
 
         {/* TAB 2: MY PORTFOLIO & DCA */}

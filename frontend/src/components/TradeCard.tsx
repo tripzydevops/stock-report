@@ -380,6 +380,36 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           );
         })()}
 
+        {/* INSTITUTIONAL SIZING & ALLOCATION COMPARISON */}
+        {(() => {
+          const riskPerShare = Math.max(0.01, Math.abs(signal.entryPrice - signal.stopLoss));
+          const fixedCapitalShares = signal.entryPrice > 0 ? Math.floor(1000 / signal.entryPrice) : 0;
+          const instRiskShares = Math.floor(150 / riskPerShare);
+
+          return (
+            <div className="my-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
+              <div className="flex justify-between items-center text-gray-500 dark:text-gray-400 font-bold">
+                <span className="flex items-center gap-1 text-slate-800 dark:text-slate-200">
+                  <span>🏛️</span> {language === 'tr' ? 'Pozisyon Boyutlandırma Rehberi:' : 'Position Sizing Guide:'}
+                </span>
+                <span className="font-mono text-[10px]">Risk/Hisse: {formatPrice(riskPerShare)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+                <div className="p-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                  <span className="text-gray-500 block">{language === 'tr' ? 'Bireysel (₺1.000 Sabit):' : 'Retail (₺1,000 Fixed):'}</span>
+                  <strong className="text-gray-900 dark:text-white">{fixedCapitalShares} Lot</strong>
+                  <span className="text-gray-500 block text-[9px]">Stop Zararı: {formatPrice(fixedCapitalShares * riskPerShare)}</span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800">
+                  <span className="text-blue-700 dark:text-blue-300 font-bold block">{language === 'tr' ? '🏛️ Kurumsal (₺150 Risk):' : '🏛️ Quant (₺150 Risk):'}</span>
+                  <strong className="text-blue-900 dark:text-blue-200">{instRiskShares} Lot</strong>
+                  <span className="text-blue-600 dark:text-blue-400 block text-[9px] font-bold">Kesin Zarar: ₺150.00</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <button 
             onClick={() => setExpanded(!expanded)} 

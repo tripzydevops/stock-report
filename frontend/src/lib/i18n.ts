@@ -40,6 +40,7 @@ export interface Translations {
     dividend: string;
     scorecard: string;
     orb: string;
+    quant: string;
   };
   regime: {
     usMarket: string;
@@ -300,6 +301,7 @@ export const translations: Record<Language, Translations> = {
       dividend: 'Dividend Cashflow',
       scorecard: 'Strategy Scorecard',
       orb: 'Opening Direction',
+      quant: '🏛️ Institutional Quant',
     },
     regime: {
       usMarket: 'US Market (SPY)',
@@ -558,6 +560,7 @@ export const translations: Record<Language, Translations> = {
       dividend: 'Temettü Nakit Akışı',
       scorecard: 'Strateji Karnesi',
       orb: 'Açılış Yönü',
+      quant: '🏛️ Kurumsal Quant',
     },
     regime: {
       usMarket: 'ABD Piyasası (SPY)',
