@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { FALLBACK_FACTORS_113 } from '../data/fallbackFactors';
 
 export interface PairOpportunity {
   pair_id: string;
@@ -222,7 +223,7 @@ export default function QuantHubView() {
   const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'pairs' | 'factors' | 'sizing'>('pairs');
   const [pairs, setPairs] = useState<PairOpportunity[]>(FALLBACK_PAIRS);
-  const [factors, setFactors] = useState<FactorItem[]>([]);
+  const [factors, setFactors] = useState<FactorItem[]>(FALLBACK_FACTORS_113);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // User-friendly UI state
@@ -230,6 +231,12 @@ export default function QuantHubView() {
   const [showGlossary, setShowGlossary] = useState<boolean>(false);
   const [expandedPairId, setExpandedPairId] = useState<string | null>(null);
   const [activeColumnHelp, setActiveColumnHelp] = useState<string | null>(null);
+
+  // Factor Filters & Pagination
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'TOP10' | 'TOP25' | 'MID' | 'LAGGARD'>('ALL');
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Sizing Lab state
   const [entryPrice, setEntryPrice] = useState<number>(100.0);
@@ -242,7 +249,7 @@ export default function QuantHubView() {
     async function fetchQuantData() {
       setIsLoading(true);
       try {
-        const pRes = await fetch('http://127.0.0.1:8000/api/quant/pairs');
+        const pRes = await fetch('/api/quant/pairs');
         if (pRes.ok) {
           const pData = await pRes.json();
           if (pData.pairs && pData.pairs.length > 0) {
@@ -250,11 +257,11 @@ export default function QuantHubView() {
           }
         }
       } catch (err) {
-        console.warn('Backend quant pairs API offline; using verified local stat-arb dataset:', err);
+        console.warn('Next.js quant pairs API offline; fallback active:', err);
       }
 
       try {
-        const fRes = await fetch('http://127.0.0.1:8000/api/quant/factors');
+        const fRes = await fetch('/api/quant/factors');
         if (fRes.ok) {
           const fData = await fRes.json();
           if (fData.rankings && fData.rankings.length > 0) {
@@ -262,7 +269,7 @@ export default function QuantHubView() {
           }
         }
       } catch (err) {
-        generateFallbackFactors();
+        console.warn('Next.js quant factors API offline; fallback active:', err);
       }
       setIsLoading(false);
     }
@@ -270,21 +277,26 @@ export default function QuantHubView() {
     fetchQuantData();
   }, []);
 
-  function generateFallbackFactors() {
-    const list: FactorItem[] = [
-      { symbol: 'THYAO', percentile_rank: 98.2, composite_z: 2.35, ret_1m_pct: 14.2, ret_3m_pct: 28.5, vol_surge: 2.1, realized_vol_pct: 26.4, bb_z_score: 1.8, rsi: 64.2, factor_tier: 'Tier-1 Top Decile (Kurumsal Akümülasyon)' },
-      { symbol: 'ASELS', percentile_rank: 95.4, composite_z: 1.95, ret_1m_pct: 12.1, ret_3m_pct: 22.0, vol_surge: 1.8, realized_vol_pct: 24.1, bb_z_score: 1.4, rsi: 61.5, factor_tier: 'Tier-1 Top Decile (Kurumsal Akümülasyon)' },
-      { symbol: 'BIMAS', percentile_rank: 91.0, composite_z: 1.62, ret_1m_pct: 8.5, ret_3m_pct: 18.2, vol_surge: 1.4, realized_vol_pct: 18.9, bb_z_score: 1.1, rsi: 58.0, factor_tier: 'Tier-1 Top Decile (Kurumsal Akümülasyon)' },
-      { symbol: 'GARAN', percentile_rank: 88.5, composite_z: 1.42, ret_1m_pct: 7.2, ret_3m_pct: 16.4, vol_surge: 1.3, realized_vol_pct: 28.5, bb_z_score: 0.9, rsi: 56.4, factor_tier: 'Tier-2 Outperforming Momentum (Güçlü Lider)' },
-      { symbol: 'ISMEN', percentile_rank: 84.1, composite_z: 1.25, ret_1m_pct: 6.8, ret_3m_pct: 14.1, vol_surge: 1.25, realized_vol_pct: 22.0, bb_z_score: 0.8, rsi: 55.2, factor_tier: 'Tier-2 Outperforming Momentum (Güçlü Lider)' },
-      { symbol: 'FROTO', percentile_rank: 78.0, composite_z: 0.95, ret_1m_pct: 4.5, ret_3m_pct: 11.2, vol_surge: 1.1, realized_vol_pct: 27.0, bb_z_score: 0.4, rsi: 53.0, factor_tier: 'Tier-2 Outperforming Momentum (Pozitif Trend)' },
-      { symbol: 'KCHOL', percentile_rank: 62.4, composite_z: 0.35, ret_1m_pct: 1.8, ret_3m_pct: 7.5, vol_surge: 0.95, realized_vol_pct: 21.5, bb_z_score: -0.1, rsi: 49.5, factor_tier: 'Tier-3 Neutral Core (Piyasa Dengesi)' },
-      { symbol: 'AKBNK', percentile_rank: 35.2, composite_z: -0.45, ret_1m_pct: -2.1, ret_3m_pct: 5.0, vol_surge: 0.88, realized_vol_pct: 29.2, bb_z_score: -0.8, rsi: 44.1, factor_tier: 'Tier-3 Neutral Core (Geride Kalan)' },
-      { symbol: 'EREGL', percentile_rank: 18.4, composite_z: -1.20, ret_1m_pct: -6.4, ret_3m_pct: -3.2, vol_surge: 0.75, realized_vol_pct: 25.1, bb_z_score: -1.5, rsi: 38.2, factor_tier: 'Tier-4 Laggard (Satış Baskısında)' },
-      { symbol: 'SAHOL', percentile_rank: 12.0, composite_z: -1.55, ret_1m_pct: -8.5, ret_3m_pct: -4.8, vol_surge: 0.82, realized_vol_pct: 23.8, bb_z_score: -1.9, rsi: 34.0, factor_tier: 'Tier-5 Deep Laggard (Dipte / Zayıf Akış)' }
-    ];
-    setFactors(list);
-  }
+  // Filter factors based on search and tier
+  const filteredFactors = factors.filter((item) => {
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.trim().toUpperCase();
+      if (!item.symbol.toUpperCase().includes(q)) return false;
+    }
+
+    if (tierFilter === 'TOP10') return item.percentile_rank >= 90;
+    if (tierFilter === 'TOP25') return item.percentile_rank >= 75;
+    if (tierFilter === 'MID') return item.percentile_rank > 20 && item.percentile_rank < 75;
+    if (tierFilter === 'LAGGARD') return item.percentile_rank <= 20;
+
+    return true;
+  });
+
+  // Pagination calculation
+  const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(filteredFactors.length / pageSize));
+  const paginatedFactors = pageSize === 0 
+    ? filteredFactors 
+    : filteredFactors.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Sizing calculations
   const riskPerShare = Math.max(0.01, Math.abs(entryPrice - stopLoss));
@@ -325,8 +337,8 @@ export default function QuantHubView() {
             </div>
             <p className="text-sm text-indigo-200/90 max-w-3xl leading-relaxed">
               {language === 'tr'
-                ? 'Büyük fonlar (Citadel, Point72, Millennium) tek hisse kumarı oynamaz; borsa çökse de kazandıran ikili işlemler (Pairs Arbitraj), 500 hisse içinden en çok para giren liderleri seçen Z-Skorları ve risk sabitleme modelleriyle hareket eder.'
-                : 'Top quantitative hedge funds do not make directional stock bets; they profit from market-neutral pairs arbitrage, cross-sectional factor decile rankings, and strict volatility risk-budgeting.'}
+                ? 'Büyük fonlar (Citadel, Point72, Millennium) tek hisse kumarı oynamaz; borsa çökse de kazandıran ikili işlemler (Pairs Arbitraj), 113+ hisse içinden en çok para giren liderleri seçen Z-Skorları ve risk sabitleme modelleriyle hareket eder.'
+                : 'Top quantitative hedge funds do not make directional stock bets; they profit from market-neutral pairs arbitrage, cross-sectional factor decile rankings across 113+ assets, and strict volatility risk-budgeting.'}
             </p>
           </div>
 
@@ -371,9 +383,9 @@ export default function QuantHubView() {
             }`}
           >
             <span>📊</span>
-            <span>{language === 'tr' ? '2. Faktör Z-Skorları (Lider Hisseler)' : '2. Factor Z-Scores'}</span>
+            <span>{language === 'tr' ? `2. Faktör Z-Skorları (${factors.length} Hisse)` : `2. Factor Z-Scores (${factors.length} Assets)`}</span>
             <span className="ml-1 text-[10px] bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded-full font-mono">
-              Top %10
+              Top %10 Liderler
             </span>
           </button>
           <button
@@ -418,13 +430,13 @@ export default function QuantHubView() {
           </div>
           <div className="bg-black/35 rounded-xl p-3 border border-indigo-500/20">
             <span className="text-[11px] text-indigo-300 font-semibold block">
-              {language === 'tr' ? 'Ortalama Eş Korelasyonu' : 'Avg Pair Correlation'}
+              {language === 'tr' ? 'Değerlendirilen Hisse Evreni' : 'Evaluated Universe'}
             </span>
             <span className="text-xl font-mono font-black text-blue-300 mt-0.5 block">
-              r = 0.81 (%81 İkiz)
+              {factors.length} {language === 'tr' ? 'Varlık' : 'Assets'}
             </span>
             <span className="text-[10px] text-gray-400 mt-0.5 block">
-              {language === 'tr' ? 'Birlikte hareket kabiliyeti çok yüksek' : 'High co-movement'}
+              {language === 'tr' ? 'BIST 100 + Global Çapraz Kesit' : 'BIST 100 + Global Cross-Section'}
             </span>
           </div>
           <div className="bg-black/35 rounded-xl p-3 border border-indigo-500/20">
@@ -441,7 +453,7 @@ export default function QuantHubView() {
         </div>
       </div>
 
-      {/* COLLAPSIBLE BEGINNER'S GUIDE (NASIL OKUNUR & NASIL KAZANDIRIR?) */}
+      {/* COLLAPSIBLE BEGINNER'S GUIDE */}
       {showGuide && (
         <div className="bg-gradient-to-br from-amber-500/10 via-blue-500/5 to-purple-500/10 border-2 border-amber-500/30 dark:border-amber-400/20 rounded-2xl p-5 shadow-lg relative">
           <button
@@ -485,10 +497,10 @@ export default function QuantHubView() {
               <div>
                 <div className="flex items-center gap-2 font-black text-blue-700 dark:text-blue-400 mb-1.5">
                   <span className="text-base">📊</span>
-                  <span>2. Faktör Z-Skorları (Lider Hisseleri Bulma)</span>
+                  <span>2. Faktör Z-Skorları (113 Hisse Arasından Şampiyonları Bulma)</span>
                 </div>
                 <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                  Borsadaki 500 hisseyi tek tek inceleyemezsiniz. Bu liste, kurumsal büyük fonların gizlice en çok topladığı elit <strong>Top %10</strong> hisseleri en tepeye koyar.
+                  Borsadaki tüm hisseleri tek tek takip edemezsiniz. Bu liste, kurumsal büyük fonların gizlice en çok topladığı elit <strong>Top %10</strong> hisseleri en tepeye koyar.
                 </p>
                 <div className="mt-2.5 p-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg text-blue-900 dark:text-blue-200 font-semibold">
                   🎯 <strong>Eylem:</strong> Alım yaparken yeşil <strong>Top %10</strong> hisseleri seçin (+1.5σ Z-skor). Kırmızı bölgedeki hisselerden uzak durun.
@@ -515,7 +527,7 @@ export default function QuantHubView() {
         </div>
       )}
 
-      {/* GLOSSARY MODAL / POPUP */}
+      {/* GLOSSARY MODAL */}
       {showGlossary && (
         <div className="bg-white dark:bg-gray-800 border-2 border-indigo-500/40 rounded-2xl p-5 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
@@ -539,8 +551,8 @@ export default function QuantHubView() {
               <p className="text-gray-600 dark:text-gray-300">
                 Bir hissenin veya fiyat oranının normal ortalamasından ne kadar uzaklaştığını gösterir. 
                 <strong> 0σ</strong> = Tam ortalama. 
-                <strong> +2.0σ</strong> = Normalin çok üstünde primli veya kurumsal talep tavan yapmış. 
-                <strong> -2.0σ</strong> = Normalin çok altında aşırı ucuzlamış.
+                <strong> +1.5σ</strong> = Normalin çok üstünde primli veya kurumsal talep tavan yapmış. 
+                <strong> -1.5σ</strong> = Normalin çok altında aşırı ucuzlamış.
               </p>
             </div>
 
@@ -549,7 +561,7 @@ export default function QuantHubView() {
                 Yarı-Ömür (Half-Life - Gün):
               </strong>
               <p className="text-gray-600 dark:text-gray-300">
-                Birbirinden uzaklaşan iki hissenin açılan fiyat makasının yarı yarıya kapanması için gereken ortalama süredir. Örneğin <strong>9 gün</strong>, pozisyonu açtıktan sonra kârın realize olması için yaklaşık 9-14 gün beklemeniz gerektiğini belirtir.
+                Birbirinden uzaklaşan iki hissenin açılan fiyat makasının yarı yarıya kapanması için gereken ortalama süredir. Örneğin <strong>~10 gün</strong>, pozisyonu açtıktan sonra kârın realize olması için yaklaşık 10-14 gün beklemeniz gerektiğini belirtir.
               </p>
             </div>
 
@@ -574,7 +586,7 @@ export default function QuantHubView() {
         </div>
       )}
 
-      {/* SUB-TAB 1: PAIRS TRADING (STATISTICAL ARBITRAGE) */}
+      {/* SUB-TAB 1: PAIRS TRADING */}
       {activeSubTab === 'pairs' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -594,7 +606,6 @@ export default function QuantHubView() {
             </div>
           </div>
 
-          {/* Quick explanation pill */}
           <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2">
             <span className="text-base">💡</span>
             <div>
@@ -624,14 +635,13 @@ export default function QuantHubView() {
                   }`}
                 >
                   <div>
-                    {/* Top Row: Pair symbols + Sector + Status */}
                     <div className="flex justify-between items-start gap-2 mb-3">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-black text-gray-900 dark:text-white font-mono">
                             {p.leg_a} / {p.leg_b}
                           </span>
-                          <span className="text-xs px-2 py-0.5 rounded-md font-mono font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="Korelasyon katsayısı: %80 üzeri ikiz hisse sayılır">
+                          <span className="text-xs px-2 py-0.5 rounded-md font-mono font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                             r = {p.correlation.toFixed(2)} (%{(p.correlation * 100).toFixed(0)} Eşleşme)
                           </span>
                         </div>
@@ -667,11 +677,10 @@ export default function QuantHubView() {
                         <span className="text-rose-600 font-bold">+2.0σ (Al {p.leg_b})</span>
                       </div>
 
-                      {/* Bar track */}
                       <div className="relative w-full h-3.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-400 dark:bg-gray-500 z-10" title="Orta Denge Noktası (0σ)" />
-                        <div className="absolute left-0 top-0 bottom-0 w-[20%] bg-emerald-500/30" title="Alım Bölgesi (< -1.8σ)" />
-                        <div className="absolute right-0 top-0 bottom-0 w-[20%] bg-rose-500/30" title="Alım Bölgesi (> +1.8σ)" />
+                        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-400 dark:bg-gray-500 z-10" />
+                        <div className="absolute left-0 top-0 bottom-0 w-[20%] bg-emerald-500/30" />
+                        <div className="absolute right-0 top-0 bottom-0 w-[20%] bg-rose-500/30" />
                         <div
                           className="absolute top-0 bottom-0 w-3 bg-blue-600 dark:bg-blue-400 rounded-full shadow-md transition-all -ml-1.5"
                           style={{ left: `${zPercent}%` }}
@@ -702,7 +711,6 @@ export default function QuantHubView() {
                       </div>
                     </div>
 
-                    {/* Step-by-Step Execution Drawer */}
                     {isExpanded && (
                       <div className="my-3 p-3.5 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs space-y-2">
                         <strong className="text-indigo-900 dark:text-indigo-200 block text-xs">
@@ -720,7 +728,6 @@ export default function QuantHubView() {
                     )}
                   </div>
 
-                  {/* Execution Instructions & Action Button */}
                   <div className="pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                     <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
                       <span>⏱️ Kapanma Süresi:</span>
@@ -752,7 +759,7 @@ export default function QuantHubView() {
       {/* SUB-TAB 2: CROSS-SECTIONAL FACTOR RANKING */}
       {activeSubTab === 'factors' && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 shadow-lg space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
                 <span>📊</span>
@@ -760,13 +767,15 @@ export default function QuantHubView() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {language === 'tr'
-                  ? 'Borsadaki 500 hisse arasında kurumsal fonların en çok biriktirdiği liderleri (Top %10) ve elden çıkardığı geride kalanları gösterir.'
-                  : 'Ranks all stocks across the universe using standardized Z-scores to reveal institutional accumulation vs liquidation.'}
+                  ? 'Borsadaki 113 varlık arasında kurumsal fonların en çok biriktirdiği liderleri (Top %10) ve elden çıkardığı geride kalanları gösterir.'
+                  : 'Ranks 113+ assets across the universe using standardized Z-scores to reveal institutional accumulation vs liquidation.'}
               </p>
             </div>
-            <span className="text-xs font-mono bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800">
-              {factors.length} {language === 'tr' ? 'Hisse İncelendi' : 'Assets Evaluated'}
-            </span>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className="text-xs font-mono font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                {factors.length} {language === 'tr' ? 'Varlık Değerlendirildi' : 'Assets Evaluated'}
+              </span>
+            </div>
           </div>
 
           {/* Quick Decision Actionable Box */}
@@ -778,7 +787,7 @@ export default function QuantHubView() {
                   Top %10 Liderler (Z ≥ +1.5σ):
                 </strong>
                 <p className="text-gray-600 dark:text-gray-300 text-[11px] mt-0.5">
-                  Fonların en yoğun alım yaptığı şampiyonlar (THYAO, ASELS, BIMAS). Trend işlemlerinde ilk tercih edilmelidir.
+                  Fonların en yoğun alım yaptığı şampiyonlar (TKFEN, AMD, ENERY, SASA, THYAO). Trend ve momentumda ilk tercih.
                 </p>
               </div>
             </div>
@@ -802,9 +811,83 @@ export default function QuantHubView() {
                   Dipteki Laggard'lar (Z ≤ -1.0σ):
                 </strong>
                 <p className="text-gray-600 dark:text-gray-300 text-[11px] mt-0.5">
-                  "Çok düştü, ucuz" tuzağına düşmeyin. Fonlar çıktığı için toparlanması aylar alabilir. Dip aramayın.
+                  "Çok düştü, ucuz" tuzağına düşmeyin (ODINE, IEYHO, DSTKF). Fonlar çıktığı için toparlanması aylar alabilir. Dip aramayın.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* FILTER & SEARCH BAR */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <button
+                onClick={() => { setTierFilter('ALL'); setCurrentPage(1); }}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  tierFilter === 'ALL'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                Tümü ({factors.length})
+              </button>
+              <button
+                onClick={() => { setTierFilter('TOP10'); setCurrentPage(1); }}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  tierFilter === 'TOP10'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+                }`}
+              >
+                🟢 Top %10 Elit
+              </button>
+              <button
+                onClick={() => { setTierFilter('TOP25'); setCurrentPage(1); }}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  tierFilter === 'TOP25'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100'
+                }`}
+              >
+                ⭐ Top %25 Momentum
+              </button>
+              <button
+                onClick={() => { setTierFilter('MID'); setCurrentPage(1); }}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  tierFilter === 'MID'
+                    ? 'bg-gray-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                ⚪ Piyasa Dengesi
+              </button>
+              <button
+                onClick={() => { setTierFilter('LAGGARD'); setCurrentPage(1); }}
+                className={`px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  tierFilter === 'LAGGARD'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+                }`}
+              >
+                🔴 Diptekiler (Laggards)
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={language === 'tr' ? '🔍 Sembol Ara (THYAO, SASA, ODINE...)' : '🔍 Search Symbol...'}
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="w-full sm:w-64 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1.5 text-gray-400 hover:text-gray-600 text-xs"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -894,9 +977,10 @@ export default function QuantHubView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60 font-mono">
-                {factors.map((item, idx) => {
+                {paginatedFactors.map((item, idx) => {
                   const isTopDecile = item.percentile_rank >= 90;
                   const isBottom = item.percentile_rank <= 20;
+                  const globalIdx = pageSize === 0 ? idx : (currentPage - 1) * pageSize + idx;
 
                   return (
                     <tr
@@ -907,7 +991,7 @@ export default function QuantHubView() {
                     >
                       <td className="py-3 px-3 font-bold text-gray-700 dark:text-gray-300">
                         <span className={`px-2 py-0.5 rounded font-bold ${isTopDecile ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300' : 'text-gray-500'}`}>
-                          Top %{(100 - item.percentile_rank).toFixed(0)} ({idx + 1})
+                          Top %{(100 - item.percentile_rank).toFixed(0)} ({globalIdx + 1})
                         </span>
                       </td>
                       <td className="py-3 px-3 font-black text-gray-900 dark:text-white text-sm">
@@ -958,6 +1042,51 @@ export default function QuantHubView() {
               </tbody>
             </table>
           </div>
+
+          {/* PAGINATION CONTROLS */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs">
+            <div className="text-gray-500 dark:text-gray-400">
+              Gösterilen: <strong>{paginatedFactors.length}</strong> / Toplam: <strong>{filteredFactors.length}</strong> Hisse (Evren: {factors.length})
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500">Sayfa Başına:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  className="bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-gray-800 dark:text-gray-200"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={0}>Tümü</option>
+                </select>
+              </div>
+
+              {pageSize > 0 && totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-2.5 py-1 rounded bg-gray-100 dark:bg-gray-700 disabled:opacity-40 text-gray-700 dark:text-gray-300 font-bold cursor-pointer"
+                  >
+                    ◀
+                  </button>
+                  <span className="px-2 font-mono font-bold text-gray-700 dark:text-gray-300">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-2.5 py-1 rounded bg-gray-100 dark:bg-gray-700 disabled:opacity-40 text-gray-700 dark:text-gray-300 font-bold cursor-pointer"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -976,7 +1105,6 @@ export default function QuantHubView() {
             </p>
           </div>
 
-          {/* Simple Explanation Callout */}
           <div className="bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-300 dark:border-purple-800 rounded-xl p-4 text-xs text-purple-950 dark:text-purple-200 space-y-1">
             <strong className="block text-sm font-bold text-purple-900 dark:text-purple-300">
               💡 Neden Bu Hesap Sizi Korumak İçin Şarttır?
@@ -987,7 +1115,6 @@ export default function QuantHubView() {
             </p>
           </div>
 
-          {/* Interactive controls */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-700">
             <div>
               <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 block mb-1">
@@ -1035,16 +1162,14 @@ export default function QuantHubView() {
             </div>
           </div>
 
-          {/* Trade Parameters Pill */}
           <div className="flex flex-wrap items-center gap-3 text-xs font-mono bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 p-3 rounded-xl border border-blue-200 dark:border-blue-800">
             <span>⚡ Hisse Başı Risk: <strong>₺{riskPerShare.toFixed(2)}</strong></span>
             <span>•</span>
             <span>Stop Mesafesi: <strong>-%{stopLossPct}</strong></span>
           </div>
 
-          {/* 3-Column Comparative Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Box 1: Retail Fixed Capital */}
+            {/* Box 1 */}
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
               <div>
                 <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block mb-1">
@@ -1078,7 +1203,7 @@ export default function QuantHubView() {
               </div>
             </div>
 
-            {/* Box 2: Institutional Fixed Risk Budget */}
+            {/* Box 2 */}
             <div className="bg-gradient-to-b from-blue-50 to-indigo-50/40 dark:from-blue-950/40 dark:to-indigo-950/20 rounded-2xl p-5 border-2 border-blue-500/60 shadow-md flex flex-col justify-between">
               <div>
                 <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block mb-1">
@@ -1112,7 +1237,7 @@ export default function QuantHubView() {
               </div>
             </div>
 
-            {/* Box 3: AQR Volatility Targeting */}
+            {/* Box 3 */}
             <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
               <div>
                 <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider block mb-1">

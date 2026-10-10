@@ -108,7 +108,7 @@ async def get_factor_rankings(
     factor_list = list(factor_dict.values())
     factor_list.sort(key=lambda x: x["percentile_rank"], reverse=True)
 
-    if min_percentile is not None:
+    if min_percentile is not None and isinstance(min_percentile, (int, float)):
         factor_list = [f for f in factor_list if f["percentile_rank"] >= min_percentile]
 
     return {
