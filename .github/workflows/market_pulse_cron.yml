@@ -44,6 +44,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python export_to_spreadsheet.py
+          python backend/scripts/sync_live_catalysts.py
 
       - name: Upload Latest Spreadsheet as Workflow Artifact
         uses: actions/upload-artifact@v4
