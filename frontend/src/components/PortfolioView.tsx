@@ -58,6 +58,7 @@ export default function PortfolioView({
   const [editTargetValue, setEditTargetValue] = useState<string>('');
   const [expandedLots, setExpandedLots] = useState<{ [symbol: string]: boolean }>({});
   const [lotSortOrder, setLotSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [isCompactTable, setIsCompactTable] = useState<boolean>(true);
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
   };
@@ -498,8 +499,38 @@ export default function PortfolioView({
             </p>
           </div>
           <div className="flex items-center space-x-2 shrink-0">
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hidden md:inline-block">
-              🟢 {language === 'tr' ? 'Çoklu Dilim Takibi Aktif' : 'Multi-Lot Tracking Active'}
+            {/* View Mode Toggle: Compact vs Detailed */}
+            <div className="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600">
+              <button
+                type="button"
+                onClick={() => setIsCompactTable(true)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  isCompactTable
+                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                }`}
+                title="Kompakt görünüm: Yatay kaydırmayı önler, sabit hisse kolonu ve birleştirilmiş metrikler sunar"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline">{language === 'tr' ? 'Kompakt' : 'Compact'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCompactTable(false)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  !isCompactTable
+                    ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                }`}
+                title="Detaylı görünüm: 12 kolonlu geniş görünüm"
+              >
+                <span>📋</span>
+                <span className="hidden sm:inline">{language === 'tr' ? 'Geniş' : 'Detailed'}</span>
+              </button>
+            </div>
+
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hidden xl:inline-block">
+              🟢 {language === 'tr' ? 'Çoklu Dilim Takibi' : 'Multi-Lot Tracking'}
             </span>
             {onAddHoldingClick && (
               <button
@@ -513,23 +544,252 @@ export default function PortfolioView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Dedicated Card List (< 768px, eliminates horizontal scroll completely) */}
+        <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+          {portfolio.map((item, idx) => {
+            const isProfit = item.pnlPercent >= 0;
+            const formattedBoughtDate = item.entryDate 
+              ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : '24.09.2026';
+            const daysHeld = item.entryDate
+              ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
+              : null;
+            const lots = getBuyLotsForHolding(item);
+            const isExpanded = !!expandedLots[item.symbol];
+            const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+            const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+            const effTarget = item.targetPrice && item.targetPrice > 0
+              ? item.targetPrice
+              : (item.stopLoss > 0 && item.entryPrice > item.stopLoss
+                  ? Number((item.entryPrice + 2 * (item.entryPrice - item.stopLoss)).toFixed(2))
+                  : Number((item.entryPrice * 1.10).toFixed(2)));
+            const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
+
+            return (
+              <div key={`m-${item.symbol || idx}`} className="p-4 space-y-3 bg-white dark:bg-gray-800">
+                {/* Header: Symbol, Market, Date & Total Value */}
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => onSelectTicker?.(item.symbol)}
+                        className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
+                      >
+                        <span>{item.symbol}</span>
+                        <span className="text-xs text-blue-500">📈</span>
+                      </button>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {item.market}
+                      </span>
+                      {item.isDividend && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                          DIV
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+                      <span className="truncate max-w-[150px]">{item.name}</span>
+                      <span>·</span>
+                      <span className="text-gray-400 font-mono text-[11px]">{formattedBoughtDate} {daysHeld ? `(${daysHeld}g)` : ''}</span>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className="text-base font-black text-gray-900 dark:text-white font-mono">
+                      {formatCurr(item.currentValue, item.currency)}
+                    </div>
+                    <div className="text-xs font-bold text-gray-500">
+                      {item.shares.toLocaleString()} lot
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metrics Grid: Fiyat/Maliyet & Net K/Z */}
+                <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-750/70 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700 text-xs">
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-gray-400">Güncel / Maliyet</div>
+                    <div className="font-bold text-gray-900 dark:text-white mt-0.5">
+                      {formatCurr(item.currentPrice, item.currency)}
+                    </div>
+                    <div className="text-[11px] text-gray-500">
+                      Mal: {formatCurr(item.entryPrice, item.currency)}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase font-bold text-gray-400">Net Kâr / Zarar</div>
+                    <div className={`font-black mt-0.5 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
+                    </div>
+                    <span className={`inline-block text-[10px] font-black px-1.5 py-0.2 rounded mt-0.5 ${
+                      isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                    }`}>
+                      {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Risk & Target Badges */}
+                <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs pt-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Stop Loss status */}
+                    {item.isDividend ? (
+                      <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                        💎 DCA Modu
+                      </span>
+                    ) : item.stopLoss >= item.entryPrice ? (
+                      <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
+                        🛡️ Stop: {formatCurr(item.stopLoss, item.currency)} (Free)
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        item.distanceToStop < 3 && item.stopLoss > 0
+                          ? 'bg-rose-500 text-white border-rose-600 animate-pulse'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600'
+                      }`}>
+                        🛑 Stop: {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                      </span>
+                    )}
+
+                    {/* Target */}
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 font-mono">
+                      🎯 {formatCurr(effTarget, item.currency)}
+                    </span>
+                  </div>
+
+                  {/* Vade / DCA Zone Badge */}
+                  <div>
+                    {item.dcaZone === 'BUY' ? (
+                      <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
+                        🎯 ALIM BÖLGESİ
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/60 px-2 py-0.5 rounded">
+                        ⏳ {timing.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mobile Action Buttons & Lot Accordion */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-750">
+                  <button
+                    type="button"
+                    onClick={() => toggleLots(item.symbol)}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 cursor-pointer py-1"
+                  >
+                    <span>📦 {lots.length} Lot</span>
+                    <svg className={`w-3 h-3 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onTradeHolding?.(item)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>⚡ Trade / DCA</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenCoPilot?.(item)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>💡</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(item.symbol)}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                      title="Sil"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mobile Expanded Lots View */}
+                {isExpanded && (
+                  <div className="bg-blue-50/40 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 space-y-2 mt-2">
+                    <div className="text-xs font-black text-gray-800 dark:text-gray-200 flex justify-between items-center">
+                      <span>📦 Alım Kademeleri</span>
+                      <button
+                        type="button"
+                        onClick={() => onTradeHolding?.(item)}
+                        className="text-[11px] text-blue-600 font-bold hover:underline"
+                      >
+                        + Yeni Kademe
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {lots.map(lot => (
+                        <div key={lot.id} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-100 dark:border-gray-700 flex justify-between items-center text-[11px]">
+                          <div>
+                            <div className="font-bold text-gray-900 dark:text-white">
+                              Lot #{lot.lotNumber}: +{lot.shares} lot @ {formatCurr(lot.price, item.currency)}
+                            </div>
+                            <div className="text-gray-400 text-[10px]">{lot.date}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold font-mono">{formatCurr(lot.currentValue, item.currency)}</div>
+                            <div className={`font-bold ${lot.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {lot.pnl >= 0 ? '+' : ''}{lot.pnlPct.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {portfolio.length === 0 && (
+            <div className="p-8 text-center text-gray-500">
+              <p className="font-semibold text-sm">Portföyde aktif pozisyon bulunmuyor.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop / Tablet Table View (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th className="px-5 py-3">{t.portfolio.holdingsTable.symbol}</th>
-                <th className="px-4 py-3 text-center">{language === 'tr' ? 'Alış Tarihi' : 'Date Bought'}</th>
-                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.shares}</th>
-                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.entryPrice}</th>
-                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentPrice}</th>
-                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentValue}</th>
-                <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.pnl}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Zarar Kes / Mod' : 'Stop Loss / Mode'}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Hedef / Çıkış' : 'Target / Exit Price'}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Tahmini Çıkış / Vade' : 'Est. Exit / Horizon'}</th>
-                <th className="px-5 py-3 text-center">{t.portfolio.holdingsTable.statusDca}</th>
-                <th className="px-4 py-3 text-center">{t.portfolio.holdingsTable.actions}</th>
-              </tr>
+              {isCompactTable ? (
+                /* Ultra-Compact 8-Column Layout */
+                <tr>
+                  <th className="px-4 py-3 sticky left-0 bg-gray-50 dark:bg-gray-900 z-10 shadow-r border-r border-gray-200 dark:border-gray-800">
+                    {t.portfolio.holdingsTable.symbol}
+                  </th>
+                  <th className="px-4 py-3 text-right">Değer / Adet</th>
+                  <th className="px-4 py-3 text-right">Fiyat / Maliyet</th>
+                  <th className="px-4 py-3 text-right">{t.portfolio.holdingsTable.pnl}</th>
+                  <th className="px-4 py-3 text-center">{language === 'tr' ? 'Stop / Mod' : 'Stop / Mode'}</th>
+                  <th className="px-4 py-3 text-center">{language === 'tr' ? 'Hedef & Vade' : 'Target & Horizon'}</th>
+                  <th className="px-4 py-3 text-center">{t.portfolio.holdingsTable.statusDca}</th>
+                  <th className="px-4 py-3 text-center">{t.portfolio.holdingsTable.actions}</th>
+                </tr>
+              ) : (
+                /* Detailed 12-Column Layout */
+                <tr>
+                  <th className="px-5 py-3 sticky left-0 bg-gray-50 dark:bg-gray-900 z-10">{t.portfolio.holdingsTable.symbol}</th>
+                  <th className="px-4 py-3 text-center">{language === 'tr' ? 'Alış Tarihi' : 'Date Bought'}</th>
+                  <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.shares}</th>
+                  <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.entryPrice}</th>
+                  <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentPrice}</th>
+                  <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.currentValue}</th>
+                  <th className="px-5 py-3 text-right">{t.portfolio.holdingsTable.pnl}</th>
+                  <th className="px-5 py-3 text-center">{language === 'tr' ? 'Zarar Kes / Mod' : 'Stop Loss / Mode'}</th>
+                  <th className="px-5 py-3 text-center">{language === 'tr' ? 'Hedef / Çıkış' : 'Target / Exit Price'}</th>
+                  <th className="px-5 py-3 text-center">{language === 'tr' ? 'Tahmini Çıkış / Vade' : 'Est. Exit / Horizon'}</th>
+                  <th className="px-5 py-3 text-center">{t.portfolio.holdingsTable.statusDca}</th>
+                  <th className="px-4 py-3 text-center">{t.portfolio.holdingsTable.actions}</th>
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {portfolio.map((item, idx) => {
@@ -540,11 +800,28 @@ export default function PortfolioView({
                 const daysHeld = item.entryDate
                   ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
                   : null;
+                const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+                const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+                const defaultStop = item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2));
+                const calcT2 = Number((item.entryPrice + 2 * Math.abs(item.entryPrice - defaultStop)).toFixed(2));
+                const effT2 = item.targetPrice && item.targetPrice > 0 ? item.targetPrice : calcT2;
+                const effT1 = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null;
+                const t1Shares = Math.max(1, Math.ceil(item.shares * 0.5));
+                const t2Shares = Math.max(0, item.shares - t1Shares);
+                const effTarget = effT2;
+                const upsidePct = item.entryPrice > 0 ? ((effTarget - item.entryPrice) / item.entryPrice) * 100 : 0;
+                const distFromCurr = item.currentPrice > 0 ? ((effTarget - item.currentPrice) / item.currentPrice) * 100 : 0;
+                const hasT1 = Boolean(matchedSig && matchedSig.targetPrice > 0 && Math.abs(matchedSig.targetPrice - effTarget) > 0.05);
+                const isT1Hit = Boolean(hasT1 && item.currentPrice >= matchedSig!.targetPrice);
+                const lots = getBuyLotsForHolding(item);
+                const isExpanded = !!expandedLots[item.symbol];
+                const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
 
                 return (
                   <React.Fragment key={item.symbol || idx}>
                     <tr className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                      <td className="px-5 py-4">
+                      {/* Column 1: Symbol & Info (STICKY LEFT in Compact Mode) */}
+                      <td className={`px-4 py-3.5 ${isCompactTable ? 'sticky left-0 bg-white dark:bg-gray-800 z-10 border-r border-gray-100 dark:border-gray-800 shadow-xs' : 'px-5 py-4'}`}>
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => onSelectTicker?.(item.symbol)}
@@ -564,648 +841,765 @@ export default function PortfolioView({
                           )}
                         </div>
                         <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5 flex-wrap gap-1">
-                          <span>{item.name}</span>
-                          <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded">
-                            🗓️ {formattedBoughtDate}
-                          </span>
-                          {(() => {
-                            const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
-                            const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
-                            const defaultStop = item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2));
-                            const calcT2 = Number((item.entryPrice + 2 * Math.abs(item.entryPrice - defaultStop)).toFixed(2));
-                            const effT2 = item.targetPrice && item.targetPrice > 0 ? item.targetPrice : calcT2;
-                            const effT1 = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null;
-                            const t1Shares = Math.max(1, Math.ceil(item.shares * 0.5));
-                            const t2Shares = Math.max(0, item.shares - t1Shares);
+                          <span className="truncate max-w-[120px]">{item.name}</span>
+                          {isCompactTable && (
+                            <span className="text-[10px] font-mono text-gray-400">
+                              · {formattedBoughtDate} {daysHeld ? `(${daysHeld}g)` : ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleLots(item.symbol)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer shadow-xs ${
+                              isExpanded
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 border-blue-200 dark:border-blue-800'
+                            }`}
+                            title="Tüm alım kademelerini göster/gizle"
+                          >
+                            <span>📦</span>
+                            <span>{isExpanded ? (language === 'tr' ? 'Gizle' : 'Hide') : (language === 'tr' ? `${lots.length} Lot` : `${lots.length} Lots`)}</span>
+                            <svg className={`w-2.5 h-2.5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
 
-                            return (
-                              <div className="lg:hidden text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 flex-wrap">
-                                <span>🎯 T1: Sell {t1Shares} shs {effT1 ? `(${formatCurr(effT1, item.currency)})` : ''}</span>
-                                <span>·</span>
-                                <span>T2: Sell {t2Shares > 0 ? t2Shares : item.shares} shs ({formatCurr(effT2, item.currency)})</span>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {(() => {
-                            const lots = getBuyLotsForHolding(item);
-                            const isExpanded = !!expandedLots[item.symbol];
-                            return (
-                              <button
-                                type="button"
-                                onClick={() => toggleLots(item.symbol)}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black border transition-all cursor-pointer shadow-xs ${
-                                  isExpanded
-                                    ? 'bg-blue-600 text-white border-blue-600'
-                                    : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 border-blue-200 dark:border-blue-800'
-                                }`}
-                                title="Click to view all purchase lots, execution dates, and fill prices"
-                              >
-                                <span>📦</span>
-                                <span>{isExpanded ? (language === 'tr' ? 'Lotları Gizle' : 'Hide Lots') : (language === 'tr' ? `${lots.length} Alım Lotu` : `${lots.length} Buy Lot${lots.length > 1 ? 's' : ''}`)}</span>
-                                <svg className={`w-2.5 h-2.5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      <div className="flex items-center gap-1.5 mt-2 lg:hidden">
-                        <button
-                          type="button"
-                          onClick={() => onTradeHolding?.(item)}
-                          className="px-2.5 py-1 rounded-lg text-[11px] font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>⚡ Trade / Buy</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onOpenCoPilot?.(item)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>💡 Co-Pilot</span>
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-center whitespace-nowrap">
-                      <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-300 font-bold text-xs shadow-sm">
-                        <span>🗓️</span>
-                        <span>{formattedBoughtDate}</span>
-                      </span>
-                      {daysHeld && (
-                        <div className="text-[10px] text-gray-400 font-medium mt-0.5">
-                          {daysHeld}d held
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-right font-medium text-gray-900 dark:text-white">
-                      {item.shares.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-4 text-right text-gray-600 dark:text-gray-400">
-                      {formatCurr(item.entryPrice, item.currency)}
-                    </td>
-                    <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
-                      {formatCurr(item.currentPrice, item.currency)}
-                    </td>
-                    <td className="px-5 py-4 text-right font-semibold text-gray-900 dark:text-white">
-                      {formatCurr(item.currentValue, item.currency)}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className={`font-bold ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
-                      </div>
-                      <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded mt-0.5 ${
-                        isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
-                      }`}>
-                        {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      {editingStopSymbol === item.symbol ? (
-                        <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
-                          <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={editStopValue}
-                            onChange={(e) => setEditStopValue(e.target.value)}
-                            className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const val = parseFloat(editStopValue);
-                                if (!isNaN(val) && val >= 0) {
-                                  onUpdateStopLoss?.(item.symbol, val);
-                                }
-                                setEditingStopSymbol(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingStopSymbol(null);
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const val = parseFloat(editStopValue);
-                              if (!isNaN(val) && val >= 0) {
-                                onUpdateStopLoss?.(item.symbol, val);
-                              }
-                              setEditingStopSymbol(null);
-                            }}
-                            className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
-                            title="Save Stop Loss"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingStopSymbol(null)}
-                            className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
-                            title="Cancel"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : item.isDividend ? (
-                        <div className="inline-flex flex-col items-center">
-                          <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-sm">
-                            <span>💎</span>
-                            <span>DCA Mode</span>
-                          </span>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                            Accumulate on Dips
-                          </span>
-                          {item.currentPrice > item.entryPrice && (
-                            <button
-                              type="button"
-                              onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
-                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
-                              title="Set stop loss to entry price to eliminate risk (Free Trade)"
-                            >
-                              🛡️ Breakeven
-                            </button>
-                          )}
-                        </div>
-                      ) : item.stopLoss >= item.entryPrice ? (
-                        <div className="inline-flex flex-col items-center">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                              <span>🛡️</span>
-                              <span>{formatCurr(item.stopLoss, item.currency)}</span>
+                      {/* Compact Mode Streamlined Columns */}
+                      {isCompactTable ? (
+                        <>
+                          {/* Col 2: Değer / Adet (Value & Shares) */}
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <div className="font-bold text-gray-900 dark:text-white font-mono">
+                              {formatCurr(item.currentValue, item.currency)}
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">
+                              {item.shares.toLocaleString()} lot
+                            </div>
+                          </td>
+
+                          {/* Col 3: Fiyat / Maliyet (Price & Cost) */}
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <div className="font-bold text-gray-900 dark:text-white font-mono">
+                              {formatCurr(item.currentPrice, item.currency)}
+                            </div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
+                              Mal: {formatCurr(item.entryPrice, item.currency)}
+                            </div>
+                          </td>
+
+                          {/* Col 4: Net K/Z (P&L) */}
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <div className={`font-bold font-mono ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
+                            </div>
+                            <span className={`inline-block text-[10px] font-black px-1.5 py-0.2 rounded mt-0.5 ${
+                              isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                            }`}>
+                              {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingStopSymbol(item.symbol);
-                                setEditStopValue(item.stopLoss.toString());
-                              }}
-                              className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
-                              title="Edit stop loss price manually"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 mt-0.5 shadow-sm">
-                            FREE TRADE
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateStopLoss?.(item.symbol, Number((item.entryPrice * 0.95).toFixed(2)))}
-                            className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-gray-500 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-200 dark:border-gray-700 shadow-xs cursor-pointer flex items-center gap-0.5"
-                            title="Revert stop loss back to original technical level (5% below entry)"
-                          >
-                            <span>↺ Revert Stop ({formatCurr(item.entryPrice * 0.95, item.currency)})</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                              {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingStopSymbol(item.symbol);
-                                setEditStopValue(item.stopLoss > 0 ? item.stopLoss.toString() : (item.entryPrice * 0.95).toFixed(2));
-                              }}
-                              className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
-                              title="Edit stop loss price manually"
-                            >
-                              ✏️
-                            </button>
-                          </div>
-                          {item.currentPrice > item.entryPrice ? (
-                            <button
-                              type="button"
-                              onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
-                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
-                              title="Set stop loss to entry price to eliminate risk (Free Trade)"
-                            >
-                              🛡️ Breakeven
-                            </button>
-                          ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
-                              ⚠️ AT STOP RISK
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-gray-500 block mt-0.5">
-                              {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}% buffer` : 'Safe'}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-center whitespace-nowrap">
-                      {editingTargetSymbol === item.symbol ? (
-                        <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
-                          <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={editTargetValue}
-                            onChange={(e) => setEditTargetValue(e.target.value)}
-                            className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                const val = parseFloat(editTargetValue);
-                                if (!isNaN(val) && val >= 0) {
-                                  onUpdateTargetPrice?.(item.symbol, val);
-                                }
-                                setEditingTargetSymbol(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingTargetSymbol(null);
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const val = parseFloat(editTargetValue);
-                              if (!isNaN(val) && val >= 0) {
-                                onUpdateTargetPrice?.(item.symbol, val);
-                              }
-                              setEditingTargetSymbol(null);
-                            }}
-                            className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
-                            title="Save Target Exit Price"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingTargetSymbol(null)}
-                            className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
-                            title="Cancel"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : item.isDividend ? (
-                        <div className="inline-flex flex-col items-center">
-                          {item.targetPrice && item.targetPrice > 0 ? (
-                            <>
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs font-bold text-purple-700 dark:text-purple-300 font-mono">
-                                  🎯 {formatCurr(item.targetPrice, item.currency)}
-                                </span>
+                          </td>
+
+                          {/* Col 5: Stop / Mod */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            {editingStopSymbol === item.symbol ? (
+                              <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
+                                <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editStopValue}
+                                  onChange={(e) => setEditStopValue(e.target.value)}
+                                  className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = parseFloat(editStopValue);
+                                      if (!isNaN(val) && val >= 0) {
+                                        onUpdateStopLoss?.(item.symbol, val);
+                                      }
+                                      setEditingStopSymbol(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingStopSymbol(null);
+                                    }
+                                  }}
+                                />
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingTargetSymbol(item.symbol);
-                                    setEditTargetValue(item.targetPrice!.toString());
+                                    const val = parseFloat(editStopValue);
+                                    if (!isNaN(val) && val >= 0) {
+                                      onUpdateStopLoss?.(item.symbol, val);
+                                    }
+                                    setEditingStopSymbol(null);
                                   }}
-                                  className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
-                                  title="Edit target exit price"
+                                  className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
                                 >
-                                  ✏️
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingStopSymbol(null)}
+                                  className="px-1.5 py-0.5 text-xs font-black text-gray-600 hover:bg-gray-200 rounded cursor-pointer"
+                                >
+                                  ✕
                                 </button>
                               </div>
-                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold mt-0.5">
-                                +{(((item.targetPrice - item.entryPrice) / item.entryPrice) * 100).toFixed(1)}% target
+                            ) : item.isDividend ? (
+                              <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                                💎 DCA Modu
                               </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
-                                <span>💎</span>
-                                <span>Yield / Core</span>
-                              </span>
+                            ) : item.stopLoss >= item.entryPrice ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                                  🛡️ {formatCurr(item.stopLoss, item.currency)}
+                                </span>
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 mt-0.5">
+                                  FREE TRADE
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                    {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStopSymbol(item.symbol);
+                                      setEditStopValue(item.stopLoss > 0 ? item.stopLoss.toString() : (item.entryPrice * 0.95).toFixed(2));
+                                    }}
+                                    className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                    title="Stop loss fiyatını düzenle"
+                                  >
+                                    ✏️
+                                  </button>
+                                </div>
+                                {item.currentPrice > item.entryPrice ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
+                                    className="mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 cursor-pointer"
+                                  >
+                                    🛡️ Breakeven
+                                  </button>
+                                ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
+                                    ⚠️ STOP RİSKİ
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 block mt-0.5">
+                                    {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}%` : 'Safe'}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Col 6: Hedef & Vade */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                              <span>🎯 {formatCurr(effTarget, item.currency)}</span>
                               <button
                                 type="button"
                                 onClick={() => {
                                   setEditingTargetSymbol(item.symbol);
-                                  setEditTargetValue(item.entryPrice > 0 ? (item.entryPrice * 1.25).toFixed(2) : '');
+                                  setEditTargetValue(effTarget.toString());
                                 }}
-                                className="text-[10px] text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:underline mt-0.5 cursor-pointer"
-                                title="Set an optional take-profit target for this compounder"
+                                className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
                               >
-                                + Set Exit Target
+                                ✏️
                               </button>
-                            </>
-                          )}
-                        </div>
+                            </div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center justify-center gap-1">
+                              <span>{timing.maxExitDateFormatted}</span>
+                              <span className="font-bold">({timing.label})</span>
+                            </div>
+                          </td>
+
+                          {/* Col 7: DCA Durumu */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            {item.dcaZone === 'BUY' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white shadow-xs">
+                                🎯 ALIM BÖLGESİ
+                              </span>
+                            ) : item.dcaZone === 'PAUSE' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+                                ⚠️ BEKLE
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                TUT
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Col 8: İşlemler (Actions) */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center space-x-1.5">
+                              <button
+                                onClick={() => onTradeHolding?.(item)}
+                                className="px-2 py-1 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 text-white transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+                                title="Al veya Sat"
+                              >
+                                <span>⚡</span>
+                                <span>Trade</span>
+                              </button>
+                              <button
+                                onClick={() => onOpenCoPilot?.(item)}
+                                className="px-2 py-1 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer"
+                                title="Co-Pilot Analiz"
+                              >
+                                <span>💡</span>
+                              </button>
+                              <button
+                                onClick={() => handleRemove(item.symbol)}
+                                className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                                title="Sil"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </>
                       ) : (
-                        (() => {
-                          const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
-                          const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
-
-                          const effTarget = item.targetPrice && item.targetPrice > 0
-                            ? item.targetPrice
-                            : (item.stopLoss > 0 && item.entryPrice > item.stopLoss
-                                ? Number((item.entryPrice + 2 * (item.entryPrice - item.stopLoss)).toFixed(2))
-                                : Number((item.entryPrice * 1.10).toFixed(2)));
-                          const upsidePct = item.entryPrice > 0 ? ((effTarget - item.entryPrice) / item.entryPrice) * 100 : 0;
-                          const distFromCurr = item.currentPrice > 0 ? ((effTarget - item.currentPrice) / item.currentPrice) * 100 : 0;
-                          const hasT1 = Boolean(matchedSig && matchedSig.targetPrice > 0 && Math.abs(matchedSig.targetPrice - effTarget) > 0.05);
-                          const isT1Hit = Boolean(hasT1 && item.currentPrice >= matchedSig!.targetPrice);
-
-                          return (
-                            <div className="inline-flex flex-col items-center">
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1">
-                                  <span>🎯 {hasT1 ? 'T2:' : ''}</span>
-                                  <span>{formatCurr(effTarget, item.currency)}</span>
-                                </span>
+                        /* Detailed 12-Column Layout (Existing) */
+                        <>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-300 font-bold text-xs shadow-sm">
+                              <span>🗓️</span>
+                              <span>{formattedBoughtDate}</span>
+                            </span>
+                            {daysHeld && (
+                              <div className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                {daysHeld}d held
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-right font-medium text-gray-900 dark:text-white">
+                            {item.shares.toLocaleString()}
+                          </td>
+                          <td className="px-5 py-4 text-right text-gray-600 dark:text-gray-400">
+                            {formatCurr(item.entryPrice, item.currency)}
+                          </td>
+                          <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
+                            {formatCurr(item.currentPrice, item.currency)}
+                          </td>
+                          <td className="px-5 py-4 text-right font-semibold text-gray-900 dark:text-white">
+                            {formatCurr(item.currentValue, item.currency)}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <div className={`font-bold ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
+                            </div>
+                            <span className={`inline-block text-xs font-semibold px-1.5 py-0.5 rounded mt-0.5 ${
+                              isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                            }`}>
+                              {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-center">
+                            {editingStopSymbol === item.symbol ? (
+                              <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
+                                <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editStopValue}
+                                  onChange={(e) => setEditStopValue(e.target.value)}
+                                  className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = parseFloat(editStopValue);
+                                      if (!isNaN(val) && val >= 0) {
+                                        onUpdateStopLoss?.(item.symbol, val);
+                                      }
+                                      setEditingStopSymbol(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingStopSymbol(null);
+                                    }
+                                  }}
+                                />
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingTargetSymbol(item.symbol);
-                                    setEditTargetValue(effTarget.toString());
+                                    const val = parseFloat(editStopValue);
+                                    if (!isNaN(val) && val >= 0) {
+                                      onUpdateStopLoss?.(item.symbol, val);
+                                    }
+                                    setEditingStopSymbol(null);
                                   }}
-                                  className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
-                                  title="Edit target exit price"
+                                  className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
+                                  title="Save Stop Loss"
                                 >
-                                  ✏️
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingStopSymbol(null)}
+                                  className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
+                                  title="Cancel"
+                                >
+                                  ✕
                                 </button>
                               </div>
-
-                              {hasT1 && (
-                                <div className="text-[10px] flex items-center gap-1 mt-0.5">
-                                  <span className="text-gray-500 dark:text-gray-400 font-medium">T1: {formatCurr(matchedSig!.targetPrice, item.currency)}</span>
-                                  {isT1Hit ? (
-                                    <span className="px-1 py-0.2 rounded text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                                      ✓ Hit
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400 text-[9px]">
-                                      ({((matchedSig!.targetPrice - item.currentPrice) / item.currentPrice * 100).toFixed(1)}%)
-                                    </span>
-                                  )}
+                            ) : item.isDividend ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-sm">
+                                  <span>💎</span>
+                                  <span>DCA Mode</span>
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                  Accumulate on Dips
+                                </span>
+                                {item.currentPrice > item.entryPrice && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
+                                    className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
+                                    title="Set stop loss to entry price to eliminate risk (Free Trade)"
+                                  >
+                                    🛡️ Breakeven
+                                  </button>
+                                )}
+                              </div>
+                            ) : item.stopLoss >= item.entryPrice ? (
+                              <div className="inline-flex flex-col items-center">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                    <span>🛡️</span>
+                                    <span>{formatCurr(item.stopLoss, item.currency)}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStopSymbol(item.symbol);
+                                      setEditStopValue(item.stopLoss.toString());
+                                    }}
+                                    className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                    title="Edit stop loss price manually"
+                                  >
+                                    ✏️
+                                  </button>
                                 </div>
-                              )}
-
-                              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
-                                +{upsidePct.toFixed(1)}% {hasT1 ? 'T2 runner' : 'target'} {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
-                              </span>
-
-                              {/* Scale-Out Exit Shares Specification */}
-                              {(() => {
-                                const t1Shares = Math.max(1, Math.ceil(item.shares * 0.5));
-                                const t2Shares = Math.max(0, item.shares - t1Shares);
-
-                                return (
-                                  <div className="mt-1 text-[10px] bg-gray-50 dark:bg-gray-900/60 px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700/60 text-center w-full">
-                                    <div className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">Scale-Out ({item.shares} shs):</div>
-                                    <div className="flex items-center justify-center gap-1.5 font-mono mt-0.5">
-                                      <span className={isT1Hit ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-gray-300"}>
-                                        T1: <strong>{t1Shares}</strong> shs {isT1Hit && '✓'}
+                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 mt-0.5 shadow-sm">
+                                  FREE TRADE
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onUpdateStopLoss?.(item.symbol, Number((item.entryPrice * 0.95).toFixed(2)))}
+                                  className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-gray-500 hover:text-rose-600 dark:text-gray-400 dark:hover:text-rose-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-200 dark:border-gray-700 shadow-xs cursor-pointer flex items-center gap-0.5"
+                                  title="Revert stop loss back to original technical level (5% below entry)"
+                                >
+                                  <span>↺ Revert Stop ({formatCurr(item.entryPrice * 0.95, item.currency)})</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="flex items-center justify-center gap-1">
+                                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                    {item.stopLoss > 0 ? formatCurr(item.stopLoss, item.currency) : 'Trailing'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingStopSymbol(item.symbol);
+                                      setEditStopValue(item.stopLoss > 0 ? item.stopLoss.toString() : (item.entryPrice * 0.95).toFixed(2));
+                                    }}
+                                    className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                    title="Edit stop loss price manually"
+                                  >
+                                    ✏️
+                                  </button>
+                                </div>
+                                {item.currentPrice > item.entryPrice ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
+                                    className="mt-1 px-2 py-0.5 rounded text-[10px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition-colors shadow-sm block mx-auto cursor-pointer"
+                                    title="Set stop loss to entry price to eliminate risk (Free Trade)"
+                                  >
+                                    🛡️ Breakeven
+                                  </button>
+                                ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
+                                    ⚠️ AT STOP RISK
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-500 block mt-0.5">
+                                    {item.distanceToStop > 0 ? `+${item.distanceToStop.toFixed(1)}% buffer` : 'Safe'}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-center whitespace-nowrap">
+                            {editingTargetSymbol === item.symbol ? (
+                              <div className="inline-flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-lg border border-blue-400 dark:border-blue-600 shadow-md">
+                                <span className="text-[10px] text-gray-500 font-bold">{item.currency === 'USD' ? '$' : '₺'}</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={editTargetValue}
+                                  onChange={(e) => setEditTargetValue(e.target.value)}
+                                  className="w-16 px-1 py-0.5 text-xs text-center border rounded bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const val = parseFloat(editTargetValue);
+                                      if (!isNaN(val) && val >= 0) {
+                                        onUpdateTargetPrice?.(item.symbol, val);
+                                      }
+                                      setEditingTargetSymbol(null);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingTargetSymbol(null);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const val = parseFloat(editTargetValue);
+                                    if (!isNaN(val) && val >= 0) {
+                                      onUpdateTargetPrice?.(item.symbol, val);
+                                    }
+                                    setEditingTargetSymbol(null);
+                                  }}
+                                  className="px-1.5 py-0.5 text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded cursor-pointer"
+                                  title="Save Target Exit Price"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTargetSymbol(null)}
+                                  className="px-1.5 py-0.5 text-xs font-black text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer"
+                                  title="Cancel"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : item.isDividend ? (
+                              <div className="inline-flex flex-col items-center">
+                                {item.targetPrice && item.targetPrice > 0 ? (
+                                  <>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300 font-mono">
+                                        🎯 {formatCurr(item.targetPrice, item.currency)}
                                       </span>
-                                      <span className="text-gray-400">|</span>
-                                      <span className="text-purple-600 dark:text-purple-400 font-medium">
-                                        T2: <strong>{t2Shares > 0 ? t2Shares : item.shares}</strong> shs
-                                      </span>
-                                    </div>
-                                    {isT1Hit && (
                                       <button
                                         type="button"
-                                        onClick={() => onTradeHolding?.(item)}
-                                        className="mt-1 w-full px-1.5 py-0.5 rounded text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-700 transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                                        title={`Target 1 reached! Take profit on ${t1Shares} shares`}
+                                        onClick={() => {
+                                          setEditingTargetSymbol(item.symbol);
+                                          setEditTargetValue(item.targetPrice!.toString());
+                                        }}
+                                        className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                        title="Edit target exit price"
                                       >
-                                        <span>⚡ Sell T1 ({t1Shares} shs)</span>
+                                        ✏️
                                       </button>
+                                    </div>
+                                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold mt-0.5">
+                                      +{(((item.targetPrice - item.entryPrice) / item.entryPrice) * 100).toFixed(1)}% target
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
+                                      <span>💎</span>
+                                      <span>Yield / Core</span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingTargetSymbol(item.symbol);
+                                        setEditTargetValue(item.entryPrice > 0 ? (item.entryPrice * 1.25).toFixed(2) : '');
+                                      }}
+                                      className="text-[10px] text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:underline mt-0.5 cursor-pointer"
+                                      title="Set an optional take-profit target for this compounder"
+                                    >
+                                      + Set Exit Target
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="inline-flex flex-col items-center">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1">
+                                    <span>🎯 {hasT1 ? 'T2:' : ''}</span>
+                                    <span>{formatCurr(effTarget, item.currency)}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTargetSymbol(item.symbol);
+                                      setEditTargetValue(effTarget.toString());
+                                    }}
+                                    className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                    title="Edit target exit price"
+                                  >
+                                    ✏️
+                                  </button>
+                                </div>
+
+                                {hasT1 && (
+                                  <div className="text-[10px] flex items-center gap-1 mt-0.5">
+                                    <span className="text-gray-500 dark:text-gray-400 font-medium">T1: {formatCurr(matchedSig!.targetPrice, item.currency)}</span>
+                                    {isT1Hit ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                        ✓ Hit
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 text-[9px]">
+                                        ({((matchedSig!.targetPrice - item.currentPrice) / item.currentPrice * 100).toFixed(1)}%)
+                                      </span>
                                     )}
                                   </div>
-                                );
-                              })()}
+                                )}
 
-                              {isT1Hit && (
-                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                                  🛡️ Trail Stop to Breakeven
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
+                                  +{upsidePct.toFixed(1)}% {hasT1 ? 'T2 runner' : 'target'} {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
                                 </span>
-                              )}
-                            </div>
-                          );
-                        })()
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-center whitespace-nowrap">
-                      {(() => {
-                        const timing = calculateExitDate(item.entryDate, item.strategyType || 'SWING', item.isDividend);
-                        return timing.isDividend ? (
-                          <div className="inline-flex flex-col items-center">
-                            <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 shadow-xs">
-                              💎 Core Compounder
-                            </span>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                              Indefinite · Yield Focus
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onToggleStrategyType?.(item.symbol)}
-                              className="mt-1 px-2 py-0.5 rounded text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/70 border border-blue-200 dark:border-blue-800 transition-colors shadow-xs cursor-pointer flex items-center gap-1"
-                              title="Switch position to normal swing trade mode (with stop loss & target exit date)"
-                            >
-                              <span>⚡</span>
-                              <span>Make Swing Trade</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="inline-flex flex-col items-center">
-                            <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
-                              {timing.maxExitDateFormatted}
-                            </span>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full mt-0.5 ${
-                              timing.statusColor === 'green'
-                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                                : timing.statusColor === 'amber'
-                                ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                                : 'bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse'
-                            }`}>
-                              ⏳ {timing.label}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onToggleStrategyType?.(item.symbol)}
-                              className="mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-gray-400 hover:text-purple-600 dark:text-gray-500 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors cursor-pointer flex items-center gap-0.5"
-                              title="Promote to Core Dividend Compounder (DCA accumulation mode)"
-                            >
-                              <span>💎</span>
-                              <span>Make Compounder</span>
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      {item.dcaZone === 'BUY' ? (
-                        <div className="inline-flex flex-col items-center">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500 text-white shadow-sm shadow-emerald-500/30">
-                            🎯 PRIME BUY ZONE
-                          </span>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">{item.dcaRationale}</span>
-                        </div>
-                      ) : item.dcaZone === 'PAUSE' ? (
-                        <div className="inline-flex flex-col items-center">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500 text-white">
-                            ⚠️ OVERBOUGHT (Pause)
-                          </span>
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">{item.dcaRationale}</span>
-                        </div>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                          HOLD / ACCUMULATE
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-center whitespace-nowrap">
-                      <div className="inline-flex items-center space-x-1.5">
-                        <button
-                          onClick={() => onOpenCoPilot?.(item)}
-                          className="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 flex items-center space-x-1 cursor-pointer"
-                          title="Open AI Trade Co-Pilot Analysis & Blueprint"
-                        >
-                          <span>💡 Co-Pilot</span>
-                        </button>
-                        <button
-                          onClick={() => onTradeHolding?.(item)}
-                          className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center space-x-1"
-                          title="Buy more lots or sell shares"
-                        >
-                          <span>⚡ Trade</span>
-                        </button>
-                        <button
-                          onClick={() => handleRemove(item.symbol)}
-                          className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                          title={`Remove ${item.symbol} from portfolio`}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedLots[item.symbol] && (
-                    <tr key={`${item.symbol}-lots`} className="bg-blue-50/25 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
-                      <td colSpan={12} className="px-3 py-3 sm:px-5">
-                        <div className="bg-white dark:bg-gray-850 rounded-xl p-3 sm:p-4 border border-blue-200 dark:border-blue-800/70 shadow-xs space-y-3">
-                          <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 dark:border-gray-750 pb-2.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
-                                <span>📦</span>
-                                <span>{language === 'tr' ? 'Alım Kademeleri & Lot Dağılımı' : 'Purchase Tranches & Buy Lots Breakdown'}: <span className="text-blue-600 dark:text-blue-400 font-mono">{item.symbol}</span></span>
+
+                                <div className="mt-1 text-[10px] bg-gray-50 dark:bg-gray-900/60 px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700/60 text-center w-full">
+                                  <div className="text-[9px] font-semibold text-gray-500 dark:text-gray-400">Scale-Out ({item.shares} shs):</div>
+                                  <div className="flex items-center justify-center gap-1.5 font-mono mt-0.5">
+                                    <span className={isT1Hit ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-gray-300"}>
+                                      T1: <strong>{t1Shares}</strong> shs {isT1Hit && '✓'}
+                                    </span>
+                                    <span className="text-gray-400">|</span>
+                                    <span className="text-purple-600 dark:text-purple-400 font-medium">
+                                      T2: <strong>{t2Shares > 0 ? t2Shares : item.shares}</strong> shs
+                                    </span>
+                                  </div>
+                                  {isT1Hit && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onTradeHolding?.(item)}
+                                      className="mt-1 w-full px-1.5 py-0.5 rounded text-[9px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 border border-emerald-300 dark:border-emerald-700 transition-colors shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                                    >
+                                      <span>⚡ Sell T1 ({t1Shares} shs)</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-center whitespace-nowrap">
+                            {timing.isDividend ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 shadow-xs">
+                                  💎 Core Compounder
+                                </span>
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                  Indefinite · Yield Focus
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
+                                  {timing.maxExitDateFormatted}
+                                </span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full mt-0.5 ${
+                                  timing.statusColor === 'green'
+                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                    : timing.statusColor === 'amber'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse'
+                                }`}>
+                                  ⏳ {timing.label}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-5 py-4 text-center">
+                            {item.dcaZone === 'BUY' ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500 text-white shadow-sm shadow-emerald-500/30">
+                                  🎯 PRIME BUY ZONE
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">{item.dcaRationale}</span>
+                              </div>
+                            ) : item.dcaZone === 'PAUSE' ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500 text-white">
+                                  ⚠️ OVERBOUGHT (Pause)
+                                </span>
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">{item.dcaRationale}</span>
+                              </div>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                HOLD / ACCUMULATE
                               </span>
-                              <span className="text-[11px] text-gray-500">
-                                {language === 'tr' ? 'Toplam' : 'Total'}: <strong className="text-gray-900 dark:text-white">{item.shares.toLocaleString()} {language === 'tr' ? 'lot' : 'shares'}</strong> @ {language === 'tr' ? 'ort.' : 'avg'} <strong className="text-gray-900 dark:text-white">{formatCurr(item.entryPrice, item.currency)}</strong>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2.5">
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center space-x-1.5">
                               <button
-                                type="button"
-                                onClick={() => setLotSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                                className="text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-750 hover:bg-gray-200 dark:hover:bg-gray-700 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 cursor-pointer transition-colors"
-                                title={language === 'tr' ? 'Sıralamayı değiştir' : 'Change sort order'}
+                                onClick={() => onOpenCoPilot?.(item)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 flex items-center space-x-1 cursor-pointer"
+                                title="Open AI Trade Co-Pilot Analysis & Blueprint"
                               >
-                                <span>{lotSortOrder === 'asc' ? '⬆️' : '⬇️'}</span>
-                                <span>
-                                  {language === 'tr'
-                                    ? (lotSortOrder === 'asc' ? 'Kronolojik (İlk Alım Üstte)' : 'En Yeni Alım Üstte')
-                                    : (lotSortOrder === 'asc' ? 'Chronological (Oldest First)' : 'Newest First')
-                                  }
-                                </span>
+                                <span>💡 Co-Pilot</span>
                               </button>
                               <button
-                                type="button"
                                 onClick={() => onTradeHolding?.(item)}
-                                className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center space-x-1"
+                                title="Buy more lots or sell shares"
                               >
-                                <span>+ {language === 'tr' ? 'Kademeli Ekle / Al' : 'Buy More / Scale In'}</span>
+                                <span>⚡ Trade</span>
+                              </button>
+                              <button
+                                onClick={() => handleRemove(item.symbol)}
+                                className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                                title={`Remove ${item.symbol} from portfolio`}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
                             </div>
-                          </div>
-
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs">
-                              <thead className="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-750">
-                                <tr>
-                                  <th className="py-1.5 px-2">{language === 'tr' ? 'Kademe / Lot' : 'Tranche / Lot'}</th>
-                                  <th className="py-1.5 px-2">{language === 'tr' ? 'İşlem Tarihi' : 'Execution Date'}</th>
-                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Lot Adedi' : 'Shares'}</th>
-                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Alış Fiyatı' : 'Fill Price'}</th>
-                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Maliyet Tutarı' : 'Cost Outlay'}</th>
-                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Güncel Değer' : 'Current Value'}</th>
-                                  <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Kademe K/Z' : 'Tranche P&L'}</th>
-                                  <th className="py-1.5 px-2">{language === 'tr' ? 'DCA Notu / Gerekçe' : 'DCA Note / Purpose'}</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                                {getBuyLotsForHolding(item).map((lot) => {
-                                  const isLotProfit = lot.pnl >= 0;
-                                  return (
-                                    <tr key={lot.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/20 transition-colors">
-                                      <td className="py-2 px-2 whitespace-nowrap">
-                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black ${
-                                          lot.isInitial
-                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
-                                            : lot.isLatest
-                                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
-                                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
-                                        }`}>
-                                          <span>{lot.isInitial ? '🟢' : lot.isLatest ? '⚡' : '🎯'}</span>
-                                          <span>
-                                            Lot #{lot.lotNumber} {
-                                              lot.isInitial
-                                                ? (language === 'tr' ? '(İlk Alım)' : '(Initial)')
-                                                : lot.isLatest
-                                                ? (language === 'tr' ? '(Son Kademeli Alım)' : '(Latest DCA)')
-                                                : (language === 'tr' ? '(Kademeli Alım)' : '(DCA Tranche)')
-                                            }
-                                          </span>
-                                        </span>
-                                      </td>
-                                      <td className="py-2 px-2 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300 text-[11px]">
-                                        {lot.date}
-                                      </td>
-                                      <td className="py-2 px-2 text-right font-bold text-gray-900 dark:text-white">
-                                        +{lot.shares.toLocaleString()}
-                                      </td>
-                                      <td className="py-2 px-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
-                                        {formatCurr(lot.price, item.currency)}
-                                      </td>
-                                      <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                                        {formatCurr(lot.totalCost, item.currency)}
-                                      </td>
-                                      <td className="py-2 px-2 text-right font-mono font-bold text-gray-900 dark:text-white">
-                                        {formatCurr(lot.currentValue, item.currency)}
-                                      </td>
-                                      <td className="py-2 px-2 text-right whitespace-nowrap">
-                                        <span className={`font-mono font-bold ${isLotProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                          {isLotProfit ? '+' : ''}{formatCurr(lot.pnl, item.currency)}
-                                        </span>
-                                        <span className={`ml-1 text-[10px] font-bold px-1 py-0.2 rounded ${
-                                          isLotProfit ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
-                                        }`}>
-                                          {isLotProfit ? '+' : ''}{lot.pnlPct.toFixed(2)}%
-                                        </span>
-                                      </td>
-                                      <td className="py-2 px-2 text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs">
-                                        {lot.note}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </td>
+                          </td>
+                        </>
+                      )}
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {portfolio.length === 0 && (
-              <tr>
-                <td colSpan={12} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                  <p className="text-base font-semibold">No active holdings in portfolio.</p>
-                  <p className="text-xs mt-1">Use the "+ Add Position" button above to add positions.</p>
-                </td>
-              </tr>
-            )}
+
+                    {/* Expanded Buy Lots breakdown row */}
+                    {isExpanded && (
+                      <tr key={`${item.symbol}-lots`} className="bg-blue-50/25 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/40">
+                        <td colSpan={isCompactTable ? 8 : 12} className="px-3 py-3 sm:px-5">
+                          <div className="bg-white dark:bg-gray-850 rounded-xl p-3 sm:p-4 border border-blue-200 dark:border-blue-800/70 shadow-xs space-y-3">
+                            <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 dark:border-gray-750 pb-2.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-black text-gray-900 dark:text-white flex items-center gap-1.5">
+                                  <span>📦</span>
+                                  <span>{language === 'tr' ? 'Alım Kademeleri & Lot Dağılımı' : 'Purchase Tranches & Buy Lots Breakdown'}: <span className="text-blue-600 dark:text-blue-400 font-mono">{item.symbol}</span></span>
+                                </span>
+                                <span className="text-[11px] text-gray-500">
+                                  {language === 'tr' ? 'Toplam' : 'Total'}: <strong className="text-gray-900 dark:text-white">{item.shares.toLocaleString()} {language === 'tr' ? 'lot' : 'shares'}</strong> @ {language === 'tr' ? 'ort.' : 'avg'} <strong className="text-gray-900 dark:text-white">{formatCurr(item.entryPrice, item.currency)}</strong>
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setLotSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                  className="text-[10px] font-bold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 bg-gray-100 dark:bg-gray-750 hover:bg-gray-200 dark:hover:bg-gray-700 px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 cursor-pointer transition-colors"
+                                  title={language === 'tr' ? 'Sıralamayı değiştir' : 'Change sort order'}
+                                >
+                                  <span>{lotSortOrder === 'asc' ? '⬆️' : '⬇️'}</span>
+                                  <span>
+                                    {language === 'tr'
+                                      ? (lotSortOrder === 'asc' ? 'Kronolojik (İlk Alım Üstte)' : 'En Yeni Alım Üstte')
+                                      : (lotSortOrder === 'asc' ? 'Chronological (Oldest First)' : 'Newest First')
+                                    }
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onTradeHolding?.(item)}
+                                  className="text-[11px] font-black text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>+ {language === 'tr' ? 'Kademeli Ekle / Al' : 'Buy More / Scale In'}</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs">
+                                <thead className="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-750">
+                                  <tr>
+                                    <th className="py-1.5 px-2">{language === 'tr' ? 'Kademe / Lot' : 'Tranche / Lot'}</th>
+                                    <th className="py-1.5 px-2">{language === 'tr' ? 'İşlem Tarihi' : 'Execution Date'}</th>
+                                    <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Lot Adedi' : 'Shares'}</th>
+                                    <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Alış Fiyatı' : 'Fill Price'}</th>
+                                    <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Maliyet Tutarı' : 'Cost Outlay'}</th>
+                                    <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Güncel Değer' : 'Current Value'}</th>
+                                    <th className="py-1.5 px-2 text-right">{language === 'tr' ? 'Kademe K/Z' : 'Tranche P&L'}</th>
+                                    <th className="py-1.5 px-2">{language === 'tr' ? 'DCA Notu / Gerekçe' : 'DCA Note / Purpose'}</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                  {lots.map((lot) => {
+                                    const isLotProfit = lot.pnl >= 0;
+                                    return (
+                                      <tr key={lot.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/20 transition-colors">
+                                        <td className="py-2 px-2 whitespace-nowrap">
+                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black ${
+                                            lot.isInitial
+                                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300'
+                                              : lot.isLatest
+                                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'
+                                              : 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300'
+                                          }`}>
+                                            <span>{lot.isInitial ? '🟢' : lot.isLatest ? '⚡' : '🎯'}</span>
+                                            <span>
+                                              Lot #{lot.lotNumber} {
+                                                lot.isInitial
+                                                  ? (language === 'tr' ? '(İlk Alım)' : '(Initial)')
+                                                  : lot.isLatest
+                                                  ? (language === 'tr' ? '(Son Kademeli Alım)' : '(Latest DCA)')
+                                                  : (language === 'tr' ? '(Kademeli Alım)' : '(DCA Tranche)')
+                                              }
+                                            </span>
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-2 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300 text-[11px]">
+                                          {lot.date}
+                                        </td>
+                                        <td className="py-2 px-2 text-right font-bold text-gray-900 dark:text-white">
+                                          +{lot.shares.toLocaleString()}
+                                        </td>
+                                        <td className="py-2 px-2 text-right font-mono font-semibold text-gray-800 dark:text-gray-200">
+                                          {formatCurr(lot.price, item.currency)}
+                                        </td>
+                                        <td className="py-2 px-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                                          {formatCurr(lot.totalCost, item.currency)}
+                                        </td>
+                                        <td className="py-2 px-2 text-right font-mono font-bold text-gray-900 dark:text-white">
+                                          {formatCurr(lot.currentValue, item.currency)}
+                                        </td>
+                                        <td className="py-2 px-2 text-right whitespace-nowrap">
+                                          <span className={`font-mono font-bold ${isLotProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {isLotProfit ? '+' : ''}{formatCurr(lot.pnl, item.currency)}
+                                          </span>
+                                          <span className={`ml-1 text-[10px] font-bold px-1 py-0.2 rounded ${
+                                            isLotProfit ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
+                                          }`}>
+                                            {isLotProfit ? '+' : ''}{lot.pnlPct.toFixed(2)}%
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-2 text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs">
+                                          {lot.note}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              {portfolio.length === 0 && (
+                <tr>
+                  <td colSpan={isCompactTable ? 8 : 12} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <p className="text-base font-semibold">No active holdings in portfolio.</p>
+                    <p className="text-xs mt-1">Use the "+ Add Position" button above to add positions.</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
