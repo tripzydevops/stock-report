@@ -17,7 +17,9 @@ import CatalystFeedView from '../components/CatalystFeedView';
 import QuantHubView from '../components/QuantHubView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
+import { AuthModal } from '../components/AuthModal';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import {
   supabase,
   PortfolioItem,
@@ -813,6 +815,8 @@ const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'o
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
+  const { user, isDemoMode, signOut } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('signals');
 
   const handleTabChange = (newTab: TabId) => {
@@ -1152,11 +1156,19 @@ export default function Home() {
           console.warn('Error fetching opening direction:', e);
         }
 
-        // 4. Fetch Executed Orders from Supabase
-        const { data: ordersData } = await supabase
+        // 4. Fetch Executed Orders from Supabase (Scoped to logged-in user or Model Portfolio)
+        let ordersQuery = supabase
           .from('portfolio_orders')
           .select('*')
           .order('executed_at', { ascending: false });
+
+        if (user && !isDemoMode) {
+          ordersQuery = ordersQuery.eq('user_id', user.id);
+        } else {
+          ordersQuery = ordersQuery.is('user_id', null);
+        }
+
+        const { data: ordersData } = await ordersQuery;
 
         if (ordersData && ordersData.length > 0) {
           const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => {
@@ -1250,13 +1262,24 @@ export default function Home() {
           });
 
           setRealizedTrades(reconstructedRealized);
+        } else {
+          setExecutedOrders([]);
+          setRealizedTrades([]);
         }
 
-        // 5. Fetch Capital Transfers from Supabase
-        const { data: transData } = await supabase
+        // 5. Fetch Capital Transfers from Supabase (Scoped to logged-in user or Model Portfolio)
+        let transQuery = supabase
           .from('portfolio_transfers')
           .select('*')
           .order('transfer_date', { ascending: false });
+
+        if (user && !isDemoMode) {
+          transQuery = transQuery.eq('user_id', user.id);
+        } else {
+          transQuery = transQuery.is('user_id', null);
+        }
+
+        const { data: transData } = await transQuery;
 
         if (transData && transData.length > 0) {
           const mappedTrans: CapitalTransfer[] = transData.map((t: any) => ({
@@ -1268,14 +1291,24 @@ export default function Home() {
             notes: t.notes
           }));
           setTransfers(mappedTrans);
+        } else {
+          setTransfers([]);
         }
 
-        // 6. Fetch Active Portfolio Positions from Supabase
-        const { data: positionsData } = await supabase
+        // 6. Fetch Active Portfolio Positions from Supabase (Scoped to logged-in user or Model Portfolio)
+        let positionsQuery = supabase
           .from('portfolio_positions')
           .select('*, assets(symbol, name, market)')
           .eq('is_open', true)
           .order('created_at', { ascending: true });
+
+        if (user && !isDemoMode) {
+          positionsQuery = positionsQuery.eq('user_id', user.id);
+        } else {
+          positionsQuery = positionsQuery.is('user_id', null);
+        }
+
+        const { data: positionsData } = await positionsQuery;
 
         if (positionsData && positionsData.length > 0) {
           const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
@@ -1446,7 +1479,7 @@ export default function Home() {
       window.removeEventListener('hashchange', handleHashChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [user?.id, isDemoMode]);
 
   const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
     try {
@@ -1500,10 +1533,16 @@ export default function Home() {
         .limit(1);
 
       if (assetData && assetData.length > 0) {
-        await supabase
+        let delQuery = supabase
           .from('portfolio_positions')
           .delete()
           .eq('asset_id', assetData[0].id);
+        if (user && !isDemoMode) {
+          delQuery = delQuery.eq('user_id', user.id);
+        } else {
+          delQuery = delQuery.is('user_id', null);
+        }
+        await delQuery;
       }
     } catch (err) {
       console.warn('Could not remove holding from Supabase:', err);
@@ -1520,6 +1559,7 @@ export default function Home() {
 
     try {
       await supabase.from('portfolio_transfers').insert([{
+        user_id: user ? user.id : null,
         transfer_type: newTransfer.transferType,
         amount: newTransfer.amount,
         currency: newTransfer.currency,
@@ -1591,6 +1631,7 @@ export default function Home() {
       if (assetId) {
         const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
         await supabase.from('portfolio_positions').insert([{
+          user_id: user ? user.id : null,
           asset_id: assetId,
           quantity: newHolding.shares,
           avg_entry_price: newHolding.entryPrice,
@@ -1613,6 +1654,7 @@ export default function Home() {
 
         try {
           await supabase.from('portfolio_orders').insert([{
+            user_id: user ? user.id : null,
             order_ref: refCode,
             symbol: cleanSym,
             side: 'BUY',
@@ -1663,6 +1705,7 @@ export default function Home() {
           setTransfers(prev => [autoTransfer, ...prev]);
           try {
             await supabase.from('portfolio_transfers').insert([{
+              user_id: user ? user.id : null,
               transfer_type: 'DEPOSIT',
               amount: shortfall,
               currency: 'TRY',
@@ -1750,11 +1793,18 @@ export default function Home() {
         if (target) {
           const totalShares = target.shares + additionalShares;
           const blendedEntry = ((target.shares * target.entryPrice) + (additionalShares * buyPrice)) / totalShares;
-          await supabase
+          let updatePosQuery = supabase
             .from('portfolio_positions')
             .update({ quantity: totalShares, avg_entry_price: blendedEntry })
             .eq('asset_id', assetData[0].id)
             .eq('is_open', true);
+
+          if (user && !isDemoMode) {
+            updatePosQuery = updatePosQuery.eq('user_id', user.id);
+          } else {
+            updatePosQuery = updatePosQuery.is('user_id', null);
+          }
+          await updatePosQuery;
 
           // Log buy order to portfolio_orders
           const totalVal = additionalShares * buyPrice;
@@ -1768,6 +1818,7 @@ export default function Home() {
 
           try {
             await supabase.from('portfolio_orders').insert([{
+              user_id: user ? user.id : null,
               order_ref: refCode,
               symbol: cleanSym,
               side: 'BUY',
@@ -1913,14 +1964,26 @@ export default function Home() {
         .limit(1);
 
       if (assetData && assetData.length > 0) {
+        let posMutQuery = supabase.from('portfolio_positions');
         if (actualSold >= target.shares) {
-          await supabase.from('portfolio_positions').delete().eq('asset_id', assetData[0].id);
+          let delQuery = posMutQuery.delete().eq('asset_id', assetData[0].id);
+          if (user && !isDemoMode) {
+            delQuery = delQuery.eq('user_id', user.id);
+          } else {
+            delQuery = delQuery.is('user_id', null);
+          }
+          await delQuery;
         } else {
-          await supabase
-            .from('portfolio_positions')
+          let updQuery = posMutQuery
             .update({ quantity: target.shares - actualSold })
             .eq('asset_id', assetData[0].id)
             .eq('is_open', true);
+          if (user && !isDemoMode) {
+            updQuery = updQuery.eq('user_id', user.id);
+          } else {
+            updQuery = updQuery.is('user_id', null);
+          }
+          await updQuery;
         }
       }
 
@@ -1938,6 +2001,7 @@ export default function Home() {
 
       try {
         await supabase.from('portfolio_orders').insert([{
+          user_id: user ? user.id : null,
           order_ref: refCode,
           symbol: cleanSym,
           side: 'SELL',
@@ -1998,11 +2062,17 @@ export default function Home() {
         .limit(1);
 
       if (assetData && assetData.length > 0) {
-        await supabase
+        let updateQuery = supabase
           .from('portfolio_positions')
           .update({ stop_loss: newStopPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true);
+        if (user && !isDemoMode) {
+          updateQuery = updateQuery.eq('user_id', user.id);
+        } else {
+          updateQuery = updateQuery.is('user_id', null);
+        }
+        await updateQuery;
       }
     } catch (err) {
       console.warn('Could not update stop loss in Supabase:', err);
@@ -2028,11 +2098,17 @@ export default function Home() {
         .limit(1);
 
       if (assetData && assetData.length > 0) {
-        await supabase
+        let updateQuery = supabase
           .from('portfolio_positions')
           .update({ target_price: newTargetPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true);
+        if (user && !isDemoMode) {
+          updateQuery = updateQuery.eq('user_id', user.id);
+        } else {
+          updateQuery = updateQuery.is('user_id', null);
+        }
+        await updateQuery;
       }
     } catch (err) {
       console.warn('Could not update target price in Supabase:', err);
@@ -2215,6 +2291,44 @@ export default function Home() {
                 <span>🇬🇧</span>
                 <span className="text-[11px]">EN</span>
               </button>
+            </div>
+
+            {/* User Auth Profile / Sign In Button */}
+            <div className="flex items-center space-x-1.5 shrink-0">
+              {user ? (
+                <div className="flex items-center space-x-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl px-2.5 py-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate max-w-[110px] hidden sm:inline">
+                    {user.email?.split('@')[0]}
+                  </span>
+                  <button
+                    onClick={() => signOut()}
+                    className="text-[10px] text-gray-400 hover:text-rose-500 font-bold ml-1 cursor-pointer"
+                    title={language === 'tr' ? 'Çıkış Yap' : 'Sign Out'}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : isDemoMode ? (
+                <button
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors cursor-pointer"
+                  title={language === 'tr' ? 'Model portföy modundasınız. Kendi hesabınıza geçmek için tıklayın.' : 'In model portfolio mode. Click to sign in.'}
+                >
+                  <span>👀</span>
+                  <span className="hidden sm:inline">{language === 'tr' ? 'Model Portföy' : 'Demo Mode'}</span>
+                  <span className="text-blue-600 font-black ml-1">+</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
+                  title={language === 'tr' ? 'Giriş Yap veya Hesap Aç' : 'Sign In or Register'}
+                >
+                  <span>👤</span>
+                  <span className="hidden sm:inline">{language === 'tr' ? 'Giriş' : 'Sign In'}</span>
+                </button>
+              )}
             </div>
 
             <div className="flex items-center space-x-1 shrink-0">
@@ -2743,6 +2857,11 @@ export default function Home() {
         isOpen={!!coPilotAsset}
         onClose={() => setCoPilotAsset(null)}
         asset={coPilotAsset}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </main>
   );
