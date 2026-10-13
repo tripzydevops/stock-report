@@ -146,7 +146,15 @@ const INITIAL_REALIZED_TRADES: RealizedTrade[] = [
     exitPrice: 35.02,
     realizedPnl: 376.38,
     realizedPnlPercent: 7.56,
-    closeDate: '2026-09-17'
+    closeDate: '2026-09-17',
+    recommendedTargetPrice: 38.50,
+    targetPnl: 908.82,
+    targetPnlPercent: 18.24,
+    currentPrice: 36.40,
+    leftOnTableAmount: 211.14,
+    disciplineCapturePct: 41.4,
+    executionVerdict: 'RUNNING',
+    aiTargetNote: "Hisse hedefe doğru ilerliyor (Güncel: ₺36.40). Kârın %41.4'ü erken realize edildi."
   }
 ];
 
@@ -965,6 +973,8 @@ export default function Home() {
           generateFallbackAssets();
         }
 
+        let allSignalsRegistry: ScannedTradeSignal[] = [...INITIAL_SCANNED_SIGNALS];
+
         // 3. Fetch All Trade Signals (Open + Resolved Audit Ledger)
         const { data: allSigData } = await supabase
           .from('trade_signals')
@@ -1010,6 +1020,7 @@ export default function Home() {
               combinedSignals.push(initSig);
             }
           });
+          allSignalsRegistry = combinedSignals;
           setScannedSignals(combinedSignals);
 
           // Group open signals by cleanSymbol to merge multi-day triggers into persistent active trade setups
@@ -1245,6 +1256,49 @@ export default function Home() {
 
             const calcPnlPct = avgEntry > 0 ? ((exitPr - avgEntry) / avgEntry) * 100 : 0;
             const cDate = so.executed_at ? so.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+            const currSymbol = so.currency === 'USD' ? '$' : '₺';
+
+            // Execution Discipline & Counterfactual Target Analysis
+            const matchedSig = allSignalsRegistry.find(s => 
+              s.symbol.replace('.IS', '').toUpperCase() === clean
+            );
+            const livePrice = matched?.price || exitPr;
+
+            let recommendedTarget = matchedSig?.targetPrice && matchedSig.targetPrice > 0
+              ? matchedSig.targetPrice
+              : (avgEntry > 0 ? Number((avgEntry * 1.12).toFixed(2)) : exitPr);
+
+            const targetPnl = (recommendedTarget - avgEntry) * qty;
+            const targetPnlPercent = avgEntry > 0 ? ((recommendedTarget - avgEntry) / avgEntry) * 100 : 0;
+
+            let verdict: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' | 'STOPPED_OUT' | 'NO_SIGNAL' = 'RUNNING';
+            let leftOnTable = 0;
+            let aiNote = '';
+
+            if (livePrice >= recommendedTarget) {
+              verdict = 'TARGET_HIT';
+              leftOnTable = targetPnl - calcPnl;
+              aiNote = `Hedef (${currSymbol}${recommendedTarget.toFixed(2)}) vuruldu! Erken çıkış nedeniyle masada kâr bırakıldı.`;
+            } else if (livePrice > exitPr) {
+              verdict = 'RUNNING';
+              leftOnTable = (livePrice - exitPr) * qty;
+              aiNote = `Fiyat satışın üzerinde (${currSymbol}${livePrice.toFixed(2)}). Hedefe doğru ralli sürüyor.`;
+            } else if (livePrice < exitPr) {
+              verdict = 'PULLBACK_PROTECTED';
+              leftOnTable = -((exitPr - livePrice) * qty); // negative means capital/profit protected
+              aiNote = `Zamanlama başarılı! Satış sonrası fiyat ${currSymbol}${livePrice.toFixed(2)} seviyesine çekildi, kâr korundu.`;
+            } else {
+              verdict = 'RUNNING';
+              leftOnTable = 0;
+              aiNote = `Fiyat satış seviyesinde yatay seyrediyor (${currSymbol}${livePrice.toFixed(2)}).`;
+            }
+
+            let disciplineCapture = 100;
+            if (targetPnl > 0) {
+              disciplineCapture = Math.max(0, Number(((calcPnl / targetPnl) * 100).toFixed(1)));
+            } else if (calcPnl < 0) {
+              disciplineCapture = 0;
+            }
 
             reconstructedRealized.push({
               id: `realized-${so.id || so.order_ref}`,
@@ -1257,7 +1311,15 @@ export default function Home() {
               exitPrice: exitPr,
               realizedPnl: calcPnl,
               realizedPnlPercent: calcPnlPct,
-              closeDate: cDate
+              closeDate: cDate,
+              recommendedTargetPrice: recommendedTarget,
+              targetPnl: targetPnl,
+              targetPnlPercent: targetPnlPercent,
+              currentPrice: livePrice,
+              leftOnTableAmount: leftOnTable,
+              disciplineCapturePct: disciplineCapture,
+              executionVerdict: verdict,
+              aiTargetNote: aiNote
             });
           });
 
@@ -1913,7 +1975,45 @@ export default function Home() {
     const realizedPnlPct = target.entryPrice > 0 ? ((sellPrice - target.entryPrice) / target.entryPrice) * 100 : 0;
     const chosenCloseDate = tradeDate || new Date().toISOString().slice(0, 10);
 
-    // Record realized trade
+    // Record realized trade with execution discipline analytics
+    const cleanSym = target.symbol.replace('.IS', '').toUpperCase();
+    const matchedAsset = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
+    const matchedSig = scannedSignals.find(s => s.symbol.replace('.IS', '').toUpperCase() === cleanSym);
+    const currSymbol = target.currency === 'USD' ? '$' : '₺';
+    const livePrice = matchedAsset?.price || sellPrice;
+    const recommendedTarget = target.targetPrice || matchedSig?.targetPrice || (target.entryPrice > 0 ? Number((target.entryPrice * 1.12).toFixed(2)) : sellPrice);
+    const targetPnl = (recommendedTarget - target.entryPrice) * actualSold;
+    const targetPnlPercent = target.entryPrice > 0 ? ((recommendedTarget - target.entryPrice) / target.entryPrice) * 100 : 0;
+
+    let verdict: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' = 'RUNNING';
+    let leftOnTable = 0;
+    let aiNote = '';
+
+    if (livePrice >= recommendedTarget) {
+      verdict = 'TARGET_HIT';
+      leftOnTable = targetPnl - realizedPnl;
+      aiNote = `Hedef (${currSymbol}${recommendedTarget.toFixed(2)}) vuruldu! Masada kâr bırakıldı.`;
+    } else if (livePrice > sellPrice) {
+      verdict = 'RUNNING';
+      leftOnTable = (livePrice - sellPrice) * actualSold;
+      aiNote = `Fiyat satışın üzerinde (${currSymbol}${livePrice.toFixed(2)}). Hedefe doğru ralli sürüyor.`;
+    } else if (livePrice < sellPrice) {
+      verdict = 'PULLBACK_PROTECTED';
+      leftOnTable = -((sellPrice - livePrice) * actualSold);
+      aiNote = `Zamanlama başarılı! Satış sonrası fiyat ${currSymbol}${livePrice.toFixed(2)} seviyesine çekildi, kâr korundu.`;
+    } else {
+      verdict = 'RUNNING';
+      leftOnTable = 0;
+      aiNote = `Fiyat satış seviyesinde (${currSymbol}${livePrice.toFixed(2)}).`;
+    }
+
+    let disciplineCapture = 100;
+    if (targetPnl > 0) {
+      disciplineCapture = Math.max(0, Number(((realizedPnl / targetPnl) * 100).toFixed(1)));
+    } else if (realizedPnl < 0) {
+      disciplineCapture = 0;
+    }
+
     const newRealized: RealizedTrade = {
       id: `trade-${Date.now()}`,
       symbol: target.symbol,
@@ -1925,7 +2025,15 @@ export default function Home() {
       exitPrice: sellPrice,
       realizedPnl: realizedPnl,
       realizedPnlPercent: realizedPnlPct,
-      closeDate: chosenCloseDate
+      closeDate: chosenCloseDate,
+      recommendedTargetPrice: recommendedTarget,
+      targetPnl: targetPnl,
+      targetPnlPercent: targetPnlPercent,
+      currentPrice: livePrice,
+      leftOnTableAmount: leftOnTable,
+      disciplineCapturePct: disciplineCapture,
+      executionVerdict: verdict,
+      aiTargetNote: aiNote
     };
 
     setRealizedTrades(prev => [newRealized, ...prev]);

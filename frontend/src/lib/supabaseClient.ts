@@ -129,6 +129,15 @@ export interface RealizedTrade {
   realizedPnl: number;
   realizedPnlPercent: number;
   closeDate: string;
+  // Execution Discipline & Counterfactual Tracking
+  recommendedTargetPrice?: number;
+  targetPnl?: number;
+  targetPnlPercent?: number;
+  currentPrice?: number;
+  leftOnTableAmount?: number;
+  disciplineCapturePct?: number;
+  executionVerdict?: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' | 'STOPPED_OUT' | 'NO_SIGNAL';
+  aiTargetNote?: string;
 }
 
 export interface ExecutedOrder {

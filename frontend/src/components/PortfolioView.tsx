@@ -232,6 +232,36 @@ export default function PortfolioView({
   const totalDepositedDisplay = currencyMode === 'USD' ? (totalDepositedTRY / usdTryRate) : totalDepositedTRY;
   const trueRoiDisplay = currencyMode === 'USD' ? (trueRoiAmountTRY / usdTryRate) : trueRoiAmountTRY;
 
+  // Counterfactual & Execution Discipline Metrics
+  const totalTargetPnlTRY = realizedTrades.reduce((acc, trade) => {
+    const tPnl = trade.targetPnl !== undefined ? trade.targetPnl : trade.realizedPnl;
+    return acc + (trade.currency === 'USD' ? tPnl * usdTryRate : tPnl);
+  }, 0);
+
+  const totalCapitalProtectedTRY = realizedTrades.reduce((acc, trade) => {
+    if ((trade.leftOnTableAmount || 0) < 0) {
+      const saved = Math.abs(trade.leftOnTableAmount || 0);
+      return acc + (trade.currency === 'USD' ? saved * usdTryRate : saved);
+    }
+    return acc;
+  }, 0);
+
+  const totalMissedGainsTRY = realizedTrades.reduce((acc, trade) => {
+    if ((trade.leftOnTableAmount || 0) > 0) {
+      const missed = trade.leftOnTableAmount || 0;
+      return acc + (trade.currency === 'USD' ? missed * usdTryRate : missed);
+    }
+    return acc;
+  }, 0);
+
+  const avgDisciplineCapturePct = realizedTrades.length > 0 && totalTargetPnlTRY > 0
+    ? Math.max(0, Math.min(150, (totalRealizedPnlTRY / totalTargetPnlTRY) * 100))
+    : 100;
+
+  const totalTargetDisplay = currencyMode === 'USD' ? (totalTargetPnlTRY / usdTryRate) : totalTargetPnlTRY;
+  const totalMissedDisplay = currencyMode === 'USD' ? (totalMissedGainsTRY / usdTryRate) : totalMissedGainsTRY;
+  const totalProtectedDisplay = currencyMode === 'USD' ? (totalCapitalProtectedTRY / usdTryRate) : totalCapitalProtectedTRY;
+
   const formatCurr = (val: number, curr?: string) => {
     const c = curr || currencyMode;
     const symbol = c === 'USD' ? '$' : '₺';
@@ -1636,96 +1666,350 @@ export default function PortfolioView({
       {/* Realized Trades & Closed Positions History (Collapsible / Toggleable) */}
       {(showRealized || realizedTrades.length > 0) && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden animate-in fade-in duration-200">
-          <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-850">
+          {/* Card Header */}
+          <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
             <div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
                 <span>🏆</span>
-                <span>Realized Gains & Closed Tranches Log</span>
+                <span>{language === 'tr' ? 'Gerçekleşen İşlemler & Erken Çıkış Denetimi' : 'Realized Trades & Discipline Audit'}</span>
               </h3>
-              <p className="text-xs text-gray-500">Every executed sale locks in realized profit and is recorded here for lifetime performance tracking.</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {language === 'tr' 
+                  ? 'Erken kâr alımlarınızı AI sistem hedefleriyle karşılaştırın, masada kalan kârları ve düşüşten korunan sermayeyi denetleyin.' 
+                  : 'Compare your realized exits against AI system targets to track money left on the table and pullbacks avoided.'}
+              </p>
             </div>
-            <div className="text-right">
-              <span className={`text-sm font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
-                {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)} Total Realized
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <span className={`text-base font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
+                  {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
+                </span>
+                <div className="text-[10px] text-gray-400 font-medium">
+                  {language === 'tr' ? 'Toplam Kilitlenen Kâr' : 'Total Realized'}
+                </div>
+              </div>
+              <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+              <div className="px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-800/50 text-right hidden sm:block">
+                <span className="text-xs font-black text-blue-600 dark:text-blue-400">
+                  %{avgDisciplineCapturePct.toFixed(1)}
+                </span>
+                <div className="text-[10px] text-blue-500/80 font-medium">
+                  {language === 'tr' ? 'Hedef Yakalama' : 'Target Capture'}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-5 py-3">Asset</th>
-                  <th className="px-5 py-3 text-right">Shares Sold</th>
-                  <th className="px-5 py-3 text-right">Cost Basis</th>
-                  <th className="px-5 py-3 text-right">Execution Sell Price</th>
-                  <th className="px-5 py-3 text-right">Realized P&L</th>
-                  <th className="px-5 py-3 text-right">Return %</th>
-                  <th className="px-5 py-3 text-center">Date Sold / Closed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {realizedTrades.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-gray-500 dark:text-gray-400">
-                      <p className="font-semibold text-sm">No executed sales or closed tranches yet.</p>
-                      <p className="text-xs mt-1">When you sell or trim shares via the ⚡ Trade button, your executed sales and realized P&L will be tracked here.</p>
-                    </td>
-                  </tr>
-                ) : (
-                  realizedTrades.map((trade) => {
-                  const isProfit = trade.realizedPnl >= 0;
-                  return (
-                    <tr key={trade.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => onSelectTicker?.(trade.symbol)}
-                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
-                            title={`Click to view ${trade.symbol} chart & indicators`}
-                          >
-                            <span className="group-hover:underline">{trade.symbol}</span>
-                            <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
-                          </button>
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                            {trade.market}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500">{trade.name}</div>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-medium text-gray-900 dark:text-white">
-                        {trade.sharesSold.toLocaleString()}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-gray-600 dark:text-gray-400">
-                        {formatCurr(trade.entryPrice, trade.currency)}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-bold text-gray-900 dark:text-white">
-                        {formatCurr(trade.exitPrice, trade.currency)}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-black">
-                        <span className={isProfit ? 'text-emerald-500' : 'text-rose-500'}>
-                          {isProfit ? '+' : ''}{formatCurr(trade.realizedPnl, trade.currency)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-bold">
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded ${
-                          isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
-                        }`}>
-                          {isProfit ? '▲ +' : '▼ '}{trade.realizedPnlPercent.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-800/50 shadow-sm">
-                          <span>🗓️</span>
-                          <span>{trade.closeDate}</span>
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                }))}
-              </tbody>
-            </table>
+          {/* Execution Discipline KPI Strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-gray-50/70 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700 text-xs">
+            <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 shadow-xs">
+              <div className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                <span>💰</span>
+                <span>{language === 'tr' ? 'Kilitlenen Net Kâr' : 'Actual Realized Profit'}</span>
+              </div>
+              <div className={`text-base sm:text-lg font-black mt-1 ${totalRealizedPnlTRY >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-0.5">
+                {realizedTrades.length} {language === 'tr' ? 'kapalı işlem' : 'closed trades'}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 shadow-xs">
+              <div className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                <span>🎯</span>
+                <span>{language === 'tr' ? 'AI Sistem Hedef Kârı' : 'AI Target Potential'}</span>
+              </div>
+              <div className="text-base sm:text-lg font-black mt-1 text-blue-600 dark:text-blue-400">
+                {totalTargetPnlTRY > 0 ? '+' : ''}{formatCurr(totalTargetDisplay)}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-0.5">
+                {language === 'tr' ? 'Hedefe kadar beklenseydi' : 'If held to full targets'}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 shadow-xs">
+              <div className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                <span>⚠️</span>
+                <span>{language === 'tr' ? 'Masada Kalan Kâr' : 'Left on the Table'}</span>
+              </div>
+              <div className="text-base sm:text-lg font-black mt-1 text-amber-500 dark:text-amber-400">
+                {totalMissedGainsTRY > 0 ? `-${formatCurr(totalMissedDisplay)}` : '₺0.00'}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-0.5">
+                {language === 'tr' ? 'Erken çıkış fırsat maliyeti' : 'Opportunity cost from exit'}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 shadow-xs">
+              <div className="text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1.5">
+                <span>🛡️</span>
+                <span>{language === 'tr' ? 'Korunan Sermaye' : 'Drawdown Protected'}</span>
+              </div>
+              <div className="text-base sm:text-lg font-black mt-1 text-emerald-500 dark:text-emerald-400">
+                +{formatCurr(totalProtectedDisplay)}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-0.5">
+                {language === 'tr' ? 'Düşüş öncesi kâr kilitleme' : 'Gains saved before pullback'}
+              </div>
+            </div>
           </div>
+
+          {realizedTrades.length === 0 ? (
+            <div className="px-5 py-10 text-center text-gray-500 dark:text-gray-400">
+              <p className="font-semibold text-sm">No executed sales or closed tranches yet.</p>
+              <p className="text-xs mt-1">When you sell or trim shares via the ⚡ Trade button, your executed sales and realized P&L will be tracked here.</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                      <th className="px-5 py-3">Asset</th>
+                      <th className="px-4 py-3 text-right">Shares & Entry</th>
+                      <th className="px-4 py-3 text-right">Exit Price</th>
+                      <th className="px-4 py-3 text-right">Your Realized P&L</th>
+                      <th className="px-4 py-3 text-center">AI Target & Potential</th>
+                      <th className="px-4 py-3 text-right">Current Market</th>
+                      <th className="px-5 py-3 text-center">Discipline & Left-on-Table</th>
+                      <th className="px-4 py-3 text-center">Date Closed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {realizedTrades.map((trade) => {
+                      const isProfit = trade.realizedPnl >= 0;
+                      const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
+                      const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
+                      const targetPotentialPct = trade.targetPnlPercent !== undefined ? trade.targetPnlPercent : 0;
+                      const leftAmount = trade.leftOnTableAmount || 0;
+                      const livePrice = trade.currentPrice || trade.exitPrice;
+                      const priceDiff = livePrice - trade.exitPrice;
+                      const priceDiffPct = trade.exitPrice > 0 ? (priceDiff / trade.exitPrice) * 100 : 0;
+
+                      return (
+                        <tr key={trade.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => onSelectTicker?.(trade.symbol)}
+                                className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                                title={`Click to view ${trade.symbol} chart & indicators`}
+                              >
+                                <span className="group-hover:underline">{trade.symbol}</span>
+                                <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                              </button>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                {trade.market}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 truncate max-w-[140px]">{trade.name}</div>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right font-medium">
+                            <div className="text-gray-900 dark:text-white font-bold">{trade.sharesSold.toLocaleString()} lot</div>
+                            <div className="text-xs text-gray-400">@ {formatCurr(trade.entryPrice, trade.currency)}</div>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right font-black text-gray-900 dark:text-white">
+                            {formatCurr(trade.exitPrice, trade.currency)}
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right font-black">
+                            <div className={isProfit ? 'text-emerald-500' : 'text-rose-500'}>
+                              {isProfit ? '+' : ''}{formatCurr(trade.realizedPnl, trade.currency)}
+                            </div>
+                            <span className={`inline-block text-[11px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
+                              isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
+                            }`}>
+                              {isProfit ? '▲ +' : '▼ '}{trade.realizedPnlPercent.toFixed(2)}%
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-center">
+                            {hasTarget ? (
+                              <div className="inline-block text-left bg-blue-50/60 dark:bg-blue-950/40 px-2.5 py-1 rounded-xl border border-blue-200/60 dark:border-blue-800/40">
+                                <div className="text-xs font-black text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                  <span>🎯</span>
+                                  <span>{formatCurr(trade.recommendedTargetPrice || 0, trade.currency)}</span>
+                                </div>
+                                <div className="text-[10px] text-blue-500 font-semibold">
+                                  +{formatCurr(targetPotentialPnl, trade.currency)} (+{targetPotentialPct.toFixed(1)}%)
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3.5 text-right font-medium">
+                            <div className="text-gray-900 dark:text-white font-bold">{formatCurr(livePrice, trade.currency)}</div>
+                            <div className={`text-[10px] font-semibold ${priceDiff >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {priceDiff >= 0 ? '+' : ''}{formatCurr(priceDiff, trade.currency)} ({priceDiff >= 0 ? '+' : ''}{priceDiffPct.toFixed(1)}%)
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-3.5 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {trade.executionVerdict === 'TARGET_HIT' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                  <span>⚠️ Masada:</span>
+                                  <span>-{formatCurr(Math.abs(leftAmount), trade.currency)}</span>
+                                </span>
+                              )}
+                              {trade.executionVerdict === 'PULLBACK_PROTECTED' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                  <span>🛡️ Korundu:</span>
+                                  <span>+{formatCurr(Math.abs(leftAmount), trade.currency)}</span>
+                                </span>
+                              )}
+                              {trade.executionVerdict === 'RUNNING' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
+                                  <span>⏳ Ralli Sürüyor</span>
+                                  {leftAmount > 0 && <span className="text-[10px]">(-{formatCurr(leftAmount, trade.currency)})</span>}
+                                </span>
+                              )}
+                              {trade.disciplineCapturePct !== undefined && trade.disciplineCapturePct > 0 && (
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-semibold">
+                                  {language === 'tr' ? 'Hedef Yakalama' : 'Capture'}: %{trade.disciplineCapturePct.toFixed(0)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-xs border border-gray-200 dark:border-gray-700">
+                              <span>🗓️</span>
+                              <span>{trade.closeDate}</span>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View (< 768px) */}
+              <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                {realizedTrades.map((trade) => {
+                  const isProfit = trade.realizedPnl >= 0;
+                  const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
+                  const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
+                  const leftAmount = trade.leftOnTableAmount || 0;
+                  const livePrice = trade.currentPrice || trade.exitPrice;
+
+                  return (
+                    <div key={trade.id} className="p-4 space-y-3 bg-white dark:bg-gray-800">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => onSelectTicker?.(trade.symbol)}
+                              className="font-bold text-gray-900 dark:text-white hover:text-blue-600 text-base flex items-center gap-1"
+                            >
+                              <span>{trade.symbol}</span>
+                              <span className="text-[10px] text-blue-500">📈</span>
+                            </button>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                              {trade.market}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">{trade.name}</div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-sm font-black ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {isProfit ? '+' : ''}{formatCurr(trade.realizedPnl, trade.currency)}
+                          </span>
+                          <div className={`text-xs font-bold ${isProfit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {isProfit ? '▲ +' : '▼ '}{trade.realizedPnlPercent.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trade Execution vs AI Target Comparison */}
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-750">
+                        <div>
+                          <span className="text-gray-400 block text-[10px] uppercase font-semibold">
+                            {language === 'tr' ? 'Satış İşleminiz' : 'Your Execution'}
+                          </span>
+                          <span className="font-bold text-gray-900 dark:text-white">
+                            {trade.sharesSold.toLocaleString()} lot @ {formatCurr(trade.exitPrice, trade.currency)}
+                          </span>
+                          <div className="text-[11px] text-gray-500 mt-0.5">
+                            {language === 'tr' ? 'Maliyet' : 'Cost'}: {formatCurr(trade.entryPrice, trade.currency)}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 block text-[10px] uppercase font-semibold">
+                            {language === 'tr' ? 'AI Sistem Hedefi' : 'AI System Target'}
+                          </span>
+                          {hasTarget ? (
+                            <>
+                              <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                                <span>🎯</span>
+                                <span>{formatCurr(trade.recommendedTargetPrice || 0, trade.currency)}</span>
+                              </span>
+                              <div className="text-[11px] text-blue-500/90 mt-0.5 font-medium">
+                                +{formatCurr(targetPotentialPnl, trade.currency)} ({language === 'tr' ? 'Potansiyel' : 'Target'})
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Live Market & Discipline Audit Pill */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        <div className="text-xs">
+                          <span className="text-gray-400 mr-1">{language === 'tr' ? 'Güncel:' : 'Live:'}</span>
+                          <span className="font-bold text-gray-900 dark:text-white">{formatCurr(livePrice, trade.currency)}</span>
+                        </div>
+
+                        <div>
+                          {trade.executionVerdict === 'TARGET_HIT' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                              <span>⚠️ Masada:</span>
+                              <strong>-{formatCurr(Math.abs(leftAmount), trade.currency)}</strong>
+                            </span>
+                          )}
+                          {trade.executionVerdict === 'PULLBACK_PROTECTED' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              <span>🛡️ Korundu:</span>
+                              <strong>+{formatCurr(Math.abs(leftAmount), trade.currency)}</strong>
+                            </span>
+                          )}
+                          {trade.executionVerdict === 'RUNNING' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800">
+                              <span>⏳ Ralli Sürüyor</span>
+                              {leftAmount > 0 && <span className="text-[10px]">(-{formatCurr(leftAmount, trade.currency)})</span>}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-100 dark:border-gray-750">
+                        <span>🗓️ {trade.closeDate}</span>
+                        {trade.disciplineCapturePct !== undefined && trade.disciplineCapturePct > 0 && (
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                            {language === 'tr' ? 'Hedef Yakalama' : 'Target Capture'}: %{trade.disciplineCapturePct.toFixed(0)}
+                          </span>
+                        )}
+                      </div>
+
+                      {trade.aiTargetNote && (
+                        <div className="text-[11px] text-gray-500 italic bg-gray-50/60 dark:bg-gray-850 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                          💡 {trade.aiTargetNote}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       )}
 
