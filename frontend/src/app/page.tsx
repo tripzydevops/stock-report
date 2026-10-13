@@ -1322,17 +1322,26 @@ export default function Home() {
             const cleanUpper = cleanSym.toUpperCase();
             const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
             const isCoreDiv = overrideStrategy ? (overrideStrategy === 'CORE_DIVIDEND') : ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanUpper);
+            const matchedSig = signals?.find((s: TradeSignal) => s.symbol.replace('.IS', '').toUpperCase() === cleanUpper);
             const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
             const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+
+            // Technical Signal Inherited Levels (Structural Support & Resistance)
+            const structuralStop = matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : Number((entryPrice * 0.95).toFixed(2));
+            const structuralTarget = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : Number((entryPrice * 1.10).toFixed(2));
+
             const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
               ? Number(pos.stop_loss)
-              : (isCoreDiv ? 0 : Number((entryPrice * 0.95).toFixed(2)));
+              : (isCoreDiv ? 0 : structuralStop);
+
             const targetPrice = pos.target_price !== null && pos.target_price !== undefined && Number(pos.target_price) > 0
               ? Number(pos.target_price)
               : (isCoreDiv ? undefined : (
-                  stopLoss > 0 && entryPrice > stopLoss
-                    ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
-                    : Number((entryPrice * 1.10).toFixed(2))
+                  matchedSig && matchedSig.targetPrice > 0 && matchedSig.targetPrice > entryPrice
+                    ? matchedSig.targetPrice
+                    : (stopLoss > 0 && entryPrice > stopLoss
+                        ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
+                        : structuralTarget)
                 ));
             const totalCost = shares * entryPrice;
             const currentValue = shares * currPrice;
@@ -1630,13 +1639,21 @@ export default function Home() {
 
       if (assetId) {
         const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
+        const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+        const resolvedStop = newHolding.stopLoss > 0 
+          ? newHolding.stopLoss 
+          : (matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : null);
+        const resolvedTarget = (newHolding.targetPrice && newHolding.targetPrice > 0)
+          ? newHolding.targetPrice
+          : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
+
         await supabase.from('portfolio_positions').insert([{
           user_id: user ? user.id : null,
           asset_id: assetId,
           quantity: newHolding.shares,
           avg_entry_price: newHolding.entryPrice,
-          stop_loss: newHolding.stopLoss > 0 ? newHolding.stopLoss : null,
-          target_price: (newHolding.targetPrice && newHolding.targetPrice > 0) ? newHolding.targetPrice : null,
+          stop_loss: resolvedStop,
+          target_price: resolvedTarget,
           is_open: true,
           entry_date: orderDateStr,
           notes: newHolding.dcaRationale

@@ -655,6 +655,19 @@ export default function PortfolioView({
                     <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 font-mono">
                       🎯 {formatCurr(effTarget, item.currency)}
                     </span>
+
+                    {/* Effective R:R Badge */}
+                    {(() => {
+                      const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
+                      const effReward = effTarget > item.entryPrice ? (effTarget - item.entryPrice) : 0;
+                      const effectiveRR = effRisk > 0 ? (effReward / effRisk).toFixed(1) : null;
+                      if (!effectiveRR || item.isDividend) return null;
+                      return (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800">
+                          ⚡ R:R {effectiveRR}x
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* Vade / DCA Zone Badge */}
@@ -1019,6 +1032,21 @@ export default function PortfolioView({
                               <span>{timing.maxExitDateFormatted}</span>
                               <span className="font-bold">({timing.label})</span>
                             </div>
+                            {(() => {
+                              const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
+                              const effReward = effTarget > item.entryPrice ? (effTarget - item.entryPrice) : 0;
+                              const effectiveRR = effRisk > 0 ? (effReward / effRisk).toFixed(1) : null;
+                              if (!effectiveRR || item.isDividend) return null;
+                              return (
+                                <span className={`inline-block mt-0.5 text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                                  Number(effectiveRR) >= 3.0
+                                    ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                }`} title={`Risk: ₺${effRisk.toFixed(2)} | Hedef: ₺${effReward.toFixed(2)} (R:R ${effectiveRR}x)`}>
+                                  ⚡ R:R {effectiveRR}x {Number(effectiveRR) >= 3.0 ? '🔥' : ''}
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* Col 7: DCA Durumu */}
