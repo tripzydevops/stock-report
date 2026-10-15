@@ -404,8 +404,13 @@ export default function PortfolioView({
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span>{language === 'tr' ? 'Kapatılan Kârlar' : 'Realized Gains'}</span>
               <button
-                onClick={() => setShowRealized(!showRealized)}
-                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                onClick={() => {
+                  setShowRealized(true);
+                  setTimeout(() => {
+                    document.getElementById('realized-trades-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 50);
+                }}
+                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
               >
                 {showRealized ? (language === 'tr' ? 'Gizle' : 'Hide Log') : (language === 'tr' ? 'Geçmişi Gör' : 'View History')}
               </button>
@@ -1665,7 +1670,7 @@ export default function PortfolioView({
 
       {/* Realized Trades & Closed Positions History (Collapsible / Toggleable) */}
       {(showRealized || realizedTrades.length > 0) && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden animate-in fade-in duration-200">
+        <div id="realized-trades-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden animate-in fade-in duration-200">
           {/* Card Header */}
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
             <div>
