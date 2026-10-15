@@ -871,7 +871,7 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-  const [turmoilGuard, setTurmoilGuard] = useState<boolean>(true);
+  const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -1024,8 +1024,8 @@ export default function Home() {
           setScannedSignals(combinedSignals);
 
           // Group open signals by cleanSymbol to merge multi-day triggers into persistent active trade setups
-          const signalGroups: Record<string, typeof mappedAll> = {};
-          mappedAll
+          const signalGroups: Record<string, typeof combinedSignals> = {};
+          combinedSignals
             .filter(s => s.status === 'open')
             .forEach(s => {
               const cleanSym = s.symbol.replace('.IS', '').toUpperCase();
