@@ -3,12 +3,14 @@
 import React, { useState } from 'react';
 import { MarketCatalyst, PortfolioItem } from '../lib/supabaseClient';
 import { TradeSignal } from './TradeCard';
+import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 
 interface CatalystFeedViewProps {
   catalysts: MarketCatalyst[];
   portfolio: PortfolioItem[];
   signals: TradeSignal[];
+  dateFilter?: DateRangeFilter;
   onSelectTicker?: (symbol: string) => void;
 }
 
@@ -16,6 +18,7 @@ export default function CatalystFeedView({
   catalysts,
   portfolio,
   signals,
+  dateFilter,
   onSelectTicker,
 }: CatalystFeedViewProps) {
   const { t, language } = useLanguage();
@@ -79,6 +82,7 @@ export default function CatalystFeedView({
       item.aiTakeaway.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
+    if (dateFilter && !isDateInRange(item.publishedAt, dateFilter)) return false;
 
     if (filter === 'PORTFOLIO') {
       return portfolioSymbols.has(sym);

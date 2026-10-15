@@ -18,6 +18,8 @@ import QuantHubView from '../components/QuantHubView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import { AuthModal } from '../components/AuthModal';
+import DateFilterBar from '../components/DateFilterBar';
+import { DateRangeFilter, getDateRangeFromPreset, isDateInRange } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -872,6 +874,22 @@ export default function Home() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
+
+  const handleDateFilterChange = (newFilter: DateRangeFilter) => {
+    setDateFilter(newFilter);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('market_pulse_date_preset', newFilter.preset);
+        if (newFilter.startDate) localStorage.setItem('market_pulse_date_start', newFilter.startDate);
+        else localStorage.removeItem('market_pulse_date_start');
+        if (newFilter.endDate) localStorage.setItem('market_pulse_date_end', newFilter.endDate);
+        else localStorage.removeItem('market_pulse_date_end');
+      } catch (e) {
+        // Ignore
+      }
+    }
+  };
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -1506,6 +1524,18 @@ export default function Home() {
       if (targetTab) {
         setActiveTab(targetTab);
         window.history.replaceState(null, '', `#${targetTab}`);
+      }
+
+      // Restore saved date filter
+      try {
+        const savedPreset = localStorage.getItem('market_pulse_date_preset') as any;
+        if (savedPreset) {
+          const sDate = localStorage.getItem('market_pulse_date_start');
+          const eDate = localStorage.getItem('market_pulse_date_end');
+          setDateFilter(getDateRangeFromPreset(savedPreset, sDate, eDate));
+        }
+      } catch (e) {
+        // Ignore
       }
     }
 
@@ -2488,7 +2518,13 @@ export default function Home() {
       <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} />
 
       {/* Main Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Universal Date Filter Bar - Active on ALL tabs/pages */}
+        <DateFilterBar
+          currentFilter={dateFilter}
+          onChange={handleDateFilterChange}
+        />
+
         {/* TAB 1: SIGNALS & SCANNER */}
         {activeTab === 'signals' && (
           <div className="space-y-8">
@@ -2561,6 +2597,12 @@ export default function Home() {
                     // BUT if the user explicitly selected 'MEAN_REVERSION' in the Trade Type dropdown, allow viewing them!
                     if (turmoilGuard && selectedStrategyFilter !== 'MEAN_REVERSION' && sig.strategy.toLowerCase().includes('reversion')) {
                       return false;
+                    }
+
+                    // Universal Date Filter
+                    if (dateFilter && dateFilter.preset !== 'ALL') {
+                      const matchesDate = isDateInRange(sig.date, dateFilter) || isDateInRange(sig.lastConfirmedDate, dateFilter);
+                      if (!matchesDate) return false;
                     }
 
                     return true;
@@ -2744,6 +2786,12 @@ export default function Home() {
                         return false;
                       }
 
+                      // Universal Date Filter
+                      if (dateFilter && dateFilter.preset !== 'ALL') {
+                        const matchesDate = isDateInRange(sig.date, dateFilter) || isDateInRange(sig.lastConfirmedDate, dateFilter);
+                        if (!matchesDate) return false;
+                      }
+
                       return true;
                     });
 
@@ -2856,13 +2904,14 @@ export default function Home() {
             catalysts={catalysts}
             portfolio={portfolio}
             signals={signals}
+            dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
           />
         )}
 
         {/* TAB 1.8: INSTITUTIONAL QUANT & PAIRS STAT-ARB */}
         {activeTab === 'quant' && (
-          <QuantHubView />
+          <QuantHubView dateFilter={dateFilter} />
         )}
 
         {/* TAB 2: MY PORTFOLIO & DCA */}
@@ -2875,6 +2924,7 @@ export default function Home() {
             transfers={transfers}
             usdTryRate={usdTryRate}
             cashBalanceTRY={cashBalance}
+            dateFilter={dateFilter}
             onRemoveHolding={handleRemoveHolding}
             onAddHoldingClick={() => setIsHoldingModalOpen(true)}
             onTradeHolding={(item) => {
@@ -2895,6 +2945,7 @@ export default function Home() {
           <DividendView
             dividendAssets={dividends}
             usdTryRate={usdTryRate}
+            dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
             onImportCandidate={(cand) => {
               handleAddHolding({
@@ -2925,6 +2976,7 @@ export default function Home() {
           <ScorecardView 
             strategies={strategies} 
             scannedSignals={scannedSignals}
+            dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
           />
         )}
@@ -2933,6 +2985,7 @@ export default function Home() {
         {activeTab === 'orb' && (
           <OpeningDirectionView 
             items={orbItems}
+            dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
           />
         )}

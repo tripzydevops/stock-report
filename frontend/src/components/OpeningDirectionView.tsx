@@ -3,13 +3,15 @@
 import React, { useState, useMemo } from 'react';
 import { OpeningDirectionItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
+import { DateRangeFilter, formatFilterDisplay } from '../lib/dateFilter';
 
 interface OpeningDirectionViewProps {
   items: OpeningDirectionItem[];
   onSelectTicker?: (symbol: string) => void;
+  dateFilter?: DateRangeFilter;
 }
 
-export default function OpeningDirectionView({ items, onSelectTicker }: OpeningDirectionViewProps) {
+export default function OpeningDirectionView({ items, onSelectTicker, dateFilter }: OpeningDirectionViewProps) {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US'>('ALL');
@@ -43,6 +45,15 @@ export default function OpeningDirectionView({ items, onSelectTicker }: OpeningD
 
   return (
     <div className="space-y-6">
+      {dateFilter && dateFilter.preset !== 'ALL' && (
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl p-3 text-xs text-blue-700 dark:text-blue-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>📅</span>
+            <span><strong>{formatFilterDisplay(dateFilter, language)}:</strong> {language === 'tr' ? 'Açılış Yönü (ORB) verileri güncel seans kırılımlarını listeler.' : 'Opening Direction (ORB) displays live breakout triggers for the current session.'}</span>
+          </div>
+        </div>
+      )}
+
       {/* Top ORB Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div 

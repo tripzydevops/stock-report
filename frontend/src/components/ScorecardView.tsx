@@ -4,41 +4,70 @@ import React from 'react';
 import { StrategyStat, ScannedTradeSignal } from '../lib/supabaseClient';
 import ScanSignalsLedger from './ScanSignalsLedger';
 import { useLanguage } from '../context/LanguageContext';
+import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 
 interface ScorecardViewProps {
   strategies: StrategyStat[];
   scannedSignals?: ScannedTradeSignal[];
   onSelectTicker?: (symbol: string) => void;
+  dateFilter?: DateRangeFilter;
 }
 
-export default function ScorecardView({ strategies, scannedSignals = [], onSelectTicker }: ScorecardViewProps) {
+export default function ScorecardView({ strategies, scannedSignals = [], onSelectTicker, dateFilter }: ScorecardViewProps) {
   const { t, language } = useLanguage();
+
+  const isFiltered = Boolean(dateFilter && dateFilter.preset !== 'ALL');
+
+  const effectiveScannedSignals = React.useMemo(() => {
+    if (!dateFilter || dateFilter.preset === 'ALL') return scannedSignals;
+    return scannedSignals.filter(s => isDateInRange(s.signalDate, dateFilter) || isDateInRange(s.closedAt, dateFilter));
+  }, [scannedSignals, dateFilter]);
+
+  // Backtest / Lifetime stats
   const totalTrades = strategies.reduce((acc, s) => acc + s.totalTrades, 0);
   const weightedWinRate = totalTrades > 0
     ? strategies.reduce((acc, s) => acc + s.winRate * s.totalTrades, 0) / totalTrades
     : 0;
+
+  // Period-specific dynamic stats from ledger
+  const targetHitCount = effectiveScannedSignals.filter(s => s.status === 'target_hit').length;
+  const stoppedOutCount = effectiveScannedSignals.filter(s => s.status === 'stopped_out').length;
+  const resolvedCount = targetHitCount + stoppedOutCount;
+  const periodWinRate = resolvedCount > 0 ? (targetHitCount / resolvedCount) * 100 : 0;
+
+  const winningTrades = effectiveScannedSignals.filter(s => s.status === 'target_hit' && (s.outcomePnlPct || 0) > 0);
+  const losingTrades = effectiveScannedSignals.filter(s => s.status === 'stopped_out' && (s.outcomePnlPct || 0) < 0);
+  const avgGain = winningTrades.length > 0 ? winningTrades.reduce((acc, s) => acc + (s.outcomePnlPct || 0), 0) / winningTrades.length : 0;
+  const avgLoss = losingTrades.length > 0 ? Math.abs(losingTrades.reduce((acc, s) => acc + (s.outcomePnlPct || 0), 0) / losingTrades.length) : 0;
+  const periodProfitFactor = (avgLoss > 0 && losingTrades.length > 0)
+    ? ((avgGain * winningTrades.length) / (avgLoss * losingTrades.length)).toFixed(2)
+    : (winningTrades.length > 0 ? '∞' : 'N/A');
 
   return (
     <div className="space-y-6">
       {/* Top Level System KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.totalTrades}</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            {isFiltered ? (language === 'tr' ? 'Dönem İçi İşlemler' : 'Period Trades') : t.scorecard.totalTrades}
+          </span>
           <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
-            {totalTrades.toLocaleString()} {language === 'tr' ? 'İşlem' : 'Trades'}
+            {isFiltered ? effectiveScannedSignals.length.toLocaleString() : totalTrades.toLocaleString()} {language === 'tr' ? 'İşlem' : 'Trades'}
           </div>
           <div className="text-xs text-emerald-500 font-semibold mt-1">
-            ● {language === 'tr' ? '117 Varlık Üzerinde 1 Yıllık Test' : '1-Year Backtest Across 117 Assets'}
+            ● {isFiltered ? formatFilterDisplay(dateFilter!, language) : (language === 'tr' ? '117 Varlık Üzerinde 1 Yıllık Test' : '1-Year Backtest Across 117 Assets')}
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.winRate}</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            {isFiltered ? (language === 'tr' ? 'Dönem Kazanma Oranı' : 'Period Win Rate') : t.scorecard.winRate}
+          </span>
           <div className="mt-2 text-2xl font-black text-emerald-500">
-            {weightedWinRate.toFixed(1)}%
+            {isFiltered ? `${periodWinRate.toFixed(1)}%` : `${weightedWinRate.toFixed(1)}%`}
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            {language === 'tr' ? 'Standart 1.5 - 2.5 R:R Hedefleri' : 'Standard 1.5 - 2.5 R:R Targets'}
+            {isFiltered ? `${targetHitCount} Başarılı / ${stoppedOutCount} Stop` : (language === 'tr' ? 'Standart 1.5 - 2.5 R:R Hedefleri' : 'Standard 1.5 - 2.5 R:R Targets')}
           </div>
         </div>
 
@@ -53,9 +82,11 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.scorecard.profitFactor}</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            {isFiltered ? (language === 'tr' ? 'Dönem Kâr Faktörü' : 'Period Profit Factor') : t.scorecard.profitFactor}
+          </span>
           <div className="mt-2 text-2xl font-black text-emerald-500">
-            1.82
+            {isFiltered ? periodProfitFactor : '1.82'}
           </div>
           <div className="text-xs text-emerald-500 font-semibold mt-1">
             ● {language === 'tr' ? 'Toplam Kâr / Toplam Zarar > 1.5' : 'Gross Profit / Gross Loss > 1.5'}
@@ -138,7 +169,7 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
       </div>
 
       {/* Historical Signals & Outcome Audit Ledger */}
-      <ScanSignalsLedger signals={scannedSignals} onSelectTicker={onSelectTicker} />
+      <ScanSignalsLedger signals={effectiveScannedSignals} onSelectTicker={onSelectTicker} />
 
       {/* Rationale & Edge Guide */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

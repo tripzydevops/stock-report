@@ -258,6 +258,21 @@ export interface Translations {
     below200Ema: string;
     near50Ema: string;
   };
+  dateFilter: {
+    title: string;
+    allTime: string;
+    today: string;
+    last7Days: string;
+    last30Days: string;
+    thisMonth: string;
+    customRange: string;
+    from: string;
+    to: string;
+    apply: string;
+    cancel: string;
+    reset: string;
+    activeNotice: string;
+  };
 }
 
 export const translations: Record<Language, Translations> = {
@@ -519,6 +534,21 @@ export const translations: Record<Language, Translations> = {
       below200Ema: 'Below 200 EMA',
       near50Ema: 'Near 50 EMA',
     },
+    dateFilter: {
+      title: 'Date Filter',
+      allTime: 'All Time',
+      today: 'Today',
+      last7Days: 'Last 7 Days',
+      last30Days: 'Last 30 Days',
+      thisMonth: 'This Month',
+      customRange: 'Custom Range',
+      from: 'From:',
+      to: 'To:',
+      apply: 'Apply',
+      cancel: 'Cancel',
+      reset: 'Reset',
+      activeNotice: 'Filtered by date window',
+    },
   },
   tr: {
     common: {
@@ -777,6 +807,21 @@ export const translations: Record<Language, Translations> = {
       above200Ema: '200 EMA Üzerinde',
       below200Ema: '200 EMA Altında',
       near50Ema: '50 EMA Yakınında',
+    },
+    dateFilter: {
+      title: 'Tarih Filtresi',
+      allTime: 'Tüm Zamanlar',
+      today: 'Bugün',
+      last7Days: 'Son 7 Gün',
+      last30Days: 'Son 30 Gün',
+      thisMonth: 'Bu Ay',
+      customRange: 'Özel Aralık',
+      from: 'Başlangıç:',
+      to: 'Bitiş:',
+      apply: 'Uygula',
+      cancel: 'Vazgeç',
+      reset: 'Sıfırla',
+      activeNotice: 'Tarih aralığına göre filtrelendi',
     },
   },
 };

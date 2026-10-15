@@ -219,7 +219,13 @@ const FALLBACK_PAIRS: PairOpportunity[] = [
   }
 ];
 
-export default function QuantHubView() {
+import { DateRangeFilter, formatFilterDisplay } from '../lib/dateFilter';
+
+interface QuantHubViewProps {
+  dateFilter?: DateRangeFilter;
+}
+
+export default function QuantHubView({ dateFilter }: QuantHubViewProps = {}) {
   const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'pairs' | 'factors' | 'sizing'>('pairs');
   const [pairs, setPairs] = useState<PairOpportunity[]>(FALLBACK_PAIRS);
@@ -334,6 +340,12 @@ export default function QuantHubView() {
               <span className="text-xs bg-indigo-500/30 text-indigo-300 font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-400/30">
                 Tier-1 Hedge Fund Mode
               </span>
+              {dateFilter && dateFilter.preset !== 'ALL' && (
+                <span className="text-xs bg-blue-500/30 text-blue-300 font-mono font-bold px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1">
+                  <span>📅</span>
+                  <span>{formatFilterDisplay(dateFilter, language)}</span>
+                </span>
+              )}
             </div>
             <p className="text-sm text-indigo-200/90 max-w-3xl leading-relaxed">
               {language === 'tr'

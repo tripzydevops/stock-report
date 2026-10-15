@@ -7,6 +7,7 @@ import { calculateSectorRisk } from '../lib/sectorRisk';
 import { useLanguage } from '../context/LanguageContext';
 
 import { TradeSignal } from './TradeCard';
+import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -16,6 +17,7 @@ interface PortfolioViewProps {
   transfers?: CapitalTransfer[];
   usdTryRate: number;
   cashBalanceTRY?: number;
+  dateFilter?: DateRangeFilter;
   onRemoveHolding?: (symbol: string) => void;
   onAddHoldingClick?: () => void;
   onTradeHolding?: (holding: PortfolioItem) => void;
@@ -35,6 +37,7 @@ export default function PortfolioView({
   transfers = [],
   usdTryRate,
   cashBalanceTRY = 2952.26,
+  dateFilter,
   onRemoveHolding,
   onAddHoldingClick,
   onTradeHolding,
@@ -232,13 +235,29 @@ export default function PortfolioView({
   const totalDepositedDisplay = currencyMode === 'USD' ? (totalDepositedTRY / usdTryRate) : totalDepositedTRY;
   const trueRoiDisplay = currencyMode === 'USD' ? (trueRoiAmountTRY / usdTryRate) : trueRoiAmountTRY;
 
-  // Counterfactual & Execution Discipline Metrics
-  const totalTargetPnlTRY = realizedTrades.reduce((acc, trade) => {
+  // Date-filtered collections
+  const effectiveRealizedTrades = React.useMemo(() => {
+    if (!dateFilter || dateFilter.preset === 'ALL') return realizedTrades;
+    return realizedTrades.filter(t => isDateInRange(t.closeDate, dateFilter));
+  }, [realizedTrades, dateFilter]);
+
+  const effectiveOrders = React.useMemo(() => {
+    if (!dateFilter || dateFilter.preset === 'ALL') return orders;
+    return orders.filter(o => isDateInRange(o.executedAt, dateFilter));
+  }, [orders, dateFilter]);
+
+  const effectiveTransfers = React.useMemo(() => {
+    if (!dateFilter || dateFilter.preset === 'ALL') return transfers;
+    return transfers.filter(t => isDateInRange(t.transferDate, dateFilter));
+  }, [transfers, dateFilter]);
+
+  // Counterfactual & Execution Discipline Metrics (Filtered by Date if active)
+  const totalTargetPnlTRY = effectiveRealizedTrades.reduce((acc, trade) => {
     const tPnl = trade.targetPnl !== undefined ? trade.targetPnl : trade.realizedPnl;
     return acc + (trade.currency === 'USD' ? tPnl * usdTryRate : tPnl);
   }, 0);
 
-  const totalCapitalProtectedTRY = realizedTrades.reduce((acc, trade) => {
+  const totalCapitalProtectedTRY = effectiveRealizedTrades.reduce((acc, trade) => {
     if ((trade.leftOnTableAmount || 0) < 0) {
       const saved = Math.abs(trade.leftOnTableAmount || 0);
       return acc + (trade.currency === 'USD' ? saved * usdTryRate : saved);
@@ -246,7 +265,7 @@ export default function PortfolioView({
     return acc;
   }, 0);
 
-  const totalMissedGainsTRY = realizedTrades.reduce((acc, trade) => {
+  const totalMissedGainsTRY = effectiveRealizedTrades.reduce((acc, trade) => {
     if ((trade.leftOnTableAmount || 0) > 0) {
       const missed = trade.leftOnTableAmount || 0;
       return acc + (trade.currency === 'USD' ? missed * usdTryRate : missed);
@@ -254,8 +273,13 @@ export default function PortfolioView({
     return acc;
   }, 0);
 
-  const avgDisciplineCapturePct = realizedTrades.length > 0 && totalTargetPnlTRY > 0
-    ? Math.max(0, Math.min(150, (totalRealizedPnlTRY / totalTargetPnlTRY) * 100))
+  const totalPeriodRealizedPnlTRY = effectiveRealizedTrades.reduce((acc, trade) => {
+    return acc + (trade.currency === 'USD' ? trade.realizedPnl * usdTryRate : trade.realizedPnl);
+  }, 0);
+  const totalPeriodRealizedDisplay = currencyMode === 'USD' ? (totalPeriodRealizedPnlTRY / usdTryRate) : totalPeriodRealizedPnlTRY;
+
+  const avgDisciplineCapturePct = effectiveRealizedTrades.length > 0 && totalTargetPnlTRY > 0
+    ? Math.max(0, Math.min(150, (totalPeriodRealizedPnlTRY / totalTargetPnlTRY) * 100))
     : 100;
 
   const totalTargetDisplay = currencyMode === 'USD' ? (totalTargetPnlTRY / usdTryRate) : totalTargetPnlTRY;
@@ -1760,10 +1784,18 @@ export default function PortfolioView({
             </div>
           </div>
 
-          {realizedTrades.length === 0 ? (
+          {effectiveRealizedTrades.length === 0 ? (
             <div className="px-5 py-10 text-center text-gray-500 dark:text-gray-400">
-              <p className="font-semibold text-sm">No executed sales or closed tranches yet.</p>
-              <p className="text-xs mt-1">When you sell or trim shares via the ⚡ Trade button, your executed sales and realized P&L will be tracked here.</p>
+              <p className="font-semibold text-sm">
+                {dateFilter && dateFilter.preset !== 'ALL'
+                  ? (language === 'tr' ? 'Seçilen tarih aralığında kapatılmış işlem bulunmuyor.' : 'No closed trades in the selected date window.')
+                  : (language === 'tr' ? 'Henüz kapatılan işlem yok.' : 'No executed sales or closed tranches yet.')}
+              </p>
+              <p className="text-xs mt-1">
+                {dateFilter && dateFilter.preset !== 'ALL'
+                  ? (language === 'tr' ? 'Tüm işlemleri görmek için tarih filtresini sıfırlayabilirsiniz.' : 'Reset date filter to view all historical closed trades.')
+                  : (language === 'tr' ? 'Hisse sattığınızda gerçekleşen kâr ve AI hedef analizleri burada listelenir.' : 'When you sell or trim shares via the ⚡ Trade button, your executed sales and realized P&L will be tracked here.')}
+              </p>
             </div>
           ) : (
             <>
@@ -1783,7 +1815,7 @@ export default function PortfolioView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {realizedTrades.map((trade) => {
+                    {effectiveRealizedTrades.map((trade) => {
                       const isProfit = trade.realizedPnl >= 0;
                       const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
                       const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
@@ -1898,7 +1930,7 @@ export default function PortfolioView({
 
               {/* Mobile Card View (< 768px) */}
               <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
-                {realizedTrades.map((trade) => {
+                {effectiveRealizedTrades.map((trade) => {
                   const isProfit = trade.realizedPnl >= 0;
                   const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
                   const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
@@ -2026,7 +2058,7 @@ export default function PortfolioView({
               <span>📜</span>
               <span>Executed Orders & DCA Accumulation Log</span>
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
-                {orders.length} Executed
+                {effectiveOrders.length} Executed
               </span>
             </h3>
             <p className="text-xs text-gray-500">Live synchronization with your brokerage executed orders, showing fills, timestamps, ref IDs, and DCA tranches.</p>
@@ -2089,7 +2121,7 @@ export default function PortfolioView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {orders
+              {effectiveOrders
                 .filter(ord => {
                   const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
                   const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
@@ -2188,14 +2220,14 @@ export default function PortfolioView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {transfers.length === 0 ? (
+                {effectiveTransfers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-5 py-6 text-center text-gray-500">
                       No transfers recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  transfers.map((t) => (
+                  effectiveTransfers.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${

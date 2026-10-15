@@ -4,15 +4,17 @@ import React, { useState } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
 import DividendPortfolioLab from './DividendPortfolioLab';
 import { useLanguage } from '../context/LanguageContext';
+import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
 
 interface DividendViewProps {
   dividendAssets: DividendAsset[];
   usdTryRate: number;
+  dateFilter?: DateRangeFilter;
   onImportCandidate?: (candidate: { symbol: string; name: string; market: string; shares: number; price: number; isDividend: boolean }) => void;
   onSelectTicker?: (symbol: string) => void;
 }
 
-export default function DividendView({ dividendAssets, usdTryRate, onImportCandidate, onSelectTicker }: DividendViewProps) {
+export default function DividendView({ dividendAssets, usdTryRate, dateFilter, onImportCandidate, onSelectTicker }: DividendViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [viewMode, setViewMode] = useState<'schedule' | 'table' | 'lab'>('schedule');
@@ -47,8 +49,13 @@ export default function DividendView({ dividendAssets, usdTryRate, onImportCandi
     return `${symbol}${val.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Sort upcoming payouts by next ex-dividend date
-  const sortedUpcoming = [...dividendAssets].sort((a, b) => {
+  // Filter and sort upcoming payouts by next ex-dividend date
+  const filteredUpcomingAssets = React.useMemo(() => {
+    if (!dateFilter || dateFilter.preset === 'ALL') return dividendAssets;
+    return dividendAssets.filter(item => isDateInRange(item.nextExDate, dateFilter) || isDateInRange(item.nextPaymentDate, dateFilter));
+  }, [dividendAssets, dateFilter]);
+
+  const sortedUpcoming = [...filteredUpcomingAssets].sort((a, b) => {
     const dateA = a.nextExDate ? new Date(a.nextExDate).getTime() : 9999999999999;
     const dateB = b.nextExDate ? new Date(b.nextExDate).getTime() : 9999999999999;
     return dateA - dateB;
