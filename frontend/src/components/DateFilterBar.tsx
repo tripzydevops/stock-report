@@ -26,13 +26,13 @@ export default function DateFilterBar({
   const [customStart, setCustomStart] = useState<string>(currentFilter.startDate || '');
   const [customEnd, setCustomEnd] = useState<string>(currentFilter.endDate || '');
 
-  const presets: { id: DateFilterPreset; icon: string; labelTr: string; labelEn: string }[] = [
-    { id: 'ALL', icon: '🌐', labelTr: 'Tüm Zamanlar', labelEn: 'All Time' },
-    { id: 'TODAY', icon: '🔥', labelTr: 'Bugün', labelEn: 'Today' },
-    { id: '7D', icon: '⚡', labelTr: 'Son 7 Gün', labelEn: 'Last 7 Days' },
-    { id: '30D', icon: '📊', labelTr: 'Son 30 Gün', labelEn: 'Last 30 Days' },
-    { id: 'THIS_MONTH', icon: '🗓️', labelTr: 'Bu Ay', labelEn: 'This Month' },
-    { id: 'CUSTOM', icon: '⚙️', labelTr: 'Özel Aralık', labelEn: 'Custom' },
+  const presets: { id: DateFilterPreset; icon: string; labelTr: string; labelEn: string; shortTr: string; shortEn: string }[] = [
+    { id: 'ALL', icon: '🌐', labelTr: 'Tüm Zamanlar', labelEn: 'All Time', shortTr: 'Tümü', shortEn: 'All' },
+    { id: 'TODAY', icon: '🔥', labelTr: 'Bugün', labelEn: 'Today', shortTr: 'Bugün', shortEn: 'Today' },
+    { id: '7D', icon: '⚡', labelTr: 'Son 7 Gün', labelEn: 'Last 7 Days', shortTr: '7 Gün', shortEn: '7 Days' },
+    { id: '30D', icon: '📊', labelTr: 'Son 30 Gün', labelEn: 'Last 30 Days', shortTr: '30 Gün', shortEn: '30 Days' },
+    { id: 'THIS_MONTH', icon: '🗓️', labelTr: 'Bu Ay', labelEn: 'This Month', shortTr: 'Bu Ay', shortEn: 'Month' },
+    { id: 'CUSTOM', icon: '⚙️', labelTr: 'Özel Aralık', labelEn: 'Custom', shortTr: 'Özel', shortEn: 'Custom' },
   ];
 
   const handleSelectPreset = (preset: DateFilterPreset) => {
@@ -66,11 +66,11 @@ export default function DateFilterBar({
   const isActive = currentFilter.preset !== 'ALL';
 
   return (
-    <div className={`bg-white dark:bg-gray-850/80 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-800 p-3 sm:p-4 shadow-sm space-y-3 transition-all ${className}`}>
-      {/* Top Header Row with Presets */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm shadow-xs">
+    <div className={`bg-white dark:bg-gray-850/90 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-800 p-3 sm:p-4 shadow-sm space-y-3 transition-all ${className}`}>
+      {/* Top Header Row with Active Filter Label */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm shadow-xs shrink-0">
             📅
           </div>
           <div>
@@ -80,7 +80,7 @@ export default function DateFilterBar({
               </span>
               {isActive && (
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800 animate-pulse">
-                  {language === 'tr' ? 'Filtre Aktif' : 'Filtered'}
+                  {language === 'tr' ? 'Aktif' : 'Active'}
                 </span>
               )}
             </div>
@@ -88,85 +88,131 @@ export default function DateFilterBar({
               {formatFilterDisplay(currentFilter, language)}
               {filteredCount !== undefined && totalCount !== undefined && (
                 <span className="ml-1 text-gray-400">
-                  ({filteredCount}/{totalCount} {language === 'tr' ? 'öğe' : 'items'})
+                  ({filteredCount}/{totalCount})
                 </span>
               )}
             </p>
           </div>
         </div>
 
-        {/* Quick Presets Horizontal Strip */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar touch-pan-x -mx-1 px-1">
-          {presets.map(p => {
-            const isSelected = currentFilter.preset === p.id || (p.id === 'CUSTOM' && isCustomOpen);
+        {isActive && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-2.5 py-1 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1 shadow-xs"
+            title={language === 'tr' ? 'Filtreyi Sıfırla' : 'Reset Filter'}
+          >
+            <span>✕</span>
+            <span className="text-[11px]">{language === 'tr' ? 'Sıfırla' : 'Reset'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* MOBILE ONLY VIEW (< 768px): 4-Button Grid + Dropdown */}
+      <div className="md:hidden space-y-2">
+        {/* 4 Primary Touch Chips (No Scrolling Required!) */}
+        <div className="grid grid-cols-4 gap-1.5">
+          {presets.slice(0, 4).map(p => {
+            const isSelected = currentFilter.preset === p.id && !isCustomOpen;
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => handleSelectPreset(p.id)}
-                className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/40'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-transparent'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-750 border border-gray-200/60 dark:border-gray-700'
                 }`}
               >
-                <span>{p.icon}</span>
-                <span>{language === 'tr' ? p.labelTr : p.labelEn}</span>
+                <span className="text-sm leading-none mb-0.5">{p.icon}</span>
+                <span className="text-[10px] tracking-tight truncate w-full text-center">
+                  {language === 'tr' ? p.shortTr : p.shortEn}
+                </span>
               </button>
             );
           })}
+        </div>
 
-          {isActive && (
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-2 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 transition-colors whitespace-nowrap cursor-pointer ml-1"
-              title={language === 'tr' ? 'Filtreyi Sıfırla' : 'Reset Filter'}
-            >
-              ✕ {language === 'tr' ? 'Sıfırla' : 'Reset'}
-            </button>
-          )}
+        {/* Mobile Dropdown for All Choices including Custom & This Month */}
+        <div className="flex items-center gap-2 pt-1">
+          <label className="text-[11px] font-bold text-gray-500 shrink-0">
+            {language === 'tr' ? 'Daha Fazla:' : 'More:'}
+          </label>
+          <select
+            value={isCustomOpen ? 'CUSTOM' : currentFilter.preset}
+            onChange={(e) => handleSelectPreset(e.target.value as DateFilterPreset)}
+            className="flex-1 text-xs font-bold py-1.5 px-3 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          >
+            {presets.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.icon} {language === 'tr' ? p.labelTr : p.labelEn}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      {/* Expandable Custom Date Range Selector */}
+      {/* DESKTOP VIEW (>= 768px): Horizontal Presets Strip */}
+      <div className="hidden md:flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 no-scrollbar touch-pan-x -mx-1 px-1">
+        {presets.map(p => {
+          const isSelected = currentFilter.preset === p.id || (p.id === 'CUSTOM' && isCustomOpen);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handleSelectPreset(p.id)}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/40'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-transparent'
+              }`}
+            >
+              <span>{p.icon}</span>
+              <span>{language === 'tr' ? p.labelTr : p.labelEn}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Expandable Custom Date Range Selector (Both Mobile & Desktop) */}
       {isCustomOpen && (
         <form onSubmit={handleApplyCustom} className="pt-2.5 border-t border-gray-100 dark:border-gray-800 flex flex-wrap items-center gap-2.5 animate-in fade-in duration-200">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto">
             <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
-              {language === 'tr' ? 'Başlangıç:' : 'From:'}
+              {language === 'tr' ? 'Başlangıç Tarihi:' : 'Start Date:'}
             </label>
             <input
               type="date"
               value={customStart}
               onChange={(e) => setCustomStart(e.target.value)}
-              className="px-2.5 py-1 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="px-2.5 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer w-full sm:w-auto"
             />
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full sm:w-auto">
             <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
-              {language === 'tr' ? 'Bitiş:' : 'To:'}
+              {language === 'tr' ? 'Bitiş Tarihi:' : 'End Date:'}
             </label>
             <input
               type="date"
               value={customEnd}
               onChange={(e) => setCustomEnd(e.target.value)}
-              className="px-2.5 py-1 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="px-2.5 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer w-full sm:w-auto"
             />
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 w-full sm:w-auto pt-1 sm:pt-0">
             <button
               type="submit"
-              className="px-3 py-1 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+              className="flex-1 sm:flex-initial px-4 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs transition-all cursor-pointer text-center"
             >
-              ✓ {language === 'tr' ? 'Uygula' : 'Apply'}
+              ✓ {language === 'tr' ? 'Tarih Aralığını Uygula' : 'Apply Range'}
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="px-2.5 py-1 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 transition-colors cursor-pointer"
             >
               {language === 'tr' ? 'Vazgeç' : 'Cancel'}
             </button>
