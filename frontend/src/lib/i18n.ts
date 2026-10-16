@@ -38,6 +38,7 @@ export interface Translations {
     catalysts: string;
     portfolio: string;
     dividend: string;
+    forecast: string;
     scorecard: string;
     orb: string;
     quant: string;
@@ -314,6 +315,7 @@ export const translations: Record<Language, Translations> = {
       catalysts: '⚡ Catalysts & KAP',
       portfolio: 'My Portfolio & DCA',
       dividend: 'Dividend Cashflow',
+      forecast: '🔮 Dividend Forecast & Comparator',
       scorecard: 'Strategy Scorecard',
       orb: 'Opening Direction',
       quant: '🏛️ Institutional Quant',
@@ -588,6 +590,7 @@ export const translations: Record<Language, Translations> = {
       catalysts: '⚡ Katalizörler & KAP',
       portfolio: 'Portföyüm & Kademeli Alım',
       dividend: 'Temettü Nakit Akışı',
+      forecast: '🔮 Temettü Projeksiyonu & Kıyaslama',
       scorecard: 'Strateji Karnesi',
       orb: 'Açılış Yönü',
       quant: '🏛️ Kurumsal Quant',

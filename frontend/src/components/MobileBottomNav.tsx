@@ -27,6 +27,15 @@ export default function MobileBottomNav({
 
   const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string }[] = [
     {
+      id: 'forecast',
+      labelTr: 'Temettü Projeksiyonu & Kıyaslama',
+      labelEn: 'Dividend Forecast & Comparator',
+      icon: '🔮',
+      descTr: 'DRIP simülatörü, kartopu hedefleri ve BIST/Midas ABD hisseleri kıyaslaması',
+      descEn: 'DRIP compounding simulator, snowball milestones & BIST/US stock comparator',
+      badge: 'YENİ',
+    },
+    {
       id: 'quant',
       labelTr: 'Kurumsal Quant Hub',
       labelEn: 'Institutional Quant Hub',
@@ -58,7 +67,7 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['quant', 'dividend', 'orb'].includes(activeTab);
+  const isMoreActive = ['quant', 'dividend', 'orb', 'forecast'].includes(activeTab);
 
   return (
     <>
@@ -255,10 +264,14 @@ export default function MobileBottomNav({
                 : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
             }`}
           >
-            <span className="text-lg leading-none mb-0.5">{isMoreActive ? '🏛️' : '☰'}</span>
+            <span className="text-lg leading-none mb-0.5">
+              {isMoreActive
+                ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'dividend' ? '💰' : '🔔')
+                : '☰'}
+            </span>
             <span className="text-[10px] tracking-tight">
               {isMoreActive
-                ? (activeTab === 'quant' ? 'Quant' : activeTab === 'dividend' ? 'Temettü' : 'Açılış')
+                ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'dividend' ? 'Temettü' : 'Açılış')
                 : (language === 'tr' ? 'Diğer' : 'More')}
             </span>
           </button>

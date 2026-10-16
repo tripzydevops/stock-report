@@ -3,7 +3,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'scorecard' | 'orb' | 'catalysts' | 'quant';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant';
 
 interface NavigationTabsProps {
   activeTab: TabId;
@@ -22,6 +22,7 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
     { id: 'quant', label: t.tabs.quant, icon: '🏛️', count: 'Quant', mobileShort: 'Quant' },
     { id: 'portfolio', label: t.tabs.portfolio, icon: '💼', mobileShort: language === 'tr' ? 'Portföy' : 'Portfolio' },
     { id: 'dividend', label: t.tabs.dividend, icon: '💰', mobileShort: language === 'tr' ? 'Temettü' : 'Dividend' },
+    { id: 'forecast', label: t.tabs.forecast, icon: '🔮', count: 'DRIP Lab', mobileShort: language === 'tr' ? 'Projeksiyon' : 'Forecast' },
     { id: 'scorecard', label: t.tabs.scorecard, icon: '📈', count: '1,173', mobileShort: language === 'tr' ? 'Karne' : 'Scorecard' },
     { id: 'orb', label: t.tabs.orb, icon: '🔔', mobileShort: language === 'tr' ? 'Açılış' : 'Opening' },
   ];

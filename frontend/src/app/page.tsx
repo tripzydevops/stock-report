@@ -11,6 +11,7 @@ import AddHoldingModal from '../components/AddHoldingModal';
 import TradeHoldingModal from '../components/TradeHoldingModal';
 import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
+import DividendForecastView from '../components/DividendForecastView';
 import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
 import CatalystFeedView from '../components/CatalystFeedView';
@@ -2974,6 +2975,15 @@ export default function Home() {
               }, true);
               handleTabChange('portfolio');
             }}
+          />
+        )}
+
+        {/* TAB: DIVIDEND FORECAST & COMPARATOR */}
+        {activeTab === 'forecast' && (
+          <DividendForecastView
+            usdTryRate={usdTryRate}
+            userDividendAssets={dividends}
+            onSelectTicker={handleSelectTicker}
           />
         )}
 
