@@ -41,21 +41,21 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
   const currentActiveTabObj = tabs.find(t => t.id === activeTab) || tabs[0];
 
   return (
-    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-14 sm:top-16 z-30 shadow-xs">
+    <div className="bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-14 sm:top-16 z-30 shadow-xs">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         {/* MOBILE VIEW (< 640px): Prominent Full-Page Dropdown Selector */}
-        <div className="sm:hidden pt-2.5 pb-1">
-          <div className="flex items-center justify-between gap-2 bg-gray-50 dark:bg-gray-800/80 p-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xs">
+        <div className="sm:hidden pt-2 pb-1">
+          <div className="flex items-center justify-between gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
             <div className="flex items-center gap-1.5 pl-1 shrink-0">
               <span className="text-sm">{currentActiveTabObj.icon}</span>
-              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
                 {language === 'tr' ? 'Sayfa:' : 'Page:'}
               </span>
             </div>
             <select
               value={activeTab}
               onChange={(e) => onTabChange(e.target.value as TabId)}
-              className="flex-1 text-xs font-black py-1 px-2.5 rounded-lg bg-white dark:bg-gray-750 text-blue-600 dark:text-blue-400 border border-gray-200 dark:border-gray-600 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="flex-1 text-xs font-black py-1 px-2.5 rounded-lg bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               {tabs.map((tab) => (
                 <option key={tab.id} value={tab.id}>
@@ -69,7 +69,7 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
         {/* HORIZONTAL SWIPEABLE TABS WITH VISUAL OVERFLOW HINTS */}
         <div className="relative">
           {/* Left subtle fade */}
-          <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-white dark:from-gray-900 to-transparent pointer-events-none z-10 sm:hidden" />
+          <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-white dark:from-[#090e1a] to-transparent pointer-events-none z-10 sm:hidden" />
           
           {/* Scrollable tab strip */}
           <div
@@ -86,7 +86,7 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
                   className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/30'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:white hover:bg-gray-100 dark:hover:bg-gray-800'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   <span className="text-sm">{tab.icon}</span>
@@ -96,7 +96,7 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
                       className={`ml-1 text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full font-bold ${
                         isActive
                           ? 'bg-blue-700 text-blue-100'
-                          : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       {tab.count}

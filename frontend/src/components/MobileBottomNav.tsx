@@ -81,11 +81,11 @@ export default function MobileBottomNav({
           />
 
           {/* Drawer Content */}
-          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white dark:bg-gray-900 rounded-t-3xl border-t border-gray-200 dark:border-gray-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250">
+          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-xl rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250">
             {/* Grab Handle */}
-            <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto" />
+            <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
 
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
                   <span>📱</span>
@@ -188,7 +188,7 @@ export default function MobileBottomNav({
       {/* Fixed Bottom Navigation Bar (Mobile Only: < 768px) */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] px-1 py-1 safe-bottom"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#080d17]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] px-1 py-1 safe-bottom"
       >
         <div className="grid grid-cols-5 items-center justify-around">
           {/* Tab 1: Signals */}

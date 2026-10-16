@@ -66,11 +66,11 @@ export default function DateFilterBar({
   const isActive = currentFilter.preset !== 'ALL';
 
   return (
-    <div className={`bg-white dark:bg-gray-850/90 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-800 p-3 sm:p-4 shadow-sm space-y-3 transition-all ${className}`}>
+    <div className={`bg-white/80 dark:bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-200/80 dark:border-slate-800/80 p-2.5 sm:p-3.5 shadow-sm space-y-2.5 transition-all ${className}`}>
       {/* Top Header Row with Active Filter Label */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 text-sm shadow-xs shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-blue-500/10 dark:bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 text-xs shadow-xs shrink-0">
             📅
           </div>
           <div>
@@ -122,7 +122,7 @@ export default function DateFilterBar({
                 className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/40'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-750 border border-gray-200/60 dark:border-gray-700'
+                    : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/60'
                 }`}
               >
                 <span className="text-sm leading-none mb-0.5">{p.icon}</span>
@@ -136,13 +136,13 @@ export default function DateFilterBar({
 
         {/* Mobile Dropdown for All Choices including Custom & This Month */}
         <div className="flex items-center gap-2 pt-1">
-          <label className="text-[11px] font-bold text-gray-500 shrink-0">
+          <label className="text-[11px] font-bold text-slate-500 shrink-0">
             {language === 'tr' ? 'Daha Fazla:' : 'More:'}
           </label>
           <select
             value={isCustomOpen ? 'CUSTOM' : currentFilter.preset}
             onChange={(e) => handleSelectPreset(e.target.value as DateFilterPreset)}
-            className="flex-1 text-xs font-bold py-1.5 px-3 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            className="flex-1 text-xs font-bold py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/90 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
           >
             {presets.map(p => (
               <option key={p.id} value={p.id}>
@@ -165,7 +165,7 @@ export default function DateFilterBar({
               className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 isSelected
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/40'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-transparent'
+                  : 'bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700/60'
               }`}
             >
               <span>{p.icon}</span>

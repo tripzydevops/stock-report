@@ -299,7 +299,7 @@ export const translations: Record<Language, Translations> = {
     },
     header: {
       title: 'MarketPulse',
-      subtitle: 'Autonomous Travel & Market Intelligence Engine',
+      subtitle: 'Institutional Market & Dividend Intelligence Terminal',
       syncData: 'Sync Market Data',
       syncing: 'Syncing...',
       syncShort: 'Sync',
@@ -574,7 +574,7 @@ export const translations: Record<Language, Translations> = {
     },
     header: {
       title: 'MarketPulse',
-      subtitle: 'Otonom Seyahat & Piyasa İstihbarat Motoru',
+      subtitle: 'Kurumsal Piyasa & Temettü İstihbarat Terminali',
       syncData: 'Piyasa Verilerini Senkronize Et',
       syncing: 'Senkronize Ediliyor...',
       syncShort: 'Senk',

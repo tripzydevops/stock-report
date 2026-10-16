@@ -2368,9 +2368,9 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-100 dark:bg-[#0b0f19] text-gray-900 dark:text-gray-100 pb-28 sm:pb-20">
+    <main className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 pb-28 sm:pb-20 antialiased selection:bg-blue-500/20">
       {/* Top Header */}
-      <header className="bg-white dark:bg-gray-900 shadow-sm sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800">
+      <header className="bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-md shadow-xs sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30">
@@ -2522,7 +2522,7 @@ export default function Home() {
       <NavigationTabs activeTab={activeTab} onTabChange={handleTabChange} catalystsCount={catalysts.length} />
 
       {/* Regime Banners (Always visible on top) */}
-      <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} />
+      <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} usdTryRate={usdTryRate} />
 
       {/* Main Tab Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -2534,7 +2534,70 @@ export default function Home() {
 
         {/* TAB 1: SIGNALS & SCANNER */}
         {activeTab === 'signals' && (
-          <div className="space-y-8">
+          <div className="space-y-6">
+            {/* Executive Quick Stats Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {language === 'tr' ? 'Aktif Sinyal Havuzu' : 'Active Alpha Signals'}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-xl font-black text-slate-900 dark:text-white font-mono">
+                      {signals.length}
+                    </span>
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      {signals.filter(s => s.market === 'BIST').length} BIST · {signals.filter(s => s.market === 'US').length} US
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {language === 'tr' ? 'Kademeli alım & momentum fırsatları' : 'DCA dip & momentum setups'}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center text-lg font-black shrink-0">
+                  ⚡
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {language === 'tr' ? 'İskontolu Temettü Verimi' : 'Dividend Accumulation'}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      %7.09 – %8.55
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {language === 'tr' ? 'ISMEN & TURSG alım bölgesinde' : 'ISMEN & TURSG in deep buy zone'}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-lg font-black shrink-0">
+                  💎
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {language === 'tr' ? 'Piyasa Yönü & Rejim' : 'Market Regime Context'}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                      SPY: {usRegime?.status || 'Bullish'} · BIST: {bistRegime?.status || 'Bearish'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {language === 'tr' ? 'BIST 11.682 destek testi; disiplinli kademe' : 'BIST 11,682 support retest; disciplined DCA'}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-lg font-black shrink-0">
+                  🌐
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col lg:flex-row gap-8">
               <div className="lg:w-2/3 space-y-4">
                 <div className="flex justify-between items-end flex-wrap gap-2">
