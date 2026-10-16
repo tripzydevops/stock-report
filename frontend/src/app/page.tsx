@@ -66,26 +66,26 @@ const INITIAL_SIGNALS: TradeSignal[] = [
 const INITIAL_PORTFOLIO: PortfolioItem[] = [
   {
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', market: 'BIST',
-    shares: 35, entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
-    totalCost: 2492.00, currentValue: 2453.50, pnlAmount: -38.50, pnlPercent: -1.54,
-    stopLoss: 67.50, targetPrice: 82.00, distanceToStop: 3.7, isDividend: false,
-    dcaZone: 'BUY', dcaRationale: 'Major private bank holding; pullback to 50 EMA support.',
+    shares: 35, entryPrice: 71.20, currentPrice: 66.90, currency: 'TRY',
+    totalCost: 2492.00, currentValue: 2341.50, pnlAmount: -150.50, pnlPercent: -6.04,
+    stopLoss: 67.50, targetPrice: 82.00, distanceToStop: -0.9, isDividend: false,
+    dcaZone: 'PAUSE', dcaRationale: 'Stop loss level (₺67.50) breached on index selloff; pause new buying.',
     entryDate: '2026-09-24', strategyType: 'SWING'
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
-    shares: 215, entryPrice: 31.09, currentPrice: 31.48, currency: 'TRY',
-    totalCost: 6684.68, currentValue: 6768.20, pnlAmount: 83.52, pnlPercent: 1.25,
+    shares: 215, entryPrice: 31.09, currentPrice: 28.78, currency: 'TRY',
+    totalCost: 6684.68, currentValue: 6187.70, pnlAmount: -496.98, pnlPercent: -7.43,
     stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'High dividend cashflow provider; holding structural support.',
+    dcaZone: 'BUY', dcaRationale: 'Flash discount below ₺29.00; Forward dividend yield surges to 8.55%. Prime DCA accumulation tranche.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
-    shares: 1263, entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
-    totalCost: 7391.85, currentValue: 7148.58, pnlAmount: -243.27, pnlPercent: -3.29,
+    shares: 1263, entryPrice: 5.85, currentPrice: 5.15, currency: 'TRY',
+    totalCost: 7391.85, currentValue: 6504.45, pnlAmount: -887.40, pnlPercent: -12.00,
     stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Insurance compounder with solid dividend yield; attractive accumulation level.',
+    dcaZone: 'BUY', dcaRationale: 'Deep index dip to ₺5.15; Net forward dividend yield jumps to 7.09%. Prime DCA accumulation tranche.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   }
 ];
@@ -93,8 +93,8 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
 const INITIAL_DIVIDENDS: DividendAsset[] = [
   {
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', shares: 35,
-    entryPrice: 71.20, currentPrice: 70.10, currency: 'TRY',
-    dividendYield: 4.52, yieldOnCost: 4.45, annualPayout: 110.80, monthlyPayout: 9.23,
+    entryPrice: 71.20, currentPrice: 66.90, currency: 'TRY',
+    dividendYield: 4.73, yieldOnCost: 4.45, annualPayout: 110.80, monthlyPayout: 9.23,
     payoutRatio: 28.5, safetyRating: 'A', frequency: 'Annual',
     nextExDate: '2027-03-26', nextPaymentDate: '2027-03-30',
     estimatedNextDPS: 3.165, estimatedNextPayout: 110.80,
@@ -102,8 +102,8 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
   },
   {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', shares: 215,
-    entryPrice: 31.09, currentPrice: 31.48, currency: 'TRY',
-    dividendYield: 7.82, yieldOnCost: 7.92, annualPayout: 529.27, monthlyPayout: 44.11,
+    entryPrice: 31.09, currentPrice: 28.78, currency: 'TRY',
+    dividendYield: 8.55, yieldOnCost: 7.92, annualPayout: 529.27, monthlyPayout: 44.11,
     payoutRatio: 58.4, safetyRating: 'A', frequency: 'Annual',
     nextExDate: '2027-03-29', nextPaymentDate: '2027-04-02',
     estimatedNextDPS: 2.462, estimatedNextPayout: 529.33,
@@ -111,8 +111,8 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 1263,
-    entryPrice: 5.85, currentPrice: 5.66, currency: 'TRY',
-    dividendYield: 6.45, yieldOnCost: 6.24, annualPayout: 460.60, monthlyPayout: 38.38,
+    entryPrice: 5.85, currentPrice: 5.15, currency: 'TRY',
+    dividendYield: 7.09, yieldOnCost: 6.24, annualPayout: 460.60, monthlyPayout: 38.38,
     payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual',
     nextExDate: '2027-05-22', nextPaymentDate: '2027-05-26',
     estimatedNextDPS: 0.3647, estimatedNextPayout: 460.60,
@@ -846,7 +846,7 @@ export default function Home() {
     status: 'Bullish', close: 771.35, trend: 'up'
   });
   const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Neutral', close: 12550.94, trend: 'flat'
+    status: 'Bearish', close: 11682.95, trend: 'down'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'BIST' | 'US'>('ALL');
