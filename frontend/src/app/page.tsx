@@ -1475,12 +1475,17 @@ export default function Home() {
 
     function generateFallbackAssets() {
       const topSymbols = [
-        { s: 'SPY', n: 'SPDR S&P 500 ETF', m: 'US', p: 545.20, c: 0.82, r: 62.4, e: 'Above 200 EMA', v: 1.15 },
-        { s: 'QQQ', n: 'Invesco QQQ Trust', m: 'US', p: 480.15, c: 1.25, r: 68.5, e: 'Above 200 EMA', v: 1.30 },
-        { s: 'NVDA', n: 'NVIDIA Corp', m: 'US', p: 125.40, c: 2.10, r: 64.2, e: 'Above 200 EMA', v: 1.85 },
+        { s: 'SPY', n: 'SPDR S&P 500 ETF', m: 'US', p: 575.20, c: 0.82, r: 62.4, e: 'Above 200 EMA', v: 1.15 },
+        { s: 'QQQ', n: 'Invesco QQQ Trust', m: 'US', p: 495.15, c: 1.25, r: 68.5, e: 'Above 200 EMA', v: 1.30 },
+        { s: 'VOO', n: 'Vanguard S&P 500 ETF', m: 'US', p: 528.40, c: 0.28, r: 50.5, e: 'Above 200 EMA', v: 1.05 },
+        { s: 'SCHD', n: 'Schwab US Dividend ETF', m: 'US', p: 83.10, c: 0.35, r: 55.0, e: 'Above 200 EMA', v: 1.05 },
+        { s: 'JEPI', n: 'JPMorgan Equity Premium ETF', m: 'US', p: 57.16, c: 0.51, r: 67.1, e: 'Above 200 EMA', v: 1.20 },
+        { s: 'O', n: 'Realty Income Corp (REIT)', m: 'US', p: 55.55, c: 0.69, r: 52.3, e: 'Above 200 EMA', v: 1.10 },
+        { s: 'VICI', n: 'VICI Properties Inc (REIT)', m: 'US', p: 32.46, c: 2.27, r: 48.9, e: 'Above 200 EMA', v: 1.35 },
+        { s: 'PLD', n: 'Prologis Inc (REIT)', m: 'US', p: 126.94, c: -2.70, r: 35.9, e: 'Near 50 EMA', v: 0.95 },
+        { s: 'KO', n: 'The Coca-Cola Co', m: 'US', p: 68.50, c: 0.24, r: 61.1, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'NVDA', n: 'NVIDIA Corp', m: 'US', p: 135.40, c: 2.10, r: 64.2, e: 'Above 200 EMA', v: 1.85 },
         { s: 'AAPL', n: 'Apple Inc.', m: 'US', p: 231.80, c: 0.45, r: 56.1, e: 'Above 200 EMA', v: 0.95 },
-        { s: 'SCHD', n: 'Schwab US Dividend ETF', m: 'US', p: 82.10, c: 0.35, r: 48.0, e: 'Above 200 EMA', v: 1.05 },
-        { s: 'O', n: 'Realty Income Corp', m: 'US', p: 54.30, c: -0.20, r: 42.5, e: 'Near 50 EMA', v: 0.88 },
         { s: 'THYAO', n: 'Türk Hava Yolları', m: 'BIST', p: 326.50, c: 2.45, r: 58.2, e: 'Above 200 EMA', v: 2.10 },
         { s: 'TUPRS', n: 'Tüpraş', m: 'BIST', p: 165.20, c: -1.15, r: 42.1, e: 'Near 50 EMA', v: 0.82 },
         { s: 'ASELS', n: 'Aselsan', m: 'BIST', p: 374.50, c: 3.10, r: 66.4, e: 'Above 200 EMA', v: 2.40 },

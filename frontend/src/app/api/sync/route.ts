@@ -10,7 +10,11 @@ const HIGH_PRIORITY_SYMBOLS = [
   'ISMEN.IS', 'TURSG.IS', 'HALKB.IS', 'AKBNK.IS', 'SOKM.IS',
   'BRSAN.IS', 'CCOLA.IS', 'KCHOL.IS', 'KRDMD.IS', 'MPARK.IS', 'TKFEN.IS', 'TRMET.IS', 'VAKBN.IS',
   'THYAO.IS', 'TUPRS.IS', 'ASELS.IS', 'BIMAS.IS', 'EREGL.IS', 'FROTO.IS', 'SISE.IS',
-  'SPY', 'QQQ', 'NVDA', 'AAPL', 'AMZN', 'GOOGL', 'SCHD', 'O',
+  // US Equities, Midas REITs & High-Yield ETFs
+  'SPY', 'QQQ', 'VOO', 'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'AVGO', 'COST',
+  'O', 'VICI', 'PLD', 'AMT', 'EQIX', 'STAG', 'SPG',
+  'SCHD', 'JEPI', 'JEPQ', 'VNQ', 'VYM', 'SMH', 'TLT', 'GLD',
+  'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B',
   'XU100.IS', 'TRY=X'
 ];
 

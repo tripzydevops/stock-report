@@ -61,9 +61,41 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
             <input 
               type="text" required 
               value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g. AAPL"
+              placeholder="e.g. AAPL, O, SCHD"
               className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white uppercase"
             />
+          </div>
+
+          {/* Quick-add Midas Favorites Chips */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+              Popular Midas US Assets (REITs, ETFs & Dividend Kings):
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { s: 'O', n: 'Realty Income (Monthly REIT)', c: 'Stock' },
+                { s: 'VICI', n: 'VICI Properties (REIT)', c: 'Stock' },
+                { s: 'SCHD', n: 'Schwab US Dividend ETF', c: 'ETF' },
+                { s: 'JEPI', n: 'JPMorgan Equity Premium ETF', c: 'ETF' },
+                { s: 'PLD', n: 'Prologis (Logistics REIT)', c: 'Stock' },
+                { s: 'VOO', n: 'Vanguard S&P 500 ETF', c: 'ETF' },
+                { s: 'KO', n: 'The Coca-Cola Co (Dividend King)', c: 'Stock' },
+              ].map(q => (
+                <button
+                  key={q.s}
+                  type="button"
+                  onClick={() => {
+                    setSymbol(q.s);
+                    setName(q.n);
+                    setAssetClass(q.c);
+                    setMarket('US');
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800 transition-colors cursor-pointer"
+                >
+                  +{q.s}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
