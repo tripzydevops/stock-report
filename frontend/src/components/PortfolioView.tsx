@@ -8,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
+import DcaOffsetEngine from './DcaOffsetEngine';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -788,15 +789,34 @@ export default function PortfolioView({
                 {isExpanded && (
                   <div className="bg-blue-50/40 dark:bg-blue-950/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-900/60 space-y-2 mt-2">
                     <div className="text-xs font-black text-gray-800 dark:text-gray-200 flex justify-between items-center">
-                      <span>📦 Alım Kademeleri</span>
+                      <span>📦 {language === 'tr' ? 'Alım Kademeleri & Lot Dağılımı' : 'Purchase Tranches Breakdown'}</span>
                       <button
                         type="button"
                         onClick={() => onTradeHolding?.(item)}
                         className="text-[11px] text-blue-600 font-bold hover:underline"
                       >
-                        + Yeni Kademe
+                        + {language === 'tr' ? 'Yeni Kademe' : 'New Tranche'}
                       </button>
                     </div>
+
+                    {/* Mobile DCA Offset & Breakeven Engine */}
+                    {lots.length > 1 && (
+                      <DcaOffsetEngine
+                        symbol={item.symbol}
+                        name={item.name}
+                        currency={item.currency}
+                        totalShares={item.shares}
+                        avgEntryPrice={item.entryPrice}
+                        currentPrice={item.currentPrice}
+                        totalCost={item.totalCost}
+                        currentValue={item.currentValue}
+                        isDividend={item.isDividend}
+                        lots={lots}
+                        formatCurr={formatCurr}
+                        onTradeHolding={() => onTradeHolding?.(item)}
+                      />
+                    )}
+
                     <div className="space-y-1.5">
                       {lots.map(lot => (
                         <div key={lot.id} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-100 dark:border-gray-700 flex justify-between items-center text-[11px]">
@@ -1598,6 +1618,24 @@ export default function PortfolioView({
                                 </button>
                               </div>
                             </div>
+
+                            {/* DCA Offset & Breakeven Compression Engine */}
+                            {lots.length > 1 && (
+                              <DcaOffsetEngine
+                                symbol={item.symbol}
+                                name={item.name}
+                                currency={item.currency}
+                                totalShares={item.shares}
+                                avgEntryPrice={item.entryPrice}
+                                currentPrice={item.currentPrice}
+                                totalCost={item.totalCost}
+                                currentValue={item.currentValue}
+                                isDividend={item.isDividend}
+                                lots={lots}
+                                formatCurr={formatCurr}
+                                onTradeHolding={() => onTradeHolding?.(item)}
+                              />
+                            )}
 
                             <div className="overflow-x-auto">
                               <table className="w-full text-left text-xs">
