@@ -36,6 +36,7 @@ import {
   ScannedTradeSignal,
   MarketCatalyst,
 } from '../lib/supabaseClient';
+import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES } from '../lib/dividendForecastMath';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
   {
@@ -83,8 +84,8 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
-    shares: 1263, entryPrice: 5.85, currentPrice: 5.15, currency: 'TRY',
-    totalCost: 7391.85, currentValue: 6504.45, pnlAmount: -887.40, pnlPercent: -12.00,
+    shares: 1771, entryPrice: 5.62, currentPrice: 5.15, currency: 'TRY',
+    totalCost: 9951.53, currentValue: 9120.65, pnlAmount: -830.88, pnlPercent: -8.35,
     stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Deep index dip to ₺5.15; Net forward dividend yield jumps to 7.09%. Prime DCA accumulation tranche.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
@@ -111,12 +112,12 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
     payoutMonth: 'March / April 2027', paymentStatus: 'Estimated'
   },
   {
-    symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 1263,
-    entryPrice: 5.85, currentPrice: 5.15, currency: 'TRY',
-    dividendYield: 7.09, yieldOnCost: 6.24, annualPayout: 460.60, monthlyPayout: 38.38,
+    symbol: 'TURSG', name: 'Türkiye Sigorta', shares: 1771,
+    entryPrice: 5.62, currentPrice: 5.15, currency: 'TRY',
+    dividendYield: 7.09, yieldOnCost: 6.50, annualPayout: 646.65, monthlyPayout: 53.89,
     payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual',
     nextExDate: '2027-05-22', nextPaymentDate: '2027-05-26',
-    estimatedNextDPS: 0.3647, estimatedNextPayout: 460.60,
+    estimatedNextDPS: 0.3647, estimatedNextPayout: 645.88,
     payoutMonth: 'May 2027', paymentStatus: 'Estimated'
   }
 ];
@@ -893,6 +894,11 @@ export default function Home() {
     }
   };
 
+  // Keep Dividend Cashflow automatically and 100% synchronized with live portfolio holdings
+  useEffect(() => {
+    setDividends(prev => deriveDividendsFromPortfolio(portfolio, prev));
+  }, [portfolio]);
+
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
     const matched = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === clean);
@@ -1403,7 +1409,14 @@ export default function Home() {
             const storedOverrides = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('portfolio_strategy_overrides') || '{}') : {};
             const cleanUpper = cleanSym.toUpperCase();
             const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
-            const isCoreDiv = overrideStrategy ? (overrideStrategy === 'CORE_DIVIDEND') : ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanUpper);
+            const isCoreDiv = overrideStrategy 
+              ? (overrideStrategy === 'CORE_DIVIDEND') 
+              : Boolean(
+                  MASTER_GROWTH_PROFILES[cleanUpper] || 
+                  ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O', 'VICI', 'JEPI', 'JEPQ', 'VOO', 'VNQ', 'VYM', 'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B', 'AVGO', 'COST', 'AKBNK'].includes(cleanUpper) ||
+                  pos.notes?.toLowerCase().includes('dividend') ||
+                  pos.notes?.toLowerCase().includes('core')
+                );
             const matchedSig = signals?.find((s: TradeSignal) => s.symbol.replace('.IS', '').toUpperCase() === cleanUpper);
             const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
             const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
@@ -1460,6 +1473,7 @@ export default function Home() {
           });
 
           setPortfolio(mappedPortfolio);
+          setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev));
         }
 
         const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -1681,7 +1695,7 @@ export default function Home() {
 
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv: boolean, divYield?: number) => {
     const cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
-    const isCoreDiv = isDiv || ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O'].includes(cleanSymUpper);
+    const isCoreDiv = isDiv || Boolean(MASTER_GROWTH_PROFILES[cleanSymUpper]) || ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O', 'VICI', 'JEPI', 'JEPQ', 'VOO', 'VNQ', 'VYM', 'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B', 'AVGO', 'COST', 'AKBNK'].includes(cleanSymUpper);
     const enrichedHolding: PortfolioItem = {
       ...newHolding,
       entryDate: newHolding.entryDate || new Date().toISOString().slice(0, 10),
@@ -1842,7 +1856,7 @@ export default function Home() {
     const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
     
     setPortfolio(prev => {
-      return prev.map(item => {
+      const updated = prev.map(item => {
         if (item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return item;
         const totalShares = item.shares + additionalShares;
         const currentCost = item.shares * item.entryPrice;
@@ -1865,33 +1879,16 @@ export default function Home() {
           distanceToStop: distToStop
         };
       });
+
+      // Synchronize dividend cashflow immediately
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+
+      return updated;
     });
 
     setSyncFeedback({
       message: `Successfully added ${additionalShares} shares of ${cleanSymUpper} (DCA Lot)!`,
       type: 'success'
-    });
-
-    // Update dividends if present
-    setDividends(prev => {
-      return prev.map(div => {
-        if (div.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return div;
-        const targetHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
-        const oldShares = targetHolding ? targetHolding.shares : div.shares;
-        const oldPrice = targetHolding ? targetHolding.entryPrice : div.entryPrice;
-        const totalShares = oldShares + additionalShares;
-        const blendedEntry = totalShares > 0 ? ((oldShares * oldPrice) + (additionalShares * buyPrice)) / totalShares : oldPrice;
-        const newYoC = blendedEntry > 0 ? ((div.currentPrice * div.dividendYield) / blendedEntry) : div.dividendYield;
-
-        return {
-          ...div,
-          shares: totalShares,
-          entryPrice: blendedEntry,
-          yieldOnCost: newYoC,
-          annualPayout: (totalShares * div.currentPrice * div.dividendYield) / 100,
-          monthlyPayout: (totalShares * div.currentPrice * div.dividendYield) / 1200
-        };
-      });
     });
 
     // Persist to Supabase
@@ -2282,22 +2279,27 @@ export default function Home() {
     let newStrategy: 'CORE_DIVIDEND' | 'SWING' = 'SWING';
     let newStopLoss = 0;
 
-    setPortfolio(prev => prev.map(item => {
-      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
-      const willBeSwing = item.strategyType === 'CORE_DIVIDEND' || item.isDividend;
-      newStrategy = willBeSwing ? 'SWING' : 'CORE_DIVIDEND';
-      // When switching to SWING: provide an initial sensible stop loss (e.g. 5% under entry or existing stop)
-      newStopLoss = willBeSwing ? (item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2))) : 0;
-      const distToStop = newStopLoss > 0 && item.currentPrice > 0 ? ((item.currentPrice - newStopLoss) / item.currentPrice) * 100 : 0;
+    setPortfolio(prev => {
+      const updated = prev.map(item => {
+        if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+        const willBeSwing = item.strategyType === 'CORE_DIVIDEND' || item.isDividend;
+        newStrategy = willBeSwing ? 'SWING' : 'CORE_DIVIDEND';
+        // When switching to SWING: provide an initial sensible stop loss (e.g. 5% under entry or existing stop)
+        newStopLoss = willBeSwing ? (item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2))) : 0;
+        const distToStop = newStopLoss > 0 && item.currentPrice > 0 ? ((item.currentPrice - newStopLoss) / item.currentPrice) * 100 : 0;
 
-      return {
-        ...item,
-        strategyType: newStrategy,
-        isDividend: newStrategy === 'CORE_DIVIDEND',
-        stopLoss: newStopLoss,
-        distanceToStop: distToStop
-      };
-    }));
+        return {
+          ...item,
+          strategyType: newStrategy,
+          isDividend: newStrategy === 'CORE_DIVIDEND',
+          stopLoss: newStopLoss,
+          distanceToStop: distToStop
+        };
+      });
+
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+      return updated;
+    });
 
     // Cache locally so it immediately persists across sessions
     try {

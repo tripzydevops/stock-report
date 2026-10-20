@@ -686,3 +686,104 @@ export const MASTER_COMPARATOR_ASSETS: DividendComparatorAsset[] = [
     thesisEn: 'Global logistics real estate leader benefiting from secular e-commerce warehousing expansion.',
   },
 ];
+
+/**
+ * Automatically synchronizes and derives DividendAsset items from the user's live Portfolio holdings.
+ * Keeps dividend cashflow, upcoming schedules, and annual payout metrics 100% in sync with portfolio trades.
+ */
+export function deriveDividendsFromPortfolio(
+  portfolioList: Array<{
+    symbol: string;
+    name?: string;
+    shares: number;
+    entryPrice: number;
+    currentPrice: number;
+    currency?: string;
+    market?: string;
+    isDividend?: boolean;
+    strategyType?: string;
+  }>,
+  existingDivs: Array<{
+    symbol: string;
+    name: string;
+    shares: number;
+    currentPrice: number;
+    entryPrice: number;
+    currency: string;
+    dividendYield: number;
+    yieldOnCost: number;
+    annualPayout: number;
+    monthlyPayout: number;
+    payoutRatio: number;
+    safetyRating: 'A' | 'B' | 'C';
+    frequency: string;
+    nextExDate?: string;
+    nextPaymentDate?: string;
+    estimatedNextDPS?: number;
+    estimatedNextPayout?: number;
+    payoutMonth?: string;
+    paymentStatus?: 'Estimated' | 'Confirmed';
+  }> = []
+) {
+  const existingMap = new Map<string, (typeof existingDivs)[0]>();
+  for (const d of existingDivs) {
+    existingMap.set(d.symbol.replace('.IS', '').trim().toUpperCase(), d);
+  }
+
+  const result: typeof existingDivs = [];
+
+  for (const pos of portfolioList) {
+    if (pos.shares <= 0) continue;
+    const cleanSym = pos.symbol.replace('.IS', '').trim().toUpperCase();
+    const growthProfile = MASTER_GROWTH_PROFILES[cleanSym];
+    const existing = existingMap.get(cleanSym);
+
+    // Check if asset is a dividend holding
+    const isDivAsset = Boolean(
+      pos.isDividend ||
+      pos.strategyType === 'CORE_DIVIDEND' ||
+      existing ||
+      (growthProfile && growthProfile.currentYield > 0)
+    );
+
+    if (!isDivAsset) continue;
+
+    const divYield = growthProfile?.currentYield || existing?.dividendYield || 5.0;
+    const yoc = pos.entryPrice > 0 ? (pos.currentPrice * divYield) / pos.entryPrice : divYield;
+    const annualPayout = (pos.shares * pos.currentPrice * divYield) / 100;
+    const monthlyPayout = annualPayout / 12;
+
+    const frequency = growthProfile?.payoutFrequency || existing?.frequency || (pos.market === 'US' ? 'Quarterly' : 'Annual');
+    const payoutRatio = growthProfile?.payoutRatio || existing?.payoutRatio || 50.0;
+    const safetyRating = (growthProfile?.safetyGrade?.charAt(0) || existing?.safetyRating || 'A') as 'A' | 'B' | 'C';
+
+    const freqDiv = frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1;
+    const estimatedDPS = existing?.estimatedNextDPS || Number(((pos.currentPrice * (divYield / 100)) / freqDiv).toFixed(4));
+    const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
+
+    result.push({
+      symbol: cleanSym,
+      name: pos.name || cleanSym,
+      shares: pos.shares,
+      entryPrice: pos.entryPrice,
+      currentPrice: pos.currentPrice,
+      currency: pos.currency || (pos.market === 'US' ? 'USD' : 'TRY'),
+      dividendYield: divYield,
+      yieldOnCost: Number(yoc.toFixed(2)),
+      annualPayout: Number(annualPayout.toFixed(2)),
+      monthlyPayout: Number(monthlyPayout.toFixed(2)),
+      payoutRatio: payoutRatio,
+      safetyRating: safetyRating,
+      frequency: frequency,
+      nextExDate: existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-03-28'),
+      nextPaymentDate: existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-05'),
+      estimatedNextDPS: estimatedDPS,
+      estimatedNextPayout: estimatedNextPayout,
+      payoutMonth: existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'March / April 2027'),
+      paymentStatus: existing?.paymentStatus || 'Estimated'
+    });
+  }
+
+  return result;
+}
+

@@ -117,7 +117,7 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
             A- Grade
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            {language === 'tr' ? 'Tüm varlıklarda düşük temettü kesinti riski' : 'Low dividend cut probability across all 3 assets'}
+            {language === 'tr' ? `Portföydeki ${dividendAssets.length} temettü hissesinde güçlü bilanço` : `Low dividend cut probability across all ${dividendAssets.length} holdings`}
           </div>
         </div>
       </div>
