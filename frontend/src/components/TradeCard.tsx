@@ -160,6 +160,15 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   </span>
                 );
               }
+              const isT0Hit = signal.entryPrice > 0 && signal.currentPrice && Number(currentGainPct) >= 3.0;
+              if (isT0Hit) {
+                return (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 dark:bg-amber-600 text-white shadow-xs animate-pulse flex items-center gap-1" title={language === 'tr' ? "Kişisel Hızlı Kâr Bölgeniz (+%3-%4) Alındı" : "Your Personal Quick TP Target (+3% to +4%) Reached"}>
+                    <span>🎯</span>
+                    <span>{language === 'tr' ? `KİŞİSEL TP (+%${currentGainPct})` : `PERSONAL TP (+${currentGainPct}%)`}</span>
+                  </span>
+                );
+              }
               if (signal.isReconfirmed || (signal.daysInZone && signal.daysInZone > 1)) {
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-600 text-white shadow-xs flex items-center gap-1">
@@ -201,6 +210,8 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           <div className="flex flex-col">
             {(() => {
               const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+              const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
+              const isT0Hit = Boolean(signal.currentPrice && signal.currentPrice >= signal.entryPrice * 1.03);
               const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
               const isBist = signal.market === 'BIST' || signal.currency === 'TRY';
               const tavanCeiling = isBist ? Number((signal.entryPrice * 1.0999).toFixed(2)) : null;
@@ -217,6 +228,22 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                     {isTargetHit && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 px-1 rounded font-bold">✓ {language === 'tr' ? 'Alındı' : 'Hit'}</span>}
                   </span>
                   <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.targetPrice)}</span>
+                  
+                  {/* User Personal Quick Target T0 */}
+                  <div className="mt-1 pt-0.5">
+                    <span 
+                      className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                        isT0Hit 
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' 
+                          : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
+                      }`}
+                      title={language === 'tr' ? "Kişisel Hedefiniz: Kısa vadede +%3 ila +%4 hızlı kâr realizasyonu" : "Your Personal Target: Quick +3% to +4% profit realization"}
+                    >
+                      <span>⚡ T0 (%3-4): {formatPrice(t0Price)}</span>
+                      {isT0Hit && <span className="text-emerald-600 dark:text-emerald-400">✓</span>}
+                    </span>
+                  </div>
+
                   {t2Price > signal.targetPrice && (
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title={language === 'tr' ? "2.0x Risk:Ödül Koşucu Hedefi" : "Extended 2.0x Risk:Reward Runner Target"}>
                       T2: {formatPrice(t2Price)}
@@ -278,6 +305,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           const t1Shares = isHolding ? Math.max(1, Math.ceil(userHolding!.shares * 0.5)) : 0;
           const t2Shares = isHolding ? userHolding!.shares - t1Shares : 0;
           const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
+          const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
           const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
 
           if (isHolding) {
@@ -365,15 +393,15 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           }
 
           return (
-            <div className="my-2.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-300 flex items-center justify-between">
+            <div className="my-2.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <span className="font-bold flex items-center gap-1 text-gray-700 dark:text-gray-200">
-                <span>🎯</span> {language === 'tr' ? '50/50 Kısmi Çıkış Kuralı:' : '50/50 Scale-Out Rule:'}
+                <span>🎯</span> {language === 'tr' ? 'Kademeli Hedef & Çıkış Planı:' : 'Tiered Target & Exit Plan:'}
               </span>
               <span className="font-mono text-[10px]">
                 {language === 'tr' ? (
-                  <><strong>%50</strong> @ {formatPrice(signal.targetPrice)} · <strong>%50</strong> @ {formatPrice(t2Price)}</>
+                  <><strong>⚡ T0 (%3-4):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)}</>
                 ) : (
-                  <>Sell <strong>50%</strong> @ {formatPrice(signal.targetPrice)} · Sell <strong>50%</strong> @ {formatPrice(t2Price)}</>
+                  <><strong>⚡ T0 (3-4%):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)}</>
                 )}
               </span>
             </div>

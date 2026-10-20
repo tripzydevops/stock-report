@@ -39,10 +39,12 @@ export default function AiTradeCoPilotModal({
   const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
   const entry = asset.entryPrice || asset.currentPrice;
   const stop = asset.stopLoss || (entry * 0.95);
+  const target0 = entry * 1.035; // User personal 3-4% quick TP
   const target1 = asset.targetPrice || (entry * 1.10);
   const target2 = entry * 1.18;
   const breakevenLevel = entry * 1.002; // cover broker commission
   const isProfitable = (asset.pnlPercent || 0) >= 0;
+  const isPersonalTpHit = (asset.pnlPercent || 0) >= 3.0;
 
   // Synthesize intelligence based on asset profile
   const getMacroTailwind = (sym: string) => {
@@ -170,7 +172,10 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
               : `Since the position is currently around entry, keep your initial stop at ${curr}${stop.toFixed(2)}. Move to breakeven once price reaches +3% to +4% profit.`
           }`;
         } else if (isTargetProfitQuery) {
-          aiReply = `Institutional rule for ${cleanSym}: Sell 50% at Target 1 (${curr}${target1.toFixed(2)}) to lock in cash and de-risk. Move stop on remaining 50% to entry, then trail Target 2 (${curr}${target2.toFixed(2)}) along the 20-day EMA.`;
+          aiReply = `Exit blueprint for ${cleanSym}:
+• Your Personal Quick TP (+3% to +4%): Lock in initial profits at ${curr}${target0.toFixed(2)} to accelerate capital turnover.
+• System Target 1 (${curr}${target1.toFixed(2)}): Sell 50% to lock in full swing gains and move stop to entry.
+• System Target 2 Runner (${curr}${target2.toFixed(2)}): Trail the remaining position along the 20-day EMA.`;
         } else if (isAccumulateQuery) {
           aiReply = `For swing momentum setup ${cleanSym} (Current: ${curr}${asset.currentPrice.toFixed(2)}), avoid averaging down if price breaks below your stop loss (${curr}${stop.toFixed(2)}). Only add to winning positions on confirmed technical breakouts with volume.`;
         } else {
@@ -210,7 +215,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
         </div>
 
         {/* Level Stats Bar */}
-        <div className="grid grid-cols-4 gap-2 p-4 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700 text-center text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-4 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700 text-center text-xs">
           <div>
             <span className="text-[10px] text-gray-400 uppercase font-semibold">Current Price</span>
             <p className="font-bold text-gray-900 dark:text-white mt-0.5">
@@ -232,8 +237,15 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
             </p>
           </div>
           <div>
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-bold">Personal TP (3-4%)</span>
+            <p className="font-bold text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-1 font-mono">
+              <span>{curr}{target0.toFixed(2)}</span>
+              {isPersonalTpHit && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 px-1 rounded font-bold">✓</span>}
+            </p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
             <span className="text-[10px] text-emerald-500 uppercase font-semibold">Target 1</span>
-            <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+            <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
               {curr}{target1.toFixed(2)}
             </p>
           </div>
@@ -313,19 +325,24 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-300 uppercase font-bold">⚡ 1. Personal TP (%3-4)</span>
+                      <p className="font-bold text-amber-700 dark:text-amber-300 mt-0.5">{curr}{target0.toFixed(2)}</p>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 block mt-0.5">Quick turnover (1-3 sessions)</span>
+                    </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold">1. De-Risk Trigger</span>
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">2. De-Risk Trigger</span>
                       <p className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">{curr}{breakevenLevel.toFixed(2)}</p>
                       <span className="text-[10px] text-gray-500 block mt-0.5">Move stop to entry (Risk: ₺0)</span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold">2. Target 1 (50% Trim)</span>
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">3. Target 1 (50% Trim)</span>
                       <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{curr}{target1.toFixed(2)}</p>
                       <span className="text-[10px] text-gray-500 block mt-0.5">Lock 50% profit at R:R 1.5x</span>
                     </div>
                     <div className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-650">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold">3. Target 2 (Runner)</span>
+                      <span className="text-[10px] text-gray-400 uppercase font-semibold">4. Target 2 (Runner)</span>
                       <p className="font-bold text-purple-600 dark:text-purple-400 mt-0.5">{curr}{target2.toFixed(2)}</p>
                       <span className="text-[10px] text-gray-500 block mt-0.5">Trail with 20 EMA close</span>
                     </div>

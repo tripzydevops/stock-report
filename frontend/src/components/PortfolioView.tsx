@@ -716,6 +716,18 @@ export default function PortfolioView({
                       🎯 {formatCurr(effTarget, item.currency)}
                     </span>
 
+                    {/* Personal TP Target T0 */}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono ${
+                      item.pnlPercent >= 3.0 && item.pnlPercent <= 5.0
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse'
+                        : item.pnlPercent > 5.0
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/60'
+                    }`} title="Kişisel Hızlı Kâr Hedefi (+%3-%4)">
+                      ⚡ T0 (%3-4): {formatCurr(item.entryPrice * 1.035, item.currency)}
+                      {item.pnlPercent >= 3.0 && <span className="ml-0.5">✓</span>}
+                    </span>
+
                     {/* Effective R:R Badge */}
                     {(() => {
                       const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
@@ -1110,6 +1122,23 @@ export default function PortfolioView({
                             <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center justify-center gap-1">
                               <span>{timing.maxExitDateFormatted}</span>
                               <span className="font-bold">({timing.label})</span>
+                            </div>
+
+                            {/* Personal TP Target T0 */}
+                            <div className="mt-1 pt-0.5">
+                              <span 
+                                className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                                  item.pnlPercent >= 3.0 && item.pnlPercent <= 5.0
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse'
+                                    : item.pnlPercent > 5.0
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/60'
+                                }`}
+                                title="Kişisel Hızlı Kâr Hedefiniz (+%3-%4)"
+                              >
+                                <span>⚡ T0 (%3-4): {formatCurr(item.entryPrice * 1.035, item.currency)}</span>
+                                {item.pnlPercent >= 3.0 && <span>✓</span>}
+                              </span>
                             </div>
                             {(() => {
                               const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
