@@ -10,6 +10,7 @@ import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import DcaOffsetEngine from './DcaOffsetEngine';
 import PortfolioBriefModal from './PortfolioBriefModal';
+import { calculateLedgerCash } from '../lib/cashLedger';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -199,38 +200,26 @@ export default function PortfolioView({
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
-  // Capital Deposited (Principal Funded) calculations
-  const recordedDepositsTRY = transfers.length > 0
-    ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
-    : 17000.00;
+  // User Rule: Compute cash strictly as (All Deposits + All Sells - All Buys)
+  const ledgerCash = React.useMemo(() => {
+    return calculateLedgerCash(orders, transfers, usdTryRate);
+  }, [orders, transfers, usdTryRate]);
 
-  // Realized cost basis of closed positions
-  const totalRealizedCostTRY = realizedTrades.reduce((acc, trade) => {
-    const tradeCost = trade.sharesSold * trade.entryPrice;
-    return acc + (trade.currency === 'USD' ? tradeCost * usdTryRate : tradeCost);
-  }, 0);
+  const totalDepositedTRY = ledgerCash.totalDepositsTRY;
+  const cashValTRY = ledgerCash.availableCashTRY;
+  const totalValTRY = totalStockValTRY + cashValTRY;
 
-  // Peak capital ever funded: open positions cost + closed positions cost
-  const peakInvestedCapitalTRY = totalCostTRY + totalRealizedCostTRY;
-
-  // USER RULE: When adding a new holding without adding cash, assume cash was added (do NOT assume it came from profit)
-  // If peak capital exceeds recorded deposits, the excess was funded by new cash injection:
-  const autoInjectedCapitalTRY = Math.max(0, peakInvestedCapitalTRY - recordedDepositsTRY);
-  const totalDepositedTRY = recordedDepositsTRY + autoInjectedCapitalTRY;
+  const recordedDepositsTRY = React.useMemo(() => {
+    return transfers.length > 0
+      ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
+      : 17000.00;
+  }, [transfers]);
+  const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
 
   // Realized profit calculation
   const totalRealizedPnlTRY = realizedTrades.reduce((acc, trade) => {
     return acc + (trade.currency === 'USD' ? trade.realizedPnl * usdTryRate : trade.realizedPnl);
   }, 0);
-
-  // Dynamic Cash Balance Calculation:
-  // Liquid cash includes unallocated capital from deposits/exits plus realized profits from closed trades (Zero-fee trading).
-  const totalBrokerageFeesTRY = 0.00; // Zero commission / zero-fee trading
-  const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
-  const baseCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
-  const computedCashTRY = cashBalanceTRY !== undefined && cashBalanceTRY > baseCashTRY ? cashBalanceTRY : baseCashTRY;
-  const cashValTRY = computedCashTRY;
-  const totalValTRY = totalStockValTRY + cashValTRY;
 
   const totalPnlTRY = totalStockValTRY - totalCostTRY;
   const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
@@ -433,16 +422,31 @@ export default function PortfolioView({
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span>{language === 'tr' ? 'Nakit Bakiye (Boşta)' : 'Cash Balance'}</span>
-              <span className="text-[10px] bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded">
-                {language === 'tr' ? 'Boşta' : 'Dry Powder'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsDepositModalOpen(true)}
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                  title={language === 'tr' ? "Nakit yatır veya çek" : "Transfer cash"}
+                >
+                  <span>{language === 'tr' ? '+ Transfer' : '+ Transfer'}</span>
+                </button>
+                <span className="text-[10px] bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded">
+                  {language === 'tr' ? 'Boşta' : 'Dry Powder'}
+                </span>
+              </div>
             </div>
             <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
               {formatCurr(cashDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% {language === 'tr' ? 'likit alıma hazır sermaye' : 'liquid capital ready for DCA'}
+          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
+            <span>
+              {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% {language === 'tr' ? 'likit nakit' : 'liquid cash'}
+            </span>
+            <span className="text-[10px] text-gray-400">
+              {language === 'tr' ? 'Yatırılan + Satış - Alış' : 'Deposits + Sells - Buys'}
+            </span>
           </div>
         </div>
 

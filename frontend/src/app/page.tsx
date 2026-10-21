@@ -37,6 +37,7 @@ import {
   MarketCatalyst,
 } from '../lib/supabaseClient';
 import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES } from '../lib/dividendForecastMath';
+import { calculateLedgerCash } from '../lib/cashLedger';
 
 const INITIAL_SIGNALS: TradeSignal[] = [
   {
@@ -859,7 +860,7 @@ export default function Home() {
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
-  const [cashBalance, setCashBalance] = useState<number>(2952.26);
+  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, [], 48.95).availableCashTRY);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
@@ -1207,6 +1208,7 @@ export default function Home() {
 
         const { data: ordersData } = await ordersQuery;
 
+        let loadedOrders: ExecutedOrder[] = [];
         if (ordersData && ordersData.length > 0) {
           const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => {
             const clean = o.symbol?.replace('.IS', '').toUpperCase();
@@ -1237,6 +1239,7 @@ export default function Home() {
               dcaNote: o.notes
             };
           });
+          loadedOrders = mappedOrders;
           setExecutedOrders(mappedOrders);
 
           // Reconstruct all Realized Trades dynamically from database SELL orders
@@ -1369,8 +1372,9 @@ export default function Home() {
 
         const { data: transData } = await transQuery;
 
+        let loadedTrans: CapitalTransfer[] = [];
         if (transData && transData.length > 0) {
-          const mappedTrans: CapitalTransfer[] = transData.map((t: any) => ({
+          loadedTrans = transData.map((t: any) => ({
             id: t.id,
             transferType: t.transfer_type,
             amount: Number(t.amount),
@@ -1378,10 +1382,14 @@ export default function Home() {
             transferDate: t.transfer_date,
             notes: t.notes
           }));
-          setTransfers(mappedTrans);
+          setTransfers(loadedTrans);
         } else {
           setTransfers([]);
         }
+
+        // User Rule: Compute cash strictly as: (All Deposits + All Sells - All Buys)
+        const dynamicLedger = calculateLedgerCash(loadedOrders, loadedTrans, usdTryRate);
+        setCashBalance(dynamicLedger.availableCashTRY);
 
         // 6. Fetch Active Portfolio Positions from Supabase (Scoped to logged-in user or Model Portfolio)
         let positionsQuery = supabase
@@ -1672,12 +1680,10 @@ export default function Home() {
   };
 
   const handleAddTransfer = async (newTransfer: CapitalTransfer) => {
-    setTransfers(prev => [newTransfer, ...prev]);
-    if (newTransfer.transferType === 'DEPOSIT') {
-      setCashBalance(prev => prev + newTransfer.amount);
-    } else {
-      setCashBalance(prev => Math.max(0, prev - newTransfer.amount));
-    }
+    const updatedTrans = [newTransfer, ...transfers];
+    setTransfers(updatedTrans);
+    const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate).availableCashTRY;
+    setCashBalance(updatedCash);
 
     try {
       await supabase.from('portfolio_transfers').insert([{
@@ -1818,12 +1824,13 @@ export default function Home() {
           status: 'Filled',
           dcaNote: newHolding.dcaRationale || 'Position initiation'
         };
-        setExecutedOrders(prev => [newOrder, ...prev]);
+        const updatedOrders = [newOrder, ...executedOrders];
+        setExecutedOrders(updatedOrders);
 
         // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
         const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
         const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
-        setCashBalance(prev => Math.max(0, prev - purchaseCostTRY + shortfall));
+        let updatedTransfersList = transfers;
         if (shortfall > 0) {
           const autoTransfer: CapitalTransfer = {
             id: `trans-${Date.now()}`,
@@ -1833,7 +1840,8 @@ export default function Home() {
             transferDate: orderDateStr,
             notes: `Auto-deposit: Funded position ${cleanSym} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
           };
-          setTransfers(prev => [autoTransfer, ...prev]);
+          updatedTransfersList = [autoTransfer, ...transfers];
+          setTransfers(updatedTransfersList);
           try {
             await supabase.from('portfolio_transfers').insert([{
               user_id: user ? user.id : null,
@@ -1847,6 +1855,8 @@ export default function Home() {
             console.warn('Could not auto-save capital transfer:', trErr);
           }
         }
+        const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
+        setCashBalance(updatedCash);
       }
     } catch (err) {
       console.warn('Could not save holding to Supabase:', err);
@@ -1966,12 +1976,13 @@ export default function Home() {
             status: 'Filled',
             dcaNote: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
           };
-          setExecutedOrders(prev => [newOrder, ...prev]);
+          const updatedOrders = [newOrder, ...executedOrders];
+          setExecutedOrders(updatedOrders);
 
           // USER RULE: When buying more shares without adding cash, assume cash was added (do NOT assume it came from profit)
           const additionalCostTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
           const shortfall = Math.max(0, additionalCostTRY - cashBalance);
-          setCashBalance(prev => Math.max(0, prev - additionalCostTRY + shortfall));
+          let updatedTransfersList = transfers;
           if (shortfall > 0) {
             const autoTransfer: CapitalTransfer = {
               id: `trans-${Date.now()}`,
@@ -1981,7 +1992,8 @@ export default function Home() {
               transferDate: tradeDate || new Date().toISOString().slice(0, 10),
               notes: `Auto-deposit: DCA tranche for ${cleanSym} (+${additionalShares} shares @ ₺${buyPrice.toFixed(2)})`
             };
-            setTransfers(prev => [autoTransfer, ...prev]);
+            updatedTransfersList = [autoTransfer, ...transfers];
+            setTransfers(updatedTransfersList);
             try {
               await supabase.from('portfolio_transfers').insert([{
                 transfer_type: 'DEPOSIT',
@@ -1994,6 +2006,8 @@ export default function Home() {
               console.warn('Could not auto-save capital transfer for DCA:', trErr);
             }
           }
+          const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
+          setCashBalance(updatedCash);
         }
       }
     } catch (err) {
@@ -2150,8 +2164,6 @@ export default function Home() {
 
       // Log sell order to portfolio_orders
       const totalVal = actualSold * sellPrice;
-      const totalValTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
-      setCashBalance(prev => prev + totalValTRY);
       const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       const executionIso = tradeDate
         ? new Date(tradeDate + 'T10:00:00Z').toISOString()
@@ -2196,7 +2208,10 @@ export default function Home() {
         status: 'Filled',
         dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})`
       };
-      setExecutedOrders(prev => [newSellOrder, ...prev]);
+      const updatedOrders = [newSellOrder, ...executedOrders];
+      setExecutedOrders(updatedOrders);
+      const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate).availableCashTRY;
+      setCashBalance(updatedCash);
     } catch (err) {
       console.warn('Error updating sold shares in Supabase:', err);
     }

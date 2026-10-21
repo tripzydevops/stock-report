@@ -5,6 +5,7 @@ import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '..
 import { useLanguage } from '../context/LanguageContext';
 import { calculateSectorRisk } from '../lib/sectorRisk';
 import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
+import { calculateLedgerCash } from '../lib/cashLedger';
 
 interface PortfolioBriefModalProps {
   isOpen: boolean;
@@ -72,22 +73,13 @@ export default function PortfolioBriefModal({
     }, 0);
   }, [realizedTrades, usdTryRate]);
 
-  // Peak capital ever funded
-  const recordedDepositsTRY = useMemo(() => {
-    return transfers.length > 0
-      ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
-      : 17000.00;
-  }, [transfers]);
+  // Ledger Cash Calculation: Strictly (All Deposits + All Sells - All Buys)
+  const ledgerCash = useMemo(() => {
+    return calculateLedgerCash(orders, transfers, usdTryRate);
+  }, [orders, transfers, usdTryRate]);
 
-  const peakInvestedCapitalTRY = totalCostTRY + totalRealizedCostTRY;
-  const autoInjectedCapitalTRY = Math.max(0, peakInvestedCapitalTRY - recordedDepositsTRY);
-  const totalDepositedTRY = recordedDepositsTRY + autoInjectedCapitalTRY;
-
-  // Liquid Cash (Zero-fee trading)
-  const totalBrokerageFeesTRY = 0.00;
-  const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
-  const computedCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
-  const liquidCashTRY = cashBalanceTRY !== undefined && cashBalanceTRY > computedCashTRY ? cashBalanceTRY : computedCashTRY;
+  const totalDepositedTRY = ledgerCash.totalDepositsTRY;
+  const liquidCashTRY = cashBalanceTRY !== undefined ? cashBalanceTRY : ledgerCash.availableCashTRY;
 
   // Net Portfolio Value
   const totalNetWorthTRY = totalStockValTRY + liquidCashTRY;
