@@ -5,6 +5,7 @@ import {
   createChart, 
   CandlestickSeries, 
   HistogramSeries, 
+  LineSeries,
   LineStyle,
   ColorType,
   IChartApi,
@@ -41,6 +42,7 @@ export default function InteractiveCanvasChart({
 }: InteractiveCanvasChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
+  const [showBollinger, setShowBollinger] = useState(true);
   const [crosshairInfo, setCrosshairInfo] = useState<{
     time: string;
     open: number;
@@ -188,6 +190,57 @@ export default function InteractiveCanvasChart({
       });
     }
 
+    // 4. Bollinger Bands (20, 2.0σ) Overlay
+    if (showBollinger && sortedData.length >= 5) {
+      const period = Math.min(20, sortedData.length);
+      const upperData: { time: string; value: number }[] = [];
+      const middleData: { time: string; value: number }[] = [];
+      const lowerData: { time: string; value: number }[] = [];
+
+      for (let i = period - 1; i < sortedData.length; i++) {
+        const slice = sortedData.slice(i - period + 1, i + 1);
+        const mean = slice.reduce((sum, bar) => sum + bar.close, 0) / period;
+        const variance = slice.reduce((sum, bar) => sum + Math.pow(bar.close - mean, 2), 0) / period;
+        const std = Math.sqrt(variance);
+
+        const t = sortedData[i].time;
+        middleData.push({ time: t, value: Number(mean.toFixed(2)) });
+        upperData.push({ time: t, value: Number((mean + 2 * std).toFixed(2)) });
+        lowerData.push({ time: t, value: Number((mean - 2 * std).toFixed(2)) });
+      }
+
+      if (middleData.length > 0) {
+        const upperSeries = chart.addSeries(LineSeries, {
+          color: 'rgba(168, 85, 247, 0.75)',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        upperSeries.setData(upperData);
+
+        const middleSeries = chart.addSeries(LineSeries, {
+          color: 'rgba(59, 130, 246, 0.65)',
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        middleSeries.setData(middleData);
+
+        const lowerSeries = chart.addSeries(LineSeries, {
+          color: 'rgba(168, 85, 247, 0.75)',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        lowerSeries.setData(lowerData);
+      }
+    }
+
     // Set latest bar as default crosshair info
     const latest = sortedData[sortedData.length - 1];
     if (latest) {
@@ -253,7 +306,7 @@ export default function InteractiveCanvasChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [data, entryPrice, stopLoss, targetPrice, currency, height]);
+  }, [data, entryPrice, stopLoss, targetPrice, currency, height, showBollinger]);
 
   const currSym = currency === 'USD' ? '$' : '₺';
 
@@ -266,6 +319,18 @@ export default function InteractiveCanvasChart({
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">
             Interactive Daily Candlesticks
           </span>
+          <button
+            type="button"
+            onClick={() => setShowBollinger(!showBollinger)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all ${
+              showBollinger 
+                ? 'bg-purple-950/90 text-purple-300 border-purple-600 shadow-xs' 
+                : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
+            }`}
+            title="Bollinger Bands (20 period, 2.0 standard deviation)"
+          >
+            📊 BB (20, 2σ) {showBollinger ? 'ON' : 'OFF'}
+          </button>
         </div>
 
         {crosshairInfo && (

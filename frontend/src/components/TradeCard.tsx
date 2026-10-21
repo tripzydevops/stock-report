@@ -193,6 +193,42 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${getStrategyColor(signal.strategy)}`}>
               {signal.strategy}
             </span>
+            {(() => {
+              const strat = signal.strategy.toLowerCase();
+              if (strat.includes('mean reversion') || strat.includes('reversion')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100/90 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Alt Bollinger Bandı (2.0σ) tepkisi ve aşırı satım dönüşü" : "Lower Bollinger Band (2.0σ) oversold rebound"}>
+                    <span>📊</span>
+                    <span>{language === 'tr' ? 'Alt Bollinger' : 'Lower BB'}</span>
+                  </span>
+                );
+              }
+              if (strat.includes('squeeze')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100/90 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Bollinger Bandı sıkışması ve hacimli patlama" : "Bollinger Band squeeze release & volume surge"}>
+                    <span>⚡</span>
+                    <span>{language === 'tr' ? 'Bollinger Sıkışması' : 'BB Squeeze'}</span>
+                  </span>
+                );
+              }
+              if (strat.includes('pullback')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "20/50 EMA dinamik destek testi" : "20/50 EMA dynamic support test"}>
+                    <span>📉</span>
+                    <span>{language === 'tr' ? 'EMA Desteği' : 'EMA Support'}</span>
+                  </span>
+                );
+              }
+              if (strat.includes('breakout')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Direnç ve hacim kırılımı" : "Resistance & volume breakout"}>
+                    <span>🚀</span>
+                    <span>{language === 'tr' ? 'Kırılım' : 'Breakout'}</span>
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
         </div>
       </div>
@@ -466,8 +502,33 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         </div>
 
         {expanded && (
-          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800">
-            {signal.rationale}
+          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 space-y-2">
+            <div className="leading-relaxed">{signal.rationale}</div>
+            {signal.strategy.toLowerCase().includes('mean reversion') && (
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-1.5 text-[10px]">
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">📊 {language === 'tr' ? 'Teknik Onaylar:' : 'Technical Triggers:'}</span>
+                <span className="bg-indigo-50 dark:bg-indigo-950/70 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-mono">
+                  {language === 'tr' ? 'Alt Bollinger (20, 2.0σ) Tabanı' : 'Lower BB (20, 2.0σ) Touch'}
+                </span>
+                <span className="bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono">
+                  {language === 'tr' ? 'RSI <= 36 Dönüşü' : 'RSI <= 36 Rebound'}
+                </span>
+                <span className="bg-blue-50 dark:bg-blue-950/70 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono">
+                  {language === 'tr' ? 'Hedef: 20 Günlük Ortalama' : 'Target: 20 SMA Reversion'}
+                </span>
+              </div>
+            )}
+            {signal.strategy.toLowerCase().includes('squeeze') && (
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-1.5 text-[10px]">
+                <span className="font-bold text-purple-600 dark:text-purple-400">⚡ {language === 'tr' ? 'Sıkışma Teyidi:' : 'Squeeze Triggers:'}</span>
+                <span className="bg-purple-50 dark:bg-purple-950/70 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-mono">
+                  {language === 'tr' ? 'Bollinger < Keltner Kanalı' : 'BB < Keltner Compression'}
+                </span>
+                <span className="bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono">
+                  {language === 'tr' ? 'MACD Pozitif Histogram' : 'MACD Momentum Turn'}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
