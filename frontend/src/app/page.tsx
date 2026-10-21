@@ -1823,6 +1823,7 @@ export default function Home() {
         // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
         const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
         const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
+        setCashBalance(prev => Math.max(0, prev - purchaseCostTRY + shortfall));
         if (shortfall > 0) {
           const autoTransfer: CapitalTransfer = {
             id: `trans-${Date.now()}`,
@@ -1970,6 +1971,7 @@ export default function Home() {
           // USER RULE: When buying more shares without adding cash, assume cash was added (do NOT assume it came from profit)
           const additionalCostTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
           const shortfall = Math.max(0, additionalCostTRY - cashBalance);
+          setCashBalance(prev => Math.max(0, prev - additionalCostTRY + shortfall));
           if (shortfall > 0) {
             const autoTransfer: CapitalTransfer = {
               id: `trans-${Date.now()}`,
@@ -2336,6 +2338,13 @@ export default function Home() {
   };
 
   const handleOpenCoPilotForHolding = (h: PortfolioItem) => {
+    const cleanSym = h.symbol.replace('.IS', '').trim().toUpperCase();
+    const buys = executedOrders.filter(o => o.side === 'BUY' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+    const buyCount = buys.length;
+    const lowestBuy = buys.length > 0 ? Math.min(...buys.map(b => b.price)) : h.entryPrice;
+    const highestBuy = buys.length > 0 ? Math.max(...buys.map(b => b.price)) : h.entryPrice;
+    const latestBuy = buys.length > 0 ? buys[0].price : h.entryPrice;
+
     setCoPilotAsset({
       symbol: h.symbol,
       name: h.name,
@@ -2354,7 +2363,11 @@ export default function Home() {
       entryDate: h.entryDate,
       dcaZone: h.dcaZone,
       isDividend: h.isDividend,
-      notes: h.dcaRationale
+      notes: h.dcaRationale,
+      buyCount,
+      lowestBuy,
+      highestBuy,
+      latestBuy
     });
   };
 

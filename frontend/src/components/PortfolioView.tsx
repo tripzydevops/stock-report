@@ -9,6 +9,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import DcaOffsetEngine from './DcaOffsetEngine';
+import PortfolioBriefModal from './PortfolioBriefModal';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -63,6 +64,7 @@ export default function PortfolioView({
   const [expandedLots, setExpandedLots] = useState<{ [symbol: string]: boolean }>({});
   const [lotSortOrder, setLotSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isCompactTable, setIsCompactTable] = useState<boolean>(true);
+  const [isPortfolioBriefOpen, setIsPortfolioBriefOpen] = useState(false);
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
   };
@@ -202,9 +204,18 @@ export default function PortfolioView({
     ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
     : 17000.00;
 
+  // Realized cost basis of closed positions
+  const totalRealizedCostTRY = realizedTrades.reduce((acc, trade) => {
+    const tradeCost = trade.sharesSold * trade.entryPrice;
+    return acc + (trade.currency === 'USD' ? tradeCost * usdTryRate : tradeCost);
+  }, 0);
+
+  // Peak capital ever funded: open positions cost + closed positions cost
+  const peakInvestedCapitalTRY = totalCostTRY + totalRealizedCostTRY;
+
   // USER RULE: When adding a new holding without adding cash, assume cash was added (do NOT assume it came from profit)
-  // If total cost of open positions exceeds recorded deposits, the excess was funded by new cash injection:
-  const autoInjectedCapitalTRY = Math.max(0, totalCostTRY - recordedDepositsTRY);
+  // If peak capital exceeds recorded deposits, the excess was funded by new cash injection:
+  const autoInjectedCapitalTRY = Math.max(0, peakInvestedCapitalTRY - recordedDepositsTRY);
   const totalDepositedTRY = recordedDepositsTRY + autoInjectedCapitalTRY;
 
   // Realized profit calculation
@@ -216,7 +227,8 @@ export default function PortfolioView({
   // Liquid cash includes unallocated capital from deposits/exits plus realized profits from closed trades, minus brokerage fees.
   const totalBrokerageFeesTRY = 11.89; // Verified broker commission & BSMV
   const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
-  const computedCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
+  const baseCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
+  const computedCashTRY = cashBalanceTRY !== undefined && cashBalanceTRY > baseCashTRY ? cashBalanceTRY : baseCashTRY;
   const cashValTRY = computedCashTRY;
   const totalValTRY = totalStockValTRY + cashValTRY;
 
@@ -329,19 +341,30 @@ export default function PortfolioView({
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span>{language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}</span>
-              <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setCurrencyMode('TRY')}
-                  className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'TRY' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
+                  type="button"
+                  onClick={() => setIsPortfolioBriefOpen(true)}
+                  className="px-2 py-0.5 text-[10px] font-black rounded-md bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition-colors flex items-center gap-1 cursor-pointer"
+                  title="View Whole Portfolio Executive Brief"
                 >
-                  TRY
+                  <span>📊</span>
+                  <span>Brief</span>
                 </button>
-                <button
-                  onClick={() => setCurrencyMode('USD')}
-                  className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'USD' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
-                >
-                  USD
-                </button>
+                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
+                  <button
+                    onClick={() => setCurrencyMode('TRY')}
+                    className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'TRY' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
+                  >
+                    TRY
+                  </button>
+                  <button
+                    onClick={() => setCurrencyMode('USD')}
+                    className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'USD' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
+                  >
+                    USD
+                  </button>
+                </div>
               </div>
             </div>
             <div className="mt-2 text-2xl font-black text-gray-900 dark:text-white">
@@ -589,9 +612,17 @@ export default function PortfolioView({
               </button>
             </div>
 
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hidden xl:inline-block">
-              🟢 {language === 'tr' ? 'Çoklu Dilim Takibi' : 'Multi-Lot Tracking'}
-            </span>
+            {/* Whole Portfolio Executive Brief Button */}
+            <button
+              type="button"
+              onClick={() => setIsPortfolioBriefOpen(true)}
+              className="px-3.5 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/25 active:scale-95 shrink-0"
+              title={language === 'tr' ? 'Bütünsel portföy yönetici özeti ve AI değerlendirmesi' : 'Whole-portfolio executive brief & AI health analysis'}
+            >
+              <span>📊</span>
+              <span>{language === 'tr' ? 'Portföy Özeti' : 'Portfolio Brief'}</span>
+            </button>
+
             {onAddHoldingClick && (
               <button
                 onClick={onAddHoldingClick}
@@ -2429,6 +2460,19 @@ export default function PortfolioView({
           </div>
         </div>
       )}
+
+      {/* Whole-Portfolio Executive Brief Modal */}
+      <PortfolioBriefModal
+        isOpen={isPortfolioBriefOpen}
+        onClose={() => setIsPortfolioBriefOpen(false)}
+        portfolio={portfolio}
+        realizedTrades={realizedTrades}
+        orders={orders}
+        transfers={transfers}
+        usdTryRate={usdTryRate}
+        cashBalanceTRY={cashValTRY}
+        onSelectTicker={onSelectTicker}
+      />
     </div>
   );
 }

@@ -21,6 +21,10 @@ export interface CoPilotAssetContext {
   dcaZone?: string;
   isDividend?: boolean;
   notes?: string;
+  buyCount?: number;
+  lowestBuy?: number;
+  highestBuy?: number;
+  latestBuy?: number;
 }
 
 interface AiTradeCoPilotModalProps {
@@ -61,6 +65,156 @@ export default function AiTradeCoPilotModal({
     ? Math.max(1, Math.round((Date.now() - new Date(asset.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  // Multi-lot calculations
+  const hasMultipleBuys = Boolean(asset.buyCount && asset.buyCount > 1);
+  const lowestBuyPrice = asset.lowestBuy || entry;
+  const highestBuyPrice = asset.highestBuy || entry;
+  const distToBreakevenPct = asset.currentPrice > 0 && entry > 0 
+    ? ((entry - asset.currentPrice) / asset.currentPrice) * 100 
+    : 0;
+
+  // Dynamic Company-Specific Macro & Fundamentals Engine
+  const getMacroTailwind = (sym: string) => {
+    switch (sym) {
+      case 'TURSG':
+        return 'Türkiye Sigorta (Insurance & Financial Services): Exceptionally high investment portfolio yields generated in the current high interest-rate regime. Premium growth in motor and non-life lines outpaces loss ratios, delivering record return on equity (ROE) with consistent high-yield dividend payouts.';
+      case 'ISMEN':
+        return 'İş Yatırım Menkul Değerler (Capital Markets & Brokerage): Undisputed BIST institutional trading volume leader. Beneficiary of high margin loan spreads, corporate IPO pipelines, and expanding retail brokerage accounts. Operates with near-zero debt and exceptional dividend distribution track record.';
+      case 'AKBNK':
+      case 'GARAN':
+      case 'YKBNK':
+      case 'HALKB':
+        return 'Turkish Tier-1 Banking Sector: Benefiting from monetary orthodox policy, TCMB disinflation trajectory, and foreign sovereign rating upgrades. Net Interest Margin (NIM) expansion anticipated as cost of deposits stabilizes while loan yields remain attractive.';
+      case 'FROTO':
+        return 'Ford Otosan (Automotive & Commercial Mobility): Major export powerhouse producing Ford Custom and Transit models for European markets. Hard-currency EUR revenues provide an organic currency hedge, while EV manufacturing expansion and rock-solid dividend distributions underpin defensive growth.';
+      case 'TUPRS':
+        return 'Tüpraş (Refining & Clean Energy Transition): High Mediterranean refining crack spreads (diesel and jet fuel). Strategic transformation into zero-carbon electricity and green hydrogen, backed by massive cash reserves and high dividend yield.';
+      case 'EREGL':
+        return 'Erdemir (Steel & Heavy Industrial Manufacturing): Cyclical recovery poised on global steel demand reacceleration and domestic infrastructure investment. Major investments in pelletizing plants and low-carbon electric arc furnaces position it for long-term margin expansion.';
+      case 'ASELS':
+        return 'Aselsan (Defense Electronics & Aerospace): Robust multi-year backlog exceeding $12+ Billion USD in domestic and export military contracts. Strategically protected by government defense spending commitments and high-margin avionics/radar technology.';
+      case 'THYAO':
+      case 'PGSUS':
+        return 'Aviation & Global Logistics: Strong passenger load factors and cargo revenue yield. Significant foreign-currency (USD/EUR) revenue proportion provides natural hedge against local lira fluctuations and fuel cost swings.';
+      case 'BIMAS':
+      case 'SOKM':
+      case 'MGROS':
+        return 'Defensive Food Retail: Relentless daily consumer staple demand with resilient pricing power. High inventory turnover and negative working capital model produce fortress cash flows during inflationary periods.';
+      case 'KCHOL':
+      case 'SAHOL':
+        return 'Major Diversified Conglomerates: Holding companies trading at substantial Net Asset Value (NAV) discounts. Broad multi-sector diversification across banking, energy, automotive, and retail with strong hard-currency dividend streams.';
+      case 'SISE':
+        return 'Şişecam (Global Glass & Soda Ash Leader): Vertically integrated manufacturing footprint across Europe and North America. Structural demand from architecture, automotive glass, and solar panel glass production.';
+      case 'PETKM':
+        return 'Petkim (Petrochemicals): Core supplier of domestic plastic and synthetic packaging resins. Operational turnaround tied to ethylene-naphtha spread recovery and high capacity utilization.';
+      case 'ENKAI':
+        return 'Enka İnşaat (Engineering & USD Fortress Balance Sheet): Enormous net cash position held predominantly in hard currencies. Global energy infrastructure, real estate in Moscow, and international engineering backlogs.';
+      case 'CCOLA':
+        return 'Coca-Cola İçecek (Beverages & Fast-Moving Consumer Goods): Rapid volume expansion across high-growth Central Asian and Middle Eastern territories with strong pricing realization.';
+      case 'SPY':
+      case 'VOO':
+      case 'QQQ':
+        return 'US Broad Market & Mega-Cap Tech: Powered by AI infrastructure capital expenditures, hyperscaler cloud revenue acceleration, and resilient US corporate earnings quality.';
+      case 'SCHD':
+      case 'O':
+      case 'VICI':
+      case 'KO':
+      case 'PEP':
+        return 'US Dividend Aristocrats & REITs: Long-term compounding assets with multi-decade histories of annual distribution growth, robust balance sheets, and steady cash-flow generation.';
+      default:
+        return 'High liquidity component consolidating above primary institutional moving averages. Volume accumulation patterns confirm steady fund support.';
+    }
+  };
+
+  // Dynamic Company-Specific Pre-Mortem (Failure Scenarios)
+  const getPreMortem = (sym: string) => {
+    switch (sym) {
+      case 'TURSG':
+        return [
+          'Failure Trigger 1: Severe spike in catastrophic natural disaster claim ratios that temporarily compresses underwriting profit margin.',
+          'Failure Trigger 2: Premature regulatory caps on mandatory motor traffic insurance pricing.',
+          'Action Rule: Core Dividend asset. Technical dips into support represent prime DCA accumulation tranches. Never panic sell on temporary drawdown.'
+        ];
+      case 'ISMEN':
+        return [
+          'Failure Trigger 1: Protracted contraction in aggregate BIST daily trading volumes below ₺50B, which dampens brokerage commission yields.',
+          'Failure Trigger 2: Structural breakdown below ₺27.00 support with expanding distribution volume.',
+          'Action Rule: Treat market pullbacks as opportunities to boost dividend Yield on Cost unless fundamental brokerage profit is broken.'
+        ];
+      case 'AKBNK':
+      case 'GARAN':
+      case 'YKBNK':
+      case 'HALKB':
+        return [
+          'Failure Trigger 1: A daily close below the 50 EMA on above-average volume invalidates the swing momentum thesis.',
+          'Failure Trigger 2: Unexpected regulatory tightening or reserve requirement hikes that squeeze banking NIMs.',
+          'Action Rule: If price breaks below the defined protective stop, execute immediately. Do not average down on tactical banking swings.'
+        ];
+      case 'FROTO':
+        return [
+          'Failure Trigger 1: Sharp economic contraction in European commercial vehicle demand reducing export volume.',
+          'Failure Trigger 2: Disruption in critical battery supply chain or tariff disputes in export destinations.',
+          'Action Rule: Core compounder. Dips below the 200 EMA represent generational accumulation zones for long-term dividend investors.'
+        ];
+      case 'TUPRS':
+        return [
+          'Failure Trigger 1: Collapse in European diesel and jet fuel crack margins below $10/barrel.',
+          'Failure Trigger 2: Unplanned refinery maintenance shutdowns extending beyond projected quarters.',
+          'Action Rule: Monitor crack spreads. Accumulate on seasonal weak quarters ahead of spring dividend announcements.'
+        ];
+      case 'ASELS':
+        return [
+          'Failure Trigger 1: Budgetary defense spending delays or postponement of major state procurement tenders.',
+          'Failure Trigger 2: Export license embargoes from foreign component suppliers.',
+          'Action Rule: Maintain stop at swing support. Re-enter on confirmed breakout with institutional volume expansion.'
+        ];
+      default:
+        return [
+          'Failure Trigger 1: Broader index (XU100/SPY) regime shifts into confirmed bear market with 50/200 EMA death cross.',
+          'Failure Trigger 2: Breakdown below key swing support on heavy institutional selling volume.',
+          'Action Rule: Respect the protective stop loss without emotional hesitation.'
+        ];
+    }
+  };
+
+  // Dynamic Stock-Specific Executive Directive
+  const getHoldingDirective = () => {
+    if (isPersonalTpHit) {
+      return {
+        title: `🎯 Personal Target Reached (+3% to +4% Window)`,
+        type: 'tp',
+        text: `${cleanSym} is trading at ${curr}${asset.currentPrice.toFixed(2)}, comfortably up ${asset.pnlPercent ? `+${asset.pnlPercent.toFixed(2)}%` : '+3.5%'}. We recommend taking profit on 50% to 100% of the position to recycle capital into new setups, or raising your stop loss to breakeven (${curr}${breakevenLevel.toFixed(2)}) for a risk-free runner.`
+      };
+    }
+
+    if (hasMultipleBuys) {
+      return {
+        title: `📦 Multi-Lot DCA Netting in Progress (${asset.buyCount} Buys)`,
+        type: 'dca_multilot',
+        text: `You hold ${asset.buyCount} separate tranches on ${cleanSym}. Your lowest purchase at ${curr}${lowestBuyPrice.toFixed(2)} is actively offsetting the drag of earlier high buys (up to ${curr}${highestBuyPrice.toFixed(2)}). Blended average cost is reduced to ${curr}${entry.toFixed(2)}. ${distToBreakevenPct > 0 ? `Position is within ${distToBreakevenPct.toFixed(1)}% of full breakeven.` : 'Blended position is currently profitable.'} Continue accumulating lower tranches during pullbacks.`
+      };
+    }
+
+    if (asset.isDividend) {
+      const isAtDiscount = asset.currentPrice < entry;
+      return {
+        title: `💎 Core Dividend Compounder Strategy`,
+        type: 'dividend',
+        text: isAtDiscount
+          ? `${cleanSym} is trading at ${curr}${asset.currentPrice.toFixed(2)}, below your average cost of ${curr}${entry.toFixed(2)}. This represents a Prime DCA Accumulation Zone where adding shares enhances your future dividend Yield on Cost. Ignore short-term price noise.`
+          : `${cleanSym} is trading in positive territory at ${curr}${asset.currentPrice.toFixed(2)}. Hold position to harvest annual dividend cash flows. Only add further tranches on healthy pullbacks toward average cost.`
+      };
+    }
+
+    return {
+      title: `📈 Tactical Swing Management`,
+      type: 'swing',
+      text: `Maintain your protective stop loss at ${curr}${stop.toFixed(2)}. Target 0 (+3.5% Personal TP) is at ${curr}${target0.toFixed(2)}. Swing Target 1 is at ${curr}${target1.toFixed(2)}. Monitor price action for momentum follow-through.`
+    };
+  };
+
+  const directive = getHoldingDirective();
+
   const handleCopyBrief = () => {
     const briefText = `📊 EXECUTIVE HOLDING BRIEF: ${cleanSym} (${asset.name})
 --------------------------------------------------
@@ -69,6 +223,7 @@ export default function AiTradeCoPilotModal({
 • Invested: ${curr}${(asset.totalCost || (entry * (asset.shares || 1))).toFixed(2)} | Current Value: ${curr}${(asset.currentValue || (asset.currentPrice * (asset.shares || 1))).toFixed(2)}
 • Unrealized P&L: ${isProfitable ? '+' : ''}${curr}${(asset.pnlAmount || ((asset.currentPrice - entry) * (asset.shares || 1))).toFixed(2)} (${(asset.pnlPercent || 0).toFixed(2)}%)
 • Holding Duration: ${daysHeld ? `${daysHeld} days` : 'Active'}
+${hasMultipleBuys ? `• Multi-Lot Diagnostics: ${asset.buyCount} buys. Lowest buy: ${curr}${lowestBuyPrice.toFixed(2)} vs Highest: ${curr}${highestBuyPrice.toFixed(2)}. Blended cost: ${curr}${entry.toFixed(2)}` : ''}
 
 KEY PRICE LEVELS:
 • Personal Quick TP (3-4%): ${curr}${target0.toFixed(2)}
@@ -77,73 +232,14 @@ KEY PRICE LEVELS:
 • Protection Floor / Stop: ${asset.isDividend ? 'DCA Mode (No hard stop)' : `${curr}${stop.toFixed(2)}`}
 
 AI DIRECTIVE:
-${isPersonalTpHit 
-  ? `Take profit or scale out 50-100% at +3% to +4%. Move stop to breakeven (${curr}${breakevenLevel.toFixed(2)}).` 
-  : asset.isDividend 
-    ? `Core Dividend Compounder. Use dips below average cost (${curr}${entry.toFixed(2)}) to accumulate.` 
-    : `Maintain stop at ${curr}${stop.toFixed(2)}. Watch for follow-through toward ${curr}${target0.toFixed(2)}.`}
+${directive.text}
+
+MACRO & SECTOR CATALYST:
+${getMacroTailwind(cleanSym)}
 `;
     navigator.clipboard.writeText(briefText);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2500);
-  };
-
-  // Synthesize intelligence based on asset profile
-  const getMacroTailwind = (sym: string) => {
-    switch (sym) {
-      case 'AKBNK':
-      case 'HALKB':
-        return 'Turkish Banking Sector: Sensitive to TCMB rate cycle and Net Interest Margin (NIM) trajectory. Disinflation policy and lira stabilization favor foreign institutional inflows into tier-1 liquid bank equities.';
-      case 'ISMEN':
-        return 'Brokerage & Capital Markets: Driven by BIST retail account expansion, margin loan spreads, and IPO investment banking fee pipelines. Exceptional cash-flow generation with high dividend distribution.';
-      case 'TURSG':
-        return 'Insurance & Financial Services: Rapid investment portfolio yield expansion in high-rate environment. Strong premium growth in motor and health lines outpaces loss ratios, fueling record ROE.';
-      case 'SOKM':
-      case 'BIMAS':
-        return 'Discount Food Retail: Strong pricing power and defensive consumer cash flow. Essential staple demand provides high resilience against macroeconomic slowdowns.';
-      case 'THYAO':
-      case 'PGSUS':
-        return 'Aviation & Tourism: Hard-currency USD/EUR revenue generation with seasonal passenger load factors. Natural hedge against local currency fluctuations.';
-      case 'ASELS':
-        return 'Defense & High-Tech: Long-term multi-billion USD state and export order backlogs. Strategic insulation from short-term retail economic cycles.';
-      case 'TUPRS':
-        return 'Refining & Energy: Mediterranean refining margins and petrochemical spreads. High dividend payout ratio and defensive fortress balance sheet.';
-      case 'SPY':
-      case 'QQQ':
-        return 'US Tech & Mega-Cap: Driven by US Federal Reserve liquidity, corporate AI capex cycles, and cloud revenue growth.';
-      default:
-        return 'Consolidation above key moving averages with institutional accumulation patterns across major liquid index components.';
-    }
-  };
-
-  const getPreMortem = (sym: string) => {
-    switch (sym) {
-      case 'AKBNK':
-      case 'HALKB':
-        return [
-          'Failure Trigger 1: A daily close below the 50 EMA on above-average volume invalidates the swing momentum thesis.',
-          'Failure Trigger 2: Unexpected monetary policy tightening or regulatory margin restrictions that compress banking NIMs.',
-          'Action Rule: If price breaks below the defined stop loss, cut immediately. Never average down on banking momentum swings.'
-        ];
-      case 'ISMEN':
-        return [
-          'Failure Trigger 1: Sustained drop in BIST aggregate daily trading volume below ₺60B, which dampens brokerage commission yields.',
-          'Failure Trigger 2: Structural breakdown below ₺29.50 support.',
-          'Action Rule: For core dividend holdings, treat pullbacks as DCA zones unless the fundamental dividend payout thesis is compromised.'
-        ];
-      case 'TURSG':
-        return [
-          'Failure Trigger 1: Spike in catastrophic claim ratios or sudden regulatory price caps on mandatory insurance.',
-          'Failure Trigger 2: Structural breakdown of multi-month 200 EMA support.',
-          'Action Rule: As a Core Dividend Compounder, price dips into support are accumulation/DCA zones. Do not exit on tight swing stops.'
-        ];
-      default:
-        return [
-          'Failure Trigger 1: Broader index (XU100/SPY) regime shifts from Bullish to Bearish with 50/200 EMA death cross.',
-          'Failure Trigger 2: Breakdown below key swing support with expanding volume.',
-          'Action Rule: Respect the hard stop loss without hesitation.'
-        ];
-    }
   };
 
   const handleQuickQuestion = (q: string) => {
@@ -424,37 +520,23 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                   <span>Actionable Holding Directive</span>
                 </div>
                 <div className="space-y-2 text-gray-700 dark:text-gray-300 leading-relaxed">
-                  {isPersonalTpHit ? (
-                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 space-y-1">
-                      <div className="font-bold flex items-center gap-1">
-                        <span>🎯</span>
-                        <span>Take-Profit Target Achieved (+3% to +4% Personal Window)</span>
-                      </div>
-                      <p className="text-[11px]">
-                        {cleanSym} is trading at {curr}{asset.currentPrice.toFixed(2)}, comfortably above your entry of {curr}{entry.toFixed(2)}. We recommend realizing 50% to 100% of the position to recycle capital into new setups, or raising your stop loss to breakeven ({curr}{breakevenLevel.toFixed(2)}) for a risk-free runner.
-                      </p>
+                  <div className={`p-3 rounded-xl border space-y-1.5 ${
+                    directive.type === 'tp'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                      : directive.type === 'dca_multilot'
+                        ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                        : directive.type === 'dividend'
+                          ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300'
+                          : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300'
+                  }`}>
+                    <div className="font-bold flex items-center gap-1.5 text-xs">
+                      <span>{directive.type === 'tp' ? '🎯' : directive.type === 'dca_multilot' ? '📦' : directive.type === 'dividend' ? '💎' : '📈'}</span>
+                      <span>{directive.title}</span>
                     </div>
-                  ) : asset.isDividend ? (
-                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 space-y-1">
-                      <div className="font-bold flex items-center gap-1">
-                        <span>💎</span>
-                        <span>Core Dividend Compounder Strategy</span>
-                      </div>
-                      <p className="text-[11px]">
-                        {cleanSym} is held for long-term cashflow yield. Short-term price fluctuations do not trigger stop exits. If price trades below your average cost ({curr}{entry.toFixed(2)}), use weakness to accumulate additional DCA tranches to expand your forward dividend yield.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 space-y-1">
-                      <div className="font-bold flex items-center gap-1">
-                        <span>📈</span>
-                        <span>Swing Trade Management</span>
-                      </div>
-                      <p className="text-[11px]">
-                        Maintain your initial protective stop at {curr}{stop.toFixed(2)}. Watch for follow-through toward your personal take-profit target at {curr}{target0.toFixed(2)} (+3.5%).
-                      </p>
-                    </div>
-                  )}
+                    <p className="text-[11px] leading-relaxed">
+                      {directive.text}
+                    </p>
+                  </div>
 
                   {/* Level Map Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-mono text-center">
