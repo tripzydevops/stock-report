@@ -781,8 +781,10 @@ export default function PortfolioView({
                       type="button"
                       onClick={() => onOpenCoPilot?.(item)}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1 cursor-pointer"
+                      title="Detaylı Brifing & Pozisyon Analizi"
                     >
-                      <span>💡</span>
+                      <span>📋</span>
+                      <span>Brief</span>
                     </button>
                     <button
                       type="button"
@@ -1187,10 +1189,11 @@ export default function PortfolioView({
                               </button>
                               <button
                                 onClick={() => onOpenCoPilot?.(item)}
-                                className="px-2 py-1 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-600 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer"
-                                title="Co-Pilot Analiz"
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-colors border border-purple-200 dark:border-purple-800 cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="Detaylı Brifing & Pozisyon Analizi"
                               >
-                                <span>💡</span>
+                                <span>📋</span>
+                                <span>Brief</span>
                               </button>
                               <button
                                 onClick={() => handleRemove(item.symbol)}

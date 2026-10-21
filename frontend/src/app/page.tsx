@@ -2347,6 +2347,12 @@ export default function Home() {
       currency: h.currency,
       strategy: h.strategyType || (h.isDividend ? 'Dividend Accumulation' : 'Swing Momentum'),
       pnlPercent: h.pnlPercent,
+      pnlAmount: h.pnlAmount,
+      shares: h.shares,
+      totalCost: h.totalCost,
+      currentValue: h.currentValue,
+      entryDate: h.entryDate,
+      dcaZone: h.dcaZone,
       isDividend: h.isDividend,
       notes: h.dcaRationale
     });

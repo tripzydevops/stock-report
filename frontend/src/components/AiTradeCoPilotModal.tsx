@@ -13,6 +13,12 @@ export interface CoPilotAssetContext {
   currency?: string;
   strategy?: string;
   pnlPercent?: number;
+  pnlAmount?: number;
+  shares?: number;
+  totalCost?: number;
+  currentValue?: number;
+  entryDate?: string;
+  dcaZone?: string;
   isDividend?: boolean;
   notes?: string;
 }
@@ -28,7 +34,11 @@ export default function AiTradeCoPilotModal({
   onClose,
   asset,
 }: AiTradeCoPilotModalProps) {
-  const [activeTab, setActiveTab] = useState<'blueprint' | 'premortem' | 'qa'>('blueprint');
+  const isHolding = Boolean(asset?.shares && asset.shares > 0);
+  const [activeTab, setActiveTab] = useState<'brief' | 'blueprint' | 'premortem' | 'qa'>(
+    isHolding ? 'brief' : 'blueprint'
+  );
+  const [isCopied, setIsCopied] = useState(false);
   const [userQuery, setUserQuery] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([]);
   const [isThinking, setIsThinking] = useState(false);
@@ -45,6 +55,38 @@ export default function AiTradeCoPilotModal({
   const breakevenLevel = entry * 1.002; // cover broker commission
   const isProfitable = (asset.pnlPercent || 0) >= 0;
   const isPersonalTpHit = (asset.pnlPercent || 0) >= 3.0;
+
+  // Holding duration calculation
+  const daysHeld = asset.entryDate
+    ? Math.max(1, Math.round((Date.now() - new Date(asset.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
+
+  const handleCopyBrief = () => {
+    const briefText = `📊 EXECUTIVE HOLDING BRIEF: ${cleanSym} (${asset.name})
+--------------------------------------------------
+• Status: ${isPersonalTpHit ? 'In Take-Profit Zone (+3-4%)' : isProfitable ? 'Profitable' : asset.isDividend ? 'Prime DCA Accumulation Zone' : 'Loss Watch'}
+• Position Size: ${asset.shares || 1} lots @ ${curr}${entry.toFixed(2)} avg
+• Invested: ${curr}${(asset.totalCost || (entry * (asset.shares || 1))).toFixed(2)} | Current Value: ${curr}${(asset.currentValue || (asset.currentPrice * (asset.shares || 1))).toFixed(2)}
+• Unrealized P&L: ${isProfitable ? '+' : ''}${curr}${(asset.pnlAmount || ((asset.currentPrice - entry) * (asset.shares || 1))).toFixed(2)} (${(asset.pnlPercent || 0).toFixed(2)}%)
+• Holding Duration: ${daysHeld ? `${daysHeld} days` : 'Active'}
+
+KEY PRICE LEVELS:
+• Personal Quick TP (3-4%): ${curr}${target0.toFixed(2)}
+• System Swing Target 1: ${curr}${target1.toFixed(2)}
+• System Target 2 Runner: ${curr}${target2.toFixed(2)}
+• Protection Floor / Stop: ${asset.isDividend ? 'DCA Mode (No hard stop)' : `${curr}${stop.toFixed(2)}`}
+
+AI DIRECTIVE:
+${isPersonalTpHit 
+  ? `Take profit or scale out 50-100% at +3% to +4%. Move stop to breakeven (${curr}${breakevenLevel.toFixed(2)}).` 
+  : asset.isDividend 
+    ? `Core Dividend Compounder. Use dips below average cost (${curr}${entry.toFixed(2)}) to accumulate.` 
+    : `Maintain stop at ${curr}${stop.toFixed(2)}. Watch for follow-through toward ${curr}${target0.toFixed(2)}.`}
+`;
+    navigator.clipboard.writeText(briefText);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2500);
+  };
 
   // Synthesize intelligence based on asset profile
   const getMacroTailwind = (sym: string) => {
@@ -252,20 +294,32 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-850 px-6 pt-2">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-850 px-6 pt-2 overflow-x-auto">
+          {isHolding && (
+            <button
+              onClick={() => setActiveTab('brief')}
+              className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+                activeTab === 'brief'
+                  ? 'border-purple-600 text-purple-600 dark:text-purple-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              📋 Executive Brief
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('blueprint')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
               activeTab === 'blueprint'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            📋 Tactical Blueprint
+            🎯 Tactical Blueprint
           </button>
           <button
             onClick={() => setActiveTab('premortem')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
               activeTab === 'premortem'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -275,7 +329,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
           </button>
           <button
             onClick={() => setActiveTab('qa')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
               activeTab === 'qa'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:text-gray-800'
@@ -287,6 +341,157 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
 
         {/* Body Content */}
         <div className="p-6 overflow-y-auto space-y-4 flex-grow text-xs">
+          {activeTab === 'brief' && (
+            <div className="space-y-4">
+              {/* Executive Summary Card */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/80 via-blue-50/50 to-indigo-50/80 dark:from-purple-950/40 dark:via-blue-950/30 dark:to-indigo-950/40 border border-purple-200 dark:border-purple-800/60 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-black text-gray-900 dark:text-white">
+                      {cleanSym} · {asset.name}
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      isPersonalTpHit
+                        ? 'bg-emerald-500 text-white animate-pulse'
+                        : isProfitable
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                          : asset.isDividend
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                    }`}>
+                      {isPersonalTpHit
+                        ? '🏆 TAKE PROFIT ZONE (+3-4%)'
+                        : isProfitable
+                          ? '🟢 PROFITABLE'
+                          : asset.isDividend
+                            ? '💎 PRIME DCA ZONE'
+                            : '⚠️ LOSS WATCH'}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyBrief}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs flex items-center gap-1 cursor-pointer transition-all"
+                  >
+                    <span>{isCopied ? '✓' : '📋'}</span>
+                    <span>{isCopied ? 'Copied to Clipboard!' : 'Copy Brief'}</span>
+                  </button>
+                </div>
+
+                {/* 4-Stat Box */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">Position Size</span>
+                    <p className="font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
+                      {asset.shares?.toLocaleString() || '1'} lots
+                    </p>
+                    <span className="text-[10px] text-gray-500 block">Avg: {curr}{entry.toFixed(2)}</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">Capital Invested</span>
+                    <p className="font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
+                      {curr}{(asset.totalCost || (entry * (asset.shares || 1))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <span className="text-[10px] text-gray-500 block">Current: {curr}{(asset.currentValue || (asset.currentPrice * (asset.shares || 1))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">Unrealized P&L</span>
+                    <p className={`font-bold mt-0.5 font-mono ${isProfitable ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {isProfitable ? '+' : ''}{curr}{(asset.pnlAmount || ((asset.currentPrice - entry) * (asset.shares || 1))).toFixed(2)}
+                    </p>
+                    <span className={`text-[10px] font-bold block ${isProfitable ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {isProfitable ? '▲ +' : '▼ '}{(asset.pnlPercent || 0).toFixed(2)}%
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">Holding Time</span>
+                    <p className="font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
+                      {daysHeld ? `${daysHeld} days` : 'Active'}
+                    </p>
+                    <span className="text-[10px] text-gray-500 block">{asset.entryDate || 'Recent'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actionable Executive AI Verdict */}
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-700 space-y-2.5">
+                <div className="flex items-center gap-1.5 text-gray-900 dark:text-white font-bold">
+                  <span>🤖</span>
+                  <span>Actionable Holding Directive</span>
+                </div>
+                <div className="space-y-2 text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {isPersonalTpHit ? (
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <span>🎯</span>
+                        <span>Take-Profit Target Achieved (+3% to +4% Personal Window)</span>
+                      </div>
+                      <p className="text-[11px]">
+                        {cleanSym} is trading at {curr}{asset.currentPrice.toFixed(2)}, comfortably above your entry of {curr}{entry.toFixed(2)}. We recommend realizing 50% to 100% of the position to recycle capital into new setups, or raising your stop loss to breakeven ({curr}{breakevenLevel.toFixed(2)}) for a risk-free runner.
+                      </p>
+                    </div>
+                  ) : asset.isDividend ? (
+                    <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <span>💎</span>
+                        <span>Core Dividend Compounder Strategy</span>
+                      </div>
+                      <p className="text-[11px]">
+                        {cleanSym} is held for long-term cashflow yield. Short-term price fluctuations do not trigger stop exits. If price trades below your average cost ({curr}{entry.toFixed(2)}), use weakness to accumulate additional DCA tranches to expand your forward dividend yield.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <span>📈</span>
+                        <span>Swing Trade Management</span>
+                      </div>
+                      <p className="text-[11px]">
+                        Maintain your initial protective stop at {curr}{stop.toFixed(2)}. Watch for follow-through toward your personal take-profit target at {curr}{target0.toFixed(2)} (+3.5%).
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Level Map Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-mono text-center">
+                    <div className="p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <span className="text-[10px] text-gray-400 font-sans uppercase">⚡ Personal TP (+3.5%)</span>
+                      <p className="font-bold text-amber-600 dark:text-amber-400 mt-0.5">{curr}{target0.toFixed(2)}</p>
+                      <span className="text-[9px] text-gray-500 font-sans block">{isPersonalTpHit ? '✓ Reached' : `${((target0 - asset.currentPrice)/asset.currentPrice * 100).toFixed(1)}% to target`}</span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <span className="text-[10px] text-gray-400 font-sans uppercase">🎯 Swing Target 1</span>
+                      <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{curr}{target1.toFixed(2)}</p>
+                      <span className="text-[9px] text-gray-500 font-sans block">{((target1 - asset.currentPrice)/asset.currentPrice * 100).toFixed(1)}% to target</span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <span className="text-[10px] text-gray-400 font-sans uppercase">🛡️ Protection Floor</span>
+                      <p className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">{asset.isDividend ? 'DCA Mode' : `${curr}${stop.toFixed(2)}`}</p>
+                      <span className="text-[9px] text-gray-500 font-sans block">{asset.isDividend ? 'Long-term hold' : `Risk: ${curr}${(entry - stop).toFixed(2)}`}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Macro & Catalyst Tailwinds */}
+              <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 font-bold">
+                  <span>🌐</span>
+                  <span>Macro & Sector Catalyst</span>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-[11px]">
+                  {getMacroTailwind(cleanSym)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'blueprint' && (
             <div className="space-y-4">
               {/* Macro & Fundamental Catalyst */}
