@@ -83,8 +83,8 @@ export default function PortfolioBriefModal({
   const autoInjectedCapitalTRY = Math.max(0, peakInvestedCapitalTRY - recordedDepositsTRY);
   const totalDepositedTRY = recordedDepositsTRY + autoInjectedCapitalTRY;
 
-  // Liquid Cash
-  const totalBrokerageFeesTRY = 11.89;
+  // Liquid Cash (Zero-fee trading)
+  const totalBrokerageFeesTRY = 0.00;
   const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
   const computedCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
   const liquidCashTRY = cashBalanceTRY !== undefined && cashBalanceTRY > computedCashTRY ? cashBalanceTRY : computedCashTRY;

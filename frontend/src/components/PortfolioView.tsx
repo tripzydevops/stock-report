@@ -224,8 +224,8 @@ export default function PortfolioView({
   }, 0);
 
   // Dynamic Cash Balance Calculation:
-  // Liquid cash includes unallocated capital from deposits/exits plus realized profits from closed trades, minus brokerage fees.
-  const totalBrokerageFeesTRY = 11.89; // Verified broker commission & BSMV
+  // Liquid cash includes unallocated capital from deposits/exits plus realized profits from closed trades (Zero-fee trading).
+  const totalBrokerageFeesTRY = 0.00; // Zero commission / zero-fee trading
   const unallocatedCapitalCash = Math.max(0, totalDepositedTRY - totalCostTRY);
   const baseCashTRY = Math.max(0, unallocatedCapitalCash + totalRealizedPnlTRY - totalBrokerageFeesTRY);
   const computedCashTRY = cashBalanceTRY !== undefined && cashBalanceTRY > baseCashTRY ? cashBalanceTRY : baseCashTRY;

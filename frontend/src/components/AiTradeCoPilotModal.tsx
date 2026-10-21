@@ -56,7 +56,7 @@ export default function AiTradeCoPilotModal({
   const target0 = entry * 1.035; // User personal 3-4% quick TP
   const target1 = asset.targetPrice || (entry * 1.10);
   const target2 = entry * 1.18;
-  const breakevenLevel = entry * 1.002; // cover broker commission
+  const breakevenLevel = entry; // Zero-fee trading (no broker commission)
   const isProfitable = (asset.pnlPercent || 0) >= 0;
   const isPersonalTpHit = (asset.pnlPercent || 0) >= 3.0;
 
