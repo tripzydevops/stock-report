@@ -739,6 +739,10 @@ export function deriveDividendsFromPortfolio(
     const existing = existingMap.get(cleanSym);
 
     // Check if asset is a dividend holding
+    if (pos.strategyType === 'SWING' || pos.isDividend === false) {
+      continue;
+    }
+
     const isDivAsset = Boolean(
       pos.isDividend ||
       pos.strategyType === 'CORE_DIVIDEND' ||

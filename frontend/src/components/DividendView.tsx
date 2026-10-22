@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
 import DividendPortfolioLab from './DividendPortfolioLab';
+import DividendRaindropCalendar from './DividendRaindropCalendar';
 import { useLanguage } from '../context/LanguageContext';
 import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
 
@@ -17,7 +18,7 @@ interface DividendViewProps {
 export default function DividendView({ dividendAssets, usdTryRate, dateFilter, onImportCandidate, onSelectTicker }: DividendViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
-  const [viewMode, setViewMode] = useState<'schedule' | 'table' | 'lab'>('schedule');
+  const [viewMode, setViewMode] = useState<'raindrop' | 'schedule' | 'table' | 'lab'>('raindrop');
 
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
@@ -133,6 +134,17 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
         </div>
         <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700/60 p-1 border border-gray-200 dark:border-gray-600">
           <button
+            onClick={() => setViewMode('raindrop')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
+              viewMode === 'raindrop'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span>💧</span>
+            <span>{language === 'tr' ? 'Yağmur Takvimi' : 'Raindrop Matrix'}</span>
+          </button>
+          <button
             onClick={() => setViewMode('schedule')}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
               viewMode === 'schedule'
@@ -167,6 +179,16 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
           </button>
         </div>
       </div>
+
+      {/* VIEW 0: 12-MONTH DIVIDEND RAINDROP CALENDAR */}
+      {viewMode === 'raindrop' && (
+        <DividendRaindropCalendar
+          dividendAssets={dividendAssets}
+          usdTryRate={usdTryRate}
+          currencyMode={currencyMode}
+          onSelectTicker={onSelectTicker}
+        />
+      )}
 
       {/* VIEW 1: UPCOMING DIVIDEND PAYMENT SCHEDULE CARDS */}
       {viewMode === 'schedule' && (

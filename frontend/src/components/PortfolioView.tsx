@@ -671,11 +671,27 @@ export default function PortfolioView({
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                         {item.market}
                       </span>
-                      {item.isDividend && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                          DIV
-                        </span>
-                      )}
+                      {/* Interactive Strategy Mode Toggle: Dividend (DCA) ⟷ Swing Trade */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleStrategyType?.(item.symbol);
+                        }}
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-lg border flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
+                          item.isDividend
+                            ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                            : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                        }`}
+                        title={
+                          item.isDividend
+                            ? (language === 'tr' ? "Şu an Temettü (DCA) modunda. Swing Trade'e çevirmek için dokunun" : "Currently Dividend (DCA). Tap to switch to Swing Trade")
+                            : (language === 'tr' ? "Şu an Swing Trade modunda. Temettü (DCA)'ye çevirmek için dokunun" : "Currently Swing Trade. Tap to switch to Dividend (DCA)")
+                        }
+                      >
+                        <span>{item.isDividend ? '💰 Temettü' : '⚡ Trade'}</span>
+                        <span className="text-[9px] opacity-60">⇄</span>
+                      </button>
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
                       <span className="truncate max-w-[150px]">{item.name}</span>
@@ -815,6 +831,19 @@ export default function PortfolioView({
                     >
                       <span>📋</span>
                       <span>Brief</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleStrategyType?.(item.symbol)}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
+                        item.isDividend
+                          ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                          : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                      }`}
+                      title={item.isDividend ? (language === 'tr' ? "Swing Trade moduna çevir" : "Switch to Swing Trade") : (language === 'tr' ? "Temettü (DCA) moduna çevir" : "Switch to Dividend")}
+                    >
+                      <span>⇄</span>
+                      <span>{item.isDividend ? (language === 'tr' ? 'Trade' : 'Swing') : (language === 'tr' ? 'Temettü' : 'Div')}</span>
                     </button>
                     <button
                       type="button"
@@ -970,11 +999,27 @@ export default function PortfolioView({
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             {item.market}
                           </span>
-                          {item.isDividend && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                              DIV
-                            </span>
-                          )}
+                          {/* Strategy Mode Toggle Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleStrategyType?.(item.symbol);
+                            }}
+                            className={`text-[10px] font-black px-2 py-0.5 rounded-lg border flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs ${
+                              item.isDividend
+                                ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/70 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                                : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                            }`}
+                            title={
+                              item.isDividend
+                                ? (language === 'tr' ? "Şu an Temettü (DCA) modunda. Swing Trade'e çevirmek için tıklayın" : "Currently Dividend Mode. Click to switch to Swing Trade")
+                                : (language === 'tr' ? "Şu an Swing Trade modunda. Temettü (DCA)'ye çevirmek için tıklayın" : "Currently Swing Trade. Click to switch to Dividend Mode")
+                            }
+                          >
+                            <span>{item.isDividend ? '💰 Temettü' : '⚡ Trade'}</span>
+                            <span className="text-[9px] opacity-60">⇄</span>
+                          </button>
                         </div>
                         <div className="text-xs text-gray-500 flex items-center space-x-1.5 mt-0.5 flex-wrap gap-1">
                           <span className="truncate max-w-[120px]">{item.name}</span>
@@ -1224,6 +1269,18 @@ export default function PortfolioView({
                               >
                                 <span>📋</span>
                                 <span>Brief</span>
+                              </button>
+                              <button
+                                onClick={() => onToggleStrategyType?.(item.symbol)}
+                                className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-xs ${
+                                  item.isDividend
+                                    ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                                    : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                }`}
+                                title={item.isDividend ? (language === 'tr' ? "Swing Trade moduna çevir" : "Switch to Swing Trade") : (language === 'tr' ? "Temettü (DCA) moduna çevir" : "Switch to Dividend")}
+                              >
+                                <span>⇄</span>
+                                <span>{item.isDividend ? (language === 'tr' ? 'Trade' : 'Swing') : (language === 'tr' ? 'Temettü' : 'Div')}</span>
                               </button>
                               <button
                                 onClick={() => handleRemove(item.symbol)}
@@ -1571,6 +1628,17 @@ export default function PortfolioView({
                                 <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
                                   Indefinite · Yield Focus
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleStrategyType?.(item.symbol);
+                                  }}
+                                  className="mt-1 text-[10px] font-bold text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center gap-1 mx-auto cursor-pointer underline transition-colors"
+                                  title="Swing Trade moduna çevir"
+                                >
+                                  <span>⇄ {language === 'tr' ? "Trade'e Çevir" : 'Switch to Trade'}</span>
+                                </button>
                               </div>
                             ) : (
                               <div className="inline-flex flex-col items-center">
@@ -1586,6 +1654,17 @@ export default function PortfolioView({
                                 }`}>
                                   ⏳ {timing.label}
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onToggleStrategyType?.(item.symbol);
+                                  }}
+                                  className="mt-1 text-[10px] font-bold text-slate-500 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center gap-1 mx-auto cursor-pointer underline transition-colors"
+                                  title="Temettü (DCA) moduna çevir"
+                                >
+                                  <span>⇄ {language === 'tr' ? "Temettü'ye Çevir" : 'Switch to Dividend'}</span>
+                                </button>
                               </div>
                             )}
                           </td>
@@ -1625,6 +1704,18 @@ export default function PortfolioView({
                                 title="Buy more lots or sell shares"
                               >
                                 <span>⚡ Trade</span>
+                              </button>
+                              <button
+                                onClick={() => onToggleStrategyType?.(item.symbol)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer flex items-center space-x-1 active:scale-95 shadow-xs ${
+                                  item.isDividend
+                                    ? 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                                    : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                }`}
+                                title={item.isDividend ? (language === 'tr' ? "Swing Trade moduna çevir" : "Switch to Swing Trade") : (language === 'tr' ? "Temettü (DCA) moduna çevir" : "Switch to Dividend")}
+                              >
+                                <span>⇄</span>
+                                <span>{item.isDividend ? (language === 'tr' ? 'Trade' : 'Swing') : (language === 'tr' ? 'Temettü' : 'Div')}</span>
                               </button>
                               <button
                                 onClick={() => handleRemove(item.symbol)}
