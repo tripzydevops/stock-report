@@ -323,10 +323,10 @@ export default function PortfolioView({
 
   return (
     <div className="space-y-6">
-      {/* Top Portfolio Summary KPI Cards (5 Pillars of Wealth) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Card 1: Total Account Value */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+      {/* Top Portfolio Summary KPI Cards (5 Pillars of Wealth) - Compact 2-Col Grid on Mobile */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
+        {/* Card 1: Total Account Value (Full Width on Mobile) */}
+        <div className="col-span-2 lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span>{language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}</span>
@@ -356,105 +356,100 @@ export default function PortfolioView({
                 </div>
               </div>
             </div>
-            <div className="mt-2 text-2xl font-black text-gray-900 dark:text-white">
+            <div className="mt-1.5 sm:mt-2 text-2xl font-black text-gray-900 dark:text-white">
               {formatCurr(totalValDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
             {language === 'tr' ? 'Hisseler:' : 'Equity:'} <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • {language === 'tr' ? 'Nakit:' : 'Cash:'} {formatCurr(cashDisplay)}
           </div>
         </div>
 
         {/* Card 2: Net Capital Deposited (Principal Put In) */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>{language === 'tr' ? 'Yatırılan Ana Para' : 'Total Deposited'}</span>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span className="truncate">{language === 'tr' ? 'Yatırılan Para' : 'Total Deposited'}</span>
               <button
                 onClick={() => setIsDepositModalOpen(true)}
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5"
+                className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
                 title={language === 'tr' ? "Sermaye girişi veya çekimi kaydet" : "Record new capital deposit or withdrawal"}
               >
-                <span>{language === 'tr' ? '+ Para Yatır' : '+ Deposit'}</span>
+                <span>+ Yatır</span>
               </button>
             </div>
-            <div className="mt-2 text-2xl font-black text-gray-900 dark:text-white">
+            <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-gray-900 dark:text-white truncate">
               {formatCurr(totalDepositedDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
-            <span>
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
+            <span className="truncate">
               {autoInjectedCapitalTRY > 0 
-                ? (language === 'tr' ? `Aktarılan (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)})` : `Injected (+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)} funded)`)
-                : (language === 'tr' ? 'Net Sermaye Girişi' : 'Capital Injected')}
+                ? (language === 'tr' ? `+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)}` : `+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)}`)
+                : (language === 'tr' ? 'Net Ana Para' : 'Capital')}
             </span>
             <button
               onClick={() => setShowTransfers(!showTransfers)}
-              className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-[9px] sm:text-[10px] text-blue-600 dark:text-blue-400 hover:underline shrink-0"
             >
-              {showTransfers ? (language === 'tr' ? 'Girişleri Gizle' : 'Hide Inflows') : (language === 'tr' ? 'Girişleri Gör' : 'View Inflows')}
+              {showTransfers ? (language === 'tr' ? 'Gizle' : 'Hide') : (language === 'tr' ? 'Gör' : 'Inflows')}
             </button>
           </div>
         </div>
 
         {/* Card 3: True Lifetime Return (All-Time ROI vs Money Put In) */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>{language === 'tr' ? 'Toplam Net Getiri' : 'All-Time Net ROI'}</span>
-              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span className="truncate">{language === 'tr' ? 'Net Getiri' : 'Net ROI'}</span>
+              <span className={`text-[9px] sm:text-[10px] font-black px-1 sm:px-1.5 py-0.5 rounded shrink-0 ${
                 trueRoiAmountTRY >= 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
               }`}>
-                {trueRoiPercent >= 0 ? '▲ +' : '▼ '}{trueRoiPercent.toFixed(2)}%
+                {trueRoiPercent >= 0 ? '+' : ''}{trueRoiPercent.toFixed(1)}%
               </span>
             </div>
-            <div className={`mt-2 text-2xl font-black ${trueRoiAmountTRY >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+            <div className={`mt-1 sm:mt-2 text-base sm:text-2xl font-black truncate ${trueRoiAmountTRY >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
               {trueRoiAmountTRY >= 0 ? '+' : ''}{formatCurr(trueRoiDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            {language === 'tr' ? 'Yatırılan ana para: ' : 'vs '}<span>{formatCurr(totalDepositedDisplay)}</span>
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate">
+            {language === 'tr' ? 'Yatırılan: ' : 'vs '}<span className="font-semibold">{formatCurr(totalDepositedDisplay)}</span>
           </div>
         </div>
 
         {/* Card 4: Dry Powder / Cash Balance */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>{language === 'tr' ? 'Nakit Bakiye (Boşta)' : 'Cash Balance'}</span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsDepositModalOpen(true)}
-                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                  title={language === 'tr' ? "Nakit yatır veya çek" : "Transfer cash"}
-                >
-                  <span>{language === 'tr' ? '+ Transfer' : '+ Transfer'}</span>
-                </button>
-                <span className="text-[10px] bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 font-bold px-1.5 py-0.5 rounded">
-                  {language === 'tr' ? 'Boşta' : 'Dry Powder'}
-                </span>
-              </div>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span className="truncate">{language === 'tr' ? 'Nakit (Boşta)' : 'Cash Balance'}</span>
+              <button
+                type="button"
+                onClick={() => setIsDepositModalOpen(true)}
+                className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
+                title={language === 'tr' ? "Nakit yatır veya çek" : "Transfer cash"}
+              >
+                <span>+ Transfer</span>
+              </button>
             </div>
-            <div className="mt-2 text-2xl font-black text-blue-600 dark:text-blue-400">
+            <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-blue-600 dark:text-blue-400 truncate">
               {formatCurr(cashDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
             <span>
-              {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(1) : 0}% {language === 'tr' ? 'likit nakit' : 'liquid cash'}
+              {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(0) : 0}% {language === 'tr' ? 'likit' : 'liquid'}
             </span>
-            <span className="text-[10px] text-gray-400">
-              {language === 'tr' ? 'Yatırılan + Satış - Alış' : 'Deposits + Sells - Buys'}
+            <span className="text-[9px] text-gray-400 font-mono">
+              ₺1.09k
             </span>
           </div>
         </div>
 
         {/* Card 5: Realized Profit / Losses */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>{language === 'tr' ? 'Kapatılan Kârlar' : 'Realized Gains'}</span>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <span className="truncate">{language === 'tr' ? 'Kapatılan Kâr' : 'Realized'}</span>
               <button
                 onClick={() => {
                   setShowRealized(true);
@@ -462,19 +457,19 @@ export default function PortfolioView({
                     document.getElementById('realized-trades-section')?.scrollIntoView({ behavior: 'smooth' });
                   }, 50);
                 }}
-                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer"
+                className="text-[10px] sm:text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer shrink-0"
               >
-                {showRealized ? (language === 'tr' ? 'Gizle' : 'Hide Log') : (language === 'tr' ? 'Geçmişi Gör' : 'View History')}
+                {showRealized ? (language === 'tr' ? 'Gizle' : 'Hide') : (language === 'tr' ? 'Geçmiş' : 'History')}
               </button>
             </div>
-            <div className={`mt-2 text-2xl font-black ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
+            <div className={`mt-1 sm:mt-2 text-base sm:text-2xl font-black truncate ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
               {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
             </div>
           </div>
-          <div className="text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate">
             {realizedTrades.length > 0 
-              ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trade Locked In`) 
-              : (language === 'tr' ? 'Henüz Kapatılan İşlem Yok' : 'No Closed Trades Yet')}
+              ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trades Locked`) 
+              : (language === 'tr' ? 'İşlem Yok' : 'None Yet')}
           </div>
         </div>
       </div>

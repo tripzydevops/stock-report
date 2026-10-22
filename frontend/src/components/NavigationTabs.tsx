@@ -41,30 +41,8 @@ export default function NavigationTabs({ activeTab, onTabChange, catalystsCount 
   const currentActiveTabObj = tabs.find(t => t.id === activeTab) || tabs[0];
 
   return (
-    <div className="bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-14 sm:top-16 z-30 shadow-xs">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        {/* MOBILE VIEW (< 640px): Prominent Full-Page Dropdown Selector */}
-        <div className="sm:hidden pt-2 pb-1">
-          <div className="flex items-center justify-between gap-2 bg-slate-100/80 dark:bg-slate-800/60 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs">
-            <div className="flex items-center gap-1.5 pl-1 shrink-0">
-              <span className="text-sm">{currentActiveTabObj.icon}</span>
-              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                {language === 'tr' ? 'Sayfa:' : 'Page:'}
-              </span>
-            </div>
-            <select
-              value={activeTab}
-              onChange={(e) => onTabChange(e.target.value as TabId)}
-              className="flex-1 text-xs font-black py-1 px-2.5 rounded-lg bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700 shadow-xs focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-            >
-              {tabs.map((tab) => (
-                <option key={tab.id} value={tab.id}>
-                  {tab.icon} {tab.label} {tab.count ? `(${tab.count})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+    <div className="hidden md:block bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-16 z-30 shadow-xs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* HORIZONTAL SWIPEABLE TABS WITH VISUAL OVERFLOW HINTS */}
         <div className="relative">

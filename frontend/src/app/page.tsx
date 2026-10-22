@@ -39,6 +39,17 @@ import {
 import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES } from '../lib/dividendForecastMath';
 import { calculateLedgerCash } from '../lib/cashLedger';
 
+const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
+  signals: { icon: '🎯', tr: 'Sinyaller', en: 'Signals' },
+  catalysts: { icon: '⚡', tr: 'KAP', en: 'KAP' },
+  quant: { icon: '🏛️', tr: 'Quant', en: 'Quant' },
+  portfolio: { icon: '💼', tr: 'Portföy', en: 'Portfolio' },
+  dividend: { icon: '💰', tr: 'Temettü', en: 'Dividend' },
+  forecast: { icon: '🔮', tr: 'Projeksiyon', en: 'Forecast' },
+  scorecard: { icon: '📈', tr: 'Karne', en: 'Scorecard' },
+  orb: { icon: '🔔', tr: 'Açılış', en: 'Opening' },
+};
+
 const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'THYAO', name: 'Türk Hava Yolları', strategy: 'Volatility Breakout',
@@ -879,6 +890,7 @@ export default function Home() {
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
+  const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
 
   const handleDateFilterChange = (newFilter: DateRangeFilter) => {
     setDateFilter(newFilter);
@@ -2407,26 +2419,68 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 pb-28 sm:pb-20 antialiased selection:bg-blue-500/20">
       {/* Top Header */}
       <header className="bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-md shadow-xs sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex justify-between items-center">
+          {/* Brand & Active Tab Indicator */}
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 shrink-0">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">MarketPulse</h1>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                  LIVE 2.0
+            <div className="min-w-0">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <h1 className="text-lg sm:text-xl font-black tracking-tight text-gray-900 dark:text-white truncate">MarketPulse</h1>
+                <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 shrink-0">
+                  LIVE
+                </span>
+                {/* Active Tab Badge (Mobile Only) */}
+                <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">
+                  <span>{TAB_TITLES[activeTab]?.icon}</span>
+                  <span className="truncate max-w-[80px]">{language === 'tr' ? TAB_TITLES[activeTab]?.tr : TAB_TITLES[activeTab]?.en}</span>
                 </span>
               </div>
               <p className="text-[10px] text-gray-400 hidden sm:block">{t.header.subtitle}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
-            <div className="hidden sm:flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+          {/* MOBILE ACTIONS (< 768px): Streamlined 3-Button Hub */}
+          <div className="flex md:hidden items-center space-x-2 shrink-0">
+            {/* USD/TRY Compact Badge */}
+            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-[11px] font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+              <span className="text-gray-400 font-mono">$</span>
+              <span className="text-blue-600 dark:text-blue-400 font-mono">₺{usdTryRate.toFixed(2)}</span>
+            </div>
+
+            {/* Quick 1-Tap Sync Button (With Spin Indicator) */}
+            <button
+              onClick={() => handleTriggerSync(false)}
+              disabled={isRefreshing}
+              title={t.header.syncTooltip}
+              className="w-8 h-8 rounded-xl bg-blue-600 active:scale-95 text-white flex items-center justify-center shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <svg
+                className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+
+            {/* Profile & Settings Trigger (Opens Mobile Action Sheet) */}
+            <button
+              onClick={() => setIsSettingsSheetOpen(true)}
+              className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs active:scale-95 transition-all cursor-pointer shadow-xs"
+              title={language === 'tr' ? 'Ayarlar & Profil' : 'Settings & Profile'}
+            >
+              {user ? '👤' : isDemoMode ? '👀' : '⚙️'}
+            </button>
+          </div>
+
+          {/* DESKTOP ACTIONS (>= 768px): Full Tool Suite */}
+          <div className="hidden md:flex items-center space-x-3 shrink-0">
+            <div className="flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
               <span>USD/TRY:</span>
-              <span className="text-blue-600 dark:text-blue-400">₺{usdTryRate.toFixed(2)}</span>
+              <span className="text-blue-600 dark:text-blue-400 font-mono">₺{usdTryRate.toFixed(2)}</span>
             </div>
 
             {/* In-App Sync & Refresh Action Buttons */}
@@ -2435,7 +2489,7 @@ export default function Home() {
                 onClick={() => handleTriggerSync(false)}
                 disabled={isRefreshing}
                 title={t.header.syncTooltip}
-                className="flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 <svg
                   className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -2445,19 +2499,17 @@ export default function Home() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span className="hidden sm:inline">{isRefreshing ? t.header.syncing : t.header.syncData}</span>
-                <span className="sm:hidden">{isRefreshing ? '...' : t.header.syncShort}</span>
+                <span>{isRefreshing ? t.header.syncing : t.header.syncData}</span>
               </button>
 
               <button
                 onClick={() => handleTriggerSync(true)}
                 disabled={isRefreshing}
                 title={t.header.crawlerTooltip}
-                className="flex items-center space-x-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
               >
                 <span>⚡</span>
-                <span className="hidden sm:inline">{t.header.runCrawler}</span>
-                <span className="sm:hidden">{t.header.crawlerShort}</span>
+                <span>{t.header.runCrawler}</span>
               </button>
             </div>
 
@@ -2496,7 +2548,7 @@ export default function Home() {
               {user ? (
                 <div className="flex items-center space-x-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl px-2.5 py-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate max-w-[110px] hidden sm:inline">
+                  <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate max-w-[110px]">
                     {user.email?.split('@')[0]}
                   </span>
                   <button
@@ -2514,7 +2566,7 @@ export default function Home() {
                   title={language === 'tr' ? 'Model portföy modundasınız. Kendi hesabınıza geçmek için tıklayın.' : 'In model portfolio mode. Click to sign in.'}
                 >
                   <span>👀</span>
-                  <span className="hidden sm:inline">{language === 'tr' ? 'Model Portföy' : 'Demo Mode'}</span>
+                  <span>{language === 'tr' ? 'Model Portföy' : 'Demo Mode'}</span>
                   <span className="text-blue-600 font-black ml-1">+</span>
                 </button>
               ) : (
@@ -2524,7 +2576,7 @@ export default function Home() {
                   title={language === 'tr' ? 'Giriş Yap veya Hesap Aç' : 'Sign In or Register'}
                 >
                   <span>👤</span>
-                  <span className="hidden sm:inline">{language === 'tr' ? 'Giriş' : 'Sign In'}</span>
+                  <span>{language === 'tr' ? 'Giriş' : 'Sign In'}</span>
                 </button>
               )}
             </div>
@@ -2532,9 +2584,9 @@ export default function Home() {
             <div className="flex items-center space-x-1 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               {lastRefreshedAt ? (
-                <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">{lastRefreshedAt}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{lastRefreshedAt}</span>
               ) : (
-                <span className="text-[11px] text-gray-500 font-semibold hidden md:inline">{t.common.connected}</span>
+                <span className="text-[11px] text-gray-500 font-semibold">{t.common.connected}</span>
               )}
             </div>
           </div>
@@ -3163,6 +3215,142 @@ export default function Home() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {/* Mobile Settings & Profile Slide-Up Action Sheet */}
+      {isSettingsSheetOpen && (
+        <div className="fixed inset-0 z-50 md:hidden animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsSettingsSheetOpen(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white dark:bg-[#0a0f1d] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250 safe-bottom">
+            <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
+
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⚙️</span>
+                <h3 className="text-base font-black text-gray-900 dark:text-white">
+                  {language === 'tr' ? 'Uygulama Ayarları & Profil' : 'Settings & Profile'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSettingsSheetOpen(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Section 1: User Account */}
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
+                {language === 'tr' ? 'Kullanıcı Hesabı' : 'Account'}
+              </span>
+              {user ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                      {user.email}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      signOut();
+                      setIsSettingsSheetOpen(false);
+                    }}
+                    className="px-2.5 py-1 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50 rounded-xl border border-rose-200 dark:border-rose-900/50 cursor-pointer"
+                  >
+                    {language === 'tr' ? 'Çıkış Yap' : 'Sign Out'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                      👀 {language === 'tr' ? 'Model Portföy Modu' : 'Demo Mode'}
+                    </span>
+                    <p className="text-[10px] text-gray-400">
+                      {language === 'tr' ? 'Kendi portföyünüz için giriş yapın' : 'Sign in to access your portfolio'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsSettingsSheetOpen(false);
+                      setIsAuthModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 text-xs font-black text-white bg-blue-600 rounded-xl shadow-xs cursor-pointer"
+                  >
+                    {language === 'tr' ? 'Giriş Yap' : 'Sign In'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Section 2: Language Selector */}
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
+                {language === 'tr' ? 'Dil Seçimi' : 'Language'}
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('tr')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    language === 'tr'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <span>🇹🇷</span>
+                  <span>Türkçe</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  <span>🇬🇧</span>
+                  <span>English</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Section 3: Deep Web Crawler */}
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
+                {language === 'tr' ? 'Veri Motoru' : 'Data Engine'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  handleTriggerSync(true);
+                  setIsSettingsSheetOpen(false);
+                }}
+                disabled={isRefreshing}
+                className="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                <span>⚡</span>
+                <span>{language === 'tr' ? 'Derin Web Taraması Başlat (KAP & Yahoo)' : 'Run Deep Web Crawler'}</span>
+              </button>
+            </div>
+
+            {/* Section 4: System Connection Status */}
+            <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 px-1">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{t.common.connected}</span>
+              </span>
+              {lastRefreshedAt && <span>Son yenilenme: {lastRefreshedAt}</span>}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
