@@ -21,6 +21,7 @@ import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeC
 import { AuthModal } from '../components/AuthModal';
 import DateFilterBar from '../components/DateFilterBar';
 import MobileBottomNav from '../components/MobileBottomNav';
+import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
 import { DateRangeFilter, getDateRangeFromPreset, isDateInRange } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -891,6 +892,7 @@ export default function Home() {
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
 
   const handleDateFilterChange = (newFilter: DateRangeFilter) => {
     setDateFilter(newFilter);
@@ -2415,11 +2417,92 @@ export default function Home() {
     });
   };
 
+  // Desktop Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in form controls
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl instanceof HTMLSelectElement ||
+        activeEl?.getAttribute('contenteditable') === 'true';
+
+      if (isInput) return;
+
+      // 1-8: Switch tabs instantly
+      const tabMap: Record<string, TabId> = {
+        '1': 'signals',
+        '2': 'catalysts',
+        '3': 'quant',
+        '4': 'portfolio',
+        '5': 'dividend',
+        '6': 'forecast',
+        '7': 'scorecard',
+        '8': 'orb',
+      };
+
+      if (tabMap[e.key]) {
+        e.preventDefault();
+        handleTabChange(tabMap[e.key]);
+        return;
+      }
+
+      // 'r' or 'R': Trigger sync
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleTriggerSync(false);
+        return;
+      }
+
+      // '?': Toggle shortcuts cheat sheet modal
+      if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutsModalOpen(prev => !prev);
+        return;
+      }
+
+      // 'Escape': Close top active modal
+      if (e.key === 'Escape') {
+        if (isShortcutsModalOpen) {
+          setIsShortcutsModalOpen(false);
+        } else if (isAuthModalOpen) {
+          setIsAuthModalOpen(false);
+        } else if (isModalOpen) {
+          setIsModalOpen(false);
+        } else if (isHoldingModalOpen) {
+          setIsHoldingModalOpen(false);
+        } else if (tradeModalOpen) {
+          setTradeModalOpen(false);
+        } else if (selectedAssetForHistory) {
+          setSelectedAssetForHistory(null);
+        } else if (coPilotAsset) {
+          setCoPilotAsset(null);
+        } else if (isSettingsSheetOpen) {
+          setIsSettingsSheetOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isShortcutsModalOpen,
+    isAuthModalOpen,
+    isModalOpen,
+    isHoldingModalOpen,
+    tradeModalOpen,
+    selectedAssetForHistory,
+    coPilotAsset,
+    isSettingsSheetOpen,
+    isRefreshing,
+  ]);
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 pb-28 sm:pb-20 antialiased selection:bg-blue-500/20">
       {/* Top Header */}
       <header className="bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-md shadow-xs sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex justify-between items-center">
+        <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex justify-between items-center">
           {/* Brand & Active Tab Indicator */}
           <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 shrink-0">
@@ -2607,13 +2690,23 @@ export default function Home() {
       )}
 
       {/* Tab Navigation */}
-      <NavigationTabs activeTab={activeTab} onTabChange={handleTabChange} catalystsCount={catalysts.length} />
+      <NavigationTabs
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        catalystsCount={catalysts.length}
+        usRegime={usRegime}
+        bistRegime={bistRegime}
+        usdTryRate={usdTryRate}
+        onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+      />
 
-      {/* Regime Banners (Always visible on top) */}
-      <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} usdTryRate={usdTryRate} />
+      {/* Regime Banners (Mobile only: on desktop, tickers are integrated into the command bar) */}
+      <div className="md:hidden">
+        <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} usdTryRate={usdTryRate} />
+      </div>
 
       {/* Main Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Universal Date Filter Bar - Active on ALL tabs/pages */}
         <DateFilterBar
           currentFilter={dateFilter}
@@ -2914,7 +3007,7 @@ export default function Home() {
                   );
                 })()}
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {(() => {
                     const matchesStrategy = (sigStrategy: string, filterKey: string): boolean => {
                       if (!filterKey || filterKey === 'ALL') return true;
@@ -3214,6 +3307,11 @@ export default function Home() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsModalOpen}
+        onClose={() => setIsShortcutsModalOpen(false)}
       />
 
       {/* Mobile Settings & Profile Slide-Up Action Sheet */}
