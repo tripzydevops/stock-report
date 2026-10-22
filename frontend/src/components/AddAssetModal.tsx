@@ -98,6 +98,37 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
             </div>
           </div>
 
+          {/* Quick-add BIST GYO Favorites Chips */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+              Popüler BIST GYO (Turkish REITs):
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { s: 'EKGYO', n: 'Emlak Konut GYO', c: 'Stock' },
+                { s: 'TRGYO', n: 'Torunlar GYO', c: 'Stock' },
+                { s: 'ISGYO', n: 'İş GYO', c: 'Stock' },
+                { s: 'OZKGY', n: 'Özak GYO', c: 'Stock' },
+                { s: 'ALGYO', n: 'Alarko GYO', c: 'Stock' },
+                { s: 'RYGYO', n: 'Reysaş GYO', c: 'Stock' },
+              ].map(q => (
+                <button
+                  key={q.s}
+                  type="button"
+                  onClick={() => {
+                    setSymbol(q.s);
+                    setName(q.n);
+                    setAssetClass(q.c);
+                    setMarket('BIST');
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
+                >
+                  +{q.s}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asset Name</label>
             <input 

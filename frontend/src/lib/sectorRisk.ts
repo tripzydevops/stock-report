@@ -28,6 +28,15 @@ export const ASSET_SECTOR_MAP: Record<string, { sector: string; industry: string
   AAPL: { sector: 'Technology', industry: 'Consumer Electronics', color: '#64748b' },
   SCHD: { sector: 'Dividend ETF', industry: 'US High Dividend', color: '#14b8a6' },
   O: { sector: 'Real Estate', industry: 'Triple-Net REIT', color: '#a855f7' },
+  VICI: { sector: 'Real Estate', industry: 'Experiential Gaming REIT', color: '#8b5cf6' },
+  PLD: { sector: 'Real Estate', industry: 'Logistics Industrial REIT', color: '#06b6d4' },
+  EKGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Residential & Urban REIT', color: '#10b981' },
+  TRGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Commercial & Retail REIT', color: '#0d9488' },
+  ISGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Commercial & Office REIT', color: '#0f766e' },
+  OZKGY: { sector: 'Real Estate & GYO', industry: 'Turkish Mixed-Use & Hospitality REIT', color: '#115e59' },
+  ALGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Tourism & Cash-Rich REIT', color: '#047857' },
+  RYGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Logistics Warehousing REIT', color: '#059669' },
+  PSGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Urban Project REIT', color: '#0891b2' },
 };
 
 export function calculateSectorRisk(

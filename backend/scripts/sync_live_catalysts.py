@@ -19,13 +19,14 @@ BIST_TICKERS = [
     'TAVHL', 'TCELL', 'TTKOM', 'TKFEN', 'TOASO', 'SOKM', 'MGROS', 'MAVI', 'BRSAN', 'ASTOR',
     'EUPWR', 'KONTR', 'SMRTG', 'GESAN', 'CWENE', 'ALARK', 'ODAS', 'CANTE', 'ZOREN', 'AKSA',
     'AKSEN', 'ENJSA', 'SASA', 'HEKTS', 'GUBRF', 'KOZAL', 'KOZAA', 'IPEKE', 'ECILC', 'BERA',
-    'KRDMD', 'CIMSA', 'BTCIM', 'BSOKE', 'OYAKC', 'EKGYO', 'KTLEV', 'ODINE', 'BALSU', 'REEDR'
+    'KRDMD', 'CIMSA', 'BTCIM', 'BSOKE', 'OYAKC', 'EKGYO', 'TRGYO', 'ISGYO', 'OZKGY', 'ALGYO', 'RYGYO', 'KTLEV', 'ODINE', 'BALSU', 'REEDR'
 ]
 
 MACRO_TICKERS = {
     'TCMB': ['tcmb', 'merkez bankası', 'faiz kararı', 'enflasyon', 'ppk', 'fatih karahan'],
     'FED': ['fed', 'powell', 'faiz indirimi', 'rate cut', 'fomc', 'cpi', 'pce'],
-    'XU100': ['bist 100', 'borsa istanbul', 'endeks', 'bist100']
+    'XU100': ['bist 100', 'borsa istanbul', 'endeks', 'bist100'],
+    'XGMYO': ['gyo', 'gayrimenkul yatırım ortaklığı', 'konut satış', 'tüik konut', 'xgmyo', 'emlak konut']
 }
 
 def identify_symbol_and_category(title: str, desc: str):
