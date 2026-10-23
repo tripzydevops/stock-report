@@ -11,6 +11,7 @@ import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/date
 import DcaOffsetEngine from './DcaOffsetEngine';
 import PortfolioBriefModal from './PortfolioBriefModal';
 import { calculateLedgerCash } from '../lib/cashLedger';
+import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -216,6 +217,20 @@ export default function PortfolioView({
   }, [transfers]);
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
 
+  // Active Portfolio Dividend Stream & Annual Income Run-Rate
+  const dividendAssets = React.useMemo(() => {
+    return deriveDividendsFromPortfolio(portfolio);
+  }, [portfolio]);
+
+  const totalAnnualDivTRY = React.useMemo(() => {
+    return dividendAssets.reduce((acc, d) => {
+      const p = d.currency === 'USD' ? d.annualPayout * usdTryRate : d.annualPayout;
+      return acc + p;
+    }, 0);
+  }, [dividendAssets, usdTryRate]);
+
+  const totalAnnualDivDisplay = currencyMode === 'USD' ? (totalAnnualDivTRY / usdTryRate) : totalAnnualDivTRY;
+
   // Realized profit calculation
   const totalRealizedPnlTRY = realizedTrades.reduce((acc, trade) => {
     return acc + (trade.currency === 'USD' ? trade.realizedPnl * usdTryRate : trade.realizedPnl);
@@ -360,8 +375,16 @@ export default function PortfolioView({
               {formatCurr(totalValDisplay)}
             </div>
           </div>
-          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750">
-            {language === 'tr' ? 'Hisseler:' : 'Equity:'} <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • {language === 'tr' ? 'Nakit:' : 'Cash:'} {formatCurr(cashDisplay)}
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex flex-wrap items-center justify-between gap-1">
+            <div>
+              {language === 'tr' ? 'Hisseler:' : 'Equity:'} <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • {language === 'tr' ? 'Nakit:' : 'Cash:'} {formatCurr(cashDisplay)}
+            </div>
+            {totalAnnualDivTRY > 0 && (
+              <div className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1" title={language === 'tr' ? 'Öngörülen 12 Aylık Net Temettü Nakit Akışı' : 'Projected 12-Month Net Passive Dividend Income'}>
+                <span>💰</span>
+                <span>+{formatCurr(totalAnnualDivDisplay)}/{language === 'tr' ? 'yıl temettü' : 'yr div'}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1538,10 +1561,16 @@ export default function PortfolioView({
                                   </>
                                 ) : (
                                   <>
-                                    <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
-                                      <span>💎</span>
-                                      <span>Yield / Core</span>
-                                    </span>
+                                    {(() => {
+                                      const cleanSymUpper = item.symbol.replace('.IS', '').trim().toUpperCase();
+                                      const divItem = dividendAssets.find(d => d.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
+                                      return (
+                                        <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs" title={language === 'tr' ? 'Tahmini yıllık temettü nakit akışı' : 'Estimated annual dividend payout'}>
+                                          <span>💎</span>
+                                          <span>{divItem ? `%${divItem.dividendYield.toFixed(1)} (+${formatCurr(divItem.annualPayout, item.currency)}/yıl)` : 'Yield / Core'}</span>
+                                        </span>
+                                      );
+                                    })()}
                                     <button
                                       type="button"
                                       onClick={() => {

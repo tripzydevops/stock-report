@@ -37,7 +37,7 @@ import {
   ScannedTradeSignal,
   MarketCatalyst,
 } from '../lib/supabaseClient';
-import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES } from '../lib/dividendForecastMath';
+import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES, KNOWN_DIVIDEND_LIST } from '../lib/dividendForecastMath';
 import { calculateLedgerCash } from '../lib/cashLedger';
 
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
@@ -1435,9 +1435,10 @@ export default function Home() {
               ? (overrideStrategy === 'CORE_DIVIDEND') 
               : Boolean(
                   MASTER_GROWTH_PROFILES[cleanUpper] || 
-                  ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O', 'VICI', 'JEPI', 'JEPQ', 'VOO', 'VNQ', 'VYM', 'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B', 'AVGO', 'COST', 'AKBNK'].includes(cleanUpper) ||
+                  KNOWN_DIVIDEND_LIST.includes(cleanUpper) ||
                   pos.notes?.toLowerCase().includes('dividend') ||
-                  pos.notes?.toLowerCase().includes('core')
+                  pos.notes?.toLowerCase().includes('core') ||
+                  pos.notes?.toLowerCase().includes('dca')
                 );
             const matchedSig = signals?.find((s: TradeSignal) => s.symbol.replace('.IS', '').toUpperCase() === cleanUpper);
             const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
@@ -1713,40 +1714,39 @@ export default function Home() {
     }
   };
 
-  const handleAddHolding = async (newHolding: PortfolioItem, isDiv: boolean, divYield?: number) => {
+  const handleAddHolding = async (newHolding: PortfolioItem, isDiv?: boolean, divYield?: number) => {
     const cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
-    const isCoreDiv = isDiv || Boolean(MASTER_GROWTH_PROFILES[cleanSymUpper]) || ['ISMEN', 'TURSG', 'FROTO', 'TUPRS', 'EREGL', 'SCHD', 'O', 'VICI', 'JEPI', 'JEPQ', 'VOO', 'VNQ', 'VYM', 'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B', 'AVGO', 'COST', 'AKBNK'].includes(cleanSymUpper);
+    const isCoreDiv = Boolean(
+      isDiv || 
+      newHolding.isDividend || 
+      newHolding.strategyType === 'CORE_DIVIDEND' || 
+      MASTER_GROWTH_PROFILES[cleanSymUpper] || 
+      KNOWN_DIVIDEND_LIST.includes(cleanSymUpper)
+    );
     const enrichedHolding: PortfolioItem = {
       ...newHolding,
       entryDate: newHolding.entryDate || new Date().toISOString().slice(0, 10),
-      strategyType: newHolding.strategyType || (isCoreDiv ? 'CORE_DIVIDEND' : 'SWING'),
+      strategyType: isCoreDiv ? 'CORE_DIVIDEND' : (newHolding.strategyType || 'SWING'),
       isDividend: isCoreDiv
     };
     // 1. Immediately update UI state
-    setPortfolio(prev => [enrichedHolding, ...prev]);
+    setPortfolio(prev => {
+      const filtered = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
+      const updated = [enrichedHolding, ...filtered];
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+      return updated;
+    });
 
-    if (isDiv) {
-      const yld = divYield || 5.0;
-      const yoc = newHolding.entryPrice > 0
-        ? ((newHolding.currentPrice * yld) / newHolding.entryPrice)
-        : yld;
-
-      const newDiv: DividendAsset = {
-        symbol: newHolding.symbol,
-        name: newHolding.name,
-        shares: newHolding.shares,
-        entryPrice: newHolding.entryPrice,
-        currentPrice: newHolding.currentPrice,
-        currency: newHolding.currency,
-        dividendYield: yld,
-        yieldOnCost: yoc,
-        annualPayout: (newHolding.shares * newHolding.currentPrice * yld) / 100,
-        monthlyPayout: (newHolding.shares * newHolding.currentPrice * yld) / 1200,
-        payoutRatio: 52.0,
-        safetyRating: 'A',
-        frequency: newHolding.market === 'US' ? 'Quarterly' : 'Annual'
-      };
-      setDividends(prev => [newDiv, ...prev]);
+    // Save override locally so it immediately persists across sessions
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('portfolio_strategy_overrides');
+        const overrides = stored ? JSON.parse(stored) : {};
+        overrides[cleanSymUpper] = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+        localStorage.setItem('portfolio_strategy_overrides', JSON.stringify(overrides));
+      } catch (e) {
+        // ignore local storage errors
+      }
     }
 
     // 2. Persist to Supabase
@@ -1789,7 +1789,7 @@ export default function Home() {
           target_price: resolvedTarget,
           is_open: true,
           entry_date: orderDateStr,
-          notes: newHolding.dcaRationale
+          notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding')
         }]);
 
         // Also record an Executed Order in Supabase and UI state!

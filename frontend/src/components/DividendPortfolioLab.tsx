@@ -9,7 +9,7 @@ export interface EvaluatedDividendAsset {
   currency: 'TRY' | 'USD';
   price: number; // in native currency
   yieldPercent: number;
-  safetyGrade: 'A+' | 'A' | 'B+';
+  safetyGrade: 'AAA' | 'AA' | 'A+' | 'A' | 'B+' | 'B' | 'C';
   payoutFrequency: 'Monthly' | 'Quarterly' | 'Semi-Annual' | 'Annual';
   payoutMonths: number[]; // 1-12
   sector: string;

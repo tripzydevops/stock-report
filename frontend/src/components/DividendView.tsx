@@ -53,6 +53,15 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
   // Filter and sort upcoming payouts by next ex-dividend date
   const filteredUpcomingAssets = React.useMemo(() => {
     if (!dateFilter || dateFilter.preset === 'ALL') return dividendAssets;
+
+    // Universal DateFilterBar defaults to historical presets (7D, 30D, THIS_MONTH where endDate <= today).
+    // Future scheduled payouts (e.g. 2026-11 or 2027-04) must not be filtered out by backward-looking trade filters.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isPastOnlyFilter = dateFilter.endDate && dateFilter.endDate <= todayStr;
+    if (isPastOnlyFilter) {
+      return dividendAssets;
+    }
+
     return dividendAssets.filter(item => isDateInRange(item.nextExDate, dateFilter) || isDateInRange(item.nextPaymentDate, dateFilter));
   }, [dividendAssets, dateFilter]);
 
