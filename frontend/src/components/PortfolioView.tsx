@@ -1204,57 +1204,82 @@ export default function PortfolioView({
                             )}
                           </td>
 
-                          {/* Col 6: Hedef & Vade */}
+                          {/* Col 6: Hedef & Vade / Temettü Nakit Akışı */}
                           <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                            <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
-                              <span>🎯 {formatCurr(effTarget, item.currency)}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingTargetSymbol(item.symbol);
-                                  setEditTargetValue(effTarget.toString());
-                                }}
-                                className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
-                              >
-                                ✏️
-                              </button>
-                            </div>
-                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center justify-center gap-1">
-                              <span>{timing.maxExitDateFormatted}</span>
-                              <span className="font-bold">({timing.label})</span>
-                            </div>
+                            {item.isDividend ? (
+                              <div className="inline-flex flex-col items-center">
+                                {(() => {
+                                  const cleanSymUpper = item.symbol.replace('.IS', '').trim().toUpperCase();
+                                  const divItem = dividendAssets.find(d => d.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
+                                  return (
+                                    <>
+                                      <span className="text-xs font-black text-purple-700 dark:text-purple-300 font-mono bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
+                                        <span>💎</span>
+                                        <span>{divItem ? `+${formatCurr(divItem.annualPayout, item.currency)}/yıl` : 'Temettü'}</span>
+                                      </span>
+                                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
+                                        {divItem ? `%${divItem.dividendYield.toFixed(1)} Verim` : 'Core DCA'}
+                                      </span>
+                                      <span className="text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                                        {divItem?.payoutMonth || 'Mayıs 2027'}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            ) : (
+                              <>
+                                <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                                  <span>🎯 {formatCurr(effTarget, item.currency)}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingTargetSymbol(item.symbol);
+                                      setEditTargetValue(effTarget.toString());
+                                    }}
+                                    className="text-gray-400 hover:text-blue-500 text-[10px] p-0.5 cursor-pointer"
+                                  >
+                                    ✏️
+                                  </button>
+                                </div>
+                                <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center justify-center gap-1">
+                                  <span>{timing.maxExitDateFormatted}</span>
+                                  <span className="font-bold">({timing.label})</span>
+                                </div>
 
-                            {/* Personal TP Target T0 */}
-                            <div className="mt-1 pt-0.5">
-                              <span 
-                                className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
-                                  item.pnlPercent >= 3.0 && item.pnlPercent <= 5.0
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse'
-                                    : item.pnlPercent > 5.0
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
-                                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/60'
-                                }`}
-                                title="Kişisel Hızlı Kâr Hedefiniz (+%3-%4)"
-                              >
-                                <span>⚡ T0 (%3-4): {formatCurr(item.entryPrice * 1.035, item.currency)}</span>
-                                {item.pnlPercent >= 3.0 && <span>✓</span>}
-                              </span>
-                            </div>
-                            {(() => {
-                              const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
-                              const effReward = effTarget > item.entryPrice ? (effTarget - item.entryPrice) : 0;
-                              const effectiveRR = effRisk > 0 ? (effReward / effRisk).toFixed(1) : null;
-                              if (!effectiveRR || item.isDividend) return null;
-                              return (
-                                <span className={`inline-block mt-0.5 text-[9px] font-black px-1.5 py-0.2 rounded border ${
-                                  Number(effectiveRR) >= 3.0
-                                    ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
-                                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                }`} title={`Risk: ₺${effRisk.toFixed(2)} | Hedef: ₺${effReward.toFixed(2)} (R:R ${effectiveRR}x)`}>
-                                  ⚡ R:R {effectiveRR}x {Number(effectiveRR) >= 3.0 ? '🔥' : ''}
-                                </span>
-                              );
-                            })()}
+                                {/* Personal TP Target T0 */}
+                                <div className="mt-1 pt-0.5">
+                                  <span 
+                                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                                      item.pnlPercent >= 3.0 && item.pnlPercent <= 5.0
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse'
+                                        : item.pnlPercent > 5.0
+                                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-amber-200 dark:border-amber-800/60'
+                                    }`}
+                                    title="Kişisel Hızlı Kâr Hedefiniz (+%3-%4)"
+                                  >
+                                    <span>⚡ T0 (%3-4): {formatCurr(item.entryPrice * 1.035, item.currency)}</span>
+                                    {item.pnlPercent >= 3.0 && <span>✓</span>}
+                                  </span>
+                                </div>
+                                {(() => {
+                                  const effRisk = item.stopLoss > 0 && item.entryPrice > item.stopLoss ? (item.entryPrice - item.stopLoss) : 0;
+                                  const effReward = effTarget > item.entryPrice ? (effTarget - item.entryPrice) : 0;
+                                  const effectiveRR = effRisk > 0 ? (effReward / effRisk).toFixed(1) : null;
+                                  if (!effectiveRR) return null;
+                                  return (
+                                    <span className={`inline-block mt-0.5 text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                                      Number(effectiveRR) >= 3.0
+                                        ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                        : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                    }`} title={`Risk: ₺${effRisk.toFixed(2)} | Hedef: ₺${effReward.toFixed(2)} (R:R ${effectiveRR}x)`}>
+                                      ⚡ R:R {effectiveRR}x {Number(effectiveRR) >= 3.0 ? '🔥' : ''}
+                                    </span>
+                                  );
+                                })()}
+                              </>
+                            )}
                           </td>
 
                           {/* Col 7: DCA Durumu */}

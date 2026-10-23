@@ -886,7 +886,7 @@ export const KNOWN_DIVIDEND_LIST = Object.keys(MASTER_GROWTH_PROFILES);
 export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate: string; month: string }> = {
   ISMEN: { exDate: '2027-03-29', payDate: '2027-04-02', month: 'March / April 2027' },
   TURSG: { exDate: '2027-08-25', payDate: '2027-08-27', month: 'August 2027' },
-  TRGYO: { exDate: '2027-06-18', payDate: '2027-06-22', month: 'June 2027' },
+  TRGYO: { exDate: '2027-05-21', payDate: '2027-05-25', month: 'Mayıs 2027' },
   EKGYO: { exDate: '2027-05-15', payDate: '2027-05-19', month: 'May 2027' },
   ISGYO: { exDate: '2027-04-12', payDate: '2027-04-16', month: 'April 2027' },
   ALGYO: { exDate: '2027-05-08', payDate: '2027-05-12', month: 'May 2027' },
@@ -1435,9 +1435,11 @@ export function deriveDividendsFromPortfolio(
     const nextPaymentDate = existing?.nextPaymentDate || sched?.payDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20');
     const payoutMonth = existing?.payoutMonth || sched?.month || (pos.market === 'US' ? 'November 2026' : 'April 2027');
 
+    const displayName = growthProfile?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
+
     result.push({
       symbol: cleanSym,
-      name: pos.name || cleanSym,
+      name: displayName,
       shares: pos.shares,
       entryPrice: pos.entryPrice,
       currentPrice: effectivePrice,

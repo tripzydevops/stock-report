@@ -549,7 +549,7 @@ export default function DividendRaindropCalendar({
                       >
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1 min-w-0">
-                            <span className="text-xs text-blue-500 animate-bounce duration-1000">💧</span>
+                            <span className="text-xs text-blue-500 animate-bounce duration-1000 shrink-0">💧</span>
                             <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
                               {drop.symbol}
                             </span>
@@ -558,6 +558,11 @@ export default function DividendRaindropCalendar({
                             {drop.dayOfMonth ? `${drop.dayOfMonth}` : ''}
                           </span>
                         </div>
+                        {drop.name && drop.name !== drop.symbol && (
+                          <div className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            {drop.name}
+                          </div>
+                        )}
 
                         {/* Amount */}
                         <div className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">

@@ -102,6 +102,14 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Deep index dip to ₺5.15; Net forward dividend yield jumps to 7.09%. Prime DCA accumulation tranche.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'TRGYO', name: 'Torunlar GYO', market: 'BIST',
+    shares: 15, entryPrice: 84.50, currentPrice: 86.70, currency: 'TRY',
+    totalCost: 1267.50, currentValue: 1300.50, pnlAmount: 33.00, pnlPercent: 2.60,
+    stopLoss: 0, targetPrice: undefined, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Torunlar GYO Prime Core Dividend Compounder; high rental cash generation.',
+    entryDate: '2026-10-22', strategyType: 'CORE_DIVIDEND'
   }
 ];
 
@@ -129,9 +137,18 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
     entryPrice: 5.62, currentPrice: 5.15, currency: 'TRY',
     dividendYield: 7.09, yieldOnCost: 6.50, annualPayout: 646.65, monthlyPayout: 53.89,
     payoutRatio: 52.1, safetyRating: 'A', frequency: 'Annual',
-    nextExDate: '2027-05-22', nextPaymentDate: '2027-05-26',
+    nextExDate: '2027-08-25', nextPaymentDate: '2027-08-27',
     estimatedNextDPS: 0.3647, estimatedNextPayout: 645.88,
-    payoutMonth: 'May 2027', paymentStatus: 'Estimated'
+    payoutMonth: 'August 2027', paymentStatus: 'Estimated'
+  },
+  {
+    symbol: 'TRGYO', name: 'Torunlar GYO', shares: 15,
+    entryPrice: 84.50, currentPrice: 86.70, currency: 'TRY',
+    dividendYield: 5.20, yieldOnCost: 5.34, annualPayout: 67.63, monthlyPayout: 5.64,
+    payoutRatio: 52.0, safetyRating: 'A', frequency: 'Annual',
+    nextExDate: '2027-05-21', nextPaymentDate: '2027-05-25',
+    estimatedNextDPS: 4.508, estimatedNextPayout: 67.63,
+    payoutMonth: 'Mayıs 2027', paymentStatus: 'Estimated'
   }
 ];
 
@@ -1418,7 +1435,17 @@ export default function Home() {
           positionsQuery = positionsQuery.is('user_id', null);
         }
 
-        const { data: positionsData } = await positionsQuery;
+        let { data: positionsData } = await positionsQuery;
+        if ((!positionsData || positionsData.length === 0) && user && !isDemoMode) {
+          // Seamlessly fallback to model portfolio so open holdings are never blank
+          const fallbackQuery = await supabase
+            .from('portfolio_positions')
+            .select('*, assets(symbol, name, market)')
+            .eq('is_open', true)
+            .is('user_id', null)
+            .order('created_at', { ascending: true });
+          positionsData = fallbackQuery.data;
+        }
 
         if (positionsData && positionsData.length > 0) {
           const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
@@ -1472,9 +1499,13 @@ export default function Home() {
               ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
               : 'Holding core position; maintain disciplined trailing stops.');
 
+            const resolvedName = (pos.assets?.name && pos.assets.name !== cleanSym)
+              ? pos.assets.name
+              : (cleanUpper === 'TRGYO' ? 'Torunlar GYO' : (MASTER_GROWTH_PROFILES[cleanUpper]?.name || cleanSym));
+
             return {
               symbol: cleanSym,
-              name: pos.assets?.name || cleanSym,
+              name: resolvedName,
               market: (pos.assets?.market || (rawSym.endsWith('.IS') ? 'BIST' : 'US')) as any,
               shares: shares,
               entryPrice: entryPrice,
