@@ -334,7 +334,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     name: 'Torunlar GYO',
     market: 'BIST',
     currency: 'TRY',
-    currentPrice: 84.50,
+    currentPrice: 86.70,
     currentYield: 5.20,
     historical3YrDivCagr: 42.5,
     historical3YrPriceCagr: 38.0,
@@ -493,11 +493,11 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     historical3YrPriceCagr: 38.0,
     predictedGrowth: { conservative: 12.0, realistic: 18.0, optimistic: 24.0 },
     predictedPriceAppreciation: 18.0,
-    payoutFrequency: 'Annual',
+    payoutFrequency: 'Quarterly',
     payoutRatio: 50.0,
     safetyGrade: 'A+',
-    aiRationaleTr: 'Defansif perakende lideri; enflasyondan bağımsız yüksek nakit yaratımı ve her yıl düzenli artan temettü.',
-    aiRationaleEn: 'Defensive discount grocery titan with non-cyclical cash conversion and steady annual hikes.',
+    aiRationaleTr: 'Defansif perakende lideri; enflasyondan bağımsız yüksek nakit yaratımı ve her yıl düzenli artan temettü (yılda 3 taksit).',
+    aiRationaleEn: 'Defensive discount grocery titan with non-cyclical cash conversion and steady 3-tranche annual hikes.',
   },
   CCOLA: {
     symbol: 'CCOLA',
@@ -527,11 +527,11 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     historical3YrPriceCagr: 32.0,
     predictedGrowth: { conservative: 11.0, realistic: 17.5, optimistic: 24.0 },
     predictedPriceAppreciation: 16.0,
-    payoutFrequency: 'Annual',
+    payoutFrequency: 'Semi-Annual',
     payoutRatio: 52.0,
     safetyGrade: 'A',
-    aiRationaleTr: 'Telekom sektörünün defansif lideri. ARPU büyümesi ve veri merkezi yatırımlarıyla öngörülebilir nakit akışı.',
-    aiRationaleEn: 'Leading telecoms operator with CPI-indexed recurring subscriber revenues.',
+    aiRationaleTr: 'Telekom sektörünün defansif lideri. ARPU büyümesi ve veri merkezi yatırımlarıyla öngörülebilir nakit akışı (yılda 2 taksit).',
+    aiRationaleEn: 'Leading telecoms operator with CPI-indexed recurring revenues and 2 semi-annual tranches.',
   },
   KCHOL: {
     symbol: 'KCHOL',
@@ -885,7 +885,7 @@ export const KNOWN_DIVIDEND_LIST = Object.keys(MASTER_GROWTH_PROFILES);
  */
 export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate: string; month: string }> = {
   ISMEN: { exDate: '2027-03-29', payDate: '2027-04-02', month: 'March / April 2027' },
-  TURSG: { exDate: '2027-05-22', payDate: '2027-05-26', month: 'May 2027' },
+  TURSG: { exDate: '2027-08-25', payDate: '2027-08-27', month: 'August 2027' },
   TRGYO: { exDate: '2027-06-18', payDate: '2027-06-22', month: 'June 2027' },
   EKGYO: { exDate: '2027-05-15', payDate: '2027-05-19', month: 'May 2027' },
   ISGYO: { exDate: '2027-04-12', payDate: '2027-04-16', month: 'April 2027' },
@@ -897,9 +897,9 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   TTRAK: { exDate: '2027-03-25', payDate: '2027-03-29', month: 'March 2027' },
   TOASO: { exDate: '2027-04-04', payDate: '2027-04-08', month: 'April 2027' },
   EREGL: { exDate: '2027-04-16', payDate: '2027-04-20', month: 'April 2027' },
-  BIMAS: { exDate: '2027-05-18', payDate: '2027-05-22', month: 'May 2027' },
-  CCOLA: { exDate: '2027-05-27', payDate: '2027-05-31', month: 'May 2027' },
-  TCELL: { exDate: '2027-06-25', payDate: '2027-06-29', month: 'June 2027' },
+  BIMAS: { exDate: '2026-12-16', payDate: '2026-12-18', month: 'Aralık 2026 (3. Taksit)' },
+  CCOLA: { exDate: '2027-05-12', payDate: '2027-05-14', month: 'May 2027' },
+  TCELL: { exDate: '2026-12-25', payDate: '2026-12-29', month: 'Aralık 2026 (2. Taksit)' },
   KCHOL: { exDate: '2027-04-24', payDate: '2027-04-28', month: 'April 2027' },
   SAHOL: { exDate: '2027-04-28', payDate: '2027-05-02', month: 'April / May 2027' },
   SISE: { exDate: '2027-05-30', payDate: '2027-06-03', month: 'May / June 2027' },
@@ -912,7 +912,7 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   YKBNK: { exDate: '2027-03-29', payDate: '2027-04-02', month: 'March / April 2027' },
   HALKB: { exDate: '2027-04-10', payDate: '2027-04-14', month: 'April 2027' },
   VAKBN: { exDate: '2027-04-12', payDate: '2027-04-16', month: 'April 2027' },
-  KRDMD: { exDate: '2027-06-20', payDate: '2027-06-24', month: 'June 2027' },
+  KRDMD: { exDate: '2026-11-26', payDate: '2026-11-28', month: 'Kasım 2026 (2. Taksit)' },
   AKBNK: { exDate: '2027-03-26', payDate: '2027-03-30', month: 'March 2027' },
   O: { exDate: '2026-10-31', payDate: '2026-11-15', month: 'Monthly' },
   JEPI: { exDate: '2026-10-31', payDate: '2026-11-06', month: 'Monthly' },
@@ -927,6 +927,37 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   JNJ: { exDate: '2026-11-18', payDate: '2026-12-08', month: 'December 2026' },
   PG: { exDate: '2026-10-17', payDate: '2026-11-15', month: 'November 2026' },
   MCD: { exDate: '2026-11-29', payDate: '2026-12-15', month: 'December 2026' },
+};
+
+/**
+ * Exact Tranche Calendar for Multi-Installment BIST & US Dividend Payers
+ */
+export interface TrancheSchedule {
+  months: number[]; // 0..11
+  monthLabels: string[];
+  dates: string[];
+  ratios: number[];
+}
+
+export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
+  BIMAS: {
+    months: [5, 8, 11], // June (5), September (8), December (11)
+    monthLabels: ['Haziran (1. Taksit)', 'Eylül (2. Taksit)', 'Aralık (3. Taksit)'],
+    dates: ['2027-06-18', '2027-09-17', '2026-12-18'],
+    ratios: [0.333, 0.333, 0.334]
+  },
+  TCELL: {
+    months: [5, 11], // June (5), December (11)
+    monthLabels: ['Haziran (1. Taksit)', 'Aralık (2. Taksit)'],
+    dates: ['2027-06-25', '2026-12-29'],
+    ratios: [0.5, 0.5]
+  },
+  KRDMD: {
+    months: [5, 10], // June (5), November (10)
+    monthLabels: ['Haziran (1. Taksit)', 'Kasım (2. Taksit)'],
+    dates: ['2027-06-20', '2026-11-28'],
+    ratios: [0.5, 0.5]
+  }
 };
 
 /**
@@ -1394,7 +1425,8 @@ export function deriveDividendsFromPortfolio(
     const payoutRatio = growthProfile?.payoutRatio || existing?.payoutRatio || 50.0;
     const safetyRating = (growthProfile?.safetyGrade?.charAt(0) || existing?.safetyRating || 'A') as 'A' | 'B' | 'C';
 
-    const freqDiv = frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1;
+    const trancheInfo = KNOWN_DIVIDEND_TRANCHES[cleanSym];
+    const freqDiv = trancheInfo ? trancheInfo.months.length : (frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1);
     const estimatedDPS = existing?.estimatedNextDPS || Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4));
     const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
 

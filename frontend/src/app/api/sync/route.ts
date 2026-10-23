@@ -10,6 +10,9 @@ const HIGH_PRIORITY_SYMBOLS = [
   'ISMEN.IS', 'TURSG.IS', 'HALKB.IS', 'AKBNK.IS', 'SOKM.IS',
   'BRSAN.IS', 'CCOLA.IS', 'KCHOL.IS', 'KRDMD.IS', 'MPARK.IS', 'TKFEN.IS', 'TRMET.IS', 'VAKBN.IS',
   'THYAO.IS', 'TUPRS.IS', 'ASELS.IS', 'BIMAS.IS', 'EREGL.IS', 'FROTO.IS', 'SISE.IS',
+  // BIST Dividend Champions & REITs
+  'TRGYO.IS', 'EKGYO.IS', 'ISGYO.IS', 'ALGYO.IS', 'OZKGY.IS', 'RYGYO.IS', 'TTRAK.IS', 'TOASO.IS',
+  'AEFES.IS', 'AGHOL.IS', 'PETKM.IS', 'TCELL.IS', 'YKBNK.IS',
   // US Equities, Midas REITs & High-Yield ETFs
   'SPY', 'QQQ', 'VOO', 'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'AVGO', 'COST',
   'O', 'VICI', 'PLD', 'AMT', 'EQIX', 'STAG', 'SPG',
@@ -65,8 +68,26 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({ action: 'refresh' }));
     const today = new Date().toISOString().slice(0, 10);
 
+    // 0. Fetch open portfolio position symbols to guarantee live sync for every owned stock
+    const { data: openPos } = await supabase
+      .from('portfolio_positions')
+      .select('assets(symbol)')
+      .eq('is_open', true);
+
+    const activeSymbols: string[] = [];
+    if (openPos) {
+      for (const pos of openPos) {
+        const rawSym = (pos as any).assets?.symbol;
+        if (rawSym) {
+          activeSymbols.push(rawSym);
+        }
+      }
+    }
+
+    const symbolsToSync = Array.from(new Set([...HIGH_PRIORITY_SYMBOLS, ...activeSymbols]));
+
     // 1. Fetch live quotes in parallel for key portfolio & market symbols
-    const quotePromises = HIGH_PRIORITY_SYMBOLS.map(sym => fetchLiveQuote(sym));
+    const quotePromises = symbolsToSync.map(sym => fetchLiveQuote(sym));
     const quotes = (await Promise.all(quotePromises)).filter((q): q is QuoteResult => q !== null);
 
     if (quotes.length === 0) {

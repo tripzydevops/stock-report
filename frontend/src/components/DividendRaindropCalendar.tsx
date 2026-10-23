@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
+import { KNOWN_DIVIDEND_TRANCHES } from '../lib/dividendForecastMath';
 
 export interface RaindropItem {
   id: string;
@@ -125,7 +126,48 @@ export default function DividendRaindropCalendar({
       const isUsd = asset.currency === 'USD';
       const annualAmount = asset.annualPayout || (asset.shares * asset.currentPrice * (asset.dividendYield / 100));
 
-      if (asset.frequency === 'Monthly') {
+      const cleanSym = asset.symbol.replace('.IS', '').trim().toUpperCase();
+      const customTranche = KNOWN_DIVIDEND_TRANCHES[cleanSym];
+
+      if (customTranche) {
+        // Multi-tranche exact seasonal distribution (e.g., BIMAS in Jun, Sep, Dec; TCELL in Jun, Dec)
+        for (let t = 0; t < customTranche.months.length; t++) {
+          const targetMonth = customTranche.months[t];
+          const ratio = customTranche.ratios[t] || (1 / customTranche.months.length);
+          const trancheAmount = annualAmount * ratio;
+          const trancheTRY = isUsd ? trancheAmount * usdTryRate : trancheAmount;
+          const dps = (asset.currentPrice * (asset.dividendYield / 100)) * ratio;
+          const trancheLabel = customTranche.monthLabels[t];
+          const trancheDate = customTranche.dates[t];
+
+          let parsedDay = 18;
+          if (trancheDate) {
+            const d = new Date(trancheDate);
+            if (!isNaN(d.getTime())) parsedDay = d.getDate();
+          }
+
+          buckets[targetMonth].raindrops.push({
+            id: `${asset.symbol}-tranche-${t}`,
+            symbol: asset.symbol,
+            name: `${asset.name} (${trancheLabel})`,
+            currency: (asset.currency === 'USD' ? 'USD' : 'TRY') as 'TRY' | 'USD',
+            shares: asset.shares,
+            dps: Number(dps.toFixed(3)),
+            payoutAmount: trancheAmount,
+            payoutAmountTRY: trancheTRY,
+            exDate: trancheDate,
+            paymentDate: trancheDate,
+            dayOfMonth: parsedDay,
+            frequency: asset.frequency,
+            dividendYield: asset.dividendYield,
+            yieldOnCost: asset.yieldOnCost,
+            paymentStatus: asset.paymentStatus || 'Estimated',
+            isQuarterlyTranche: true,
+            trancheNumber: t + 1,
+          });
+          buckets[targetMonth].totalPayoutTRY += trancheTRY;
+        }
+      } else if (asset.frequency === 'Monthly') {
         // 12 monthly raindrops
         const perMonthAmount = annualAmount / 12;
         const perMonthTRY = isUsd ? perMonthAmount * usdTryRate : perMonthAmount;
