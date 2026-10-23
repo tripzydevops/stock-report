@@ -21,8 +21,8 @@ export default function MobileBottomNav({
   const mainTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; count?: string }[] = [
     { id: 'signals', labelTr: 'Sinyaller', labelEn: 'Signals', icon: '🎯' },
     { id: 'portfolio', labelTr: 'Portföy', labelEn: 'Portfolio', icon: '💼' },
+    { id: 'dividend', labelTr: 'Temettü', labelEn: 'Dividend', icon: '💰' },
     { id: 'catalysts', labelTr: 'KAP', labelEn: 'KAP', icon: '⚡', count: `${catalystsCount}` },
-    { id: 'scorecard', labelTr: 'Karne', labelEn: 'Scorecard', icon: '📈' },
   ];
 
   const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string }[] = [
@@ -45,12 +45,12 @@ export default function MobileBottomNav({
       badge: 'PRO',
     },
     {
-      id: 'dividend',
-      labelTr: 'Temettü Nakit Akışı',
-      labelEn: 'Dividend Cashflow Tracker',
-      icon: '💰',
-      descTr: 'Pasif gelir takvimi, maliyet verimi ve temettü portföy laboratuvarı',
-      descEn: 'Passive income schedule, yield-on-cost & dividend lab',
+      id: 'scorecard',
+      labelTr: 'Strateji Karnesi & Başarı Oranları',
+      labelEn: 'Strategy Scorecard & Win Rates',
+      icon: '📈',
+      descTr: '1,173 geçmiş trade istatistiği, kâr faktörü ve strateji beklenti analizi',
+      descEn: '1,173 trade backtest history, profit factors & expectancy metrics',
     },
     {
       id: 'orb',
@@ -67,7 +67,7 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['quant', 'dividend', 'orb', 'forecast'].includes(activeTab);
+  const isMoreActive = ['quant', 'scorecard', 'orb', 'forecast'].includes(activeTab);
 
   return (
     <>
@@ -219,7 +219,21 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Portföy' : 'Portfolio'}</span>
           </button>
 
-          {/* Tab 3: KAP / Catalysts */}
+          {/* Tab 3: Dividend / Temettü */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('dividend')}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'dividend'
+                ? 'text-blue-600 dark:text-blue-400 font-black'
+                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+            }`}
+          >
+            <span className="text-lg leading-none mb-0.5">💰</span>
+            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Temettü' : 'Dividends'}</span>
+          </button>
+
+          {/* Tab 4: KAP / Catalysts */}
           <button
             type="button"
             onClick={() => handleSelectTab('catalysts')}
@@ -240,20 +254,6 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">KAP</span>
           </button>
 
-          {/* Tab 4: Scorecard */}
-          <button
-            type="button"
-            onClick={() => handleSelectTab('scorecard')}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'scorecard'
-                ? 'text-blue-600 dark:text-blue-400 font-black'
-                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-            }`}
-          >
-            <span className="text-lg leading-none mb-0.5">📈</span>
-            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Karne' : 'Scorecard'}</span>
-          </button>
-
           {/* Tab 5: More / Menu (Diğer) */}
           <button
             type="button"
@@ -266,12 +266,12 @@ export default function MobileBottomNav({
           >
             <span className="text-lg leading-none mb-0.5">
               {isMoreActive
-                ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'dividend' ? '💰' : '🔔')
+                ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'scorecard' ? '📈' : '🔔')
                 : '☰'}
             </span>
             <span className="text-[10px] tracking-tight">
               {isMoreActive
-                ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'dividend' ? 'Temettü' : 'Açılış')
+                ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'scorecard' ? (language === 'tr' ? 'Karne' : 'Scorecard') : (language === 'tr' ? 'Açılış' : 'Opening'))
                 : (language === 'tr' ? 'Diğer' : 'More')}
             </span>
           </button>

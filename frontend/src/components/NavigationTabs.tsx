@@ -52,10 +52,10 @@ export default function NavigationTabs({
   }, [activeTab]);
 
   return (
-    <div className="hidden md:block bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-16 z-30 shadow-xs">
-      <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-        {/* Left: Tab Strip with Direct Terminal Key Indices */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto py-2 no-scrollbar scroll-smooth">
+    <div className="block bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-14 sm:top-16 z-30 shadow-xs">
+      <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-2.5 sm:px-6 lg:px-8 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left: Tab Strip with Direct Terminal Key Indices (Swipeable on Mobile) */}
+        <div ref={scrollContainerRef} className="flex items-center space-x-1 sm:space-x-1.5 overflow-x-auto py-1.5 sm:py-2 no-scrollbar scroll-smooth w-full md:w-auto touch-pan-x">
           {tabs.map((tab, idx) => {
             const isActive = activeTab === tab.id;
             return (
@@ -63,14 +63,14 @@ export default function NavigationTabs({
                 key={tab.id}
                 ref={isActive ? activeTabRef : null}
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                className={`flex items-center space-x-1 sm:space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400/30'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
                 }`}
                 title={`Kısayol: [${idx + 1}]`}
               >
-                <span className="text-sm">{tab.icon}</span>
+                <span className="text-sm shrink-0">{tab.icon}</span>
                 <span>{tab.label}</span>
                 {tab.count && (
                   <span
@@ -83,7 +83,7 @@ export default function NavigationTabs({
                     {tab.count}
                   </span>
                 )}
-                <span className={`text-[9px] font-mono px-1 rounded transition-opacity ${isActive ? 'text-blue-200 bg-blue-700/60' : 'text-slate-400 dark:text-slate-500 opacity-60'}`}>
+                <span className={`hidden md:inline text-[9px] font-mono px-1 rounded transition-opacity ${isActive ? 'text-blue-200 bg-blue-700/60' : 'text-slate-400 dark:text-slate-500 opacity-60'}`}>
                   {idx + 1}
                 </span>
               </button>
