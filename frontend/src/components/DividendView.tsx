@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { DividendAsset } from '../lib/supabaseClient';
 import DividendPortfolioLab from './DividendPortfolioLab';
 import DividendRaindropCalendar from './DividendRaindropCalendar';
+import DividendAdvisorView from './DividendAdvisorView';
 import { useLanguage } from '../context/LanguageContext';
 import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
 
@@ -18,7 +19,7 @@ interface DividendViewProps {
 export default function DividendView({ dividendAssets, usdTryRate, dateFilter, onImportCandidate, onSelectTicker }: DividendViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
-  const [viewMode, setViewMode] = useState<'raindrop' | 'schedule' | 'table' | 'lab'>('raindrop');
+  const [viewMode, setViewMode] = useState<'raindrop' | 'schedule' | 'table' | 'advisor' | 'lab'>('raindrop');
 
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
@@ -121,14 +122,28 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{language === 'tr' ? 'Temettü Güvenilirliği' : 'Dividend Sustainability'}</span>
-          <div className="mt-2 text-2xl font-black text-emerald-500">
-            A- Grade
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{language === 'tr' ? 'Temettü Güvenilirliği' : 'Dividend Sustainability'}</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-[10px] font-black text-emerald-700 dark:text-emerald-300">
+                AI Advisor
+              </span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-emerald-500">
+              A- Grade
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {language === 'tr' ? `Portföydeki ${dividendAssets.length} temettü hissesinde güçlü bilanço` : `Low dividend cut probability across all ${dividendAssets.length} holdings`}
+            </div>
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            {language === 'tr' ? `Portföydeki ${dividendAssets.length} temettü hissesinde güçlü bilanço` : `Low dividend cut probability across all ${dividendAssets.length} holdings`}
-          </div>
+          <button
+            onClick={() => setViewMode('advisor')}
+            className="mt-3 w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <span>🤖</span>
+            <span>{language === 'tr' ? 'Danışman Önerilerini İncele' : 'Review Advisor Audit'}</span>
+          </button>
         </div>
       </div>
 
@@ -141,7 +156,7 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
           </h3>
           <p className="text-xs text-gray-500">{t.dividend.subtitle}</p>
         </div>
-        <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700/60 p-1 border border-gray-200 dark:border-gray-600">
+        <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700/60 p-1 border border-gray-200 dark:border-gray-600 flex-wrap gap-1">
           <button
             onClick={() => setViewMode('raindrop')}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
@@ -174,6 +189,17 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
           >
             <span>📊</span>
             <span>{t.dividend.tabTable}</span>
+          </button>
+          <button
+            onClick={() => setViewMode('advisor')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 cursor-pointer ${
+              viewMode === 'advisor'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <span>🤖</span>
+            <span>{t.dividend.tabAdvisor || (language === 'tr' ? 'AI Danışmanı' : 'AI Advisor')}</span>
           </button>
           <button
             onClick={() => setViewMode('lab')}
@@ -435,7 +461,19 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
         </div>
       </div>
 
-      {/* VIEW 3: AI PORTFOLIO LAB & BACKTEST SIMULATOR */}
+      {/* VIEW 3: AI PORTFOLIO ADVISOR */}
+      {viewMode === 'advisor' && (
+        <DividendAdvisorView
+          dividendAssets={dividendAssets}
+          usdTryRate={usdTryRate}
+          onSelectTicker={onSelectTicker}
+          onOpenLabWithStrategy={() => {
+            setViewMode('lab');
+          }}
+        />
+      )}
+
+      {/* VIEW 4: AI PORTFOLIO LAB & BACKTEST SIMULATOR */}
       {viewMode === 'lab' && (
         <DividendPortfolioLab
           usdTryRate={usdTryRate}

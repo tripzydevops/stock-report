@@ -199,6 +199,7 @@ export interface Translations {
     portfolioYield: string;
     tabSchedule: string;
     tabTable: string;
+    tabAdvisor: string;
     tabLab: string;
     upcomingPayouts: string;
     estDPS: string;
@@ -476,6 +477,7 @@ export const translations: Record<Language, Translations> = {
       portfolioYield: 'Portfolio Dividend Yield',
       tabSchedule: 'Payout Schedule',
       tabTable: 'Dividend Assets Table',
+      tabAdvisor: 'AI Portfolio Advisor',
       tabLab: 'Dividend Portfolio Lab',
       upcomingPayouts: 'Upcoming Dividend Payouts',
       estDPS: 'Est. Net DPS',
@@ -751,6 +753,7 @@ export const translations: Record<Language, Translations> = {
       portfolioYield: 'Portföy Temettü Verimi',
       tabSchedule: 'Ödeme Takvimi',
       tabTable: 'Temettü Hisseleri',
+      tabAdvisor: 'AI Portföy Danışmanı',
       tabLab: 'Temettü Portföy Lab',
       upcomingPayouts: 'Yaklaşan Temettü Ödemeleri',
       estDPS: 'Tahmini Net Hisse Başı',
