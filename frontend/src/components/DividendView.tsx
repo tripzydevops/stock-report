@@ -270,9 +270,19 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
 
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-[11px]">
                     <span className="text-gray-400">{language === 'tr' ? 'Ödeme Durumu:' : 'Payment Status:'}</span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400 flex items-center space-x-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                      <span>{asset.paymentStatus === 'Estimated' ? (language === 'tr' ? 'Tahmini' : 'Estimated') : (asset.paymentStatus || 'Estimated')}</span>
+                    <span className={`font-semibold flex items-center space-x-1.5 ${
+                      asset.paymentStatus === 'Confirmed'
+                        ? 'text-emerald-600 dark:text-emerald-400 font-bold'
+                        : 'text-blue-600 dark:text-blue-400'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        asset.paymentStatus === 'Confirmed' ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'
+                      }`}></span>
+                      <span>
+                        {asset.paymentStatus === 'Confirmed'
+                          ? (language === 'tr' ? '✓ Kesinleşti (Resmi/KAP)' : '✓ Confirmed (Official)')
+                          : (language === 'tr' ? 'Tahmini' : 'Estimated')}
+                      </span>
                     </span>
                   </div>
                 </div>

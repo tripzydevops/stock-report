@@ -553,6 +553,11 @@ export default function DividendRaindropCalendar({
                             <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
                               {drop.symbol}
                             </span>
+                            {drop.paymentStatus === 'Confirmed' && (
+                              <span className="text-[8px] font-black px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0" title="KAP/Resmi Kesinleşti">
+                                ✓
+                              </span>
+                            )}
                           </div>
                           <span className="text-[10px] font-mono text-slate-400 shrink-0">
                             {drop.dayOfMonth ? `${drop.dayOfMonth}` : ''}
@@ -641,11 +646,16 @@ export default function DividendRaindropCalendar({
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-black text-base text-slate-900 dark:text-white">{drop.symbol}</span>
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                             {drop.frequency}
                           </span>
+                          {drop.paymentStatus === 'Confirmed' && (
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300">
+                              ✓ {language === 'tr' ? 'Kesinleşti' : 'Confirmed'}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 truncate max-w-[200px]">{drop.name}</p>
                       </div>

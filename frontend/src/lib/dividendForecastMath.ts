@@ -2,6 +2,8 @@
  * Dividend Forecasting, DRIP Compounding, and Head-to-Head Comparison Math Engine
  */
 
+import liveDividendSchedulesData from '../data/live_dividend_schedules.json';
+
 export interface ForecastParams {
   initialCapital: number; // in chosen currency
   monthlyContribution: number; // recurring monthly DCA
@@ -899,7 +901,7 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   EREGL: { exDate: '2027-04-16', payDate: '2027-04-20', month: 'April 2027' },
   BIMAS: { exDate: '2026-12-16', payDate: '2026-12-18', month: 'Aralık 2026 (3. Taksit)' },
   CCOLA: { exDate: '2027-05-12', payDate: '2027-05-14', month: 'May 2027' },
-  TCELL: { exDate: '2026-12-25', payDate: '2026-12-29', month: 'Aralık 2026 (2. Taksit)' },
+  TCELL: { exDate: '2026-12-09', payDate: '2026-12-11', month: 'Aralık 2026 (2. Taksit)' },
   KCHOL: { exDate: '2027-04-24', payDate: '2027-04-28', month: 'April 2027' },
   SAHOL: { exDate: '2027-04-28', payDate: '2027-05-02', month: 'April / May 2027' },
   SISE: { exDate: '2027-05-30', payDate: '2027-06-03', month: 'May / June 2027' },
@@ -914,7 +916,7 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   VAKBN: { exDate: '2027-04-12', payDate: '2027-04-16', month: 'April 2027' },
   KRDMD: { exDate: '2026-11-26', payDate: '2026-11-28', month: 'Kasım 2026 (2. Taksit)' },
   AKBNK: { exDate: '2027-03-26', payDate: '2027-03-30', month: 'March 2027' },
-  O: { exDate: '2026-10-31', payDate: '2026-11-15', month: 'Monthly' },
+  O: { exDate: '2026-10-30', payDate: '2026-11-13', month: 'Monthly' },
   JEPI: { exDate: '2026-10-31', payDate: '2026-11-06', month: 'Monthly' },
   JEPQ: { exDate: '2026-10-31', payDate: '2026-11-06', month: 'Monthly' },
   VICI: { exDate: '2026-12-18', payDate: '2027-01-08', month: 'January 2027' },
@@ -922,11 +924,11 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   VOO: { exDate: '2026-12-20', payDate: '2026-12-27', month: 'December 2026' },
   VNQ: { exDate: '2026-12-22', payDate: '2026-12-29', month: 'December 2026' },
   VYM: { exDate: '2026-12-18', payDate: '2026-12-24', month: 'December 2026' },
-  KO: { exDate: '2026-11-28', payDate: '2026-12-15', month: 'December 2026' },
+  KO: { exDate: '2026-12-01', payDate: '2026-12-15', month: 'December 2026' },
   PEP: { exDate: '2026-12-04', payDate: '2027-01-06', month: 'January 2027' },
-  JNJ: { exDate: '2026-11-18', payDate: '2026-12-08', month: 'December 2026' },
+  JNJ: { exDate: '2026-11-24', payDate: '2026-12-08', month: 'December 2026' },
   PG: { exDate: '2026-10-17', payDate: '2026-11-15', month: 'November 2026' },
-  MCD: { exDate: '2026-11-29', payDate: '2026-12-15', month: 'December 2026' },
+  MCD: { exDate: '2026-12-01', payDate: '2026-12-15', month: 'December 2026' },
 };
 
 /**
@@ -949,7 +951,7 @@ export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
   TCELL: {
     months: [5, 11], // June (5), December (11)
     monthLabels: ['Haziran (1. Taksit)', 'Aralık (2. Taksit)'],
-    dates: ['2027-06-25', '2026-12-29'],
+    dates: ['2027-06-25', '2026-12-11'],
     ratios: [0.5, 0.5]
   },
   KRDMD: {
@@ -959,6 +961,71 @@ export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
     ratios: [0.5, 0.5]
   }
 };
+
+export interface LiveDividendRecord {
+  symbol: string;
+  ticker: string;
+  exDate: string | null;
+  payDate: string | null;
+  lastDPS: number | null;
+  lastDivDate: string | null;
+  paymentStatus: 'Estimated' | 'Confirmed';
+  isConfirmed: boolean;
+  updatedAt?: string;
+}
+
+export const LIVE_DIVIDEND_RECORDS: Record<string, LiveDividendRecord> =
+  (liveDividendSchedulesData as unknown as Record<string, LiveDividendRecord>) || {};
+
+export function resolveDividendSchedule(symbol: string): {
+  exDate: string;
+  payDate: string;
+  month: string;
+  isConfirmed: boolean;
+  status: 'Estimated' | 'Confirmed';
+  confirmedDPS?: number;
+} {
+  const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
+  const live = LIVE_DIVIDEND_RECORDS[cleanSym];
+  const staticSched = KNOWN_DIVIDEND_SCHEDULES[cleanSym];
+
+  const isConfirmed = Boolean(live?.isConfirmed);
+  const status: 'Estimated' | 'Confirmed' = isConfirmed ? 'Confirmed' : 'Estimated';
+
+  let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '2027-04-15');
+  let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate);
+
+  // If live data has confirmed exDate but payDate is null (common for BIST), calculate payDate as exDate + 2 business days
+  if (live?.isConfirmed && live?.exDate && !live?.payDate) {
+    const d = new Date(live.exDate);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + 2);
+      payDate = d.toISOString().slice(0, 10);
+    }
+  }
+
+  // Derive human-readable month
+  let month = staticSched?.month;
+  if (!month || isConfirmed) {
+    const d = new Date(payDate || exDate);
+    if (!isNaN(d.getTime())) {
+      const trMonths = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+      const suffix = staticSched?.month?.includes('Taksit') ? ` (${staticSched.month.split('(')[1]}` : '';
+      month = `${trMonths[d.getMonth()]} ${d.getFullYear()}${suffix}`;
+    } else {
+      month = staticSched?.month || 'TBD';
+    }
+  }
+
+  return {
+    exDate,
+    payDate,
+    month,
+    isConfirmed,
+    status,
+    confirmedDPS: live?.lastDPS || undefined,
+  };
+}
 
 /**
  * Calculates month-by-month compound growth with DRIP, recurring contributions, and dividend growth
@@ -1427,13 +1494,16 @@ export function deriveDividendsFromPortfolio(
 
     const trancheInfo = KNOWN_DIVIDEND_TRANCHES[cleanSym];
     const freqDiv = trancheInfo ? trancheInfo.months.length : (frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1);
-    const estimatedDPS = existing?.estimatedNextDPS || Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4));
+    
+    const sched = resolveDividendSchedule(cleanSym);
+
+    const estimatedDPS = existing?.estimatedNextDPS || (sched.confirmedDPS && sched.isConfirmed ? Number(sched.confirmedDPS.toFixed(4)) : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)));
     const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
 
-    const sched = KNOWN_DIVIDEND_SCHEDULES[cleanSym];
-    const nextExDate = existing?.nextExDate || sched?.exDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15');
-    const nextPaymentDate = existing?.nextPaymentDate || sched?.payDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20');
-    const payoutMonth = existing?.payoutMonth || sched?.month || (pos.market === 'US' ? 'November 2026' : 'April 2027');
+    const nextExDate = sched.exDate || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15');
+    const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20');
+    const payoutMonth = sched.month || existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'April 2027');
+    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (existing?.paymentStatus || 'Estimated');
 
     const displayName = growthProfile?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
 
@@ -1456,7 +1526,7 @@ export function deriveDividendsFromPortfolio(
       estimatedNextDPS: estimatedDPS,
       estimatedNextPayout: estimatedNextPayout,
       payoutMonth: payoutMonth,
-      paymentStatus: existing?.paymentStatus || 'Estimated'
+      paymentStatus: paymentStatus
     });
   }
 

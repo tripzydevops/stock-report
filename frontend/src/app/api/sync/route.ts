@@ -224,6 +224,20 @@ export async function POST(request: Request) {
         }], { onConflict: 'market,date' });
     }
 
+    // 7. Background Corporate Dividend Calendar Sync (Non-blocking)
+    if (body?.syncDividends || body?.action === 'crawler') {
+      try {
+        const { spawn } = await import('child_process');
+        const path = await import('path');
+        const pyPath = path.resolve(process.cwd(), '..', 'backend', '.venv', 'Scripts', 'python.exe');
+        const scriptPath = path.resolve(process.cwd(), '..', 'backend', 'scripts', 'sync_upcoming_dividends.py');
+        const proc = spawn(pyPath, [scriptPath], { detached: true, stdio: 'ignore' });
+        proc.unref();
+      } catch (err) {
+        console.warn('Could not launch background dividend sync process:', err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       dispatched: true,
