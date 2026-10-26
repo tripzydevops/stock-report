@@ -3,15 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { message, language = 'tr', holdings = [], metrics = {} } = body;
+    const { message, language = 'tr', holdings = [], metrics = {}, geminiApiKey: clientApiKey } = body;
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const headerKey = req.headers.get('x-gemini-key');
+    const apiKey = headerKey || clientApiKey || process.env.GEMINI_API_KEY;
+
     if (!apiKey || apiKey === 'your-gemini-api-key') {
-      // Fallback to client-side deterministic reasoning engine
+      // Fallback to client-side comprehensive multi-sector deterministic engine
       return NextResponse.json({ 
         success: false, 
         fallback: true,
@@ -19,22 +21,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Call Gemini REST API directly from Next.js serverless route
+    // Call Gemini REST API directly
     const systemInstruction = language === 'tr'
-      ? `Sen Türkiye (BIST) ve Küresel (ABD) temettü hisseleri konusunda uzman, objektif ve veri odaklı bir Baş Portföy & Temettü Danışmanısın (Lead Dividend Architect).
-Kullanıcının portföyündeki hisseleri ve sorduğu sektörü analiz et.
-Sektör şampiyonları:
-- Enerji & Rafineri: 1 numara TÜPRAŞ (TUPRS, %7.4 verim, yılda 2 taksit Nisan/Ekim, rafineri tekeli). Defansif elektrik şampiyonu ENERJİSA (ENJSA, %6.8 verim, TÜFE regülasyonlu şebeke tekeli). Aygaz (%5.4 verim, Tüpraş'ın %10.2 ortağı). Petkim petrokimya döngüseldir (%3 verim).
-- Bankacılık: Özel bankalar (AKBNK CAR %19.4, ROE %34; GARAN ROE %37) açık ara kamu bankalarından (HALKB, VAKBN ROE %18, verim %1.2) üstündür. Kamu bankalarında kâr sermayeye eklenir, temettü çok zayıftır.
-- GYO: Torunlar GYO (TRGYO) BIST'in temettü kralıdır. EN BÜYÜK AVANTAJI %0 STOPAJDIR (sıfır vergi). Mall of Istanbul kira kalkanı vardır.
-- Otomotiv & Sanayi: Türk Traktör (TTRAK, %7.8 verim, %75 kâr dağıtımı) ve Ford Otosan (FROTO, %6.2 verim, Euro ihracat tekeli). Borusan Boru (BRSAN) temettü için düşüktür (%3).
-- Tüketim & Perakende: BİM (BIMAS, yılda 3 taksitle öder - 18 Aralık 2026'da ödemesi var). Coca-Cola İçecek (CCOLA, %52 3Y CAGR döviz büyümesi).
-- Finans: İş Yatırım (ISMEN, %8.55 verim, 84% 3Y CAGR) ve Türkiye Sigorta (TURSG, %7.09 verim, Ağustos ayı ödemesiyle nakit akışını çeşitlendirir).
-- Telekom: Turkcell (TCELL, yılda 2 taksit - 9 Aralık 2026'da 2. taksit kesinleşti).
-- Global: SCHD (%3.65 temettü kralları sepeti), JEPI (%7.5 aylık covered call nakit akışı).
-
-Kullanıcının sorusuna net, maddeli, yüzdeler ve somut şirket isimleri vererek Türkçe cevap ver. Asla genel geçer kaçamak yanıt verme.`
-      : `You are the Lead Dividend Architect and Senior Quantitative Portfolio Advisor specializing in BIST and US dividend equities. Provide rigorous, data-driven, structured responses with clear verdicts.`;
+      ? `Sen Türkiye (BIST) ve Küresel (ABD) piyasalarında tüm sektörler konusunda uzman, kıdemli bir Baş Portföy & Temettü Danışmanısın (Lead Dividend Architect).
+Kullanıcı herhangi bir sektörü (Havacılık, Enerji, Çimento, Savunma, İlaç/Sağlık, Teknoloji, Cam, Kimya, Madencilik, Gıda, Otomotiv, GYO, Bankacılık, Sigorta, Holding vb.) sorduğunda:
+1. O sektördeki öne çıkan şirketleri ve temettü kültürlerini açıkla (Temettü verimi, kâr dağıtım oranı, nakit akışı istikrarı).
+2. Sektörün 1 numaralı hissesini ve nedenini net olarak belirt.
+3. Hangi hisselerin temettü için değil büyüme/yatırım (CapEx) için uygun olduğunu açıkla (Örn: THYAO filo yatırımı yapar temettü vermez; ASELS AR-GE yapar düşük temettü verir; SASA temettü vermez).
+4. Kullanıcının mevcut portföy durumuyla ilişkilendir.
+Maddeli, net yüzdeler ve profesyonel Türkçe ile doğrudan soruyu yanıtla.`
+      : `You are the Lead Dividend Architect and Senior Quantitative Portfolio Advisor specializing in all BIST and Global sectors. Provide rigorous, data-driven, structured responses with clear verdicts on any sector asked.`;
 
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 

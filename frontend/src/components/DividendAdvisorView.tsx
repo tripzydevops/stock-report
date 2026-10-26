@@ -1371,33 +1371,415 @@ Portföyünüzün güçlü yönleri:
       }
     }
 
-    // 12. Smart Fallback: Comprehensive Executive Briefing (No more bland dismissive text!)
+    // 12. Aviation & Logistics (THYAO, PGSUS, TAVHL, CLEBI, RYSAS, GSDHO)
+    if (
+      lower.includes('havacılık') ||
+      lower.includes('uçak') ||
+      lower.includes('hava') ||
+      lower.includes('thyao') ||
+      lower.includes('thy') ||
+      lower.includes('pgsus') ||
+      lower.includes('pegasus') ||
+      lower.includes('tavhl') ||
+      lower.includes('tav') ||
+      lower.includes('clebi') ||
+      lower.includes('çelebi') ||
+      lower.includes('ulaştırma') ||
+      lower.includes('lojistik') ||
+      lower.includes('aviation') ||
+      lower.includes('airline')
+    ) {
+      if (language === 'tr') {
+        return `✈️ **Havacılık & Lojistik Sektörü Temettü Analizi:**
+
+Havacılık sektörü sermaye yoğun (CapEx) ve yüksek borç/büyüme odaklı bir sektördür. Şirketlerin temettü politikaları birbirinden tamamen farklıdır:
+
+1. ⚠️ **THYAO (Türk Hava Yolları) & PGSUS (Pegasus): Temettü İçin Uygun Değildir!**
+   - **Neden?** THY ve Pegasus, elde ettikleri tüm net kârı yüzlerce yeni uçak alımına (Filo genişletme CapEx) yatırırlar. Nakit kâr payı dağıtmaz veya sembolik düzeyde bırakırlar. Büyüme ve sermaye kazancı için harikadırlar, ancak **saf temettü portföyü için uygun değillerdir.**
+2. 👑 **TAVHL (TAV Havalimanları) & CLEBI (Çelebi): Sektörün Nakit Şampiyonları**
+   - **TAVHL:** Havalimanı terminal işletme harçları döviz bazlıdır. Yeni terminal yatırımları bittiğinde düzenli temettü dağıtır.
+   - **CLEBI (%6-%8 Dönemsel Verim):** Havalimanı yer hizmetleri tekelidir; işletme sermayesi ihtiyacı düşük olduğundan kârının neredeyse tamamını nakit temettü olarak dağıtma geleneğine sahiptir.
+
+👉 **Danışman Kararı:** Havacılıkta nakit akışı istiyorsanız THYAO yerine havalimanı işletme ve yer hizmeti tekelleri olan **TAVHL** veya **CLEBI** tercih edilmelidir.`;
+      } else {
+        return `✈️ **Aviation & Logistics Dividend Analysis:**
+
+- **THYAO & PGSUS:** Capital-intensive airlines reinvesting cashflows into fleet expansion CapEx. Suboptimal for cash dividends.
+- **TAVHL & CLEBI:** Airport concessions and ground handling monopolies generating reliable hard-currency operational cashflows with regular distributions.`;
+      }
+    }
+
+    // 13. Defense & Aerospace (ASELS, SDTTR, OTKAR)
+    if (
+      lower.includes('savunma') ||
+      lower.includes('asels') ||
+      lower.includes('aselsan') ||
+      lower.includes('sdttr') ||
+      lower.includes('defense') ||
+      lower.includes('askeri') ||
+      lower.includes('silah')
+    ) {
+      if (language === 'tr') {
+        return `🛡️ **Savunma Sanayii Temettü Analizi:**
+
+Savunma şirketleri stratejik devlet projeleri ve yüksek AR-GE harcamaları nedeniyle nakit kârlarını şirket bünyesinde tutma eğilimindedir:
+
+1. **ASELS (Aselsan):**
+   - **Temettü Karakteri:** Her yıl aralıksız kâr payı öder; ancak cari temettü verimi **%1.0 - %1.5** ile düşüktür.
+   - **Neden?** Kârın %70-80'i yüksek teknolojili radar, elektro-optik ve hava savunma AR-GE'sine aktarılır. Portföyde temettü verimi için değil, jeopolitik krizlere karşı **defansif kalkan ve büyüme** amacıyla tutulur.
+2. **OTKAR (Otokar):**
+   - Koç Grubu temettü disipliniyle zırhlı kara araçları ve ticari otobüs ihracatından elde ettiği kârı daha cömert oranlarla (%3.5-%5 verim) hissedarına dağıtır.
+
+👉 **Danışman Kararı:** Saf temettü geliri arıyorsanız Aselsan verim açısından TUPRS, ISMEN veya TTRAK'ın çok gerisindedir.`;
+      } else {
+        return `🛡️ **Defense Industry Dividend Analysis:**
+
+- **ASELS (1.0% - 1.5% yield):** Retains 70%+ of earnings to fund advanced defense electronics R&D. Defensive geopolitical hedge, not a high-yield vehicle.
+- **OTKAR:** More generous export distributions under Koç Holding governance.`;
+      }
+    }
+
+    // 14. Cement & Construction Materials (AKCNS, CIMSA, OYAKC, NUHCM, BOBET)
+    if (
+      lower.includes('çimento') ||
+      lower.includes('beton') ||
+      lower.includes('yapı') ||
+      lower.includes('akcns') ||
+      lower.includes('cimsa') ||
+      lower.includes('oyakc') ||
+      lower.includes('nuhcm') ||
+      lower.includes('bobet') ||
+      lower.includes('cement') ||
+      lower.includes('inşaat')
+    ) {
+      if (language === 'tr') {
+        return `🏗️ **Çimento & Yapı Malzemeleri Sektörü Temettü Analizi:**
+
+Çimento sektörü BIST'in **en köklü ve en yüksek temettü ödeyen** sanayi sektörlerinden biridir:
+
+1. 👑 **AKCNS (Akçansa) - Temettü Kalesi:**
+   - **Temettü Verimi:** **%6.5 - %7.5**.
+   - **Moat:** Sabancı Holding ve Alman Heidelberg Materials ortaklığı; Marmara bölgesi pazar hakimiyeti ve kârının %70-80'ini nakit dağıtma disiplini.
+2. 🥈 **CIMSA (Çimsa) - Küresel Beyaz Çimento Devi:**
+   - **Temettü Verimi:** **%6.0 - %6.8**.
+   - **Moat:** Beyaz çimento ve kalsiyum alüminat ihracatında dünya lideri. Yüksek döviz geliriyle düzenli temettü öder.
+3. **OYAKC (Oyak Çimento):**
+   - Entegre Oyak Grubu gücü, deprem bölgesi yeniden inşa projeleri ve altyapı nakit üretimi.
+
+👉 **Danışman Kararı:** Çimento sektörü doğrudan nakit akışı için mükemmeldir. Öncelikli tercih **AKCNS** veya döviz gelirli **CIMSA** olmalıdır.`;
+      } else {
+        return `🏗️ **Cement & Construction Materials Dividend Analysis:**
+
+- **AKCNS (6.5% - 7.5% yield):** Premier dividend aristocrat backed by Sabancı and Heidelberg Materials with ~75% cash payout culture.
+- **CIMSA (6.0% - 6.8% yield):** Global leader in white cement exports generating hard-currency cash distributions.`;
+      }
+    }
+
+    // 15. Healthcare & Pharmaceuticals (SELEC, DEVA, MPARK, GENIL, TRILC)
+    if (
+      lower.includes('sağlık') ||
+      lower.includes('ilaç') ||
+      lower.includes('ecza') ||
+      lower.includes('hastane') ||
+      lower.includes('selec') ||
+      lower.includes('deva') ||
+      lower.includes('mpark') ||
+      lower.includes('genil') ||
+      lower.includes('pharma') ||
+      lower.includes('health')
+    ) {
+      if (language === 'tr') {
+        return `💊 **Sağlık & İlaç Sektörü Temettü Analizi:**
+
+1. 👑 **SELEC (Selçuk Ecza Deposu) - Sektörün Tartışmasız Temettü Şampiyonu:**
+   - **Temettü Verimi:** **%5.0 - %6.0**.
+   - **Moat:** Türkiye genelinde 25.000+ eczaneye dağıtım tekeli (%40+ pazar payı). Net nakit pozisyonunda borçsuz bilanço ve her yıl aralıksız kâr dağıtımı. Resesyonlardan ve ekonomik krizlerden etkilenmeyen defansif liman.
+2. **MPARK (MLP Sağlık - Medical Park):**
+   - Özel hastane zinciri büyüme ve yeni yatırımlara odaklıdır; temettü yerine şirket değerini büyütmeyi hedefler.
+3. **DEVA (Deva Holding):**
+   - Jenerik ilaç üretimi ve AR-GE odaklı; temettü verimi %2-3 civarındadır.
+
+👉 **Danışman Kararı:** Sağlık sektöründe temettü için tek geçilecek hisse borçsuz nakit zengini **SELEC**'tir.`;
+      } else {
+        return `💊 **Healthcare & Pharma Dividend Analysis:**
+
+- **SELEC (5.0% - 6.0% yield):** Undisputed pharmaceutical distribution monopoly with net cash balance sheet and non-cyclical defensive dividends.
+- **MPARK & DEVA:** Growth and hospital expansion models retaining capital.`;
+      }
+    }
+
+    // 16. Technology & Software (LOGO, VBTYZ, MTRKS, ARDYZ, FONET)
+    if (
+      lower.includes('yazılım') ||
+      lower.includes('bilişim') ||
+      lower.includes('teknoloji') ||
+      lower.includes('logo') ||
+      lower.includes('vbtyz') ||
+      lower.includes('mtrks') ||
+      lower.includes('ardyz') ||
+      lower.includes('tech') ||
+      lower.includes('software')
+    ) {
+      if (language === 'tr') {
+        return `💻 **Teknoloji & Yazılım Sektörü Temettü Analizi:**
+
+Teknoloji şirketleri genellikle sermaye artırımı (bedelsiz) tercih eder; ancak aralarında çok özel bir istisna vardır:
+
+1. 👑 **LOGO (Logo Yazılım) - BIST'in Teknoloji Temettü Devi:**
+   - **Temettü Verimi:** **%3.5 - %4.2**.
+   - **Moat:** Türkiye KOBİ ve kurumsal ERP pazar lideri, sıfır borç, %40+ FAVÖK marjı ve SaaS tekrarlayan abonelik nakit akışı.
+   - 15 yılı aşkın süredir kesintisiz temettü öder.
+2. **MTRKS & VBTYZ:**
+   - Veri analitiği ve kamu bilişim projeleriyle dönemsel kâr payı öderler ancak verimleri daha mütevazıdır.
+
+👉 **Danışman Kararı:** Teknolojide hem büyüme hem de güvenilir nakit temettü arayanlar için tek kurumsal adres **LOGO**'dur.`;
+      } else {
+        return `💻 **Technology & Software Dividend Analysis:**
+
+- **LOGO (3.5% - 4.2% yield):** BIST's premier tech dividend compounder with zero debt, 40%+ EBITDA margins, and recurring enterprise SaaS revenues.
+- Other tech peers generally retain cash for capital investments.`;
+      }
+    }
+
+    // 17. Glass & Packaging (SISE, KLSYN, DURDO, BAKAB)
+    if (
+      lower.includes('cam') ||
+      lower.includes('şişe') ||
+      lower.includes('ambalaj') ||
+      lower.includes('sise') ||
+      lower.includes('şişecam') ||
+      lower.includes('klsyn') ||
+      lower.includes('durdo') ||
+      lower.includes('glass')
+    ) {
+      if (language === 'tr') {
+        return `🏢 **Cam & Ambalaj Sektörü Temettü Analizi:**
+
+1. 👑 **ŞİŞECAM (\`SISE\`) - Küresel Sanayi Devi:**
+   - **Temettü Verimi:** **%2.80 - %3.50**.
+   - **Moat:** Düzcam, cam ambalaj, cam ev eşyası ve soda külünde dünya ilk 5 üreticisi. Gelirlerinin %60+'ı döviz bazlıdır. İş Bankası iştirakidir ve her yıl düzenli kâr payı öder.
+   - **Temettü Notu:** ABD doğal soda külü yatırımı gibi milyar dolarlık global CapEx yürüttüğünden kârının bir kısmını sermayeye ekler; bu nedenle verimi TTRAK veya ISMEN gibi %7-8 seviyesinde değildir.
+2. **DURDO (Duran Doğan Basım):**
+   - Premium karton ambalaj ihracatçısı; Avrupa lüks tüketim ambalajıyla düzenli kâr payı dağıtır.
+
+👉 **Danışman Kararı:** Şişecam döviz bazlı sanayi kalesidir; yüksek cari getiri yerine defansif uzun vadeli büyüme sunar.`;
+      } else {
+        return `🏢 **Glass & Packaging Dividend Analysis:**
+
+- **SISE (2.8% - 3.5% yield):** Global top-5 glass and soda ash titan with 60%+ foreign currency revenues under İş Bankası stewardship.`;
+      }
+    }
+
+    // 18. Mining & Precious Metals (KOZAL, KOZAA, IPEKE, PRKME)
+    if (
+      lower.includes('maden') ||
+      lower.includes('altın') ||
+      lower.includes('metal') ||
+      lower.includes('kozal') ||
+      lower.includes('kozaa') ||
+      lower.includes('ipeke') ||
+      lower.includes('mining') ||
+      lower.includes('gold')
+    ) {
+      if (language === 'tr') {
+        return `⛏️ **Madencilik & Altın Sektörü Temettü Analizi:**
+
+- **KOZAL (Koza Altın) & KOZAA:**
+  - **Moat:** Sıfır borç, Türkiye'nin en zengin altın yatakları ve devasa nakit kasası. Ons altın yükselişinde kârlılık patlar.
+  - **Temettü Uyarısı:** Hukuki ve mülkiyet süreçleri nedeniyle düzenli bir temettü takvimi bulunmamaktadır. Şirket kasasında milyarlarca TL nakit tutmasına rağmen bunu her yıl düzenli temettü olarak dağıtmaz.
+👉 **Danışman Kararı:** Altın fiyat artışından faydalanmak için tutulabilir; ancak nakit maaş odaklı temettü portföyü için güvenilir bir takvim sunmaz.`;
+      } else {
+        return `⛏️ **Mining & Gold Dividend Analysis:**
+
+- **KOZAL / KOZAA:** Pristine net cash balance sheets benefiting from gold bull runs, but legal ownership overhang makes dividend distribution schedules sporadic.`;
+      }
+    }
+
+    // 19. Chemicals & Fertilizers (EGGUB, GUBRF, BAGFS, HEKTS, SASA)
+    if (
+      lower.includes('kimya') ||
+      lower.includes('gübre') ||
+      lower.includes('zirai') ||
+      lower.includes('sasa') ||
+      lower.includes('hekts') ||
+      lower.includes('hektas') ||
+      lower.includes('gubrf') ||
+      lower.includes('bagfs') ||
+      lower.includes('eggub') ||
+      lower.includes('chemical')
+    ) {
+      if (language === 'tr') {
+        return `🧪 **Kimya & Gübre Sektörü Temettü Analizi:**
+
+⚠️ **Önemli Ayrım: SASA ve HEKTAŞ Temettü Hissesi Değildir!**
+- **SASA** ve **HEKTS**: Çok yüksek borçlulukla milyar dolarlık petrokimya ve tohum yatırımları yaparlar. Nakit kâr payı dağıtmazlar. Temettü yatırımcısı için uygun değillerdir.
+- 👑 **EGGUB (Ege Gübre - %5.5 Verim):** Aliağa liman işletmeciliği ve gübre depolama gelirleriyle sektörde aralıksız temettü ödeyen en istikrarlı şirkettir.
+- **GUBRF** ve **BAGFS**: Gübre sübvansiyonları ve küresel amonyak/doğalgaz maliyetlerine duyarlıdır; ödemeleri döngüseldir.
+
+👉 **Danışman Kararı:** Kimya ve gübrede düzenli nakit için tek adres liman gelirleriyle korunan **EGGUB**'dir.`;
+      } else {
+        return `🧪 **Chemicals & Fertilizer Dividend Analysis:**
+
+- **SASA & HEKTS:** Growth and debt-driven capex models; zero regular dividend distribution.
+- **EGGUB (5.5% yield):** Consistent dividend cashflow anchored by deep-sea port logistics.`;
+      }
+    }
+
+    // 20. Automotive Special: DOAS (Doğuş Otomotiv)
+    if (
+      lower.includes('doas') ||
+      lower.includes('doğuş') ||
+      lower.includes('distribütör')
+    ) {
+      if (language === 'tr') {
+        return `🚗 **DOAS (Doğuş Otomotiv) Temettü Analizi:**
+
+- **Temettü Verimi:** **%8.50 - %11.00** (BIST'in en cömert nakit dağıtım devlerinden biri).
+- **Moat:** Volkswagen, Audi, Porsche, Skoda, Seat ve Scania Türkiye distribütörlüğü + TÜVTÜRK araç muayene tekelinin %33 ortağı.
+- **Dağıtım Disiplini:** Kârının **%70-80'ini** hissedara dağıtır; yılda 2-3 taksit halinde ödeme yapar.
+👉 **Danışman Kararı:** TTRAK ve FROTO ile birlikte otomotivde en yüksek nakit üreten üçlüden biridir; portföye eklenmesi temettü gelirini hızla yukarı çeker.`;
+      } else {
+        return `🚗 **DOAS (Doğuş Otomotiv) Analysis:**
+
+- **Yield:** **8.5% - 11.0%** (among highest dividend yields on BIST).
+- **Moat:** Exclusive VW/Audi/Porsche distributor + TÜVTÜRK vehicle inspection monopoly with 75%+ cash payout ratio.`;
+      }
+    }
+
+    // 21. Textile (YUNSA, KORDS)
+    if (
+      lower.includes('tekstil') ||
+      lower.includes('kumaş') ||
+      lower.includes('iplik') ||
+      lower.includes('yunsa') ||
+      lower.includes('kords') ||
+      lower.includes('textile')
+    ) {
+      if (language === 'tr') {
+        return `🧵 **Tekstil & Güçlendirme Temettü Analizi:**
+
+- **YUNSA (Yünsa - %8.0 Verim):** Lüks yünlü kumaş ihracatıyla son yıllarda kârının neredeyse tamamını dağıtarak yüksek temettü ödemiştir.
+- **KORDS (Kordsa - %3.5 Verim):** Sabancı Holding çatısında küresel lastik ve havacılık kord bezi üreticisidir; döviz gelirleriyle düzenli temettü öder.`;
+      } else {
+        return `🧵 **Textile & Reinforcement Analysis:** YUNSA delivers high cyclical yields (8%+), while KORDS offers global export stability under Sabancı Holding.`;
+      }
+    }
+
+    // 22. Tourism & Hotels
+    if (
+      lower.includes('turizm') ||
+      lower.includes('otel') ||
+      lower.includes('tatil') ||
+      lower.includes('tourism')
+    ) {
+      if (language === 'tr') {
+        return `🏖️ **Turizm & Otelcilik Temettü Analizi:**
+
+- BIST turizm hisseleri (MAALT, AYCES, PKENT) temettü için değil, gayrimenkul değer artışları için tutulur.
+- Temettü verimleri çok düşüktür (%0.5 - %1.5); düzenli nakit akışı portföyleri için **önerilmez.**`;
+      } else {
+        return `🏖️ **Tourism Analysis:** Tourism equities feature negligible dividend yields (<1.5%) and are unsuited for income portfolios.`;
+      }
+    }
+
+    // 23. Factoring & Leasing
+    if (
+      lower.includes('faktoring') ||
+      lower.includes('leasing') ||
+      lower.includes('kiralama') ||
+      lower.includes('garfa') ||
+      lower.includes('vakfa') ||
+      lower.includes('lidfa') ||
+      lower.includes('crdfa')
+    ) {
+      if (language === 'tr') {
+        return `📈 **Faktoring & Finansal Kiralama Temettü Analizi:**
+
+- Yüksek faiz ortamında banka dışı faktoring spreadleri patlamıştır.
+- **GARFA** (%8.2 verim), **LIDFA** (%7.5 verim) ve **CRDFA** kârlarının büyük kısmını nakit temettü olarak dağıtır.
+👉 **Danışman Kararı:** Yüksek faiz döneminde ISMEN ve TURSG gibi finansal nakit akışını destekler.`;
+      } else {
+        return `📈 **Factoring & Leasing Analysis:** Generates 7-8% cash yields from interest rate spreads during high-rate macro regimes.`;
+      }
+    }
+
+    // 24. Inflation Hedging
+    if (
+      lower.includes('enflasyon') ||
+      lower.includes('tüfe') ||
+      lower.includes('inflation')
+    ) {
+      if (language === 'tr') {
+        return `🛡️ **Enflasyona Karşı En Güçlü 3 Temettü Sektörü:**
+
+1. 🏢 **GYO (Torunlar GYO - TRGYO):** Prime AVM ve ofis kiraları doğrudan TÜFE'ye endekslidir ve **%0 STOPAJ** (sıfır vergi) avantajıyla kesintisiz net nakit sağlar.
+2. 🛒 **Gıda Perakendesi (BİM - BIMAS):** Enflasyonist maliyetleri 24 saat içinde raflara yansıtır; negatif işletme sermayesiyle nakit basar. Yılda 3 taksitle öder.
+3. ⚡ **Telekom (Turkcell - TCELL):** Fatura tarifelerini TÜFE oranında günceller; 2 taksitli ödeme yapar.`;
+      } else {
+        return `🛡️ **Top 3 Inflation-Hedged Dividend Sectors:** REITs (TRGYO 0% tax), Retail (BIMAS), and Telecoms (TCELL).`;
+      }
+    }
+
+    // 25. Hard Currency / Export Hedging
+    if (
+      lower.includes('ihracat') ||
+      lower.includes('döviz') ||
+      lower.includes('dolar bazlı') ||
+      lower.includes('euro') ||
+      lower.includes('export')
+    ) {
+      if (language === 'tr') {
+        return `💵 **Döviz / İhracat Gelirli En İyi Temettü Hisseleri:**
+
+1. 🇪🇺 **FROTO (Ford Otosan):** Avrupa Transit ihracat tekeli; gelirleri saf Euro bazlıdır (%6.20 verim).
+2. 🌏 **CCOLA (Coca-Cola İçecek):** Orta Asya ve Orta Doğu döviz bazlı kârları (%52 3Y CAGR).
+3. 🚜 **TTRAK (Türk Traktör):** Küresel ihracat liderliği (%7.80 verim).
+4. 🇺🇸 **SCHD & JEPI (ABD ETF'leri):** Doğrudan her çeyrek veya her ay banka hesabınıza Dolar nakit temettüsü öder.`;
+      } else {
+        return `💵 **Top Foreign Currency Dividend Exporters:** FROTO (EUR), CCOLA (Central Asia), TTRAK (Global), and US ETFs (SCHD/JEPI).`;
+      }
+    }
+
+    // 26. Complete Market Sector Matrix Fallback (Institutional Grade)
     if (language === 'tr') {
-      return `📊 **Sektörel Temettü Danışmanı Özeti (Yıllık: ~₺${totalAnnualTRY.toFixed(0)}, Aylık: ~₺${totalMonthlyTRY.toFixed(0)}):**
+      return `🏛️ **BIST & Küresel Tüm Sektörler Temettü Atlası:**
 
-Sorduğunuz konuyla ilgili sektör liderleri şunlardır:
-- ⚡ **Enerji & Rafineri:** 1 Numara **TUPRS** (%7.40 verim) ve defansif **ENJSA** (%6.80 verim).
-- 🏛️ **Bankacılık:** **AKBNK** (CAR %19.4, ROE %34) kamu bankalarından çok daha kârlıdır.
-- 🏢 **GYO:** **TRGYO** (%0 stopaj vergisi avantajıyla kesintisiz net nakit).
-- 🏭 **Sanayi:** **TTRAK** (%7.80 verim, %75 dağıtım oranı) ve **FROTO** (Euro döviz kalkanı).
-- 🛒 **Tüketim:** **BIMAS** (3 taksit - 18 Aralık'ta ödemesi var) ve **CCOLA** (%52 büyüme).
+Sorduğunuz konu doğrultusunda ekonomideki 12 ana sektörün 1 numaralı temettü şampiyonları şunlardır:
 
-💡 **Doğrudan sorabileceğiniz örnek sorular:**
-- *"Enerji sektöründen hangi hisse alınmalı?"*
-- *"Portföyümde hangi sektör eksik?"*
-- *"BIMAS mı CCOLA mı?"*
-- *"En yüksek temettüyü hangi hisse veriyor?"*`;
+1. ⚡ **Enerji & Rafineri:** **TUPRS** (%7.40 verim, 2 taksit) & **ENJSA** (%6.80 verim, TÜFE tekeli).
+2. 🏛️ **Bankacılık:** **AKBNK** (CAR %19.4, ROE %34) - Kamu bankalarından (HALKB/VAKBN) çok daha kârlı.
+3. 🏢 **GYO / Gayrimenkul:** **TRGYO** (%5.20 verim, **%0 STOPAJ VERGİSİ** ile sıfır vergi).
+4. 🚗 **Otomotiv & Traktör:** **TTRAK** (%7.80 verim, %75 dağıtım) & **DOAS** (%9.50) & **FROTO** (Euro kalkanı).
+5. ✈️ **Havacılık:** **CLEBI** (%6-8 verim) & **TAVHL** (THYAO ve PGSUS kârı filoya yatırır, temettü vermez).
+6. 💊 **Sağlık & İlaç:** **SELEC** (%5.50 verim, borçsuz ecza tekeli).
+7. 🏗️ **Çimento:** **AKCNS** (%7.20 verim) & **CIMSA** (%6.50 verim).
+8. 💻 **Teknoloji:** **LOGO** (%3.80 verim, borçsuz kurumsal yazılım).
+9. 🏢 **Cam & Sanayi:** **SISE** (%3.20 verim, küresel döviz gelirli sanayi kalesi).
+10. 🛡️ **Savunma:** **ASELS** (%1.20 verim - kâr AR-GE'ye aktarılır, defansif büyüme hissesidir).
+11. 📈 **Finansal Hizmetler:** **ISMEN** (%8.55 verim) & **TURSG** (%7.09 verim).
+12. 🛒 **Tüketim & Perakende:** **BIMAS** (3 taksit - 18 Aralık ödemesi) & **CCOLA** (%52 büyüme).
+
+💡 **İstediğiniz herhangi bir sektörü veya hisseyi doğrudan sorabilirsiniz:**
+- *"Havacılıkta neden THYAO temettü vermez?"*
+- *"Çimento sektöründen ne önerirsin?"*
+- *"Sağlık ve ilaçta en iyi temettü hissesi hangisi?"*
+- *"Teknolojide temettü ödeyen firma var mı?"*`;
     } else {
-      return `📊 **Executive Sectoral Dividend Briefing (Annual: ~₺${totalAnnualTRY.toFixed(0)}):**
+      return `🏛️ **Complete BIST & Global Sectoral Dividend Matrix:**
 
-Top champions across economic sectors:
-- ⚡ **Energy & Refining:** **TUPRS** (7.40% yield) & **ENJSA** (6.80% utility).
-- 🏛️ **Banking:** **AKBNK** (19.4% CAR, 34% ROE) dominates state banks.
-- 🏢 **REITs:** **TRGYO** (0% withholding tax shelter).
-- 🏭 **Industrial:** **TTRAK** (7.80% yield) & **FROTO** (Euro hedge).
-- 🛒 **Consumer:** **BIMAS** (3 tranches) & **CCOLA** (52% CAGR).
+- ⚡ **Energy:** TUPRS (7.4%) & ENJSA (6.8%)
+- 🏛️ **Banking:** AKBNK (19.4% CAR, 34% ROE)
+- 🏢 **REITs:** TRGYO (0% tax shield, Mall of Istanbul)
+- 🚗 **Automotive:** TTRAK (7.8%) & DOAS (9.5%) & FROTO (6.2%)
+- ✈️ **Aviation:** CLEBI & TAVHL (THYAO reinvests in aircraft fleet)
+- 💊 **Pharma:** SELEC (5.5% net cash distributor)
+- 🏗️ **Cement:** AKCNS (7.2%) & CIMSA (6.5%)
+- 💻 **Tech:** LOGO Software (3.8% SaaS recurring cash)
+- 🏢 **Glass:** SISE (Global FX producer)
+- 📈 **Financials:** ISMEN (8.55%) & TURSG (7.09%)
+- 🛒 **Retail:** BIMAS (3 tranches) & CCOLA (52% CAGR)
 
-Ask any specific question like *"Which energy stock to buy?"* or *"What is missing in my portfolio?"*`;
+Ask about any sector or company for deep qualitative diagnostics.`;
     }
   };
 
@@ -1413,12 +1795,19 @@ Ask any specific question like *"Which energy stock to buy?"* or *"What is missi
 
     // Step 1: Try AI endpoint
     try {
+      const storedKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (storedKey) {
+        headers['x-gemini-key'] = storedKey;
+      }
+
       const apiRes = await fetch('/api/advisor/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           message: text,
           language,
+          geminiApiKey: storedKey || undefined,
           holdings: Array.from(userHoldingMap.values()).map(h => ({ symbol: h.symbol, shares: h.shares })),
           metrics: { annualTRY: totalAnnualTRY, monthlyTRY: totalMonthlyTRY }
         })

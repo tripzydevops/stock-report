@@ -861,6 +861,13 @@ export default function Home() {
   const { user, isDemoMode, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('signals');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setGeminiApiKey(localStorage.getItem('gemini_api_key') || '');
+    }
+  }, []);
 
   const handleTabChange = (newTab: TabId) => {
     setActiveTab(newTab);
@@ -3450,7 +3457,54 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Section 3: Deep Web Crawler */}
+            {/* Section 3: Gemini AI API Key (Optional) */}
+            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  {language === 'tr' ? '🤖 Gemini AI Danışman Motoru' : '🤖 Gemini AI Engine'}
+                </span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300">
+                  {geminiApiKey ? (language === 'tr' ? '✓ Bağlı' : '✓ Active') : (language === 'tr' ? 'İsteğe Bağlı' : 'Optional')}
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                {language === 'tr'
+                  ? 'Kendi Google Gemini API anahtarınızı girerek tüm sektörler ve hisseler için canlı LLM akıl yürütmesini etkinleştirebilirsiniz.'
+                  : 'Enter your Google Gemini API key to enable live LLM reasoning for any sector or stock.'}
+              </p>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setGeminiApiKey(val);
+                    if (val) {
+                      localStorage.setItem('gemini_api_key', val);
+                    } else {
+                      localStorage.removeItem('gemini_api_key');
+                    }
+                  }}
+                  placeholder="AIzaSy..."
+                  className="flex-1 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-xs font-mono text-gray-900 dark:text-white"
+                />
+                {geminiApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeminiApiKey('');
+                      localStorage.removeItem('gemini_api_key');
+                    }}
+                    className="p-1.5 text-xs text-rose-500 hover:text-rose-600 font-bold"
+                    title={language === 'tr' ? 'Anahtarı Sil' : 'Clear Key'}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Section 4: Deep Web Crawler */}
             <div className="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700/60 space-y-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block">
                 {language === 'tr' ? 'Veri Motoru' : 'Data Engine'}
