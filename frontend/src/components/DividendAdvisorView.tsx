@@ -14,10 +14,11 @@ interface DividendAdvisorViewProps {
 export type DividendSectorKey =
   | 'BANKING'
   | 'REIT'
+  | 'ENERGY'
   | 'FINANCIALS'
   | 'CONSUMER'
   | 'AUTOMOTIVE_INDUSTRIAL'
-  | 'HOLDINGS_ENERGY_TELECOM'
+  | 'HOLDINGS_TELECOM'
   | 'GLOBAL_ETFS';
 
 export interface SectorStockComparison {
@@ -600,16 +601,134 @@ export default function DividendAdvisorView({
         ]
       },
 
-      HOLDINGS_ENERGY_TELECOM: {
-        key: 'HOLDINGS_ENERGY_TELECOM',
+      ENERGY: {
+        key: 'ENERGY',
         icon: '⚡',
-        nameTr: 'Holdingler, Enerji & Telekom',
-        nameEn: 'Conglomerates, Energy & Telecoms',
-        shortDescTr: 'Çok sektörlü holding nakitleri, rafineri marjları ve TÜFE endeksli telekom gelirleri',
-        shortDescEn: 'Conglomerate NAV cashflows, refining margins, and inflation-indexed telecom ARPUs',
+        nameTr: 'Enerji, Rafineri & Elektrik',
+        nameEn: 'Energy, Refining & Utilities',
+        shortDescTr: 'Rafineri crack marjları, regüle elektrik şebekeleri ve dövizli enerji nakit akışları',
+        shortDescEn: 'Refining crack spreads, regulated electricity grids, and FX power tariffs',
+        bestPickSymbol: 'TUPRS',
+        advisorInsightTr: 'Enerji sektörünün tartışmasız 1 numaralı temettü şampiyonu TÜPRAŞ (TUPRS)\'tır (%7.40 verim, yılda 2 taksitle öder). Defansif elektrik tarafında ise TÜFE garantili ENERJİSA (ENJSA, %6.80 verim) enflasyon kalkanıdır. Aygaz (%5.40) Tüpraş\'ın %10.2\'sine doğrudan ortaktır. Petkim ise petrokimya döngüsel marjları nedeniyle temettü için daha geridedir.',
+        advisorInsightEn: 'Tüpraş (TUPRS) is the undisputed dividend champion of the Turkish energy sector with 7.4% yield and semi-annual tranches. Enerjisa (ENJSA, 6.8% yield) acts as a defensive regulated utility inflation shield. Aygaz (5.4% yield) holds a 10.2% stake in Tüpraş, while Petkim suffers from cyclical commodity margins.',
+        taxNoteTr: 'Standart %10 temettü stopajı kesilir.',
+        taxNoteEn: 'Standard 10% dividend withholding tax applies.',
+        stocks: [
+          {
+            symbol: 'TUPRS',
+            name: 'Tüpraş (Türkiye Petrol Rafinerileri)',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 367.50,
+            yieldPercent: 7.40,
+            divCagr3Yr: 91.5,
+            payoutRatio: 65.0,
+            safetyGrade: 'A+',
+            frequency: 'Yılda 2 Taksit (Nis/Eki)',
+            suitability: 'Best-in-Class',
+            moat: 'Türkiye\'nin tek akaryakıt rafinerisi tekeli, Akdeniz crack marjları, yeşil hidrojen dönüşümü, net nakit kasa',
+            advisorVerdictTr: 'BIST\'in temettü kralı. Rafineri nakitlerini hissedara aktarır ve yılda 2 kez dağıtır. Enerjide tartışmasız ilk tercih.',
+            advisorVerdictEn: 'Undisputed BIST energy dividend champion. Generates heavy refining cashflows distributed semi-annually.',
+            userShares: userHoldingMap.get('TUPRS')?.shares || 0,
+          },
+          {
+            symbol: 'ENJSA',
+            name: 'Enerjisa Enerji A.Ş.',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 62.80,
+            yieldPercent: 6.80,
+            divCagr3Yr: 68.0,
+            payoutRatio: 70.0,
+            safetyGrade: 'A+',
+            frequency: 'Yıllık (Nisan)',
+            suitability: 'Best-in-Class',
+            moat: 'Sabancı & E.ON ortaklığı, 22 milyon tüketiciye elektrik dağıtım tekeli, regüle TÜFE+reel getiri gelir modeli',
+            advisorVerdictTr: 'Defansif altyapı kalesi. Gelirleri TÜFE endeksli regülasyona bağlı olduğundan enflasyon ve krizlerden etkilenmez.',
+            advisorVerdictEn: 'Defensive regulated utility monopoly jointly owned by Sabancı and E.ON with guaranteed inflation-indexed returns.',
+            userShares: userHoldingMap.get('ENJSA')?.shares || 0,
+          },
+          {
+            symbol: 'AYGAZ',
+            name: 'Aygaz A.Ş.',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 164.00,
+            yieldPercent: 5.40,
+            divCagr3Yr: 58.0,
+            payoutRatio: 60.0,
+            safetyGrade: 'A',
+            frequency: 'Yıllık (Nisan)',
+            suitability: 'Solid Core',
+            moat: 'LPG otogaz ve tüpgaz pazar liderliği, Tüpraş\'ın %10.2\'sine doğrudan ortaklık, Bangladeş yatırımı',
+            advisorVerdictTr: 'Koç Grubu güvencesi. Tüpraş\'ın %10.2 ortağı olduğu için Tüpraş temettü ödedikçe Aygaz\'a da doğrudan kâr akar.',
+            advisorVerdictEn: 'Domestic LPG leader holding a 10.2% stake in Tüpraş; upstream distributions pass directly to shareholders.',
+            userShares: userHoldingMap.get('AYGAZ')?.shares || 0,
+          },
+          {
+            symbol: 'AKSEN',
+            name: 'Aksa Enerji',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 42.50,
+            yieldPercent: 3.50,
+            divCagr3Yr: 45.0,
+            payoutRatio: 35.0,
+            safetyGrade: 'A',
+            frequency: 'Yıllık (Mayıs)',
+            suitability: 'Solid Core',
+            moat: 'Afrika ve Orta Asya\'da döviz bazlı garantili elektrik santralleri, küresel IPP büyümesi',
+            advisorVerdictTr: 'Döviz bazlı küresel elektrik üreticisi. Gelirleri döviz garantilidir; verimi orta düzeydedir, kârını yatırıma aktarır.',
+            advisorVerdictEn: 'Global power producer with USD-denominated contracts across Africa and Central Asia with moderate cash yield.',
+            userShares: userHoldingMap.get('AKSEN')?.shares || 0,
+          },
+          {
+            symbol: 'PETKM',
+            name: 'Petkim Petrokimya',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 19.80,
+            yieldPercent: 3.00,
+            divCagr3Yr: 30.0,
+            payoutRatio: 40.0,
+            safetyGrade: 'B',
+            frequency: 'Yıllık (Haziran)',
+            suitability: 'Cyclical',
+            moat: 'SOCAR Star Rafineri entegrasyonu, Türkiye\'nin tek entegre petrokimya tesisi',
+            advisorVerdictTr: 'Petrokimya marjlarına bağlı döngüsel hisse; saf temettü geliri arayanlar için TUPRS veya ENJSA kadar istikrarlı değildir.',
+            advisorVerdictEn: 'Cyclical commodity petrochemical producer with margin volatility; lags TUPRS and ENJSA in dividend stability.',
+            userShares: userHoldingMap.get('PETKM')?.shares || 48,
+          },
+          {
+            symbol: 'GWIND',
+            name: 'Galata Wind Enerji',
+            market: 'BIST',
+            currency: 'TRY',
+            currentPrice: 28.40,
+            yieldPercent: 4.20,
+            divCagr3Yr: 52.0,
+            payoutRatio: 50.0,
+            safetyGrade: 'A',
+            frequency: 'Yıllık (Nisan)',
+            suitability: 'Solid Core',
+            moat: 'Doğan Holding çatısı altında %100 saf yenilenebilir rüzgar & güneş santralleri, YEKDEM döviz tarifesi',
+            advisorVerdictTr: 'Saf yeşil enerji üreticisi. Karbon kredisi gelirleri ve sıfır fosil yakıt riski ile düzenli temettü ödeyen modern alternatif.',
+            advisorVerdictEn: '100% renewable wind and solar operator with dollar-linked feed-in tariffs and reliable clean cashflow.',
+            userShares: userHoldingMap.get('GWIND')?.shares || 0,
+          },
+        ]
+      },
+
+      HOLDINGS_TELECOM: {
+        key: 'HOLDINGS_TELECOM',
+        icon: '🏛️',
+        nameTr: 'Holdingler & Telekom',
+        nameEn: 'Conglomerates & Telecoms',
+        shortDescTr: 'Çok sektörlü holding nakitleri ve TÜFE endeksli telekom fatura gelirleri',
+        shortDescEn: 'Conglomerate NAV cashflows and inflation-indexed telecom ARPUs',
         bestPickSymbol: 'TCELL',
-        advisorInsightTr: 'Turkcell (TCELL), TÜFE endeksli fatura gelirleri ve yılda 2 TAKSİTLE ödeme yapmasıyla portföyün en dengeli nakit akışlarındandır (2. Taksit 9 Aralık 2026\'da kesinleşti!). Tüpraş (TUPRS) ise BIST\'in en yüksek temettü ödeyen enerji kalesidir.',
-        advisorInsightEn: 'Turkcell (TCELL) features inflation-indexed subscriber cashflows and 2 SEMI-ANNUAL tranches (December 2026 confirmed!). Tüpraş (TUPRS) provides high refining cash distributions.',
+        advisorInsightTr: 'Turkcell (TCELL), TÜFE endeksli fatura gelirleri ve yılda 2 TAKSİTLE ödeme yapmasıyla portföyün en dengeli nakit akışlarındandır (2. Taksit 9 Aralık 2026\'da kesinleşti!). Koç Holding (KCHOL) ise Türkiye\'nin en kaliteli ihracatçı ve finans devlerinden gelen temettüleri kasasında toplar.',
+        advisorInsightEn: 'Turkcell (TCELL) features inflation-indexed subscriber cashflows and 2 SEMI-ANNUAL tranches (December 2026 confirmed!). Koç Holding (KCHOL) funnels cash distributions from top industrial exporters and banks.',
         taxNoteTr: '%10 Stopaj kesilir.',
         taxNoteEn: 'Standard 10% withholding tax applies.',
         stocks: [
@@ -629,23 +748,6 @@ export default function DividendAdvisorView({
             advisorVerdictTr: 'Yılda 2 taksitle öder. 2. Taksiti 9 Aralık 2026\'da kesinleşmiştir. Enflasyon karşısında nakit üreten kale.',
             advisorVerdictEn: 'Semi-annual payer with December 9, 2026 distribution confirmed. Non-cyclical consumer utility moat.',
             userShares: userHoldingMap.get('TCELL')?.shares || 11,
-          },
-          {
-            symbol: 'TUPRS',
-            name: 'Tüpraş',
-            market: 'BIST',
-            currency: 'TRY',
-            currentPrice: 367.50,
-            yieldPercent: 7.40,
-            divCagr3Yr: 91.5,
-            payoutRatio: 65.0,
-            safetyGrade: 'A',
-            frequency: 'Yılda 2 Taksit (Nis/Eki)',
-            suitability: 'Best-in-Class',
-            moat: 'Stratejik milli rafineri, yeşil hidrojen dönüşümü, yüksek nakit kasası',
-            advisorVerdictTr: 'BIST\'in temettü canavarı. Rafineri kârlarını hissedarına aktarır ve yılda 2 kez temettü dağıtır.',
-            advisorVerdictEn: 'Integrated national refiner with high cash generation and semi-annual payout structure.',
-            userShares: userHoldingMap.get('TUPRS')?.shares || 0,
           },
           {
             symbol: 'KCHOL',
@@ -697,23 +799,6 @@ export default function DividendAdvisorView({
             advisorVerdictTr: 'Migros ve CCI\'nin muazzam nakit akışını toplayan dinamik perakende holdingi.',
             advisorVerdictEn: 'Holding company capturing expanding cashflows from Migros and Coca-Cola İçecek.',
             userShares: userHoldingMap.get('AGHOL')?.shares || 31,
-          },
-          {
-            symbol: 'PETKM',
-            name: 'Petkim Petrokimya',
-            market: 'BIST',
-            currency: 'TRY',
-            currentPrice: 19.80,
-            yieldPercent: 3.00,
-            divCagr3Yr: 30.0,
-            payoutRatio: 40.0,
-            safetyGrade: 'B',
-            frequency: 'Yıllık (Haziran)',
-            suitability: 'Cyclical',
-            moat: 'Star Rafineri entegrasyonu, plastik ve hammadde pazar payı',
-            advisorVerdictTr: 'Petrokimya marjlarına bağlı döngüsel hisse; temettü ödemeleri sektörel dalgalanmalardan etkilenir.',
-            advisorVerdictEn: 'Commodity petrochemical exposure with cyclical distribution swings.',
-            userShares: userHoldingMap.get('PETKM')?.shares || 48,
           },
         ]
       },
@@ -884,6 +969,19 @@ export default function DividendAdvisorView({
           : 'Concentrated Spring payouts leave summer dry. Adding monthly-payer Realty Income (O) or expanding 3-tranche BİM (BIMAS) creates recurring year-round monthly cash inflows.',
         netIncomeDeltaTRY: 320,
         badge: language === 'tr' ? 'Aylık Nakit' : 'Monthly Income'
+      },
+      {
+        id: 'prop-5-energy-gap',
+        sector: 'ENERGY',
+        title: language === 'tr' ? '⚡ Enerji: TUPRS (%7.4) veya ENJSA (%6.8) ile Sektörel Boşluğu Kapatın' : '⚡ Energy: Fill Energy Gap with TUPRS (7.4%) or ENJSA (6.8%)',
+        priority: 'HIGH',
+        current: language === 'tr' ? 'Doğrudan Enerji Hissesi Yok' : 'No Direct Energy Exposure',
+        target: 'TUPRS veya ENJSA',
+        rationale: language === 'tr'
+          ? 'Portföyünüzde banka ve sigorta ağırlığı yüksekken doğrudan bir Enerji/Rafineri hissesi bulunmuyor. BIST\'in en yüksek temettü ödeyen devi Tüpraş (TUPRS, %7.40 verim) veya regüle elektrik tekeli Enerjisa (ENJSA, %6.80 verim) ekleyerek portföyünüzün nakit akışını hemen güçlendirin.'
+          : 'Your portfolio currently lacks direct energy exposure. Adding national refiner Tüpraş (7.4% yield) or regulated utility Enerjisa (6.8% yield) expands your cash generation foundation.',
+        netIncomeDeltaTRY: 310,
+        badge: language === 'tr' ? 'Eksik Sektör' : 'Missing Sector'
       }
     ];
   }, [userHoldingMap, language]);
@@ -891,22 +989,86 @@ export default function DividendAdvisorView({
   // Sector Showdown stock selector
   const activeSectorData = sectorCatalog[selectedSector];
 
-  // Advisor Semantic Chat Engine
-  const executeChatQuery = (text: string) => {
-    if (!text.trim()) return;
-    const nowTime = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    setChatMessages(prev => [...prev, { sender: 'user', text, time: nowTime }]);
-    setUserQuery('');
-    setIsThinking(true);
+  // Helper: Local High-Precision Advisor Reasoning Engine
+  const generateLocalResponse = (query: string): string => {
+    const lower = query.toLowerCase().trim();
 
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      let response = '';
+    // 1. Energy Sector Showdown (TUPRS, ENJSA, AYGAZ, AKSEN, PETKM, GWIND)
+    if (
+      lower.includes('enerji') ||
+      lower.includes('energy') ||
+      lower.includes('petrol') ||
+      lower.includes('rafineri') ||
+      lower.includes('elektrik') ||
+      lower.includes('tuprs') ||
+      lower.includes('tüpraş') ||
+      lower.includes('enjsa') ||
+      lower.includes('enerjisa') ||
+      lower.includes('aygaz') ||
+      lower.includes('aksen') ||
+      lower.includes('petkm') ||
+      lower.includes('gwind') ||
+      lower.includes('akaryakıt') ||
+      lower.includes('şebeke')
+    ) {
+      if (language === 'tr') {
+        return `⚡ **Enerji Sektörü Temettü Analizi: Hangi Firma Alınmalı?**
 
-      // 1. Bank Showdown
-      if (lower.includes('bank') || lower.includes('akbnk') || lower.includes('halkb') || lower.includes('vakbn') || lower.includes('garan')) {
-        response = language === 'tr'
-          ? `🏦 **Banka Sektörü Değerlendirmesi: Hangi Banka Daha İyi?**
+Enerji ve altyapı sektöründe temettü açısından **2 ana şampiyon dev** öne çıkar:
+
+1. 👑 **Açık Ara 1 Numara: TÜPRAŞ (\`TUPRS\`) - BIST Temettü Şampiyonu**
+   - **Temettü Verimi:** **%7.40** (BIST'in en yüksek nakit ödeyen devlerinden biri).
+   - **Ödeme Sıklığı:** Temettüsünü **YILDA 2 TAKSİTLE** (Nisan ve Ekim) dağıtır.
+   - **Bilanço & Moat:** Türkiye'nin tek akaryakıt rafinerisi tekeli, net nakit pozisyonu, Koç Grubu temettü disiplini ve yeşil hidrojen dönüşümü.
+   - **Tavsiye:** Saf yüksek nakit temettü ve döviz bazlı rafineri marjı için enerjide tartışmasız **ilk ve en güçlü tercih**.
+
+2. 🛡️ **Defansif Alternatif: ENERJİSA (\`ENJSA\`) - Düzenli Elektrik Nakdi**
+   - **Temettü Verimi:** **%6.80**.
+   - **Moat:** Sabancı & E.ON ortaklığında elektrik dağıtım tekeli; gelirleri regülasyonla **TÜFE + reel getiri** olarak garanti altındadır. Enflasyondan ve ekonomik yavaşlamadan etkilenmeyen defansif nakit kalesidir.
+
+3. ⛽ **AYGAZ & PETKM Değerlendirmesi:**
+   - **AYGAZ (%5.40 Verim):** LPG pazar lideridir ve Tüpraş'ın %10.2'sine doğrudan ortaktır; Tüpraş temettü dağıttıkça Aygaz'a da devasa nakit akar.
+   - **PETKM (%3.00 Verim):** Petrokimya döngüsel marjları baskı altındadır; saf temettü geliri için verimi TUPRS ve ENJSA'nın çok gerisindedir.
+
+⚠️ **Portföyünüzün Durumu:**
+Portföyünüzde şu an doğrudan bir Enerji/Rafineri hissesi **bulunmuyor** (yalnızca Koç Holding iştiraki dolaylı taşınmaktadır). Portföyünüze enerji nakit akışı eklemek isterseniz ilk alacağınız hisse kesinlikle **TUPRS**, defansif denge için ise **ENJSA** olmalıdır.`;
+      } else {
+        return `⚡ **Energy Sector Dividend Diagnostics: Which Stock to Pick?**
+
+In the energy and utility sector, **2 dominant champions** lead:
+
+1. 👑 **Undisputed #1: TÜPRAŞ (\`TUPRS\`) - BIST Dividend King**
+   - **Yield:** **7.40%** (among BIST's highest cash distributions).
+   - **Frequency:** Paid in **2 SEMI-ANNUAL TRANCHES** (April & October).
+   - **Moat:** National refining monopoly, net cash balance sheet, Koç Holding discipline.
+   - **Verdict:** Undisputed top pick for pure cash generation and hard-currency refining margins.
+
+2. 🛡️ **Defensive Utility: ENERJİSA (\`ENJSA\`) - Regulated Cashflow**
+   - **Yield:** **6.80%**.
+   - **Moat:** Regulated electricity distribution grid with inflation-plus guaranteed returns; recession-proof utility cash cow.
+
+3. ⛽ **AYGAZ & PETKM Context:**
+   - **AYGAZ (5.40%):** Domestic LPG leader holding a direct 10.2% stake in Tüpraş.
+   - **PETKM (3.00%):** Cyclical petrochemical commodity exposure; suboptimal for pure income.
+
+⚠️ **Portfolio Status:** You currently have NO direct energy dividend holdings. Your primary addition should be **TUPRS**, complemented by **ENJSA**.`;
+      }
+    }
+
+    // 2. Banking Sector Showdown
+    if (
+      lower.includes('bank') ||
+      lower.includes('akbnk') ||
+      lower.includes('halkb') ||
+      lower.includes('vakbn') ||
+      lower.includes('garan') ||
+      lower.includes('ykbnk') ||
+      lower.includes('isctr') ||
+      lower.includes('kamu banka') ||
+      lower.includes('özel banka')
+    ) {
+      if (language === 'tr') {
+        return `🏦 **Banka Sektörü Değerlendirmesi: Hangi Banka Daha İyi?**
 
 Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
 
@@ -919,17 +1081,31 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
    - Kamu bankaları kârlarını temettü olarak dağıtmak yerine sermayeye eklemek zorundadır. Temettü verimleri %1.2 civarında kalır.
    - Ayrıca Halkbank üzerindeki ABD dava süreci sürekli bir iskonto baskısı yaratır.
 
-👉 **Danışman Kararı:** HALKB (21 lot) ve VAKBN (29 lot) hisselerinizi satıp **AKBNK** veya **ISMEN** üzerine aktarın.`
-          : `🏦 **Banking Showdown: Private Leaders vs State Banks**
+👉 **Danışman Kararı:** HALKB (21 lot) ve VAKBN (29 lot) hisselerinizi satıp **AKBNK** veya **ISMEN** üzerine aktarın (+₺170-₺220/yıl ek temettü).`;
+      } else {
+        return `🏦 **Banking Showdown: Private Leaders vs State Banks**
 
 1. **Why AKBNK & GARAN Win:** Nearly double the return on equity (ROE 34% vs 18%), unmatched 19.4% CAR balance sheet, and reliable ~4.7% cash yield.
 2. **Why HALKB & VAKBN Lag:** Constrained by subsidized lending and retain capital rather than paying cash dividends (~1.2% yield).
 👉 **Action:** Consolidate HALKB + VAKBN into AKBNK or ISMEN.`;
       }
-      // 2. Retail / Consumer Showdown (BIMAS vs CCOLA vs AEFES)
-      else if (lower.includes('bimas') || lower.includes('ccola') || lower.includes('aefes') || lower.includes('perakende') || lower.includes('market') || lower.includes('içecek')) {
-        response = language === 'tr'
-          ? `🛒 **Tüketim & Perakende Karşılaştırması: BIMAS mı CCOLA mı?**
+    }
+
+    // 3. Retail / Consumer Showdown (BIMAS vs CCOLA vs AEFES)
+    if (
+      lower.includes('bimas') ||
+      lower.includes('ccola') ||
+      lower.includes('aefes') ||
+      lower.includes('mgros') ||
+      lower.includes('perakende') ||
+      lower.includes('market') ||
+      lower.includes('gıda') ||
+      lower.includes('içecek') ||
+      lower.includes('bim') ||
+      lower.includes('kola')
+    ) {
+      if (language === 'tr') {
+        return `🛒 **Tüketim & Perakende Karşılaştırması: BIMAS mı CCOLA mı?**
 
 1. **BİM (BIMAS) - Defansif Nakit Şampiyonu:**
    - **Ödeme Sıklığı:** Temettüsünü **YILDA 3 TAKSİTLE** (Haziran, Eylül, Aralık) öder. 3. Taksiti **18 Aralık 2026**'da ödenecektir.
@@ -938,36 +1114,65 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
    - **Temettü Büyümesi:** Son 3 yılda %52 temettü CAGR gerçekleştirdi.
    - **Moat:** Orta Asya ve Orta Doğu operasyonları döviz bazlı kâr sağlar. Dağıtım oranı %45 ile temettüsünü rahatça artırabilir.
 
-👉 **Danışman Kararı:** İkisi birbirini mükemmel tamamlar. Düzenli çeyreklik nakit için **BIMAS**, dövizli büyüme için **CCOLA** portföyde mutlaka birlikte tutulmalıdır.`
-          : `🛒 **Retail Showdown: BIMAS vs CCOLA**
+👉 **Danışman Kararı:** İkisi birbirini mükemmel tamamlar. Düzenli çeyreklik nakit için **BIMAS**, dövizli büyüme için **CCOLA** portföyde mutlaka birlikte tutulmalıdır.`;
+      } else {
+        return `🛒 **Retail Showdown: BIMAS vs CCOLA**
 
 - **BIMAS:** Defensive grocery cash king distributing dividends across **3 tranches** (June, September, December 2026).
 - **CCOLA:** Fast-moving beverage bottler delivering high hard-currency export growth across Central Asia with 52% dividend CAGR.
 👉 **Verdict:** Both represent blue-chip holdings. Hold BIMAS for multi-tranche timing and CCOLA for FX growth.`;
       }
-      // 3. REIT Showdown (TRGYO vs EKGYO vs ISGYO vs ALGYO vs O)
-      else if (lower.includes('trgyo') || lower.includes('torunlar') || lower.includes('ekgyo') || lower.includes('gyo') || lower.includes('reit') || lower.includes('stopaj')) {
-        response = language === 'tr'
-          ? `🏢 **GYO Sektörü & Torunlar GYO (TRGYO) Analizi:**
+    }
+
+    // 4. REIT Showdown (TRGYO vs EKGYO vs ISGYO vs ALGYO vs O)
+    if (
+      lower.includes('trgyo') ||
+      lower.includes('torunlar') ||
+      lower.includes('ekgyo') ||
+      lower.includes('isgyo') ||
+      lower.includes('algyo') ||
+      lower.includes('gyo') ||
+      lower.includes('reit') ||
+      lower.includes('stopaj') ||
+      lower.includes('gayrimenkul') ||
+      lower.includes('kira')
+    ) {
+      if (language === 'tr') {
+        return `🏢 **GYO Sektörü & Torunlar GYO (TRGYO) Analizi:**
 
 1. **En Büyük Avantaj: %0 STOPAJ VERGİSİ (Sıfır Vergi):**
    - BIST sanayi hisselerinden temettü ödemesinde **%10 stopaj vergisi** kesilirken, Torunlar GYO gibi GYO şirketlerinde **STOPAJ ORANI %0'DIR**.
-   - Dağıtılan ₺1.25 hisse başı temettünün tamamı kesintisiz cebinize kalır.
+   - Dağıtılan nakdin tamamı kesintisiz cebinize kalır.
 2. **TRGYO vs EKGYO:**
    - **TRGYO (Torunlar GYO):** Mall of Istanbul ve prime ofis plazalarının TÜFE'ye endeksli kira akışına sahiptir. Cari verimi **%5.20**'dir.
    - **EKGYO (Emlak Konut):** Konut geliştirme ve gelir paylaşımı devidir (%4.80 verim). Ancak kira yerine konut satış döngüsüne duyarlıdır.
 
-👉 **Danışman Kararı:** TRGYO portföyünüzün defansif kira gelir motorudur. 15 lotunuzu koruyun, 25-30 lota kadar artırın.`
-          : `🏢 **REIT Showdown & Torunlar GYO (TRGYO) 0% Tax Moat:**
+👉 **Danışman Kararı:** TRGYO portföyünüzün defansif kira gelir motorudur. 15 lotunuzu koruyun, geri çekilmelerde 25-30 lota kadar artırın.`;
+      } else {
+        return `🏢 **REIT Showdown & Torunlar GYO (TRGYO) 0% Tax Moat:**
 
 - **0% Withholding Tax:** Turkish REITs enjoy complete exemption from the 10% dividend tax.
 - **TRGYO vs EKGYO:** TRGYO (5.2% yield) offers inflation-indexed rental cash from Mall of Istanbul, while EKGYO (4.8% yield) is exposed to residential construction cycles.
 👉 **Verdict:** TRGYO is your premier tax-free defensive cash flow anchor.`;
       }
-      // 4. Automotive & Industrial (TTRAK vs FROTO vs TOASO vs BRSAN)
-      else if (lower.includes('ttrak') || lower.includes('froto') || lower.includes('toaso') || lower.includes('brsan') || lower.includes('sanayi') || lower.includes('otomotiv') || lower.includes('traktör')) {
-        response = language === 'tr'
-          ? `🏭 **Otomotiv & Sanayi Karşılaştırması: TTRAK mı FROTO mu BRSAN mı?**
+    }
+
+    // 5. Automotive & Industrial (TTRAK vs FROTO vs TOASO vs BRSAN vs EREGL)
+    if (
+      lower.includes('ttrak') ||
+      lower.includes('froto') ||
+      lower.includes('toaso') ||
+      lower.includes('brsan') ||
+      lower.includes('eregl') ||
+      lower.includes('krdmd') ||
+      lower.includes('sanayi') ||
+      lower.includes('otomotiv') ||
+      lower.includes('traktör') ||
+      lower.includes('çelik') ||
+      lower.includes('demir')
+    ) {
+      if (language === 'tr') {
+        return `🏭 **Otomotiv & Sanayi Karşılaştırması: TTRAK mı FROTO mu BRSAN mı?**
 
 1. **Türk Traktör (TTRAK) - Temettü Şampiyonu:**
    - **Verim:** **%7.80** ile sektörün zirvesindedir.
@@ -975,75 +1180,271 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
 2. **Ford Otosan (FROTO) - Euro Bazlı İhracat Kalesi:**
    - **Verim:** **%6.20**. Ford Transit ve Custom modellerinin Avrupa ihracat tekeline sahiptir; Euro döviz kalkanıdır.
 3. **Borusan Boru (BRSAN) - Neden Temettü İçin Zayıf?**
-   - Portföyünüzde 2 lot BRSAN bulunuyor. Şirket başarılı ancak temettü verimi sadece **%3.00**'tür. 
+   - Portföyünüzde 2 lot BRSAN bulunuyor. Şirket başarılı ancak cari temettü verimi sadece **%3.00**'tür. 
 
-👉 **Danışman Kararı:** Saf temettü geliri hedefliyorsanız BRSAN'ı satıp **TTRAK** veya **FROTO**'ya geçmek yıllık temettü nakdinizi ikiye katlar.`
-          : `🏭 **Automotive & Industrial Showdown:**
+👉 **Danışman Kararı:** Saf temettü geliri hedefliyorsanız BRSAN'ı satıp **TTRAK** veya **FROTO**'ya geçmek yıllık temettü nakdinizi ikiye katlar.`;
+      } else {
+        return `🏭 **Automotive & Industrial Showdown:**
 
 - **TTRAK (7.8% yield):** Sector dividend champion distributing 75% of earnings with 50%+ tractor monopoly.
 - **FROTO (6.2% yield):** Export powerhouse generating hard-currency Euro revenues with high dividend growth.
 - **BRSAN (3.0% yield):** High-growth pipe manufacturer, but modest 3% yield makes it suboptimal for pure income.
 👉 **Verdict:** Swap low-yield BRSAN lots into TTRAK or FROTO to double cashflow conversion.`;
       }
-      // 5. Financials (ISMEN vs TURSG)
-      else if (lower.includes('ismen') || lower.includes('tursg') || lower.includes('sigorta') || lower.includes('aracı')) {
-        response = language === 'tr'
-          ? `📈 **Finansal Hizmetler Karşılaştırması: ISMEN mi TURSG mi?**
+    }
+
+    // 6. Financial Services & Insurance (ISMEN vs TURSG)
+    if (
+      lower.includes('ismen') ||
+      lower.includes('tursg') ||
+      lower.includes('sigorta') ||
+      lower.includes('aracı') ||
+      lower.includes('broker') ||
+      lower.includes('komisyon')
+    ) {
+      if (language === 'tr') {
+        return `📈 **Finansal Hizmetler Karşılaştırması: ISMEN mi TURSG mi?**
 
 İkisi de portföyünüzün **en yüksek nakit üreten iki devidir**:
-- **İş Yatırım (ISMEN):** **%8.55 verim**, sıfır borç, BIST borsa hacmi tekeli. Son 3 yılda temettüsünü %84.6 CAGR ile artırdı!
+- **İş Yatırım (ISMEN):** **%8.55 verim**, sıfır borç, BIST borsa işlem hacmi tekeli. Son 3 yılda temettüsünü %84.6 CAGR ile artırdı!
 - **Türkiye Sigorta (TURSG):** **%7.09 verim**. Yüksek faiz ortamında devasa prim float rezervlerini değerlendirerek rekor kâr payı ödüyor. Ayrıca Ağustos ayında ödeme yaparak ilkbahar dışındaki aylara can suyu veriyor.
 
-👉 **Danışman Kararı:** İkisi de portföyünüzde ağırlıklı kalmalıdır. Her ikisi de bankalardan daha yüksek doğrudan nakit temettü verir.`
-          : `📈 **Financials Showdown: ISMEN vs TURSG**
+👉 **Danışman Kararı:** İkisi de portföyünüzde ağırlıklı kalmalıdır. Her ikisi de bankalardan daha yüksek doğrudan nakit temettü verir.`;
+      } else {
+        return `📈 **Financials Showdown: ISMEN vs TURSG**
 
 Both are your highest cashflow generators:
 - **ISMEN (8.55% yield):** Zero debt, brokerage volume leader with +84% 3-year dividend CAGR.
 - **TURSG (7.09% yield):** High-float insurance underwriter paying in August to diversify timing.
 👉 **Verdict:** Maintain both as premier high-yield anchors.`;
       }
-      // 6. Telecom & Holdings (TCELL vs TUPRS vs KCHOL)
-      else if (lower.includes('tcell') || lower.includes('tuprs') || lower.includes('kchol') || lower.includes('telekom') || lower.includes('holding') || lower.includes('tüpraş')) {
-        response = language === 'tr'
-          ? `⚡ **Telekom & Holding Karşılaştırması: TCELL mi TUPRS mu KCHOL mu?**
+    }
+
+    // 7. Holdings & Telecom (TCELL vs KCHOL vs SAHOL vs AGHOL)
+    if (
+      lower.includes('tcell') ||
+      lower.includes('turkcell') ||
+      lower.includes('kchol') ||
+      lower.includes('sahol') ||
+      lower.includes('aghol') ||
+      lower.includes('holding') ||
+      lower.includes('telekom')
+    ) {
+      if (language === 'tr') {
+        return `🏛️ **Holding & Telekom Karşılaştırması: TCELL mi KCHOL mu SAHOL mu?**
 
 - **Turkcell (TCELL):** Defansif telekom devi. **Yılda 2 taksitle** temettü dağıtır. 2. Taksit ödemesi **9 Aralık 2026**'da kesinleşti!
-- **Tüpraş (TUPRS):** BIST'in en yüksek temettü ödeyen sanayi devidir (%7.40 verim). Yılda 2 kez dağıtır.
-- **Koç Holding (KCHOL):** Tüpraş, Ford Otosan, Tofaş ve Yapı Kredi temettülerinin toplandığı ana holdingdir.
+- **Koç Holding (KCHOL):** Tüpraş, Ford Otosan, Tofaş ve Yapı Kredi temettülerinin toplandığı ana holdingdir (%3.60 verim).
+- **Sabancı Holding (SAHOL):** Enerjisa ve Akbank nakitleriyle desteklenen, yüksek iskonto ile işlem gören holdingdir (%3.40 verim).
 
-👉 **Danışman Kararı:** TCELL'in 2 taksitli ödeme disiplini çok değerlidir. Portföyünüze yüksek temettülü TUPRS eklemek nakit akışını hemen yukarı çeker.`
-          : `⚡ **Holdings & Telecom Showdown:**
+👉 **Danışman Kararı:** TCELL'in 2 taksitli ödeme disiplini portföy nakit akışını pürüzsüzleştirir. KCHOL ise iştirak temettülerini toplayan en sağlam çatı yapıdır.`;
+      } else {
+        return `🏛️ **Holdings & Telecom Showdown:**
 
 - **TCELL (4.2% yield):** CPI-indexed telecom utility paying semi-annually (Dec 9, 2026 tranche confirmed!).
-- **TUPRS (7.4% yield):** High-yield refiner distributing semi-annually from refining crack spreads.
-- **KCHOL (3.6% yield):** Premier holding company funneling cash from top industrial exporters.`;
+- **KCHOL (3.6% yield):** Premier holding company funneling cash from top industrial exporters.
+- **SAHOL (3.4% yield):** Conglomerate trading at steep NAV discount anchored by Enerjisa and Akbank.`;
       }
-      // 7. General Strategy & Rebalancing
-      else if (lower.includes('değişiklik') || lower.includes('öneri') || lower.includes('change') || lower.includes('rebalance') || lower.includes('hangisi')) {
-        response = language === 'tr'
-          ? `🎯 **Sektörler Genelinde En Kritik 3 Optimizasyon:**
+    }
 
-1. **Bankacılık:** HALKB (21 lot) ve VAKBN (29 lot) kamu bankalarını satıp **AKBNK** veya **ISMEN** hisselerine aktarın (+₺170-₺220/yıl ek temettü).
-2. **Sanayi:** Cari verimi %3 olan BRSAN hisselerini **TTRAK** (%7.8 verim) veya **FROTO** (%6.2 verim) ile takas edin.
-3. **GYO & Stopaj:** %0 stopaj avantajına sahip **TRGYO** ağırlığını koruyup geri çekilmelerde artırın.`
-          : `🎯 **Top 3 Cross-Sector Rebalancing Priorities:**
+    // 8. Global ETFs / US Dividends
+    if (
+      lower.includes('abd') ||
+      lower.includes('us') ||
+      lower.includes('dolar') ||
+      lower.includes('etf') ||
+      lower.includes('schd') ||
+      lower.includes('jepi') ||
+      lower.includes('jepq') ||
+      lower.includes('vym') ||
+      lower.includes('amerika') ||
+      lower.includes('yurtdışı')
+    ) {
+      if (language === 'tr') {
+        return `🌐 **Global Temettü ETF'leri (ABD) Değerlendirmesi:**
 
-1. **Banking:** Consolidate HALKB + VAKBN into **AKBNK** or **ISMEN** (+₺170-₺220/yr cashflow boost).
-2. **Industrial:** Swap 3% yielding BRSAN into **TTRAK** (7.8%) or **FROTO** (6.2%).
-3. **REIT:** Leverage **TRGYO**'s 0% tax shelter as your defensive rental backbone.`;
+- **SCHD (%3.65 Verim):** ABD temettü kralı 100 dev şirketin sepetidir. Hem dolar bazında hisse fiyatı artar hem de temettüsü her yıl ortalama %8-10 büyür.
+- **JEPI (%7.50 Verim - Her Ay):** S&P 500 hisseleri üzerine kapalı opsiyon (covered call) yazarak **HER AY** düzenli nakit dolar temettüsü öder.
+- **JEPQ (%9.20 Verim - Her Ay):** Nasdaq teknoloji hisselerinin volatilitesinden her ay yüksek dolar nakdi üretir.
+
+👉 **Danışman Kararı:** BIST temettüleri Nisan-Mayıs aylarında yoğunlaşırken, ABD fonları yaz ve kış aylarında düzenli dolar nakit akışı sağlar.`;
       } else {
-        response = language === 'tr'
-          ? `📊 Sektörel olarak portföyünüz güçlü bir omurgaya sahip (Yıllık: ~₺${totalAnnualTRY.toFixed(0)}, Aylık: ~₺${totalMonthlyTRY.toFixed(0)}). Bankacılık, GYO, Sigorta ve Tüketim sektörlerinde hangi hisselerin daha iyi olduğunu yukarıdaki sekmelerden detaylı olarak inceleyebilirsiniz.`
-          : `📊 Your portfolio holds a robust multi-sector foundation (Annual: ~₺${totalAnnualTRY.toFixed(0)}, Monthly: ~₺${totalMonthlyTRY.toFixed(0)}). Explore the sector showdown tabs above to compare individual peers across Banking, REITs, Financials, and Retail.`;
-      }
+        return `🌐 **US Dividend ETFs Diagnostics:**
 
-      setChatMessages(prev => [...prev, {
-        sender: 'advisor',
-        text: response,
-        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-      }]);
-      setIsThinking(false);
-    }, 600);
+- **SCHD (3.65% yield):** Pure dividend compounding gold standard with ~8-10% dividend growth rate.
+- **JEPI (7.50% yield, Monthly):** Covered call monthly income powerhouse from S&P 500.
+- **JEPQ (9.20% yield, Monthly):** High monthly income harvesting Nasdaq volatility.`;
+      }
+    }
+
+    // 9. Portfolio Missing Sectors / Gaps Analysis
+    if (
+      lower.includes('eksik') ||
+      lower.includes('ne eksik') ||
+      lower.includes('hangi sektör eksik') ||
+      lower.includes('boşluk') ||
+      lower.includes('portföy') ||
+      lower.includes('denge') ||
+      lower.includes('gap') ||
+      lower.includes('missing')
+    ) {
+      if (language === 'tr') {
+        return `🔍 **Portföy Teşhisi: Hangi Sektör Eksik, Neler Düzeltilmeli?**
+
+Portföyünüzün güçlü yönleri:
+✅ **Bankacılık & Finans:** AKBNK, ISMEN (%8.55), TURSG (%7.09) ile güçlü getiri motoru.
+✅ **GYO:** TRGYO ile %0 stopajlı TÜFE kira kalkanı.
+✅ **Tüketim:** BIMAS ve CCOLA ile çoklu taksit ve dövizli ihracat.
+
+🚨 **Portföyünüzdeki En Kritik 2 Eksik & Boşluk:**
+1. ⚡ **DOĞRUDAN ENERJİ HİSSESİ YOK:** BIST'in en yüksek temettüsünü veren **TUPRS** (%7.40 verim) veya regüle elektrik tekeli **ENJSA** (%6.80 verim) portföyünüzde eksiktir!
+2. ⚠️ **Kamu Bankası Verimsizliği:** HALKB (21 lot) ve VAKBN (29 lot) kâr dağıtımı yerine sermaye biriktirdiği için portföy verimini aşağı çekmektedir.
+
+👉 **Aksiyon:** Kamu bankalarını satarak elde edilecek ~₺1.900 nakit ile doğrudan **TUPRS** veya **ENJSA** ekleyin; böylece eksik enerji ayağını tamamlayıp yıllık temettünüzü anında artırabilirsiniz.`;
+      } else {
+        return `🔍 **Portfolio Diagnostics: Missing Sectors & Rebalancing Priorities:**
+
+- **Strengths:** High yield from Financials (ISMEN 8.55%, TURSG 7.09%), 0% tax REIT (TRGYO), and retail compounders (BIMAS, CCOLA).
+- **Critical Gap:** You have **NO direct energy holdings**. Adding **TUPRS (7.4%)** or **ENJSA (6.8%)** will complete your sectoral diversification.
+- **Drag:** Suboptimal state banks (HALKB, VAKBN) should be reallocated into energy champions.`;
+      }
+    }
+
+    // 10. Yield Ranking / Best Payouts
+    if (
+      lower.includes('en yüksek') ||
+      lower.includes('en çok') ||
+      lower.includes('şampiyon') ||
+      lower.includes('en karlı') ||
+      lower.includes('highest') ||
+      lower.includes('top yield')
+    ) {
+      if (language === 'tr') {
+        return `🏆 **BIST & Global En Yüksek Temettü Veren Şampiyonlar:**
+
+1. 🥇 **ISMEN (İş Yatırım Menkul):** **%8.55 Net Verim** (Sıfır borç, BIST rekor hacim kârı).
+2. 🥈 **TTRAK (Türk Traktör):** **%7.80 Verim** (Kârının %75'ini nakit dağıtır).
+3. 🥉 **JEPI / JEPQ (ABD):** **%7.50 - %9.20 Verim** (Her ay düzenli dolar nakdi).
+4. ⚡ **TUPRS (Tüpraş):** **%7.40 Verim** (Yılda 2 taksitle öder).
+5. 🛡️ **TURSG (Türkiye Sigorta):** **%7.09 Verim** (Ağustos ödemesiyle yaz nakdi).
+6. ⚡ **ENJSA (Enerjisa):** **%6.80 Verim** (TÜFE garantili elektrik tekeli).
+7. 🏢 **TRGYO (Torunlar GYO):** **%5.20 Net Verim** (**%0 STOPAJ - Sıfır Vergi**).`;
+      } else {
+        return `🏆 **Top Dividend Yield Champions:**
+
+1. **ISMEN:** 8.55% Net Yield
+2. **TTRAK:** 7.80% Yield (75% payout ratio)
+3. **JEPQ / JEPI:** 7.50% - 9.20% Yield (Monthly USD cashflow)
+4. **TUPRS:** 7.40% Yield (Semi-annual tranches)
+5. **TURSG:** 7.09% Yield (August payout)
+6. **ENJSA:** 6.80% Yield (Regulated utility)
+7. **TRGYO:** 5.20% Yield (100% Tax-Free 0% Withholding)`;
+      }
+    }
+
+    // 11. Timing / Schedule
+    if (
+      lower.includes('ne zaman') ||
+      lower.includes('tarih') ||
+      lower.includes('aralık') ||
+      lower.includes('aylık') ||
+      lower.includes('taksit') ||
+      lower.includes('takvim') ||
+      lower.includes('maaş')
+    ) {
+      if (language === 'tr') {
+        return `📅 **Temettü Takvimi & Yaklaşan Ödemeler:**
+
+- **18 Aralık 2026:** **BİM (BIMAS)** - 3. Taksit (Hisse başı ₺3.00 net).
+- **9 Aralık 2026:** **Turkcell (TCELL)** - 2. Taksit (Hisse başı ₺1.40 net).
+- **Mart - Mayıs 2027 (Ana İlkbahar Dalgası):** AKBNK, ISMEN, TRGYO, TTRAK, FROTO ödemeleri.
+- **Ağustos 2027:** **Türkiye Sigorta (TURSG)** - Yaz ayı nakit akışı.
+- **Ekim 2027:** **Tüpraş (TUPRS)** - 2. Taksit sonbahar nakdi.
+- **Her Ay (Aylık Maaş):** Realty Income (\`O\`) veya \`JEPI\` ekleyerek 12 ay kesintisiz gelir elde edebilirsiniz.`;
+      } else {
+        return `📅 **Upcoming Dividend Distribution Schedule:**
+
+- **Dec 9, 2026:** Turkcell (TCELL) - 2nd Tranche confirmed.
+- **Dec 18, 2026:** BİM (BIMAS) - 3rd Tranche confirmed.
+- **Spring 2027:** Primary BIST distribution window (AKBNK, ISMEN, TRGYO, TTRAK).
+- **August 2027:** Türkiye Sigorta (TURSG) summer cash injection.`;
+      }
+    }
+
+    // 12. Smart Fallback: Comprehensive Executive Briefing (No more bland dismissive text!)
+    if (language === 'tr') {
+      return `📊 **Sektörel Temettü Danışmanı Özeti (Yıllık: ~₺${totalAnnualTRY.toFixed(0)}, Aylık: ~₺${totalMonthlyTRY.toFixed(0)}):**
+
+Sorduğunuz konuyla ilgili sektör liderleri şunlardır:
+- ⚡ **Enerji & Rafineri:** 1 Numara **TUPRS** (%7.40 verim) ve defansif **ENJSA** (%6.80 verim).
+- 🏛️ **Bankacılık:** **AKBNK** (CAR %19.4, ROE %34) kamu bankalarından çok daha kârlıdır.
+- 🏢 **GYO:** **TRGYO** (%0 stopaj vergisi avantajıyla kesintisiz net nakit).
+- 🏭 **Sanayi:** **TTRAK** (%7.80 verim, %75 dağıtım oranı) ve **FROTO** (Euro döviz kalkanı).
+- 🛒 **Tüketim:** **BIMAS** (3 taksit - 18 Aralık'ta ödemesi var) ve **CCOLA** (%52 büyüme).
+
+💡 **Doğrudan sorabileceğiniz örnek sorular:**
+- *"Enerji sektöründen hangi hisse alınmalı?"*
+- *"Portföyümde hangi sektör eksik?"*
+- *"BIMAS mı CCOLA mı?"*
+- *"En yüksek temettüyü hangi hisse veriyor?"*`;
+    } else {
+      return `📊 **Executive Sectoral Dividend Briefing (Annual: ~₺${totalAnnualTRY.toFixed(0)}):**
+
+Top champions across economic sectors:
+- ⚡ **Energy & Refining:** **TUPRS** (7.40% yield) & **ENJSA** (6.80% utility).
+- 🏛️ **Banking:** **AKBNK** (19.4% CAR, 34% ROE) dominates state banks.
+- 🏢 **REITs:** **TRGYO** (0% withholding tax shelter).
+- 🏭 **Industrial:** **TTRAK** (7.80% yield) & **FROTO** (Euro hedge).
+- 🛒 **Consumer:** **BIMAS** (3 tranches) & **CCOLA** (52% CAGR).
+
+Ask any specific question like *"Which energy stock to buy?"* or *"What is missing in my portfolio?"*`;
+    }
+  };
+
+  // Advisor Semantic Chat Engine
+  const executeChatQuery = async (text: string) => {
+    if (!text.trim()) return;
+    const nowTime = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    setChatMessages(prev => [...prev, { sender: 'user', text, time: nowTime }]);
+    setUserQuery('');
+    setIsThinking(true);
+
+    let response = '';
+
+    // Step 1: Try AI endpoint
+    try {
+      const apiRes = await fetch('/api/advisor/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          language,
+          holdings: Array.from(userHoldingMap.values()).map(h => ({ symbol: h.symbol, shares: h.shares })),
+          metrics: { annualTRY: totalAnnualTRY, monthlyTRY: totalMonthlyTRY }
+        })
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.success && data.reply) {
+          response = data.reply;
+        }
+      }
+    } catch {
+      // Fallback seamlessly to local deterministic engine
+    }
+
+    // Step 2: Use high-precision local advisor engine if API not available or fallback
+    if (!response) {
+      response = generateLocalResponse(text);
+    }
+
+    setChatMessages(prev => [...prev, {
+      sender: 'advisor',
+      text: response,
+      time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    }]);
+    setIsThinking(false);
   };
 
   return (
@@ -1059,7 +1460,7 @@ Both are your highest cashflow generators:
                 <span>SEKTÖREL TEMETTÜ DANIŞMANI · CANLI ANALİZ</span>
               </span>
               <span className="text-xs font-semibold text-slate-400">
-                7 Sektör · 37 Varlık Denetlendi
+                8 Sektör · 40 Varlık Denetlendi
               </span>
             </div>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -1069,8 +1470,8 @@ Both are your highest cashflow generators:
             </h2>
             <p className="text-sm text-slate-300 leading-relaxed">
               {language === 'tr'
-                ? 'Sadece bankalar değil; GYO\'lar, aracı kurumlar, otomotiv, perakende, telekom ve holdingler tek tek karşılaştırıldı. Hangi hissenin kârlılık, verim ve güvenlik açısından diğerinden daha üstün olduğunu keşfedin.'
-                : 'Not just banks—REITs, brokerage, automotive, retail, telecoms, and holding companies evaluated peer-by-peer. Compare which stocks dominate in profitability, yield, and distribution safety.'}
+                ? 'Bankacılık, GYO, Enerji, Finans, Tüketim, Sanayi/Otomotiv, Holding/Telekom ve Global ETF\'ler tek tek karşılaştırıldı. Hangi hissenin kârlılık, verim ve nakit akışı açısından diğerinden daha üstün olduğunu keşfedin.'
+                : 'Banking, REITs, Energy, Financials, Consumer, Automotive/Industrial, Holdings/Telecoms, and US ETFs evaluated peer-by-peer.'}
             </p>
           </div>
 
@@ -1089,7 +1490,7 @@ Both are your highest cashflow generators:
                 {healthScore >= 80 ? (language === 'tr' ? 'Güçlü (Sektörel Fırsatlar Açık)' : 'Strong (Actionable)') : 'Moderate'}
               </div>
               <div className="text-[11px] text-amber-400 font-medium mt-0.5">
-                {language === 'tr' ? '7 Sektör Karşılaştırmaya Hazır' : '7 Sectors Ready for Audit'}
+                {language === 'tr' ? '8 Sektör Karşılaştırmaya Hazır' : '8 Sectors Ready for Audit'}
               </div>
             </div>
           </div>
@@ -1106,7 +1507,7 @@ Both are your highest cashflow generators:
             }`}
           >
             <span>🏛️</span>
-            <span>{language === 'tr' ? 'Sektörel Karşılaştırma (7 Sektör)' : 'Sector Showdown (7 Sectors)'}</span>
+            <span>{language === 'tr' ? 'Sektörel Karşılaştırma (8 Sektör)' : 'Sector Showdown (8 Sectors)'}</span>
           </button>
           <button
             onClick={() => setActiveTab('overview')}
@@ -1128,7 +1529,7 @@ Both are your highest cashflow generators:
             }`}
           >
             <span>💡</span>
-            <span>{language === 'tr' ? 'Önerilen Değişiklikler (4 Eylem)' : 'Actionable Swaps (4 Actions)'}</span>
+            <span>{language === 'tr' ? 'Önerilen Değişiklikler (5 Eylem)' : 'Actionable Swaps (5 Actions)'}</span>
           </button>
           <button
             onClick={() => setActiveTab('chat')}
@@ -1450,6 +1851,18 @@ Both are your highest cashflow generators:
           {/* Quick Preset Prompts across multiple sectors */}
           <div className="flex flex-wrap gap-2">
             <button
+              onClick={() => executeChatQuery('Enerji sektöründen hangi firma alınmalı?')}
+              className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold transition-all cursor-pointer"
+            >
+              ⚡ Enerji: Hangi firma alınmalı?
+            </button>
+            <button
+              onClick={() => executeChatQuery('Portföyümde hangi sektör eksik?')}
+              className="text-xs px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold transition-all cursor-pointer"
+            >
+              🔍 Portföyümde ne eksik?
+            </button>
+            <button
               onClick={() => executeChatQuery('BIMAS mı CCOLA mı hangisi daha iyi?')}
               className="text-xs px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer"
             >
@@ -1465,7 +1878,7 @@ Both are your highest cashflow generators:
               onClick={() => executeChatQuery('Otomotivde TTRAK mı FROTO mu BRSAN mı?')}
               className="text-xs px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium transition-all cursor-pointer"
             >
-              🏭 TTRAK mı FROTO mu BRSAN mı?
+              🏭 TTRAK mı FROTO mu?
             </button>
             <button
               onClick={() => executeChatQuery('Hangi banka daha iyi: AKBNK mi HALKB mi?')}
