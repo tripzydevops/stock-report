@@ -14,6 +14,8 @@ interface NavigationTabsProps {
   bistRegime?: RegimeStatus;
   usdTryRate?: number;
   onOpenShortcuts?: () => void;
+  isSimpleMode?: boolean;
+  onToggleSimpleMode?: () => void;
 }
 
 export default function NavigationTabs({
@@ -24,21 +26,26 @@ export default function NavigationTabs({
   bistRegime,
   usdTryRate,
   onOpenShortcuts,
+  isSimpleMode = true,
+  onToggleSimpleMode,
 }: NavigationTabsProps) {
   const { t, language } = useLanguage();
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const tabs: { id: TabId; label: string; icon: string; count?: string; mobileShort: string }[] = [
-    { id: 'signals', label: t.tabs.signals, icon: '🎯', mobileShort: language === 'tr' ? 'Sinyaller' : 'Signals' },
-    { id: 'catalysts', label: t.tabs.catalysts, icon: '⚡', count: `${catalystsCount}`, mobileShort: 'KAP' },
-    { id: 'quant', label: t.tabs.quant, icon: '🏛️', count: 'Quant', mobileShort: 'Quant' },
+  const allTabs: { id: TabId; label: string; icon: string; count?: string; mobileShort: string }[] = [
+    { id: 'signals', label: isSimpleMode ? (language === 'tr' ? 'Tavsiyeler' : 'Picks') : t.tabs.signals, icon: '🎯', mobileShort: language === 'tr' ? 'Tavsiye' : 'Picks' },
     { id: 'portfolio', label: t.tabs.portfolio, icon: '💼', mobileShort: language === 'tr' ? 'Portföy' : 'Portfolio' },
     { id: 'dividend', label: t.tabs.dividend, icon: '💰', mobileShort: language === 'tr' ? 'Temettü' : 'Dividend' },
-    { id: 'forecast', label: t.tabs.forecast, icon: '🔮', count: 'DRIP Lab', mobileShort: language === 'tr' ? 'Projeksiyon' : 'Forecast' },
+    { id: 'forecast', label: isSimpleMode ? (language === 'tr' ? 'Kartopu Hedefi' : 'Growth Target') : t.tabs.forecast, icon: '🔮', count: isSimpleMode ? undefined : 'DRIP Lab', mobileShort: language === 'tr' ? 'Hedef' : 'Target' },
+    { id: 'catalysts', label: t.tabs.catalysts, icon: '⚡', count: `${catalystsCount}`, mobileShort: 'KAP' },
+    { id: 'quant', label: t.tabs.quant, icon: '🏛️', count: 'Quant', mobileShort: 'Quant' },
     { id: 'scorecard', label: t.tabs.scorecard, icon: '📈', count: '1,173', mobileShort: language === 'tr' ? 'Karne' : 'Scorecard' },
     { id: 'orb', label: t.tabs.orb, icon: '🔔', mobileShort: language === 'tr' ? 'Açılış' : 'Opening' },
   ];
+
+  const simpleTabIds: TabId[] = ['signals', 'portfolio', 'dividend', 'forecast'];
+  const tabs = isSimpleMode ? allTabs.filter(t => simpleTabIds.includes(t.id)) : allTabs;
 
   // Auto-scroll active tab into view when activeTab changes
   useEffect(() => {
@@ -119,6 +126,27 @@ export default function NavigationTabs({
                 {bistRegime.status === 'Bullish' ? '▲ Bull' : bistRegime.status === 'Bearish' ? '▼ Bear' : '▶ Neutral'}
               </span>
             </div>
+          )}
+
+          {/* Simple vs Pro Mode Toggle Pill */}
+          {onToggleSimpleMode && (
+            <button
+              type="button"
+              onClick={onToggleSimpleMode}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isSimpleMode
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
+                  : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25'
+              }`}
+              title={isSimpleMode ? 'Gelişmiş Pro Görünüme Geç' : 'Sade Başlangıç Görünümüne Geç'}
+            >
+              <span>{isSimpleMode ? '🌱' : '⚡'}</span>
+              <span>
+                {isSimpleMode
+                  ? (language === 'tr' ? 'Basit Mod' : 'Simple Mode')
+                  : (language === 'tr' ? 'Pro Mod' : 'Pro Mode')}
+              </span>
+            </button>
           )}
 
           {/* Keyboard Shortcuts Trigger Button */}

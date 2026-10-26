@@ -8,12 +8,16 @@ interface MobileBottomNavProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   catalystsCount?: number;
+  isSimpleMode?: boolean;
+  onToggleSimpleMode?: () => void;
 }
 
 export default function MobileBottomNav({
   activeTab,
   onTabChange,
   catalystsCount = 9,
+  isSimpleMode = true,
+  onToggleSimpleMode,
 }: MobileBottomNavProps) {
   const { language } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -191,7 +195,7 @@ export default function MobileBottomNav({
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#080d17]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] px-1 py-1 safe-bottom"
       >
         <div className="grid grid-cols-5 items-center justify-around">
-          {/* Tab 1: Signals */}
+          {/* Tab 1: Signals / Picks */}
           <button
             type="button"
             onClick={() => handleSelectTab('signals')}
@@ -202,7 +206,7 @@ export default function MobileBottomNav({
             }`}
           >
             <span className="text-lg leading-none mb-0.5">🎯</span>
-            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Sinyaller' : 'Signals'}</span>
+            <span className="text-[10px] tracking-tight">{isSimpleMode ? (language === 'tr' ? 'Tavsiye' : 'Picks') : (language === 'tr' ? 'Sinyaller' : 'Signals')}</span>
           </button>
 
           {/* Tab 2: Portfolio */}
@@ -233,48 +237,75 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Temettü' : 'Dividends'}</span>
           </button>
 
-          {/* Tab 4: KAP / Catalysts */}
-          <button
-            type="button"
-            onClick={() => handleSelectTab('catalysts')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'catalysts'
-                ? 'text-blue-600 dark:text-blue-400 font-black'
-                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-            }`}
-          >
-            <div className="relative">
-              <span className="text-lg leading-none mb-0.5">⚡</span>
-              {catalystsCount > 0 && (
-                <span className="absolute -top-1 -right-2 text-[9px] font-black px-1 rounded-full bg-rose-500 text-white min-w-3.5 text-center leading-tight">
-                  {catalystsCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] tracking-tight">KAP</span>
-          </button>
+          {/* Tab 4: In Simple Mode: Forecast / Growth Target. In Pro Mode: KAP */}
+          {isSimpleMode ? (
+            <button
+              type="button"
+              onClick={() => handleSelectTab('forecast')}
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'forecast'
+                  ? 'text-blue-600 dark:text-blue-400 font-black'
+                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+              }`}
+            >
+              <span className="text-lg leading-none mb-0.5">🔮</span>
+              <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Hedef' : 'Target'}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleSelectTab('catalysts')}
+              className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+                activeTab === 'catalysts'
+                  ? 'text-blue-600 dark:text-blue-400 font-black'
+                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+              }`}
+            >
+              <div className="relative">
+                <span className="text-lg leading-none mb-0.5">⚡</span>
+                {catalystsCount > 0 && (
+                  <span className="absolute -top-1 -right-2 text-[9px] font-black px-1 rounded-full bg-rose-500 text-white min-w-3.5 text-center leading-tight">
+                    {catalystsCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">KAP</span>
+            </button>
+          )}
 
-          {/* Tab 5: More / Menu (Diğer) */}
-          <button
-            type="button"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              isMoreActive || isMenuOpen
-                ? 'text-blue-600 dark:text-blue-400 font-black'
-                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-            }`}
-          >
-            <span className="text-lg leading-none mb-0.5">
-              {isMoreActive
-                ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'scorecard' ? '📈' : '🔔')
-                : '☰'}
-            </span>
-            <span className="text-[10px] tracking-tight">
-              {isMoreActive
-                ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'scorecard' ? (language === 'tr' ? 'Karne' : 'Scorecard') : (language === 'tr' ? 'Açılış' : 'Opening'))
-                : (language === 'tr' ? 'Diğer' : 'More')}
-            </span>
-          </button>
+          {/* Tab 5: In Simple Mode: Mode Switcher Button (Go to Pro). In Pro Mode: More Drawer Trigger */}
+          {isSimpleMode ? (
+            <button
+              type="button"
+              onClick={onToggleSimpleMode}
+              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer text-emerald-600 dark:text-emerald-400 font-bold active:scale-95"
+              title="Gelişmiş Pro Görünüme Geç"
+            >
+              <span className="text-lg leading-none mb-0.5">🌱</span>
+              <span className="text-[9px] tracking-tight">Basit (Pro)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+                isMoreActive || isMenuOpen
+                  ? 'text-blue-600 dark:text-blue-400 font-black'
+                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+              }`}
+            >
+              <span className="text-lg leading-none mb-0.5">
+                {isMoreActive
+                  ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'scorecard' ? '📈' : '🔔')
+                  : '☰'}
+              </span>
+              <span className="text-[10px] tracking-tight">
+                {isMoreActive
+                  ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'scorecard' ? (language === 'tr' ? 'Karne' : 'Scorecard') : (language === 'tr' ? 'Açılış' : 'Opening'))
+                  : (language === 'tr' ? 'Diğer' : 'More')}
+              </span>
+            </button>
+          )}
         </div>
       </nav>
     </>

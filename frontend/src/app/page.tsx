@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import NavigationTabs, { TabId } from '../components/NavigationTabs';
 import MarketRegimeBanner, { RegimeStatus } from '../components/MarketRegimeBanner';
+import MarketCorrectionBanner from '../components/MarketCorrectionBanner';
 import TradeCard, { TradeSignal } from '../components/TradeCard';
 import AssetTable, { AssetData } from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
@@ -917,6 +918,23 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
+  const [isSimpleMode, setIsSimpleMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('marketpulse_simple_mode');
+      return saved !== null ? saved === 'true' : true; // Default to true for beginners
+    }
+    return true;
+  });
+
+  const handleToggleSimpleMode = () => {
+    setIsSimpleMode(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('marketpulse_simple_mode', String(next));
+      }
+      return next;
+    });
+  };
 
   const handleDateFilterChange = (newFilter: DateRangeFilter) => {
     setDateFilter(newFilter);
@@ -2587,10 +2605,24 @@ export default function Home() {
               </svg>
             </button>
 
+            {/* Mobile Mode Switcher (Basit / Pro) */}
+            <button
+              onClick={handleToggleSimpleMode}
+              className={`h-8 px-2 rounded-xl text-[11px] font-black border transition-all active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 ${
+                isSimpleMode
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                  : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40'
+              }`}
+              title={isSimpleMode ? 'Pro Moduna Geç' : 'Basit Moduna Geç'}
+            >
+              <span>{isSimpleMode ? '🌱' : '⚡'}</span>
+              <span>{isSimpleMode ? (language === 'tr' ? 'Basit' : 'Easy') : 'Pro'}</span>
+            </button>
+
             {/* Profile & Settings Trigger (Opens Mobile Action Sheet) */}
             <button
               onClick={() => setIsSettingsSheetOpen(true)}
-              className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs active:scale-95 transition-all cursor-pointer shadow-xs"
+              className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs active:scale-95 transition-all cursor-pointer shadow-xs shrink-0"
               title={language === 'tr' ? 'Ayarlar & Profil' : 'Settings & Profile'}
             >
               {user ? '👤' : isDemoMode ? '👀' : '⚙️'}
@@ -2599,6 +2631,21 @@ export default function Home() {
 
           {/* DESKTOP ACTIONS (>= 768px): Full Tool Suite */}
           <div className="hidden md:flex items-center space-x-3 shrink-0">
+            {/* Simple vs Pro Mode Toggle Pill */}
+            <button
+              type="button"
+              onClick={handleToggleSimpleMode}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isSimpleMode
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
+                  : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25'
+              }`}
+              title={isSimpleMode ? 'Gelişmiş Pro Görünüme Geç' : 'Yeni Başlayanlar İçin Sade Görünüme Geç'}
+            >
+              <span>{isSimpleMode ? '🌱' : '⚡'}</span>
+              <span>{isSimpleMode ? (language === 'tr' ? 'Basit Mod' : 'Simple Mode') : (language === 'tr' ? 'Pro Mod' : 'Pro Mode')}</span>
+            </button>
+
             <div className="flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
               <span>USD/TRY:</span>
               <span className="text-blue-600 dark:text-blue-400 font-mono">₺{usdTryRate.toFixed(2)}</span>
@@ -2736,6 +2783,15 @@ export default function Home() {
         bistRegime={bistRegime}
         usdTryRate={usdTryRate}
         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+        isSimpleMode={isSimpleMode}
+        onToggleSimpleMode={handleToggleSimpleMode}
+      />
+
+      {/* Prominent Market Correction Warning Notice (Accessible to beginners and pro) */}
+      <MarketCorrectionBanner
+        bistRegime={bistRegime}
+        usRegime={usRegime}
+        onNavigateToTab={handleTabChange}
       />
 
       {/* Regime Banners (Mobile only: on desktop, tickers are integrated into the command bar) */}
@@ -3174,16 +3230,80 @@ export default function Home() {
               </div>
 
               <div className="lg:w-1/3">
-                <PositionCalculator selectedTrade={calcTrade} />
+                {isSimpleMode ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-750 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🌱</span>
+                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                          {language === 'tr' ? 'Yeni Başlayanlar Rehberi' : 'Beginner Safety Guide'}
+                        </h3>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                        {language === 'tr' ? 'Sade Mod' : 'Simple'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>💧</span>
+                          <span>{language === 'tr' ? 'Kural 1: Kademeli Alım (DCA)' : 'Rule 1: Staggered DCA'}</span>
+                        </span>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                          {language === 'tr'
+                            ? 'Tüm paranızla tek seferde alım yapmayın. Parayı 3 eşit parçaya bölüp, hisse düştükçe parça parça alarak ortalama maliyetinizi düşürün.'
+                            : 'Never invest all your cash at one price. Divide your capital into 3 tranches and buy progressively as the stock dips.'}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>💰</span>
+                          <span>{language === 'tr' ? 'Kural 2: Temettü Kartopu' : 'Rule 2: Dividend Snowball'}</span>
+                        </span>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                          {language === 'tr'
+                            ? 'ISMEN, TURSG, TUPRS gibi kârlı şirketler hisse fiyatı düşse bile hesabınıza nakit temettü yatırır. Bu nakitle tekrar alım yaparak servetinizi büyütün.'
+                            : 'High-quality dividend payers continue distributing cash even during corrections, compounding your portfolio over time.'}
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>🛡️</span>
+                          <span>{language === 'tr' ? 'Kural 3: Panik Satışı Yapmayın' : 'Rule 3: Avoid Panic Selling'}</span>
+                        </span>
+                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                          {language === 'tr'
+                            ? 'Borsa düşüşleri geçicidir. Zararına panik satışı yapmak yerine sakin kalarak bilançosu güçlü, borçsuz şirketlerde kalın.'
+                            : 'Market corrections are temporary. Avoid panic selling fundamentally sound companies at the market bottom.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleTabChange('dividend')}
+                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                    >
+                      <span>🤖</span>
+                      <span>{language === 'tr' ? 'AI Temettü Danışmanına Soru Sor →' : 'Ask AI Dividend Advisor →'}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <PositionCalculator selectedTrade={calcTrade} />
+                )}
               </div>
             </div>
 
-            <div className="pt-2">
-              <AssetTable 
-                assets={assets} 
-                onSelectAsset={(asset) => setSelectedAssetForHistory(asset)}
-              />
-            </div>
+            {!isSimpleMode && (
+              <div className="pt-2">
+                <AssetTable 
+                  assets={assets} 
+                  onSelectAsset={(asset) => setSelectedAssetForHistory(asset)}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -3214,6 +3334,7 @@ export default function Home() {
             usdTryRate={usdTryRate}
             cashBalanceTRY={cashBalance}
             dateFilter={dateFilter}
+            isSimpleMode={isSimpleMode}
             onRemoveHolding={handleRemoveHolding}
             onAddHoldingClick={() => setIsHoldingModalOpen(true)}
             onTradeHolding={(item) => {
@@ -3303,6 +3424,8 @@ export default function Home() {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         catalystsCount={catalysts.length}
+        isSimpleMode={isSimpleMode}
+        onToggleSimpleMode={handleToggleSimpleMode}
       />
 
       <AddAssetModal 

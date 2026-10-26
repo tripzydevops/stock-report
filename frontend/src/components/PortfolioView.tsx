@@ -31,6 +31,7 @@ interface PortfolioViewProps {
   onToggleStrategyType?: (symbol: string) => void;
   onSelectTicker?: (symbol: string) => void;
   onUpdateTargetPrice?: (symbol: string, newTargetPrice: number) => void;
+  isSimpleMode?: boolean;
 }
 
 export default function PortfolioView({
@@ -51,6 +52,7 @@ export default function PortfolioView({
   onOpenCoPilot,
   onToggleStrategyType,
   onSelectTicker,
+  isSimpleMode = false,
 }: PortfolioViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
@@ -497,7 +499,25 @@ export default function PortfolioView({
         </div>
       </div>
 
-      {/* Sector Concentration & Risk Matrix */}
+      {/* Beginner Mode Friendly Guide Card */}
+      {isSimpleMode && (
+        <div className="p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-start gap-3 shadow-xs">
+          <span className="text-xl shrink-0">💡</span>
+          <div className="space-y-1">
+            <div className="font-black text-blue-900 dark:text-blue-200 text-sm">
+              {language === 'tr' ? 'Yeni Başlayanlar İçin Portföy Özeti' : 'Beginner Portfolio Guide'}
+            </div>
+            <p className="text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
+              {language === 'tr'
+                ? 'Portföyünüzdeki geçici düşüşler borsa geneli (BIST 100) düzeltmesinden kaynaklanmaktadır. TURSG ve ISMEN gibi hisseleriniz düzenli nakit temettü üretir. Bu hisselerde panik satışı yapmayın; fiyat düştükçe temettü verimi artar ve kademeli alım (DCA) fırsatı doğar. Stop-loss seviyesini aşan al-sat hisselerinde ise piyasa tepki verdiğinde çıkış düşünülebilir.'
+                : 'Short-term portfolio drawdowns reflect the broader BIST 100 index correction. Strong dividend payers like TURSG and ISMEN continue to generate cash. Never panic sell dividend compounders on dips; as prices drop, dividend yields expand.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Sector Concentration & Risk Matrix (Pro Mode Only) */}
+      {!isSimpleMode && (
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden p-5 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-gray-100 dark:border-gray-700">
           <div>
@@ -591,6 +611,7 @@ export default function PortfolioView({
           </div>
         )}
       </div>
+      )}
 
       {/* Holdings & DCA Accumulation Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
