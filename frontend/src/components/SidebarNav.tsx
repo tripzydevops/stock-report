@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { RegimeStatus } from './MarketRegimeBanner';
 import { useAuth } from '../context/AuthContext';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help';
 
 interface NavItem {
   id: TabId;
@@ -226,6 +226,37 @@ export default function SidebarNav({
                 </button>
               );
             })}
+          </div>
+
+          {/* Help & Knowledge Base Section */}
+          <div className="space-y-1">
+            {(!isCollapsed || isMobileOpen) && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 pb-1 block">
+                {language === 'tr' ? 'Rehber & Destek' : 'Guide & Support'}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleSelectTab('help')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group ${
+                activeTab === 'help'
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+              title={language === 'tr' ? 'Kullanım Rehberi & SSS' : 'User Guide & FAQ'}
+            >
+              <span className="text-base shrink-0">📖</span>
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="truncate flex-1 text-left">
+                  {language === 'tr' ? 'Kullanım Rehberi' : 'User Guide'}
+                </span>
+              )}
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0">
+                  {language === 'tr' ? 'REHBER' : 'GUIDE'}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 

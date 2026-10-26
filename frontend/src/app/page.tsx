@@ -18,6 +18,7 @@ import ScorecardView from '../components/ScorecardView';
 import OpeningDirectionView from '../components/OpeningDirectionView';
 import CatalystFeedView from '../components/CatalystFeedView';
 import QuantHubView from '../components/QuantHubView';
+import HelpCenterView from '../components/HelpCenterView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import { AuthModal } from '../components/AuthModal';
@@ -51,6 +52,7 @@ const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
   forecast: { icon: '🔮', tr: 'Projeksiyon', en: 'Forecast' },
   scorecard: { icon: '📈', tr: 'Karne', en: 'Scorecard' },
   orb: { icon: '🔔', tr: 'Açılış', en: 'Opening' },
+  help: { icon: '📖', tr: 'Rehber & SSS', en: 'Guide & FAQ' },
 };
 
 const INITIAL_SIGNALS: TradeSignal[] = [
@@ -856,7 +858,7 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
   }
 ];
 
-const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'scorecard', 'orb', 'catalysts', 'quant'];
+const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
@@ -2606,6 +2608,7 @@ export default function Home() {
                   {activeTab === 'quant' && (language === 'tr' ? 'Eşbütünleşme (Cointegration) & Pair Trading' : 'Statistical Arbitrage & Pair Trading')}
                   {activeTab === 'scorecard' && (language === 'tr' ? '1,173 Geçmiş Trade İstatistiği ve Başarı Oranları' : 'Historical Trade Statistics & Win Rates')}
                   {activeTab === 'orb' && (language === 'tr' ? '15-Dakikalık Açılış Kırılımları ve Seans Yönü' : 'Opening Range Breakouts & Volume Anomalies')}
+                  {activeTab === 'help' && (language === 'tr' ? 'Kullanım Rehberi, Kademeli Alım (DCA) Kuralları & SSS' : 'Platform User Guide, Staggered DCA Rules & Knowledge Base')}
                 </p>
               </div>
             </div>
@@ -3273,6 +3276,14 @@ export default function Home() {
             items={orbItems}
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
+          />
+        )}
+
+        {/* TAB 6: HELP CENTER & USER GUIDE */}
+        {activeTab === 'help' && (
+          <HelpCenterView
+            onNavigateToTab={handleTabChange}
+            onOpenSettings={() => setIsSettingsSheetOpen(true)}
           />
         )}
       </main>

@@ -1,0 +1,664 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { useLanguage } from '../context/LanguageContext';
+import { TabId } from './SidebarNav';
+
+interface HelpCenterViewProps {
+  onNavigateToTab: (tab: TabId) => void;
+  onOpenSettings?: () => void;
+}
+
+type HelpCategory = 'all' | 'basics' | 'signals' | 'portfolio' | 'dividend' | 'quant' | 'faq';
+
+interface FaqItem {
+  qTr: string;
+  qEn: string;
+  aTr: string;
+  aEn: string;
+  category: HelpCategory;
+  tag: string;
+}
+
+export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: HelpCenterViewProps) {
+  const { language } = useLanguage();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<HelpCategory>('all');
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(0); // First FAQ open by default
+  const [activeWalkthroughTab, setActiveWalkthroughTab] = useState<'dca' | 'stoploss' | 'dividend' | 'gemini'>('dca');
+
+  const categories: { id: HelpCategory; labelTr: string; labelEn: string; icon: string }[] = [
+    { id: 'all', labelTr: 'Tümü', labelEn: 'All Topics', icon: '🌐' },
+    { id: 'basics', labelTr: 'Yeni Başlayanlar', labelEn: 'Beginner Basics', icon: '🌱' },
+    { id: 'signals', labelTr: 'Sinyaller & DCA', labelEn: 'Signals & DCA', icon: '🎯' },
+    { id: 'portfolio', labelTr: 'Portföy Yönetimi', labelEn: 'Portfolio Management', icon: '💼' },
+    { id: 'dividend', labelTr: 'Temettü & Kartopu', labelEn: 'Dividends & DRIP', icon: '💰' },
+    { id: 'quant', labelTr: 'KAP & Quant Hub', labelEn: 'KAP & Quant Hub', icon: '🏛️' },
+    { id: 'faq', labelTr: 'Sıkça Sorulan Sorular', labelEn: 'FAQ', icon: '❓' },
+  ];
+
+  const faqs: FaqItem[] = [
+    {
+      qTr: 'Hisselerim %10 - %20 düştü, ne yapmalıyım? Panik yapmalı mıyım?',
+      qEn: 'My stocks are down 10% - 20%, what should I do? Should I panic?',
+      aTr: 'Kesinlikle panik yapıp dip seviyeden satış yapmayın! BIST 100 endeksi düzeltme rejimindeyken en kaliteli şirketler (TURSG, ISMEN, AKBNK) bile düşebilir. Eğer hisseniz yüksek temettü ödeyen kârlı bir şirketse, fiyat düşüşü temettü verimini artırır (%8.55 verim gibi). Bu dönemlerde tek seferde alım yapmak yerine nakdinizi 3 parçaya bölüp kademeli alım (DCA) yaparak maliyetinizi hızla aşağı çekin. Ancak stop seviyesini aşmış kısa vadeli (Swing) hisselerde inatlaşmamalı, disiplinli olunmalıdır.',
+      aEn: 'Never panic sell at the market bottom! When the BIST 100 index enters a correction regime, even the strongest fundamental compounders (TURSG, ISMEN, AKBNK) experience pullbacks. If your stock is a cash-flow-rich dividend payer, price dips push dividend yields higher (e.g., above 8.5%). Divide your capital into 3 tranches and accumulate via DCA to rapidly reduce your average cost. For short-term swing setups whose stop loss was breached, exit with discipline instead of bagholding.',
+      category: 'basics',
+      tag: 'Risk & Psikoloji',
+    },
+    {
+      qTr: 'Kademeli Alım (DCA - Dollar Cost Averaging) nasıl çalışır?',
+      qEn: 'How does Staggered Accumulation (DCA) work in practice?',
+      aTr: 'DCA, elinizdeki nakdin tamamını tek bir fiyattan yatırmak yerine zamana ve fiyat seviyelerine yayarak ortalama maliyetinizi düşürme yöntemidir. Örneğin ₺30,000 bütçeniz varsa: 1. Kademe: ₺32.60 fiyattan ₺10,000 alım, 2. Kademe: Fiyat ₺31.08\'e indiğinde ₺10,000 alım, 3. Kademe: Fiyat ₺28.78 desteğine geldiğinde ₺10,000 alım. Sonuçta ortalama maliyetiniz ₺30.15 seviyesine iner ve hisse ₺31\'e ulaştığında kâra geçersiniz.',
+      aEn: 'DCA is the practice of splitting capital across multiple price levels instead of going all-in at one price. For instance, with a ₺30,000 allocation: Tranche 1: ₺10,000 at ₺32.60, Tranche 2: ₺10,000 at ₺31.08 on a dip, Tranche 3: ₺10,000 at ₺28.78 deep support. Your resulting average cost drops to ₺30.15, meaning you turn profitable as soon as the stock recovers to ₺31.',
+      category: 'signals',
+      tag: 'DCA Stratejisi',
+    },
+    {
+      qTr: 'Sinyallerdeki "Giriş", "Hedef" ve "Zarar Kes (Stop-Loss)" ne anlama gelir?',
+      qEn: 'What do "Entry", "Target", and "Stop-Loss" mean in the Trade Cards?',
+      aTr: 'Giriş (Entry): Algoritmaların matematiksel olarak yüksek olasılıklı gördüğü ideal alım seviyesidir. Hedef (Target 1 & 2): Kâr realizasyonu yapılacak teknik direnç seviyeleridir. Zarar Kes (Stop-Loss): Eğer piyasa aleyhinize dönerse maksimum katlanabileceğiniz zararı sınırlayan güvenlik kalkanıdır. Fiyat stop seviyesini kırarsa sistem sizi korumak için pozisyonu kapatmanızı tavsiye eder.',
+      aEn: 'Entry: The statistically optimal price level where algorithmic edge is confirmed. Target (1 & 2): Technical resistance zones where taking profit is recommended. Stop-Loss: The protective invalidation level that caps your maximum downside risk. If the price closes below the stop level, capital preservation dictates closing the trade.',
+      category: 'signals',
+      tag: 'Sinyal Mantığı',
+    },
+    {
+      qTr: 'Güvenli Mod (Turmoil Guard) nedir ve neden açmalıyım?',
+      qEn: 'What is Turmoil Guard and why should I enable it?',
+      aTr: 'Piyasa genelinde sert satış dalgası veya düzeltme olduğunda (BIST Rejimi: Bearish), "Aşırı Satım / Ortalamaya Dönüş (Mean Reversion)" sinyalleri "düşen bıçak" tuzağı yaratabilir. Güvenli Mod açıkken, algoritma bu tehlikeli dip arayışlarını gizler ve sadece güçlü trend düzeltmelerini ve kurumsal nakit akışına sahip temettü liderlerini listeler.',
+      aEn: 'During broad index sell-offs (Bearish Regime), catching falling knives via Mean Reversion can be treacherous. Turmoil Guard suppresses knife-catching setups and only surfaces resilient 50 EMA trend pullbacks and cash-generative dividend compounders.',
+      category: 'signals',
+      tag: 'Risk Kalkanı',
+    },
+    {
+      qTr: 'Temettü Kartopu (DRIP) Projeksiyonu nedir?',
+      qEn: 'What is the Dividend Snowball (DRIP) Forecast?',
+      aTr: 'DRIP (Dividend Reinvestment Plan), şirketinizin hesabınıza yatırdığı nakit temettüyü harcamak yerine tekrar aynı hisseden almak için kullanmanızdır. İlk yıllarda küçük görünen temettüler (örneğin aylık ₺100), 5. ve 10. yıllarda katlanarak maaşınızı geçen dev bir pasif gelir kartopuna dönüşür.',
+      aEn: 'DRIP (Dividend Reinvestment Plan) is the disciplined compounding process of reinvesting dividend payouts into purchasing more shares. While initial payouts may seem modest (e.g. ₺100/mo), compounding over 5 to 10 years turns this into a substantial passive income snowball that can cover your living expenses.',
+      category: 'dividend',
+      tag: 'Bileşik Getiri',
+    },
+    {
+      qTr: 'AI Danışmanına herhangi bir sektör ve hisse hakkında nasıl soru sorabilirim?',
+      qEn: 'How do I query the AI Advisor about any sector or stock?',
+      aTr: 'Temettü sayfamızdaki "AI Danışmanı" modülüne örneğin: "Enerji sektöründe en yüksek temettü veren hisseler hangileri?" veya "ISMEN vs TURSG kıyasla" yazabilirsiniz. Sistem dahili 20+ sektör kurallarıyla yanıt verir. Dilerseniz Ayarlar panelinden kendi ücretsiz Google Gemini API anahtarınızı girerek canlı LLM akıl yürütmesini de etkinleştirebilirsiniz.',
+      aEn: 'In the Dividend tab, open the "AI Advisor" chat and ask queries like: "Which energy sector stocks yield the highest dividends?" or "Compare ISMEN vs TURSG". The system leverages comprehensive sector intelligence. You can also connect your free Google Gemini API key in Settings for live web-scale LLM reasoning.',
+      category: 'dividend',
+      tag: 'AI & Gemini',
+    },
+    {
+      qTr: 'Basit Mod (Simple Mode) ile Pro Mod arasındaki fark nedir?',
+      qEn: 'What is the difference between Simple Mode and Pro Mode?',
+      aTr: 'Basit Mod: Finansal terim ve karmaşık grafik bilgisi gerektirmeyen, doğrudan anlaşılır alım-satım tavsiyeleri, portföy durumu ve yeni başlayanlar rehberini öne çıkaran sadeleştirilmiş görünümdür. Pro Mod: İleri düzey yatırımcılar için KAP filtreleri, kurumsal istatistiksel arbitraj (Quant Stat-Arb), 1,173 geçmiş trade karnesi ve 15-dk Açılış Seansı (ORB) modüllerini aktif hale getirir.',
+      aEn: 'Simple Mode: Streamlined for effortless investing without jargon, highlighting direct actionable picks, portfolio health, and beginner safety rules. Pro Mode: Unlocks institutional intelligence including live KAP catalyst feeds, Cointegration & Z-score pairs, backtest scorecard metrics, and 15-min Opening Range Breakouts.',
+      category: 'basics',
+      tag: 'Kullanıcı Deneyimi',
+    },
+    {
+      qTr: 'KAP Bildirimleri nasıl çalışır ve hisseleri nasıl etkiler?',
+      qEn: 'How do KAP Filings work and how do they impact stock prices?',
+      aTr: 'MarketPulse KAP motoru Kamuyu Aydınlatma Platformu\'nu canlı olarak tarar. Şirketlerin pay geri alımları (Hisse fiyatını yukarı destekleyen en güçlü pozitif sinyal), yüksek tutarlı yeni iş sözleşmeleri ve kâr payı dağıtım kararlarını yapay zeka ile anında sınıflandırıp bildirim olarak sunar.',
+      aEn: 'The KAP engine monitors official disclosures in real time. Share buybacks (one of the strongest institutional price catalysts), massive new contract wins, and dividend distribution votes are classified via AI sentiment to give you immediate execution advantage.',
+      category: 'quant',
+      tag: 'KAP Haberleri',
+    },
+    {
+      qTr: 'USD ve TRY varlıklarım portföyümde nasıl hesaplanır?',
+      qEn: 'How are USD and TRY holdings calculated in my portfolio?',
+      aTr: 'MarketPulse çift para birimli entegre portföy defterine sahiptir. ABD hisseleriniz (Midas / US) canlı TCMB / serbest piyasa USD/TRY kuruyla anlık olarak TL\'ye dönüştürülür. İsterseniz portföy sayfasındaki "TRY / USD" butonuyla tüm portföyünüzü tek dokunuşla dolar veya lira bazında görüntüleyebilirsiniz.',
+      aEn: 'MarketPulse supports seamless multi-currency accounting. Your US holdings are converted to TRY using live exchange rates. Use the "TRY / USD" toggle in the Portfolio header to view your entire net worth denominated in either currency with 1 tap.',
+      category: 'portfolio',
+      tag: 'Döviz & Kurlar',
+    },
+  ];
+
+  const filteredFaqs = useMemo(() => {
+    return faqs.filter(faq => {
+      const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory || (selectedCategory === 'faq');
+      if (!matchesCategory) return false;
+
+      if (!searchQuery.trim()) return true;
+
+      const q = searchQuery.toLowerCase();
+      const content = `${faq.qTr} ${faq.qEn} ${faq.aTr} ${faq.aEn} ${faq.tag}`.toLowerCase();
+      return content.includes(q);
+    });
+  }, [faqs, selectedCategory, searchQuery]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Hero Knowledge Base Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 text-white p-6 sm:p-10 shadow-xl border border-blue-500/30">
+        <div className="absolute -right-12 -top-12 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-12 -bottom-12 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-3xl space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-xs font-bold text-blue-100">
+            <span>💡</span>
+            <span>{language === 'tr' ? 'MarketPulse Akademi & Bilgi Merkezi' : 'MarketPulse Academy & Documentation'}</span>
+          </div>
+
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+            {language === 'tr'
+              ? 'MarketPulse\'ı Nasıl Kullanırsınız? Eksiksiz Rehber'
+              : 'How to Use MarketPulse: Complete User Guide'}
+          </h1>
+
+          <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed">
+            {language === 'tr'
+              ? 'Borsa düşüşlerinde panik yapmadan servetinizi nasıl büyüteceğinizi, kademeli alım (DCA) kurallarını, temettü kartopunu ve yapay zeka danışmanını öğrenin.'
+              : 'Learn how to navigate corrections without panic, apply disciplined DCA accumulation, compound passive dividend cashflow, and unlock algorithmic AI insights.'}
+          </p>
+
+          {/* Search Box */}
+          <div className="pt-2">
+            <div className="relative max-w-xl">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-base">🔍</span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={language === 'tr' ? 'Örn: Kademeli Alım, Stop-loss, Temettü, Gemini API...' : 'Search: DCA, Stop-loss, Dividends, Gemini API...'}
+                className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm font-semibold shadow-lg focus:outline-none focus:ring-4 focus:ring-white/30 transition-all border border-white/20"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold p-1 rounded-full"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Navigation Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar touch-pan-x -mx-3 px-3 sm:mx-0 sm:px-0">
+        {categories.map((cat) => {
+          const isSelected = selectedCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-blue-500/30 ring-2 ring-blue-400/30'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+              }`}
+            >
+              <span>{cat.icon}</span>
+              <span>{language === 'tr' ? cat.labelTr : cat.labelEn}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 3-Step Quick Start Card */}
+      <div className="bg-white dark:bg-[#090e1a] rounded-3xl p-5 sm:p-8 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-6">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl font-black">
+              🚀
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                {language === 'tr' ? '3 Adımda Kolay Başlangıç Kılavuzu' : '3-Step Quick Start Guide'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {language === 'tr' ? 'MarketPulse ile ilk 5 dakikada profesyonel yatırım yapın' : 'Get started like an institutional investor in 5 minutes'}
+              </p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+            {language === 'tr' ? 'HIZLI REHBER' : 'QUICK START'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-blue-500/30">
+              1
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              {language === 'tr' ? 'Sinyalleri & Fırsatları İnceleyin' : 'Scan Live Alpha Signals'}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Sinyaller sekmesine gidin. Yeşil "ALIM BÖLGESİ" etiketli, stop-loss ve hedef seviyesi belirlenmiş hisseleri filtreleyin.'
+                : 'Browse the Signals tab. Look for setups marked with green "BUY ZONE", complete with validated entry, stop-loss, and targets.'}
+            </p>
+            <button
+              onClick={() => onNavigateToTab('signals')}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline pt-1 inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>{language === 'tr' ? 'Sinyallere Git' : 'Open Signals'}</span>
+              <span>→</span>
+            </button>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-emerald-500/30">
+              2
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              {language === 'tr' ? 'Portföyünüze Ekleyin & Takip Edin' : 'Add to Your Portfolio'}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Sağ alttaki mavi "+" butonuna basarak elinizdeki hisseleri ve alış maliyetinizi kaydedin. Canlı kâr/zarar ve stop mesafenizi izleyin.'
+                : 'Tap the blue "+" button to record your shares and entry price. Monitor live PnL, cost basis, and distance to stop loss in real time.'}
+            </p>
+            <button
+              onClick={() => onNavigateToTab('portfolio')}
+              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline pt-1 inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>{language === 'tr' ? 'Portföye Git' : 'Open Portfolio'}</span>
+              <span>→</span>
+            </button>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/60 space-y-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-600 text-white font-black text-sm flex items-center justify-center shadow-md shadow-purple-500/30">
+              3
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              {language === 'tr' ? 'Kademeli Alımla (DCA) Büyüyün' : 'Compound with DCA on Dips'}
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Piyasa düştüğünde paniklemeyin! Sistem "KADEME 2 / 3" alım tavsiyesi verdiğinde parçalı alım yaparak maliyetinizi hızla düşürün.'
+                : 'Never panic during index pullbacks. When the engine signals Tranche 2 or 3, buy incrementally to drop your average cost basis.'}
+            </p>
+            <button
+              onClick={() => onNavigateToTab('dividend')}
+              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline pt-1 inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>{language === 'tr' ? 'Temettü & Kartopu' : 'Open Dividends'}</span>
+              <span>→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Core Concept Deep-Dives */}
+      <div className="bg-white dark:bg-[#090e1a] rounded-3xl p-5 sm:p-8 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-6">
+        <div>
+          <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <span>🔬</span>
+            <span>{language === 'tr' ? 'İnteraktif Strateji Rehberi' : 'Interactive Strategy Walkthroughs'}</span>
+          </h2>
+          <p className="text-xs text-slate-500">
+            {language === 'tr' ? 'Temel finansal kavramları ve sistemin arkasındaki mantığı inceleyin' : 'Understand key financial mechanics and our algorithmic edge'}
+          </p>
+        </div>
+
+        {/* Tab Controls for Walkthrough */}
+        <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('dca')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeWalkthroughTab === 'dca'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            💧 {language === 'tr' ? 'Kademeli Alım (DCA)' : 'Staggered DCA'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('stoploss')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeWalkthroughTab === 'stoploss'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🛡️ {language === 'tr' ? 'Zarar Kes (Stop-Loss)' : 'Stop-Loss Discipline'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('dividend')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeWalkthroughTab === 'dividend'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            💰 {language === 'tr' ? 'Temettü Kartopu' : 'Dividend Snowball'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('gemini')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeWalkthroughTab === 'gemini'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🤖 {language === 'tr' ? 'AI Gemini Danışmanı' : 'AI Gemini Engine'}
+          </button>
+        </div>
+
+        {/* Walkthrough Content Panes */}
+        {activeWalkthroughTab === 'dca' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 space-y-2">
+              <span className="text-xs font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider block">
+                {language === 'tr' ? 'Kademeli Alım (DCA) Örnek Senaryosu:' : 'Real-World DCA Accumulation Scenario:'}
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'Diyelim ki ISMEN hissesini ₺32.60\'tan 76 adet aldınız (Maliyet: ₺2,477). BIST düzeltmeye girdi ve hisse ₺31.08\'e geriledi. Eğer panik yapıp satarsanız ₺115 zarar edersiniz. Ancak sistemin tavsiye ettiği gibi 2. Kademede 66 adet daha eklerseniz ortalama maliyetiniz ₺31.89\'a düşer! Hisse ₺28.78\'e indiğinde 3. Kademeyi eklerseniz maliyet ₺30.15\'e iner ve hisse en ufak bir tepki verdiğinde doğrudan kâra geçersiniz.'
+                  : 'Suppose you buy 76 shares of ISMEN at ₺32.60 (Cost: ₺2,477). If BIST pulls back and price falls to ₺31.08, panic selling locks in a loss. But deploying Tranche 2 (66 shares) immediately drops your cost basis to ₺31.89! Adding Tranche 3 near ₺28.78 drops your average to ₺30.15, meaning any market rebound immediately turns the entire position into net profit.'}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="font-bold text-slate-900 dark:text-white block mb-1">Tranche 1: %33</span>
+                <span className="text-slate-500">İlk sinyal teyidinde pozisyon açma</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="font-bold text-slate-900 dark:text-white block mb-1">Tranche 2: %33</span>
+                <span className="text-slate-500">Destek testinde maliyet düşürme</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                <span className="font-bold text-slate-900 dark:text-white block mb-1">Tranche 3: %34</span>
+                <span className="text-slate-500">Aşırı iskontolu dip dönüşünde alım</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeWalkthroughTab === 'stoploss' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 space-y-2">
+              <span className="text-xs font-black text-rose-700 dark:text-rose-300 uppercase tracking-wider block">
+                {language === 'tr' ? 'Stop-Loss Ne Zaman Çalıştırılmalı?' : 'When to Honor Stop-Losses:'}
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'Kısa vadeli momentum ve swing hisselerinde (örneğin AKBNK stop seviyesi ₺67.50 kırıldığında) piyasa yapısı bozulmuştur. Burada inatlaşıp beklemek sermayenizi kilitleyebilir. Sistem pozisyonunuz stop-loss seviyesini aştığında "PAUSE" uyarısı verir. Bu hisselerde toparlanma tepkisinde nakite geçip, sermayenizi TURSG ve ISMEN gibi yüksek temettülü sağlam şirketlere kaydırmalısınız.'
+                  : 'For short-term swing setups (such as AKBNK breaching its ₺67.50 stop level), technical structure is invalidated. Bagholding ties up valuable capital. The engine marks this as PAUSE. Capital should be disciplined, cutting risk on bounces and rotating into dependable dividend compounders like TURSG and ISMEN.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activeWalkthroughTab === 'dividend' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
+              <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
+                {language === 'tr' ? 'Bileşik Getiri Kartopu (DRIP):' : 'The Compounding DRIP Snowball:'}
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'ISMEN %8.55, TURSG %7.09, TRGYO %5.20 ve SCHD %3.80 gibi hisseler piyasa düşse dahi nakit üretir. "Kartopu & Projeksiyon" sekmesinde bu nakit akışını simüle edebilirsiniz. Her yıl temettünüzle yeni hisse aldığınızda, sonraki yıl hem eski hisseleriniz hem de bedava aldığınız yeni hisseler temettü öder. Bu geometrik büyüme 10 yıl içinde finansal özgürlük sağlar.'
+                  : 'Quality assets like ISMEN (8.55%), TURSG (7.09%), and SCHD (3.80%) generate hard cashflow regardless of short-term market noise. Reinvesting this cashflow generates an exponential compounding curve where free shares produce additional dividends every subsequent year.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activeWalkthroughTab === 'gemini' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 space-y-2">
+              <span className="text-xs font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider block">
+                {language === 'tr' ? 'Google Gemini Entegrasyonu Nasıl Yapılır?' : 'How to Connect Google Gemini AI:'}
+              </span>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'MarketPulse dahili olarak 20+ sektör analiz kurallarına sahiptir. Eğer Google AI Studio üzerinden aldığınız ücretsiz Gemini API anahtarınızı sol alt menüdeki "Ayarlar" sekmesinden eklerseniz, AI Danışmanı canlı web verileriyle birleşerek dilediğiniz tüm hisseler için detaylı bilanço ve temettü gerekçesi üretir.'
+                  : 'MarketPulse includes built-in reasoning across 20+ financial sectors. By adding your free Gemini API key in the Settings drawer, you unlock live multi-step generative reasoning and financial sanity checks for any stock on BIST or US exchanges.'}
+              </p>
+            </div>
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs inline-flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+              >
+                <span>⚙️</span>
+                <span>{language === 'tr' ? 'Ayarlar Panelini Aç' : 'Open Settings Panel'}</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Every Page in the App Explained */}
+      <div className="space-y-4">
+        <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <span>📱</span>
+          <span>{language === 'tr' ? 'Tüm Sayfalar ve Modüllerin Açıklaması' : 'All App Views & Features Explained'}</span>
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 1: Sinyaller */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600">🎯</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'Sinyaller & Fırsatlar' : 'Signals & Alpha Picks'}
+                </h3>
+                <span className="text-[10px] text-slate-400">Algoritmik Alım Fırsatları & Kademeli Alım</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? '50 EMA Pullback, Trend Kırılımı ve Aşırı Satım modelleriyle taranan aktif fırsatlar. Her kartta giriş seviyesi, stop-loss ve DCA kademe önerisi bulunur.'
+                : 'Scanned setups utilizing 50 EMA pullbacks, momentum breakouts, and mean reversion. Every card provides validated entry, stop loss, and DCA accumulation rationale.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('signals')}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Portföy */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600">💼</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'Canlı Portföyüm' : 'My Live Portfolio'}
+                </h3>
+                <span className="text-[10px] text-slate-400">Maliyet Takibi, Nakit Defteri & DCA</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Varlıklarınızın anlık kâr/zarar oranı, stop-loss mesafesi, nakit bakiyesi ve kademeli alım aksiyonları. TRY ve USD varlıkları konsolide eder.'
+                : 'Live PnL tracking, distance to stop levels, cash balance ledger, and automated DCA tranche recommendations across both TRY and USD assets.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('portfolio')}
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Temettü */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600">💰</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'Temettü Gelirleri' : 'Dividend Tracker'}
+                </h3>
+                <span className="text-[10px] text-slate-400">Pasif Nakit Akışı & AI Danışmanı</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Yıllık ve aylık pasif temettü nakit akışı takvimi, güvenlik puanları ve doğal dilde soru sorabileceğiniz yapay zeka danışmanı.'
+                : 'Projected monthly and annual passive dividend cashflow calendar, payout safety scores, and a conversational AI dividend advisor.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('dividend')}
+                className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: Kartopu Projeksiyon */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600">🔮</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'Kartopu & Projeksiyon' : 'Snowball & Comparator'}
+                </h3>
+                <span className="text-[10px] text-slate-400">DRIP Simülatörü & BIST/US Kıyaslama</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Temettülerinizi yeniden yatırarak 5, 10, 20 yılda ulaşabileceğiniz servet simülatörü. Midas ABD temettü hisseleriyle BIST hisselerini kıyaslar.'
+                : 'Compound growth simulator projecting dividend reinvestment milestones over 5, 10, and 20 years, alongside BIST vs US stock comparisons.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('forecast')}
+                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 5: KAP Bildirimleri */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600">⚡</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'KAP Bildirimleri' : 'KAP Catalysts'}
+                </h3>
+                <span className="text-[10px] text-slate-400">Canlı Şirket Haberleri & Geri Alımlar</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Pay geri alımları (Buybacks), yeni dev sözleşmeler ve temettü kararlarını anında yakalayan canlı KAP akışı ve duygu puanlaması.'
+                : 'Real-time crawler highlighting share buybacks, major contract signings, and dividend filings classified via AI sentiment.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('catalysts')}
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+
+          {/* Card 6: Kurumsal Quant Hub */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#090e1a] border border-slate-200/80 dark:border-slate-800/80 shadow-xs space-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600">🏛️</span>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {language === 'tr' ? 'Kurumsal Quant Hub (PRO)' : 'Quant Hub (PRO)'}
+                </h3>
+                <span className="text-[10px] text-slate-400">Stat-Arb, Eşbütünleşme & Z-Score</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {language === 'tr'
+                ? 'Hedge fonların kullandığı çift işlem (Pairs Trading) ve Z-Score spread arbitraj modelleri. Piyasa düşerken bile getiri yaratma imkanı.'
+                : 'Statistical arbitrage and cointegration pair trading engine modeling mean-reverting spreads like AKBNK/GARAN and FROTO/TOASO.'}
+            </p>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onNavigateToTab('quant')}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                {language === 'tr' ? 'Sayfayı Aç →' : 'Open View →'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* FAQ Accordion Section */}
+      <div className="bg-white dark:bg-[#090e1a] rounded-3xl p-5 sm:p-8 border border-slate-200/80 dark:border-slate-800/80 shadow-sm space-y-6">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <span>❓</span>
+              <span>{language === 'tr' ? 'Sıkça Sorulan Sorular (SSS)' : 'Frequently Asked Questions (FAQ)'}</span>
+            </h2>
+            <p className="text-xs text-slate-500">
+              {language === 'tr' ? 'Kullanıcıların en çok merak ettiği sorular ve çözümleri' : 'Answers to the most common investing and platform questions'}
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold text-slate-400">
+            {filteredFaqs.length} {language === 'tr' ? 'Konu' : 'Items'}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {filteredFaqs.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-xs">
+              {language === 'tr' ? 'Aradığınız kriterlere uygun soru bulunamadı.' : 'No matching questions found.'}
+            </div>
+          ) : (
+            filteredFaqs.map((faq, idx) => {
+              const isOpen = expandedFaq === idx;
+              return (
+                <div
+                  key={idx}
+                  className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                    isOpen
+                      ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-500/50 shadow-xs'
+                      : 'bg-slate-50/70 dark:bg-slate-850/40 border-slate-200/80 dark:border-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedFaq(isOpen ? null : idx)}
+                    className="w-full text-left p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-base shrink-0">{isOpen ? '📂' : '📁'}</span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                        {language === 'tr' ? faq.qTr : faq.qEn}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hidden sm:inline">
+                        {faq.tag}
+                      </span>
+                      <span className="text-xs text-slate-400 font-bold">{isOpen ? '▲' : '▼'}</span>
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed border-t border-blue-200/40 dark:border-blue-900/40 animate-in fade-in duration-150">
+                      <p>{language === 'tr' ? faq.aTr : faq.aEn}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

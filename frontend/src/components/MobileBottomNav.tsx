@@ -64,6 +64,15 @@ export default function MobileBottomNav({
       descTr: '15-dk Açılış kırılım yönleri, hacim anormallikleri ve seans yönü',
       descEn: '15-min Opening Range Breakouts & volume anomalies',
     },
+    {
+      id: 'help',
+      labelTr: 'Kullanım Rehberi & SSS',
+      labelEn: 'User Guide & FAQ',
+      icon: '📖',
+      descTr: 'Kademeli alım, stop-loss, temettü kartopu ve AI danışmanı rehberi',
+      descEn: 'Step-by-step guide for DCA, stop-losses, DRIP compounding and AI advisor',
+      badge: 'REHBER',
+    },
   ];
 
   const handleSelectTab = (tab: TabId) => {
@@ -71,7 +80,7 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['quant', 'scorecard', 'orb', 'forecast'].includes(activeTab);
+  const isMoreActive = ['quant', 'scorecard', 'orb', 'forecast', 'help'].includes(activeTab);
 
   return (
     <>

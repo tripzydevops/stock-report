@@ -4,10 +4,13 @@ import path from 'path';
 const ARTIFACTS_DIR = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed8-95fd-10ef07babef9';
 
 test.describe('Mobile Viewport & Navigation Usability', () => {
-  test('1. Mobile layout loads without horizontal overflow and renders top header', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('header');
+  });
 
+  test('1. Mobile layout loads without horizontal overflow and renders top header', async ({ page }) => {
     // Verify no horizontal scrolling blowout
     const isHorizontalOverflow = await page.evaluate(() => {
       return document.documentElement.scrollWidth > window.innerWidth;
@@ -30,9 +33,6 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
   });
 
   test('2. Hamburger menu opens SidebarNav drawer with full links and closes on backdrop tap', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
     // Click hamburger button
     const hamburgerBtn = page.getByTitle('Menüyü Aç');
     await hamburgerBtn.click();
@@ -48,6 +48,7 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     await expect(page.locator('aside').getByText('Portföyüm').first()).toBeVisible();
     await expect(page.locator('aside').getByText('Temettü Gelirleri').first()).toBeVisible();
     await expect(page.locator('aside').getByText('KAP Bildirimleri').first()).toBeVisible();
+    await expect(page.locator('aside').getByText('Kullanım Rehberi').first()).toBeVisible();
 
     // Capture screenshot of mobile drawer open
     await page.screenshot({
@@ -61,9 +62,6 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
   });
 
   test('3. MobileBottomNav allows 1-tap switching between core tabs', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
     // Bottom nav must be visible on mobile
     const bottomNav = page.locator('nav[aria-label="Mobile Navigation"]');
     await expect(bottomNav).toBeVisible();
@@ -94,9 +92,6 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
   });
 
   test('4. Date filter button toggles date filter cleanly on mobile without blowout', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
     // Click Date filter button in header
     const dateBtn = page.getByTitle('Tarih Aralığını Filtrele');
     await expect(dateBtn).toBeVisible();
@@ -115,6 +110,41 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     // Capture screenshot with Date Filter expanded
     await page.screenshot({
       path: path.join(ARTIFACTS_DIR, 'mobile_date_filter_open.png'),
+    });
+  });
+
+  test('5. Help Center opens, renders all guide modules, searches, and expands FAQs', async ({ page }) => {
+    // Click Hamburger to open sidebar
+    const hamburgerBtn = page.getByTitle('Menüyü Aç');
+    await hamburgerBtn.click();
+
+    // Click Kullanım Rehberi
+    const helpNavBtn = page.locator('aside').getByText('Kullanım Rehberi');
+    await expect(helpNavBtn).toBeVisible();
+    await helpNavBtn.click();
+
+    // Verify Help Center Heading
+    const helpHeading = page.locator('text=MarketPulse\'ı Nasıl Kullanırsınız?');
+    await expect(helpHeading.first()).toBeVisible();
+
+    // Verify 3-step quick start
+    await expect(page.locator('text=3 Adımda Kolay Başlangıç Kılavuzu').first()).toBeVisible();
+
+    // Verify Interactive Strategy Tabs
+    const stoplossTab = page.locator('button:has-text("Zarar Kes (Stop-Loss)")');
+    await expect(stoplossTab.first()).toBeVisible();
+    await stoplossTab.first().click();
+    await expect(page.locator('text=Stop-Loss Ne Zaman Çalıştırılmalı?').first()).toBeVisible();
+
+    // Test Search Functionality
+    const searchInput = page.locator('input[placeholder*="Örn: Kademeli Alım"]');
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('panik');
+    await expect(page.locator('text=Hisselerim %10 - %20 düştü, ne yapmalıyım?').first()).toBeVisible();
+
+    // Capture screenshot of Help Center on mobile
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_help_center.png'),
     });
   });
 });

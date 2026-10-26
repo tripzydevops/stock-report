@@ -7,7 +7,7 @@ import { RegimeStatus } from './MarketRegimeBanner';
 interface MarketCorrectionBannerProps {
   bistRegime?: RegimeStatus;
   usRegime?: RegimeStatus;
-  onNavigateToTab?: (tab: 'portfolio' | 'signals' | 'dividend') => void;
+  onNavigateToTab?: (tab: 'portfolio' | 'signals' | 'dividend' | 'help') => void;
 }
 
 export default function MarketCorrectionBanner({
@@ -150,12 +150,23 @@ export default function MarketCorrectionBanner({
 
           <div className="flex items-center gap-2">
             {onNavigateToTab && (
-              <button
-                onClick={() => onNavigateToTab('portfolio')}
-                className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
-              >
-                {language === 'tr' ? 'Portföyümü İncele →' : 'Review My Holdings →'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('help')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/80 hover:bg-amber-200 dark:hover:bg-amber-900/80 text-amber-800 dark:text-amber-200 font-bold transition-all shadow-xs active:scale-95 cursor-pointer border border-amber-300 dark:border-amber-700/80 flex items-center gap-1"
+                >
+                  <span>📖</span>
+                  <span>{language === 'tr' ? 'Rehberi Oku →' : 'Read Guide →'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('portfolio')}
+                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                >
+                  {language === 'tr' ? 'Portföyümü İncele →' : 'Review My Holdings →'}
+                </button>
+              </>
             )}
           </div>
         </div>
