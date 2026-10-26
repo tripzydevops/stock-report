@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import NavigationTabs, { TabId } from '../components/NavigationTabs';
+import SidebarNav from '../components/SidebarNav';
 import MarketRegimeBanner, { RegimeStatus } from '../components/MarketRegimeBanner';
 import MarketCorrectionBanner from '../components/MarketCorrectionBanner';
 import TradeCard, { TradeSignal } from '../components/TradeCard';
@@ -918,6 +919,7 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isSimpleMode, setIsSimpleMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('marketpulse_simple_mode');
@@ -2555,257 +2557,98 @@ export default function Home() {
   ]);
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 pb-28 sm:pb-20 antialiased selection:bg-blue-500/20">
-      {/* Top Header */}
-      <header className="bg-white/95 dark:bg-[#0a0f1d]/95 backdrop-blur-md shadow-xs sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80">
-        <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex justify-between items-center">
-          {/* Brand & Active Tab Indicator */}
-          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 shrink-0">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center space-x-1.5 sm:space-x-2">
-                <h1 className="text-lg sm:text-xl font-black tracking-tight text-gray-900 dark:text-white truncate">MarketPulse</h1>
-                <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 shrink-0">
-                  LIVE
-                </span>
-                {/* Active Tab Badge (Mobile Only) */}
-                <span className="md:hidden text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">
-                  <span>{TAB_TITLES[activeTab]?.icon}</span>
-                  <span className="truncate max-w-[80px]">{language === 'tr' ? TAB_TITLES[activeTab]?.tr : TAB_TITLES[activeTab]?.en}</span>
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400 hidden sm:block">{t.header.subtitle}</p>
-            </div>
-          </div>
-
-          {/* MOBILE ACTIONS (< 768px): Streamlined 3-Button Hub */}
-          <div className="flex md:hidden items-center space-x-2 shrink-0">
-            {/* USD/TRY Compact Badge */}
-            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-[11px] font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-              <span className="text-gray-400 font-mono">$</span>
-              <span className="text-blue-600 dark:text-blue-400 font-mono">₺{usdTryRate.toFixed(2)}</span>
-            </div>
-
-            {/* Quick 1-Tap Sync Button (With Spin Indicator) */}
-            <button
-              onClick={() => handleTriggerSync(false)}
-              disabled={isRefreshing}
-              title={t.header.syncTooltip}
-              className="w-8 h-8 rounded-xl bg-blue-600 active:scale-95 text-white flex items-center justify-center shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-            >
-              <svg
-                className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-
-            {/* Mobile Mode Switcher (Basit / Pro) */}
-            <button
-              onClick={handleToggleSimpleMode}
-              className={`h-8 px-2 rounded-xl text-[11px] font-black border transition-all active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 ${
-                isSimpleMode
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
-                  : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40'
-              }`}
-              title={isSimpleMode ? 'Pro Moduna Geç' : 'Basit Moduna Geç'}
-            >
-              <span>{isSimpleMode ? '🌱' : '⚡'}</span>
-              <span>{isSimpleMode ? (language === 'tr' ? 'Basit' : 'Easy') : 'Pro'}</span>
-            </button>
-
-            {/* Profile & Settings Trigger (Opens Mobile Action Sheet) */}
-            <button
-              onClick={() => setIsSettingsSheetOpen(true)}
-              className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs active:scale-95 transition-all cursor-pointer shadow-xs shrink-0"
-              title={language === 'tr' ? 'Ayarlar & Profil' : 'Settings & Profile'}
-            >
-              {user ? '👤' : isDemoMode ? '👀' : '⚙️'}
-            </button>
-          </div>
-
-          {/* DESKTOP ACTIONS (>= 768px): Full Tool Suite */}
-          <div className="hidden md:flex items-center space-x-3 shrink-0">
-            {/* Simple vs Pro Mode Toggle Pill */}
-            <button
-              type="button"
-              onClick={handleToggleSimpleMode}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95 ${
-                isSimpleMode
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
-                  : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25'
-              }`}
-              title={isSimpleMode ? 'Gelişmiş Pro Görünüme Geç' : 'Yeni Başlayanlar İçin Sade Görünüme Geç'}
-            >
-              <span>{isSimpleMode ? '🌱' : '⚡'}</span>
-              <span>{isSimpleMode ? (language === 'tr' ? 'Basit Mod' : 'Simple Mode') : (language === 'tr' ? 'Pro Mod' : 'Pro Mode')}</span>
-            </button>
-
-            <div className="flex items-center space-x-2 px-3 py-1 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
-              <span>USD/TRY:</span>
-              <span className="text-blue-600 dark:text-blue-400 font-mono">₺{usdTryRate.toFixed(2)}</span>
-            </div>
-
-            {/* In-App Sync & Refresh Action Buttons */}
-            <div className="flex items-center space-x-1.5 shrink-0">
-              <button
-                onClick={() => handleTriggerSync(false)}
-                disabled={isRefreshing}
-                title={t.header.syncTooltip}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                <svg
-                  className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>{isRefreshing ? t.header.syncing : t.header.syncData}</span>
-              </button>
-
-              <button
-                onClick={() => handleTriggerSync(true)}
-                disabled={isRefreshing}
-                title={t.header.crawlerTooltip}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-95"
-              >
-                <span>⚡</span>
-                <span>{t.header.runCrawler}</span>
-              </button>
-            </div>
-
-            {/* Language Switcher Toggle */}
-            <div className="flex items-center p-0.5 bg-gray-100 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold shrink-0">
-              <button
-                type="button"
-                onClick={() => setLanguage('tr')}
-                className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                  language === 'tr'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                }`}
-                title="Türkçe"
-              >
-                <span>🇹🇷</span>
-                <span className="text-[11px]">TR</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage('en')}
-                className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                  language === 'en'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                }`}
-                title="English"
-              >
-                <span>🇬🇧</span>
-                <span className="text-[11px]">EN</span>
-              </button>
-            </div>
-
-            {/* User Auth Profile / Sign In Button */}
-            <div className="flex items-center space-x-1.5 shrink-0">
-              {user ? (
-                <div className="flex items-center space-x-1.5 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl px-2.5 py-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate max-w-[110px]">
-                    {user.email?.split('@')[0]}
-                  </span>
-                  <button
-                    onClick={() => signOut()}
-                    className="text-[10px] text-gray-400 hover:text-rose-500 font-bold ml-1 cursor-pointer"
-                    title={language === 'tr' ? 'Çıkış Yap' : 'Sign Out'}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : isDemoMode ? (
-                <button
-                  onClick={() => setIsAuthModalOpen(true)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] font-bold text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-colors cursor-pointer"
-                  title={language === 'tr' ? 'Model portföy modundasınız. Kendi hesabınıza geçmek için tıklayın.' : 'In model portfolio mode. Click to sign in.'}
-                >
-                  <span>👀</span>
-                  <span>{language === 'tr' ? 'Model Portföy' : 'Demo Mode'}</span>
-                  <span className="text-blue-600 font-black ml-1">+</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => setIsAuthModalOpen(true)}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
-                  title={language === 'tr' ? 'Giriş Yap veya Hesap Aç' : 'Sign In or Register'}
-                >
-                  <span>👤</span>
-                  <span>{language === 'tr' ? 'Giriş' : 'Sign In'}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-1 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              {lastRefreshedAt ? (
-                <span className="text-[10px] text-gray-500 font-mono">{lastRefreshedAt}</span>
-              ) : (
-                <span className="text-[11px] text-gray-500 font-semibold">{t.common.connected}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Floating Sync Notification Toast */}
-      {syncFeedback && (
-        <div className="fixed top-18 right-4 sm:right-8 z-50 animate-bounce duration-300 pointer-events-none">
-          <div className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-xl border flex items-center space-x-2 backdrop-blur-md ${
-            syncFeedback.type === 'success' ? 'bg-emerald-950/90 text-emerald-200 border-emerald-700 shadow-emerald-950/50' :
-            syncFeedback.type === 'info' ? 'bg-blue-950/90 text-blue-200 border-blue-700 shadow-blue-950/50' :
-            'bg-rose-950/90 text-rose-200 border-rose-700 shadow-rose-950/50'
-          }`}>
-            <span>{syncFeedback.message}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Navigation */}
-      <NavigationTabs
+    <div className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 flex antialiased selection:bg-blue-500/20">
+      {/* Left Navigation Sidebar */}
+      <SidebarNav
         activeTab={activeTab}
         onTabChange={handleTabChange}
         catalystsCount={catalysts.length}
         usRegime={usRegime}
         bistRegime={bistRegime}
         usdTryRate={usdTryRate}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onTriggerSync={handleTriggerSync}
+        isRefreshing={isRefreshing}
+        onOpenSettings={() => setIsSettingsSheetOpen(true)}
         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
-        isSimpleMode={isSimpleMode}
-        onToggleSimpleMode={handleToggleSimpleMode}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
-      {/* Prominent Market Correction Warning Notice (Accessible to beginners and pro) */}
-      <MarketCorrectionBanner
-        bistRegime={bistRegime}
-        usRegime={usRegime}
-        onNavigateToTab={handleTabChange}
-      />
+      {/* Right Main Content Canvas */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Sleek Top Header Bar */}
+        <header className="h-14 sm:h-16 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30">
+          {/* Left: Mobile Hamburger Trigger + Current Active Page Title & Subtitle */}
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="md:hidden w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-base active:scale-95 transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0"
+              title="Menüyü Aç"
+            >
+              ☰
+            </button>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xl sm:text-2xl shrink-0">{TAB_TITLES[activeTab]?.icon}</span>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+                  {language === 'tr' ? TAB_TITLES[activeTab]?.tr : TAB_TITLES[activeTab]?.en}
+                </h1>
+                <p className="text-[10px] text-slate-400 hidden sm:block truncate">
+                  {activeTab === 'signals' && (language === 'tr' ? 'Algoritmik Alım Fırsatları & Kademeli Alım Bölgeleri' : 'Algorithmic Buy Opportunities & DCA Zones')}
+                  {activeTab === 'portfolio' && (language === 'tr' ? 'Canlı Portföy, Maliyetler ve Risk Kontrolü' : 'Live Portfolio, Cost Basis & Risk Controls')}
+                  {activeTab === 'dividend' && (language === 'tr' ? 'Pasif Nakit Akışı, Temettü Takvimi ve AI Danışmanı' : 'Passive Cashflow, Dividend Calendar & AI Advisor')}
+                  {activeTab === 'forecast' && (language === 'tr' ? 'Kartopu Büyüme Simülatörü ve DRIP Lab' : 'Snowball Growth Simulator & DRIP Lab')}
+                  {activeTab === 'catalysts' && (language === 'tr' ? 'Canlı KAP Bildirimleri & Şirket Haberleri' : 'Live KAP Filings & Corporate Catalysts')}
+                  {activeTab === 'quant' && (language === 'tr' ? 'Eşbütünleşme (Cointegration) & Pair Trading' : 'Statistical Arbitrage & Pair Trading')}
+                  {activeTab === 'scorecard' && (language === 'tr' ? '1,173 Geçmiş Trade İstatistiği ve Başarı Oranları' : 'Historical Trade Statistics & Win Rates')}
+                  {activeTab === 'orb' && (language === 'tr' ? '15-Dakikalık Açılış Kırılımları ve Seans Yönü' : 'Opening Range Breakouts & Volume Anomalies')}
+                </p>
+              </div>
+            </div>
+          </div>
 
-      {/* Regime Banners (Mobile only: on desktop, tickers are integrated into the command bar) */}
-      <div className="md:hidden">
-        <MarketRegimeBanner usRegime={usRegime} bistRegime={bistRegime} usdTryRate={usdTryRate} />
-      </div>
+          {/* Right: Date Filter & Actions */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <DateFilterBar
+              currentFilter={dateFilter}
+              onChange={handleDateFilterChange}
+            />
 
-      {/* Main Tab Content */}
-      <div className="max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Universal Date Filter Bar - Active on ALL tabs/pages */}
-        <DateFilterBar
-          currentFilter={dateFilter}
-          onChange={handleDateFilterChange}
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
+              title="Yeni Takip Edilen Varlık Ekle"
+            >
+              <span>+</span>
+              <span className="hidden sm:inline">{language === 'tr' ? 'Varlık Ekle' : 'Add Asset'}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Floating Sync Notification Toast */}
+        {syncFeedback && (
+          <div className="fixed top-18 right-4 sm:right-8 z-50 animate-bounce duration-300 pointer-events-none">
+            <div className={`px-4 py-2.5 rounded-xl text-xs font-bold shadow-xl border flex items-center space-x-2 backdrop-blur-md ${
+              syncFeedback.type === 'success' ? 'bg-emerald-950/90 text-emerald-200 border-emerald-700 shadow-emerald-950/50' :
+              syncFeedback.type === 'info' ? 'bg-blue-950/90 text-blue-200 border-blue-700 shadow-blue-950/50' :
+              'bg-rose-950/90 text-rose-200 border-rose-700 shadow-rose-950/50'
+            }`}>
+              <span>{syncFeedback.message}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Prominent Market Correction Warning Notice (Accessible to beginners and pro) */}
+        <MarketCorrectionBanner
+          bistRegime={bistRegime}
+          usRegime={usRegime}
+          onNavigateToTab={handleTabChange}
         />
+
+        {/* Dedicated Full Page Content Canvas */}
+        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
 
         {/* TAB 1: SIGNALS & SCANNER */}
         {activeTab === 'signals' && (
@@ -3408,7 +3251,7 @@ export default function Home() {
             onSelectTicker={handleSelectTicker}
           />
         )}
-      </div>
+      </main>
 
       {/* Floating Add Asset Modal */}
       <button 
@@ -3657,6 +3500,7 @@ export default function Home() {
           </div>
         </div>
       )}
-    </main>
+      </div>
+    </div>
   );
 }
