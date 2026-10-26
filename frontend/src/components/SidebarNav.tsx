@@ -91,13 +91,13 @@ export default function SidebarNav({
       {isMobileOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs md:hidden transition-opacity"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs md:hidden transition-opacity"
         />
       )}
 
       {/* Main Sidebar Container */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-50 h-screen flex flex-col bg-white dark:bg-[#070b13] border-r border-slate-200/80 dark:border-slate-800/80 transition-all duration-300 ease-in-out ${
+        className={`fixed md:sticky top-0 left-0 z-60 h-screen flex flex-col bg-white dark:bg-[#070b13] border-r border-slate-200/80 dark:border-slate-800/80 transition-all duration-300 ease-in-out ${
           isCollapsed ? 'md:w-20' : 'md:w-64'
         } ${
           isMobileOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full md:translate-x-0'

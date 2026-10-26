@@ -24,7 +24,7 @@ import { AuthModal } from '../components/AuthModal';
 import DateFilterBar from '../components/DateFilterBar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
-import { DateRangeFilter, getDateRangeFromPreset, isDateInRange } from '../lib/dateFilter';
+import { DateRangeFilter, getDateRangeFromPreset, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -917,6 +917,7 @@ export default function Home() {
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
+  const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -2584,8 +2585,9 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-base active:scale-95 transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0"
+              className="md:hidden w-9.5 h-9.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-bold text-lg active:scale-95 transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shrink-0 shadow-xs"
               title="Menüyü Aç"
+              aria-label="Menüyü Aç"
             >
               ☰
             </button>
@@ -2609,12 +2611,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right: Date Filter & Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <DateFilterBar
-              currentFilter={dateFilter}
-              onChange={handleDateFilterChange}
-            />
+          {/* Right: Date Filter Trigger & Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsDateFilterExpanded(prev => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+                dateFilter.preset !== 'ALL'
+                  ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border-blue-400 dark:border-blue-700 ring-2 ring-blue-400/20'
+                  : isDateFilterExpanded
+                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+              title={language === 'tr' ? 'Tarih Aralığını Filtrele' : 'Filter by Date Range'}
+            >
+              <span className="text-xs">📅</span>
+              <span className="text-[11px] hidden sm:inline">{formatFilterDisplay(dateFilter, language)}</span>
+              <span className="text-[10px] sm:hidden font-black">
+                {dateFilter.preset === 'ALL' ? (language === 'tr' ? 'Tarih' : 'Date') : dateFilter.preset}
+              </span>
+              <span className="text-[9px] opacity-70 ml-0.5">{isDateFilterExpanded ? '▲' : '▼'}</span>
+            </button>
 
             <button
               onClick={() => setIsModalOpen(true)}
@@ -2647,8 +2664,15 @@ export default function Home() {
           onNavigateToTab={handleTabChange}
         />
 
-        {/* Dedicated Full Page Content Canvas */}
-        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-6">
+        {/* Dedicated Full Page Content Canvas with Ample Bottom Clearance for Mobile Nav */}
+        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-28 md:pb-8 space-y-5">
+          {/* Universal Date Filter Bar (Expandable on click or auto-shown if active) */}
+          {(isDateFilterExpanded || dateFilter.preset !== 'ALL') && (
+            <DateFilterBar
+              currentFilter={dateFilter}
+              onChange={handleDateFilterChange}
+            />
+          )}
 
         {/* TAB 1: SIGNALS & SCANNER */}
         {activeTab === 'signals' && (
