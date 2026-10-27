@@ -9,6 +9,8 @@ from app.api.scanner import router as scanner_router
 from app.api.portfolio import router as portfolio_router
 from app.api.regime import router as regime_router
 from app.api.quant import router as quant_router
+from app.api.reports import router as reports_router
+from app.api.movements import router as movements_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,13 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
+# Include Routers (both /api and root paths for specification compliance)
 app.include_router(assets_router, prefix="/api")
 app.include_router(prices_router, prefix="/api")
 app.include_router(scanner_router, prefix="/api")
 app.include_router(portfolio_router, prefix="/api")
 app.include_router(regime_router, prefix="/api")
 app.include_router(quant_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")
+app.include_router(reports_router)
+app.include_router(movements_router, prefix="/api")
+app.include_router(movements_router)
 
 @app.on_event("startup")
 async def startup_event():

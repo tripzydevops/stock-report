@@ -24,7 +24,8 @@ if env_path.exists():
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from app.core.database import get_supabase_client, upsert_rows, select_rows, insert_rows
 
-def sync_all_to_supabase():
+def sync_all_to_supabase(excel_path=None, report_record=None):
+    from datetime import timezone
     print("🚀 Connecting to Supabase...")
     client = get_supabase_client()
     
@@ -45,10 +46,28 @@ def sync_all_to_supabase():
         
     print(f"✅ Loaded {len(assets)} registered assets from Supabase.")
     
-    excel_path = Path(__file__).parent / "MarketPulse_Latest.xlsx"
+    if excel_path is None:
+        excel_path = Path(__file__).parent / "MarketPulse_Latest.xlsx"
+    else:
+        excel_path = Path(excel_path)
+
     if not excel_path.exists():
         print(f"❌ {excel_path} not found. Run export_to_spreadsheet.py first.")
         return
+
+    # If report_record not provided, try to fetch latest from report_files
+    if report_record is None:
+        try:
+            from app.services.report_storage import get_latest_report
+            report_record = get_latest_report(client=client)
+        except Exception:
+            report_record = None
+
+    report_file_id = report_record.get("id") if report_record else None
+    snapshot_time = report_record.get("generated_at") if report_record else datetime.now(timezone.utc).isoformat()
+    if snapshot_time and isinstance(snapshot_time, datetime):
+        snapshot_time = snapshot_time.isoformat()
+    print(f"🔗 Linked to Report File ID: {report_file_id} (Snapshot Time: {snapshot_time})")
         
     # 2. Sync Price History (last 30 days per asset to Supabase for efficiency)
     print("📥 Reading Price History from spreadsheet...")
@@ -144,6 +163,105 @@ def sync_all_to_supabase():
             print(f"Error upserting indicators chunk {i}: {e}")
             
     print(f"✅ Recorded {len(indicator_rows)} daily indicator snapshots.")
+
+    # 3b. Sync Normalized Price Snapshots & Stock Movements (Immutable Point-in-time)
+    print("📥 Syncing Normalized Price Snapshots & Stock Movements...")
+    signal_lookup = {}
+    try:
+        df_sig_preview = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
+        for _, s_row in df_sig_preview.iterrows():
+            s_sym = str(s_row["Symbol"]).replace(".IS", "").strip()
+            signal_lookup[s_sym] = {
+                "strategy": str(s_row.get("Strategy", "")),
+                "score": float(s_row.get("R:R Ratio", 8.0)) if pd.notna(s_row.get("R:R Ratio")) else 8.0,
+            }
+    except Exception as e:
+        print(f"Note on reading signals preview: {e}")
+
+    price_snapshot_rows = []
+    stock_movement_rows = []
+
+    for _, row in df_dash.iterrows():
+        sym = str(row["Symbol"]).strip()
+        asset_id = symbol_to_id.get(sym) or symbol_to_id.get(f"{sym}.IS")
+        if not asset_id:
+            continue
+
+        c = _clean_float(row.get("Close"))
+        if c is None or c <= 0:
+            continue
+
+        o = _clean_float(row.get("Open"))
+        h = _clean_float(row.get("High"))
+        l = _clean_float(row.get("Low"))
+        v = _clean_float(row.get("Volume"))
+        chg_pct = _clean_float(row.get("Change %"))
+        chg_amt = (c - o) if (c is not None and o is not None) else None
+
+        price_snapshot_rows.append({
+            "asset_id": asset_id,
+            "snapshot_time": snapshot_time,
+            "open": o if o is not None else c,
+            "high": h if h is not None else c,
+            "low": l if l is not None else c,
+            "close": c,
+            "volume": int(v) if v is not None else 0,
+            "source": "marketpulse_daily"
+        })
+
+        # Direction determination
+        direction = "FLAT"
+        if chg_pct is not None:
+            if chg_pct > 0.05:
+                direction = "UP"
+            elif chg_pct < -0.05:
+                direction = "DOWN"
+
+        clean_sym = sym.replace(".IS", "").strip()
+        sig_info = signal_lookup.get(clean_sym)
+        sig_name = sig_info.get("strategy") if sig_info else None
+        sig_score = sig_info.get("score") if sig_info else None
+
+        movement_meta = {
+            "rsi_14": _clean_float(row.get("RSI (14)")),
+            "atr_14": _clean_float(row.get("ATR (14)")),
+            "ema_20": _clean_float(row.get("EMA 20")),
+            "ema_50": _clean_float(row.get("EMA 50")),
+            "ema_200": _clean_float(row.get("EMA 200")),
+            "volume_ratio": _clean_float(row.get("Volume Ratio")),
+            "high_52w": _clean_float(row.get("52W High")),
+            "low_52w": _clean_float(row.get("52W Low"))
+        }
+
+        stock_movement_rows.append({
+            "asset_id": asset_id,
+            "movement_time": snapshot_time,
+            "direction": direction,
+            "change_amount": chg_amt,
+            "change_pct": chg_pct,
+            "signal": sig_name,
+            "score": sig_score,
+            "metadata": movement_meta,
+            "report_file_id": report_file_id
+        })
+
+    # Upsert price_snapshots in chunks of 100
+    for i in range(0, len(price_snapshot_rows), 100):
+        chunk = price_snapshot_rows[i:i+100]
+        try:
+            client.table("price_snapshots").upsert(chunk, on_conflict="asset_id,snapshot_time").execute()
+        except Exception as e:
+            print(f"Error upserting price_snapshots chunk {i}: {e}")
+    print(f"✅ Recorded {len(price_snapshot_rows)} price snapshots in public.price_snapshots.")
+
+    # Upsert stock_movements in chunks of 100
+    for i in range(0, len(stock_movement_rows), 100):
+        chunk = stock_movement_rows[i:i+100]
+        try:
+            client.table("stock_movements").upsert(chunk, on_conflict="asset_id,movement_time").execute()
+        except Exception as e:
+            print(f"Error upserting stock_movements chunk {i}: {e}")
+    print(f"✅ Recorded {len(stock_movement_rows)} normalized stock movements in public.stock_movements.")
 
     # 4. Sync Market Regime
     print("📥 Syncing Market Regime...")

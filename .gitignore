@@ -25,6 +25,12 @@ backend/.env
 .env
 .env.local
 
+# Generated reports
+*.xlsx
+!sample-data/*.xlsx
+MarketPulse_*.xlsx
+backtest_results_*.csv
+
 # OS files
 .DS_Store
 Thumbs.db

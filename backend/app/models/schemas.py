@@ -139,3 +139,50 @@ class DailyScanResult(BaseModel):
     assets_scanned: int = 0
     signals_found: int = 0
     model_config = ConfigDict(from_attributes=True)
+
+class ReportFileResponse(BaseModel):
+    id: str
+    report_type: str
+    storage_path: str
+    trading_date: date
+    generated_at: datetime
+    file_size_bytes: int | None = None
+    row_count: int | None = None
+    checksum_sha256: str | None = None
+    is_latest: bool
+    download_url: str | None = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class PriceSnapshotCreate(BaseModel):
+    asset_id: str
+    snapshot_time: datetime
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    volume: int | None = None
+    source: str = "marketpulse_daily"
+
+class PriceSnapshotResponse(PriceSnapshotCreate):
+    id: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class StockMovementResponse(BaseModel):
+    id: str
+    asset_id: str
+    symbol: str | None = None
+    name: str | None = None
+    market: str | None = None
+    movement_time: datetime
+    direction: str | None = None
+    change_amount: float | None = None
+    change_pct: float | None = None
+    signal: str | None = None
+    score: float | None = None
+    metadata: dict | None = None
+    report_file_id: str | None = None
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+

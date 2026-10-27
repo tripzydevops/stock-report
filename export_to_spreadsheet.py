@@ -783,14 +783,37 @@ def main():
         "📅 Price History": build_price_history_sheet(all_enriched, top_n_days=252),
     }
     
-    # 6. Export — always overwrite the SAME file so Google Drive sync keeps it fresh
-    output_path = str(OUTPUT_DIR / "MarketPulse_Latest.xlsx")
-    export_to_excel(sheets, output_path)
+    # 6. Export immutable timestamped report
+    from datetime import timezone
+    now_utc = datetime.now(timezone.utc)
+    from app.services.report_storage import generate_storage_path, upload_report_to_storage
+    storage_path, filename = generate_storage_path(now_utc)
     
-    # 7. Record permanently into Supabase PostgreSQL database
+    timestamped_output = OUTPUT_DIR / filename
+    print(f"💾 Saving immutable report to: {timestamped_output}")
+    export_to_excel(sheets, str(timestamped_output))
+    
+    # Also save local reference copy (git-ignored) for convenience
+    latest_local_copy = OUTPUT_DIR / "MarketPulse_Latest.xlsx"
+    try:
+        import shutil
+        shutil.copyfile(timestamped_output, latest_local_copy)
+    except Exception as copy_err:
+        print(f"Note on copying local reference: {copy_err}")
+    
+    # 7. Upload to Supabase Storage ('marketpulse-reports') and register in public.report_files
+    report_record = None
+    try:
+        print("☁️ Uploading immutable report to Supabase Storage & registering in report_files...")
+        report_record = upload_report_to_storage(timestamped_output, dt=now_utc)
+        print(f"✅ Report registered with ID: {report_record.get('id')} at path: {report_record.get('storage_path')}")
+    except Exception as upload_err:
+        print(f"⚠️ Report upload failed: {upload_err}")
+        
+    # 8. Record permanently into Supabase PostgreSQL database (idempotent upsert)
     try:
         from sync_to_supabase import sync_all_to_supabase
-        sync_all_to_supabase()
+        sync_all_to_supabase(excel_path=timestamped_output, report_record=report_record)
     except Exception as e:
         print(f"⚠️ Note: Database sync skipped: {e}")
     
