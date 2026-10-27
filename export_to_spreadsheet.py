@@ -167,21 +167,57 @@ def _ema_status(row):
         return "🔴 Below 200 EMA"
 
 
+def load_portfolio_holdings():
+    """
+    Loads portfolio holdings with dual-source fallback:
+    1. Local portfolio.json (if present on disk).
+    2. Supabase portfolio_positions table (for model/open portfolio).
+    """
+    portfolio_file = OUTPUT_DIR / "portfolio.json"
+    if portfolio_file.exists():
+        try:
+            with open(portfolio_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading local portfolio.json: {e}")
+
+    # Fallback to Supabase portfolio_positions table
+    try:
+        from app.core.database import get_supabase_client
+        client = get_supabase_client()
+        res = client.table("portfolio_positions").select("*, assets(symbol, name, market)").eq("is_open", True).execute()
+        if res.data:
+            holdings = []
+            for r in res.data:
+                sym = (r.get("assets") or {}).get("symbol", "").replace(".IS", "")
+                if sym:
+                    holdings.append({
+                        "symbol": sym,
+                        "strategy_type": "DIVIDEND" if "dividend" in (r.get("notes") or "").lower() else "SWING",
+                        "shares": float(r.get("quantity", 0)),
+                        "entry_price": float(r.get("avg_entry_price", 0)),
+                        "entry_date": str(r.get("entry_date") or ""),
+                        "stop_loss": float(r.get("stop_loss")) if r.get("stop_loss") else None,
+                        "target_price": float(r.get("target_price")) if r.get("target_price") else None,
+                        "currency": "TRY",
+                        "notes": r.get("notes") or ""
+                    })
+            if holdings:
+                return holdings
+    except Exception as e:
+        print(f"Note: Could not query Supabase for portfolio positions: {e}")
+
+    return []
+
+
 def build_portfolio_sheet(all_enriched, asset_info, fx_data):
     """
-    Builds the live Portfolio Tracker sheet from portfolio.json.
+    Builds the live Portfolio Tracker sheet from portfolio holdings.
     Computes real-time market value, cost basis, unrealized P&L (amount & %),
     today's change, portfolio weight %, and stop-loss risk alerts.
     """
-    portfolio_file = OUTPUT_DIR / "portfolio.json"
-    if not portfolio_file.exists():
-        return pd.DataFrame()
-        
-    try:
-        with open(portfolio_file, "r", encoding="utf-8") as f:
-            holdings = json.load(f)
-    except Exception as e:
-        print(f"Error loading portfolio.json: {e}")
+    holdings = load_portfolio_holdings()
+    if not holdings:
         return pd.DataFrame()
         
     # Get current USD/TRY rate for currency conversion
@@ -364,14 +400,8 @@ def build_dividend_sheet(all_enriched, asset_info, fx_data):
     ex-dividend dates, and dividend accumulation opportunity levels.
     """
     import yfinance as yf
-    portfolio_file = OUTPUT_DIR / "portfolio.json"
-    if not portfolio_file.exists():
-        return pd.DataFrame()
-        
-    try:
-        with open(portfolio_file, "r", encoding="utf-8") as f:
-            holdings = json.load(f)
-    except Exception:
+    holdings = load_portfolio_holdings()
+    if not holdings:
         return pd.DataFrame()
         
     # Get live USD/TRY rate

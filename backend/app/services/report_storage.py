@@ -141,7 +141,7 @@ def upload_report_to_storage(
         client.storage.from_(BUCKET_NAME).upload(
             path=storage_path,
             file=file_bytes,
-            file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "upsert": "true"}
+            file_options={"content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "upsert": "false"}
         )
     except Exception as e:
         # Check if error is because bucket doesn't exist

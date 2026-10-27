@@ -25,6 +25,14 @@ backend/.env
 .env
 .env.local
 
+# Private User Portfolio & Financial Data
+portfolio.json
+portfolio_orders.json
+portfolio_transfers.json
+!portfolio.example.json
+!portfolio_orders.example.json
+!portfolio_transfers.example.json
+
 # Generated reports
 *.xlsx
 !sample-data/*.xlsx

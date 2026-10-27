@@ -1,0 +1,10 @@
+[
+  {
+    "id": "trans-example-1",
+    "transferType": "DEPOSIT",
+    "amount": 10000.00,
+    "currency": "TRY",
+    "transferDate": "2026-09-16",
+    "notes": "Initial capital deposit"
+  }
+]

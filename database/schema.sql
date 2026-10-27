@@ -230,3 +230,123 @@ SELECT
 FROM trade_signals ts
 JOIN assets a ON ts.asset_id = a.id
 WHERE ts.status = 'open';
+
+-- 9. report_files table (Immutable XLSX Storage Registry)
+CREATE TABLE IF NOT EXISTS report_files (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_type TEXT NOT NULL,
+    storage_path TEXT NOT NULL UNIQUE,
+    trading_date DATE NOT NULL,
+    generated_at TIMESTAMPTZ NOT NULL,
+    file_size_bytes BIGINT,
+    row_count INTEGER,
+    checksum_sha256 TEXT,
+    is_latest BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_report_files_type_latest ON report_files (report_type, is_latest);
+CREATE INDEX IF NOT EXISTS idx_report_files_trading_date ON report_files (trading_date DESC);
+
+-- 10. price_snapshots table
+CREATE TABLE IF NOT EXISTS price_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    snapshot_time TIMESTAMPTZ NOT NULL,
+    open NUMERIC(18,6),
+    high NUMERIC(18,6),
+    low NUMERIC(18,6),
+    close NUMERIC(18,6),
+    volume BIGINT,
+    source TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_snapshots_asset_time ON price_snapshots (asset_id, snapshot_time DESC);
+
+-- 11. stock_movements table
+CREATE TABLE IF NOT EXISTS stock_movements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    movement_time TIMESTAMPTZ NOT NULL,
+    direction TEXT,
+    change_amount NUMERIC(18,6),
+    change_pct NUMERIC(10,4),
+    signal TEXT,
+    score NUMERIC(8,4),
+    metadata JSONB DEFAULT '{}'::jsonb,
+    report_file_id UUID REFERENCES report_files(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_movements_asset_time ON stock_movements (asset_id, movement_time DESC);
+
+-- 12. opening_direction table
+CREATE TABLE IF NOT EXISTS opening_direction (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id UUID REFERENCES assets(id) ON DELETE CASCADE,
+    symbol TEXT NOT NULL,
+    market TEXT NOT NULL,
+    date DATE NOT NULL,
+    prev_close NUMERIC(18,6),
+    open_price NUMERIC(18,6),
+    current_price NUMERIC(18,6),
+    gap_percent NUMERIC(8,4) NOT NULL,
+    gap_type TEXT NOT NULL,
+    orb_status TEXT NOT NULL,
+    bias TEXT NOT NULL,
+    volume_spike BOOLEAN NOT NULL DEFAULT FALSE,
+    recommended_action TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_opening_direction_date ON opening_direction (date DESC);
+
+-- 13. market_catalysts table
+CREATE TABLE IF NOT EXISTS market_catalysts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    asset_id UUID REFERENCES assets(id) ON DELETE CASCADE,
+    symbol VARCHAR(20) NOT NULL,
+    market VARCHAR(20) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    title TEXT NOT NULL,
+    details TEXT,
+    ai_verdict VARCHAR(20) NOT NULL,
+    ai_takeaway TEXT NOT NULL,
+    impact_score NUMERIC(5,2),
+    source_url TEXT,
+    published_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_market_catalysts_published ON market_catalysts (published_at DESC);
+
+-- 14. portfolio_orders table
+CREATE TABLE IF NOT EXISTS portfolio_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_ref VARCHAR(50) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(10) NOT NULL CHECK (side IN ('BUY', 'SELL')),
+    order_type VARCHAR(20) DEFAULT 'Limit',
+    quantity NUMERIC(18,6) NOT NULL,
+    price NUMERIC(18,6) NOT NULL,
+    total_amount NUMERIC(18,6) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'TRY',
+    executed_at TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) DEFAULT 'Filled',
+    notes TEXT,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 15. portfolio_transfers table
+CREATE TABLE IF NOT EXISTS portfolio_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transfer_type VARCHAR(20) NOT NULL CHECK (transfer_type IN ('DEPOSIT', 'WITHDRAWAL')),
+    amount NUMERIC(18,6) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'TRY',
+    transfer_date DATE NOT NULL,
+    notes TEXT,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);

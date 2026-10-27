@@ -1,0 +1,34 @@
+[
+  {
+    "id": "ord-example-1",
+    "ref": "#0003I3",
+    "symbol": "ISMEN",
+    "name": "İş Yatırım Menkul Değerler",
+    "market": "BIST",
+    "side": "BUY",
+    "orderType": "Limit",
+    "quantity": 66,
+    "price": 31.08,
+    "totalValue": 2051.28,
+    "currency": "TRY",
+    "dateTime": "28.09.26 - 11:37",
+    "status": "Filled",
+    "dcaNote": "DCA Tranche 2 - Lowered average cost to ₺31.89"
+  },
+  {
+    "id": "ord-example-2",
+    "ref": "#0003FZ",
+    "symbol": "TURSG",
+    "name": "Türkiye Sigorta",
+    "market": "BIST",
+    "side": "BUY",
+    "orderType": "Limit",
+    "quantity": 186,
+    "price": 5.40,
+    "totalValue": 1004.40,
+    "currency": "TRY",
+    "dateTime": "28.09.26 - 11:31",
+    "status": "Filled",
+    "dcaNote": "DCA Tranche 4 - Lowered average cost to ₺5.85"
+  }
+]
