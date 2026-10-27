@@ -107,33 +107,33 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
             if (isTargetHit) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60 mt-1.5 w-fit">
-                  <span>🏆</span>
-                  <span>{t.tradeCard.target1Hit} <strong>{formatPrice(signal.targetPrice)}</strong> (+{targetGainPct}%) · {t.tradeCard.inTakeProfitZone}</span>
+                <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60 mt-1.5 max-w-full leading-snug">
+                  <span className="shrink-0">🏆</span>
+                  <span className="truncate">{t.tradeCard.target1Hit} <strong>{formatPrice(signal.targetPrice)}</strong> (+{targetGainPct}%) · {t.tradeCard.inTakeProfitZone}</span>
                 </div>
               );
             }
             if (isStoppedOut) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/60 mt-1.5 w-fit">
-                  <span>🛑</span>
-                  <span>{t.tradeCard.stoppedOut} <strong>{formatPrice(signal.stopLoss)}</strong> · {t.tradeCard.setupInvalidated}</span>
+                <div className="flex items-center gap-1.5 text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800/60 mt-1.5 max-w-full leading-snug">
+                  <span className="shrink-0">🛑</span>
+                  <span className="truncate">{t.tradeCard.stoppedOut} <strong>{formatPrice(signal.stopLoss)}</strong> · {t.tradeCard.setupInvalidated}</span>
                 </div>
               );
             }
             if (signal.isReconfirmed) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 w-fit">
-                  <span>🔄</span>
-                  <span>{t.tradeCard.activeSetup} <strong>{signal.date}</strong> · {t.tradeCard.holdingInBuyZone}</span>
+                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 max-w-full leading-snug">
+                  <span className="shrink-0">🔄</span>
+                  <span className="truncate">{t.tradeCard.activeSetup} <strong>{signal.date}</strong> · {t.tradeCard.holdingInBuyZone}</span>
                 </div>
               );
             }
             if (signal.date < new Date().toISOString().slice(0, 10)) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 w-fit">
-                  <span>🗓️</span>
-                  <span>{t.tradeCard.activeSwing} <strong>{signal.date}</strong></span>
+                <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 max-w-full leading-snug">
+                  <span className="shrink-0">🗓️</span>
+                  <span className="truncate">{t.tradeCard.activeSwing} <strong>{signal.date}</strong></span>
                 </div>
               );
             }
@@ -261,16 +261,16 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
       </div>
       
       <div className="p-4 flex-grow">
-        <div className="grid grid-cols-3 gap-2 mb-4 text-sm">
-          <div className="flex flex-col">
-            <span className="text-gray-500 dark:text-gray-400 text-xs">{t.tradeCard.entry}</span>
-            <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.entryPrice)}</span>
+        <div className="grid grid-cols-3 gap-2 mb-4 text-sm items-start">
+          <div className="flex flex-col min-w-0">
+            <span className="text-gray-500 dark:text-gray-400 text-xs truncate">{t.tradeCard.entry}</span>
+            <span className="font-semibold text-gray-900 dark:text-white truncate">{formatPrice(signal.entryPrice)}</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-red-500 dark:text-red-400 text-xs">{t.tradeCard.stopLoss}</span>
-            <span className="font-semibold text-gray-900 dark:text-white">{formatPrice(signal.stopLoss)}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="text-red-500 dark:text-red-400 text-xs truncate">{t.tradeCard.stopLoss}</span>
+            <span className="font-semibold text-gray-900 dark:text-white truncate">{formatPrice(signal.stopLoss)}</span>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
             {(() => {
               const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
               const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));

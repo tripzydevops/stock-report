@@ -955,6 +955,24 @@ export default function Home() {
     return true;
   });
 
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('marketpulse_right_panel_open');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
+  const handleToggleRightPanel = () => {
+    setIsRightPanelOpen(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('marketpulse_right_panel_open', String(next));
+      }
+      return next;
+    });
+  };
+
   const handleToggleSimpleMode = () => {
     setIsSimpleMode(prev => {
       const next = !prev;
@@ -2818,14 +2836,27 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-8">
-              <div className="lg:w-2/3 space-y-4">
+            <div className="flex flex-col xl:flex-row items-start gap-6">
+              <div className="flex-1 min-w-0 space-y-4 w-full">
                 <div className="flex justify-between items-end flex-wrap gap-2">
                   <div>
                     <h2 className="text-xl font-black text-gray-900 dark:text-white">{t.signals.title}</h2>
                     <p className="text-xs text-gray-500">{t.signals.subtitle}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleToggleRightPanel}
+                      className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      title={isRightPanelOpen ? (language === 'tr' ? 'Rehber / Hesaplayıcı Yan Panelini Gizle' : 'Hide Guide & Calculator Panel') : (language === 'tr' ? 'Rehber / Hesaplayıcı Yan Panelini Göster' : 'Show Guide & Calculator Panel')}
+                    >
+                      <span className="text-xs">{isRightPanelOpen ? '⇥' : '⇤'}</span>
+                      <span className="hidden sm:inline">
+                        {isRightPanelOpen 
+                          ? (language === 'tr' ? 'Yan Paneli Gizle' : 'Hide Panel') 
+                          : (language === 'tr' ? 'Yan Paneli Aç' : 'Show Panel')}
+                      </span>
+                    </button>
                     <button
                       onClick={() => handleTabChange('scorecard')}
                       className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 transition-colors inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
@@ -3077,7 +3108,11 @@ export default function Home() {
                   );
                 })()}
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className={`grid grid-cols-1 ${
+                  isRightPanelOpen 
+                    ? 'md:grid-cols-2 2xl:grid-cols-3' 
+                    : 'md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+                } gap-4`}>
                   {(() => {
                     const matchesStrategy = (sigStrategy: string, filterKey: string): boolean => {
                       if (!filterKey || filterKey === 'ALL') return true;
@@ -3208,71 +3243,83 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="lg:w-1/3">
-                {isSimpleMode ? (
-                  <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-750 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">🌱</span>
-                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                          {language === 'tr' ? 'Yeni Başlayanlar Rehberi' : 'Beginner Safety Guide'}
-                        </h3>
+              {isRightPanelOpen && (
+                <div className="w-full xl:w-80 2xl:w-96 shrink-0 space-y-4">
+                  {isSimpleMode ? (
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-750 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🌱</span>
+                          <h3 className="font-bold text-gray-900 dark:text-white text-sm">
+                            {language === 'tr' ? 'Yeni Başlayanlar Rehberi' : 'Beginner Safety Guide'}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                            {language === 'tr' ? 'Sade Mod' : 'Simple'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleToggleRightPanel}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                            title={language === 'tr' ? 'Paneli Kapat' : 'Close Panel'}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
-                        {language === 'tr' ? 'Sade Mod' : 'Simple'}
-                      </span>
+
+                      <div className="space-y-3 text-xs">
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                            <span>💧</span>
+                            <span>{language === 'tr' ? 'Kural 1: Kademeli Alım (DCA)' : 'Rule 1: Staggered DCA'}</span>
+                          </span>
+                          <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                            {language === 'tr'
+                              ? 'Tüm paranızla tek seferde alım yapmayın. Parayı 3 eşit parçaya bölüp, hisse düştükçe parça parça alarak ortalama maliyetinizi düşürün.'
+                              : 'Never invest all your cash at one price. Divide your capital into 3 tranches and buy progressively as the stock dips.'}
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                            <span>💰</span>
+                            <span>{language === 'tr' ? 'Kural 2: Temettü Kartopu' : 'Rule 2: Dividend Snowball'}</span>
+                          </span>
+                          <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                            {language === 'tr'
+                              ? 'ISMEN, TURSG, TUPRS gibi kârlı şirketler hisse fiyatı düşse bile hesabınıza nakit temettü yatırır. Bu nakitle tekrar alım yaparak servetinizi büyütün.'
+                              : 'High-quality dividend payers continue distributing cash even during corrections, compounding your portfolio over time.'}
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
+                          <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                            <span>🛡️</span>
+                            <span>{language === 'tr' ? 'Kural 3: Panik Satışı Yapmayın' : 'Rule 3: Avoid Panic Selling'}</span>
+                          </span>
+                          <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
+                            {language === 'tr'
+                              ? 'Borsa düşüşleri geçicidir. Zararına panik satışı yapmak yerine sakin kalarak bilançosu güçlü, borçsuz şirketlerde kalın.'
+                              : 'Market corrections are temporary. Avoid panic selling fundamentally sound companies at the market bottom.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleTabChange('dividend')}
+                        className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <span>🤖</span>
+                        <span>{language === 'tr' ? 'AI Temettü Danışmanına Soru Sor →' : 'Ask AI Dividend Advisor →'}</span>
+                      </button>
                     </div>
-
-                    <div className="space-y-3 text-xs">
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
-                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>💧</span>
-                          <span>{language === 'tr' ? 'Kural 1: Kademeli Alım (DCA)' : 'Rule 1: Staggered DCA'}</span>
-                        </span>
-                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
-                          {language === 'tr'
-                            ? 'Tüm paranızla tek seferde alım yapmayın. Parayı 3 eşit parçaya bölüp, hisse düştükçe parça parça alarak ortalama maliyetinizi düşürün.'
-                            : 'Never invest all your cash at one price. Divide your capital into 3 tranches and buy progressively as the stock dips.'}
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
-                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>💰</span>
-                          <span>{language === 'tr' ? 'Kural 2: Temettü Kartopu' : 'Rule 2: Dividend Snowball'}</span>
-                        </span>
-                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
-                          {language === 'tr'
-                            ? 'ISMEN, TURSG, TUPRS gibi kârlı şirketler hisse fiyatı düşse bile hesabınıza nakit temettü yatırır. Bu nakitle tekrar alım yaparak servetinizi büyütün.'
-                            : 'High-quality dividend payers continue distributing cash even during corrections, compounding your portfolio over time.'}
-                        </p>
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-750/50 border border-slate-200/60 dark:border-slate-700/60 space-y-1">
-                        <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>🛡️</span>
-                          <span>{language === 'tr' ? 'Kural 3: Panik Satışı Yapmayın' : 'Rule 3: Avoid Panic Selling'}</span>
-                        </span>
-                        <p className="text-slate-600 dark:text-slate-400 text-[11px] leading-relaxed">
-                          {language === 'tr'
-                            ? 'Borsa düşüşleri geçicidir. Zararına panik satışı yapmak yerine sakin kalarak bilançosu güçlü, borçsuz şirketlerde kalın.'
-                            : 'Market corrections are temporary. Avoid panic selling fundamentally sound companies at the market bottom.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleTabChange('dividend')}
-                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
-                    >
-                      <span>🤖</span>
-                      <span>{language === 'tr' ? 'AI Temettü Danışmanına Soru Sor →' : 'Ask AI Dividend Advisor →'}</span>
-                    </button>
-                  </div>
-                ) : (
-                  <PositionCalculator selectedTrade={calcTrade} />
-                )}
-              </div>
+                  ) : (
+                    <PositionCalculator selectedTrade={calcTrade} />
+                  )}
+                </div>
+              )}
             </div>
 
             {!isSimpleMode && (
