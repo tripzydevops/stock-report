@@ -1691,7 +1691,9 @@ export default function Home() {
     try {
       setIsRefreshing(true);
       setSyncFeedback({
-        message: triggerCloudCrawl ? '⚡ Fetching real-time quotes & crawling market...' : '🔄 Pulling live market quotes from exchange...',
+        message: triggerCloudCrawl
+          ? (language === 'tr' ? '⚡ Canlı fiyatlar çekiliyor & piyasa taranıyor...' : '⚡ Fetching real-time quotes & crawling market...')
+          : (language === 'tr' ? '🔄 BIST & US anlık fiyatları senkronize ediliyor...' : '🔄 Pulling live market quotes from exchange...'),
         type: 'info'
       });
 
@@ -1704,7 +1706,10 @@ export default function Home() {
         });
         const json = await res.json();
         if (json.message) {
-          setSyncFeedback({ message: json.message, type: 'success' });
+          setSyncFeedback({
+            message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
+            type: 'success'
+          });
         }
       } catch (e) {
         console.warn('Sync API request warning:', e);
@@ -1714,9 +1719,16 @@ export default function Home() {
       await loadData(true);
       const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setLastRefreshedAt(nowStr);
+      setSyncFeedback({
+        message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : '✅ Market data synchronized successfully',
+        type: 'success'
+      });
       setTimeout(() => setSyncFeedback(null), 5000);
     } catch (err: any) {
-      setSyncFeedback({ message: `⚠️ Refresh failed: ${err.message || err}`, type: 'error' });
+      setSyncFeedback({
+        message: language === 'tr' ? `⚠️ Yenileme başarısız: ${err.message || err}` : `⚠️ Refresh failed: ${err.message || err}`,
+        type: 'error'
+      });
       setTimeout(() => setSyncFeedback(null), 5000);
     } finally {
       setIsRefreshing(false);
@@ -2614,8 +2626,43 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right: Date Filter Trigger & Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right: Sync Action + Date Filter Trigger & Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Highly Visible Live Sync Button (Mobile & Desktop) */}
+            <button
+              type="button"
+              onClick={() => handleTriggerSync(false)}
+              disabled={isRefreshing}
+              data-testid="mobile-sync-btn"
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 select-none ${
+                isRefreshing
+                  ? 'bg-blue-500/15 dark:bg-blue-500/25 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-600 ring-2 ring-blue-400/30'
+                  : 'bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-300/80 dark:border-emerald-700/80 hover:bg-emerald-500/20 active:bg-emerald-500/25'
+              }`}
+              title={language === 'tr' ? 'Piyasa Verilerini Canlı Senkronize Et' : 'Sync Live Market Data'}
+              aria-label={language === 'tr' ? 'Piyasa Verilerini Senkronize Et' : 'Sync Market Data'}
+            >
+              <svg
+                className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? 'animate-spin text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-[11px] font-black tracking-tight">
+                {isRefreshing
+                  ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...')
+                  : (language === 'tr' ? 'Yenile' : 'Sync')}
+              </span>
+              {!isRefreshing && (
+                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => setIsDateFilterExpanded(prev => !prev)}
@@ -2638,10 +2685,10 @@ export default function Home() {
 
             <button
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
               title="Yeni Takip Edilen Varlık Ekle"
             >
-              <span>+</span>
+              <span className="font-black text-sm leading-none">+</span>
               <span className="hidden sm:inline">{language === 'tr' ? 'Varlık Ekle' : 'Add Asset'}</span>
             </button>
           </div>
@@ -3304,6 +3351,8 @@ export default function Home() {
         catalystsCount={catalysts.length}
         isSimpleMode={isSimpleMode}
         onToggleSimpleMode={handleToggleSimpleMode}
+        onTriggerSync={handleTriggerSync}
+        isRefreshing={isRefreshing}
       />
 
       <AddAssetModal 

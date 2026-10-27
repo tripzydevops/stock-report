@@ -10,6 +10,8 @@ interface MobileBottomNavProps {
   catalystsCount?: number;
   isSimpleMode?: boolean;
   onToggleSimpleMode?: () => void;
+  onTriggerSync?: (crawler?: boolean) => void;
+  isRefreshing?: boolean;
 }
 
 export default function MobileBottomNav({
@@ -18,6 +20,8 @@ export default function MobileBottomNav({
   catalystsCount = 9,
   isSimpleMode = true,
   onToggleSimpleMode,
+  onTriggerSync,
+  isRefreshing = false,
 }: MobileBottomNavProps) {
   const { language } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -116,6 +120,37 @@ export default function MobileBottomNav({
                 ✕
               </button>
             </div>
+
+            {/* Quick Live Sync Card in Drawer */}
+            {onTriggerSync && (
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-transparent border border-emerald-500/25 dark:border-emerald-500/30">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <div>
+                    <p className="text-xs font-black text-slate-800 dark:text-slate-100">
+                      {language === 'tr' ? 'Canlı Veri Senkronizasyonu' : 'Live Data Synchronization'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {language === 'tr' ? 'BIST & US anlık fiyatları ve sinyalleri güncelle' : 'Fetch latest quotes, signals & portfolio values'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onTriggerSync(false)}
+                  disabled={isRefreshing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm shadow-emerald-600/30 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shrink-0"
+                >
+                  <svg className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>{isRefreshing ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...') : (language === 'tr' ? 'Şimdi Yenile' : 'Sync Now')}</span>
+                </button>
+              </div>
+            )}
 
             {/* Special Section: Secondary & Institutional Features */}
             <div className="space-y-2">

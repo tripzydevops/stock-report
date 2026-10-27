@@ -147,4 +147,70 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
       path: path.join(ARTIFACTS_DIR, 'mobile_help_center.png'),
     });
   });
+
+  test('6. Mobile sync button is prominent in top header, spins on click, and triggers feedback toast', async ({ page }) => {
+    // Top header sync button must be clearly visible on mobile viewport
+    const headerSyncBtn = page.locator('button[data-testid="mobile-sync-btn"]');
+    await expect(headerSyncBtn).toBeVisible();
+    await expect(headerSyncBtn).toContainText(/Yenile|Sync/);
+
+    // Verify it doesn't cause any horizontal overflow on small screen
+    const isOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > window.innerWidth;
+    });
+    expect(isOverflow).toBe(false);
+
+    // Take screenshot of header with prominent sync button
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_header_sync_button.png'),
+    });
+
+    // Click the sync button
+    await headerSyncBtn.click();
+
+    // Verify feedback toast appears or button triggers
+    const toast = page.locator('div:has-text("senkronize")');
+    await expect(toast.first()).toBeVisible({ timeout: 5000 });
+
+    // Take screenshot of active sync feedback
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_sync_feedback_toast.png'),
+    });
+  });
+
+  test('7. Mobile drawer and bottom action sheet also render prominent live sync buttons', async ({ page }) => {
+    // 1. Check Mobile Drawer Sync Button
+    const hamburgerBtn = page.getByTitle('Menüyü Aç');
+    await hamburgerBtn.click();
+
+    const drawerSyncBtn = page.locator('aside button:has-text("Piyasa Verilerini Canlı Yenile")');
+    await expect(drawerSyncBtn).toBeVisible();
+
+    // Capture screenshot of mobile drawer sync button
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_drawer_sync_card.png'),
+    });
+
+    // Close drawer
+    await page.locator('aside button:has-text("✕")').click();
+
+    // 2. Switch to Pro mode to open "Diğer" sheet
+    const simpleModeBtn = page.locator('nav[aria-label="Mobile Navigation"] button:has-text("Basit (Pro)")');
+    if (await simpleModeBtn.isVisible()) {
+      await simpleModeBtn.click(); // Switch to Pro mode so "Diğer" appears
+    }
+
+    const moreBtn = page.locator('nav[aria-label="Mobile Navigation"] button:has-text("Diğer")');
+    if (await moreBtn.isVisible()) {
+      await moreBtn.click();
+      const bottomSheetSyncBtn = page.locator('div:has-text("Canlı Veri Senkronizasyonu") button:has-text("Şimdi Yenile")');
+      await expect(bottomSheetSyncBtn.first()).toBeVisible();
+
+      // Capture screenshot of bottom sheet sync card
+      await page.screenshot({
+        path: path.join(ARTIFACTS_DIR, 'mobile_bottom_sheet_sync.png'),
+      });
+    }
+  });
 });
+

@@ -298,47 +298,88 @@ export default function SidebarNav({
           )}
 
           {/* Quick Actions Strip */}
-          <div className="flex items-center justify-between gap-1">
-            {/* Sync Button */}
-            <button
-              onClick={() => onTriggerSync?.(false)}
-              disabled={isRefreshing}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                isCollapsed && !isMobileOpen
-                  ? 'bg-transparent text-slate-500 hover:text-blue-600'
-                  : 'bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-              }`}
-              title="Verileri Canlı Senkronize Et"
-            >
-              <svg
-                className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          {isMobileOpen ? (
+            <div className="space-y-2">
+              <button
+                onClick={() => onTriggerSync?.(false)}
+                disabled={isRefreshing}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
+                title="Piyasa Verilerini Canlı Senkronize Et"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {(!isCollapsed || isMobileOpen) && <span>{isRefreshing ? '...' : (language === 'tr' ? 'Yenile' : 'Sync')}</span>}
-            </button>
+                <svg
+                  className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>
+                  {isRefreshing
+                    ? (language === 'tr' ? 'Veriler Yenileniyor...' : 'Syncing Data...')
+                    : (language === 'tr' ? 'Piyasa Verilerini Canlı Yenile' : 'Sync Live Market Data')}
+                </span>
+              </button>
+              <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
+                  className="flex-1 py-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 text-center transition-all cursor-pointer"
+                  title={language === 'tr' ? 'Switch to English' : 'Türkçe Dilini Seç'}
+                >
+                  {language === 'tr' ? '🇹🇷 Türkçe' : '🇬🇧 English'}
+                </button>
+                <button
+                  onClick={onOpenSettings}
+                  className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+                  title="Ayarlar & Profil"
+                >
+                  ⚙️
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-1">
+              {/* Sync Button */}
+              <button
+                onClick={() => onTriggerSync?.(false)}
+                disabled={isRefreshing}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                  isCollapsed
+                    ? 'bg-transparent text-slate-500 hover:text-blue-600'
+                    : 'bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                }`}
+                title="Verileri Canlı Senkronize Et"
+              >
+                <svg
+                  className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {!isCollapsed && <span>{isRefreshing ? '...' : (language === 'tr' ? 'Yenile' : 'Sync')}</span>}
+              </button>
 
-            {/* Language Switcher */}
-            <button
-              onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
-              className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-              title={language === 'tr' ? 'Switch to English' : 'Türkçe Dilini Seç'}
-            >
-              {language === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
-            </button>
+              {/* Language Switcher */}
+              <button
+                onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
+                className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+                title={language === 'tr' ? 'Switch to English' : 'Türkçe Dilini Seç'}
+              >
+                {language === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+              </button>
 
-            {/* Settings Trigger */}
-            <button
-              onClick={onOpenSettings}
-              className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-              title="Ayarlar & Profil"
-            >
-              ⚙️
-            </button>
-          </div>
+              {/* Settings Trigger */}
+              <button
+                onClick={onOpenSettings}
+                className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
+                title="Ayarlar & Profil"
+              >
+                ⚙️
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </>
