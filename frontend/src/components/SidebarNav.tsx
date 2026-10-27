@@ -44,6 +44,7 @@ interface SidebarNavProps {
   onOpenSettings?: () => void;
   onOpenShortcuts?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenReports?: () => void;
 }
 
 export default function SidebarNav({
@@ -60,6 +61,7 @@ export default function SidebarNav({
   onOpenSettings,
   onOpenShortcuts,
   onOpenAuthModal,
+  onOpenReports,
 }: SidebarNavProps) {
   const { language, setLanguage } = useLanguage();
   const { user } = useAuth();
@@ -254,6 +256,27 @@ export default function SidebarNav({
               {(!isCollapsed || isMobileOpen) && (
                 <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0">
                   {language === 'tr' ? 'REHBER' : 'GUIDE'}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onOpenReports?.();
+                if (isMobileOpen) onCloseMobile();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60"
+              title={language === 'tr' ? 'Excel Raporları & Geçmiş Arşiv' : 'Excel Reports & Session Archive'}
+            >
+              <span className="text-base shrink-0">📊</span>
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="truncate flex-1 text-left">
+                  {language === 'tr' ? 'Excel Rapor Arşivi' : 'Excel Reports'}
+                </span>
+              )}
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0">
+                  XLSX
                 </span>
               )}
             </button>

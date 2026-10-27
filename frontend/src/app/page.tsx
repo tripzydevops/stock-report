@@ -25,6 +25,7 @@ import { AuthModal } from '../components/AuthModal';
 import DateFilterBar from '../components/DateFilterBar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
+import ReportsArchiveModal from '../components/ReportsArchiveModal';
 import { DateRangeFilter, getDateRangeFromPreset, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -922,6 +923,7 @@ export default function Home() {
   const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
+  const [isReportsModalOpen, setIsReportsModalOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isSimpleMode, setIsSimpleMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -2537,7 +2539,9 @@ export default function Home() {
 
       // 'Escape': Close top active modal
       if (e.key === 'Escape') {
-        if (isShortcutsModalOpen) {
+        if (isReportsModalOpen) {
+          setIsReportsModalOpen(false);
+        } else if (isShortcutsModalOpen) {
           setIsShortcutsModalOpen(false);
         } else if (isAuthModalOpen) {
           setIsAuthModalOpen(false);
@@ -2560,6 +2564,7 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    isReportsModalOpen,
     isShortcutsModalOpen,
     isAuthModalOpen,
     isModalOpen,
@@ -2588,6 +2593,7 @@ export default function Home() {
         onOpenSettings={() => setIsSettingsSheetOpen(true)}
         onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenReports={() => setIsReportsModalOpen(true)}
       />
 
       {/* Right Main Content Canvas */}
@@ -3400,6 +3406,11 @@ export default function Home() {
       <KeyboardShortcutsModal
         isOpen={isShortcutsModalOpen}
         onClose={() => setIsShortcutsModalOpen(false)}
+      />
+
+      <ReportsArchiveModal
+        isOpen={isReportsModalOpen}
+        onClose={() => setIsReportsModalOpen(false)}
       />
 
       {/* Mobile Settings & Profile Slide-Up Action Sheet */}
