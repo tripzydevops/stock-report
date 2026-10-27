@@ -62,6 +62,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
   const getStrategyColor = (strategy: string) => {
     const s = strategy.toLowerCase();
+    if (s.includes('vwap')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/80 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700 font-bold';
+    if (s.includes('sweep')) return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/80 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 font-bold';
+    if (s.includes('strength') || s.includes('relative')) return 'bg-amber-100 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold';
     if (s.includes('breakout')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
     if (s.includes('pullback')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
     if (s.includes('squeeze')) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
@@ -195,6 +198,30 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             </span>
             {(() => {
               const strat = signal.strategy.toLowerCase();
+              if (strat.includes('vwap')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100/90 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Kurumsal Hacim Ağırlıklı Ortalama Fiyat (AVWAP) Desteği" : "Institutional Anchored Volume-Weighted Average Price support"}>
+                    <span>🏛️</span>
+                    <span>{language === 'tr' ? 'Kurumsal AVWAP' : 'Inst. AVWAP'}</span>
+                  </span>
+                );
+              }
+              if (strat.includes('sweep')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-100/90 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Stop Patlatma ve Akıllı Para Likidite Geri Alımı" : "Stop hunt flush absorbed by smart money"}>
+                    <span>🧲</span>
+                    <span>{language === 'tr' ? 'Likidite Avı' : 'Liquidity Sweep'}</span>
+                  </span>
+                );
+              }
+              if (strat.includes('strength') || strat.includes('relative')) {
+                return (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100/90 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Piyasa Düşerken Yükselen Kurumsal Güç Lideri" : "Leader advancing while benchmark struggles"}>
+                    <span>💎</span>
+                    <span>{language === 'tr' ? 'Göreceli Güç' : 'Relative Strength'}</span>
+                  </span>
+                );
+              }
               if (strat.includes('mean reversion') || strat.includes('reversion')) {
                 return (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100/90 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 flex items-center gap-1 shadow-2xs" title={language === 'tr' ? "Alt Bollinger Bandı (2.0σ) tepkisi ve aşırı satım dönüşü" : "Lower Bollinger Band (2.0σ) oversold rebound"}>

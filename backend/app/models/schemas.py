@@ -36,6 +36,9 @@ class StrategyName(str, Enum):
     volatility_squeeze = "volatility_squeeze"
     fund_momentum = "fund_momentum"
     mean_reversion = "mean_reversion"
+    anchored_vwap_bounce = "anchored_vwap_bounce"
+    liquidity_sweep_reclaim = "liquidity_sweep_reclaim"
+    relative_strength_divergence = "relative_strength_divergence"
 
 class AssetCreate(BaseModel):
     symbol: str = Field(max_length=20)

@@ -49,6 +49,12 @@ export function calculateExitDate(
     targetTradingDays = 20;
   } else if (stratUpper.includes('REVERSION') || stratUpper.includes('MEAN')) {
     targetTradingDays = 10;
+  } else if (stratUpper.includes('VWAP')) {
+    targetTradingDays = 15;
+  } else if (stratUpper.includes('SWEEP')) {
+    targetTradingDays = 10;
+  } else if (stratUpper.includes('STRENGTH') || stratUpper.includes('RS')) {
+    targetTradingDays = 18;
   }
 
   const start = startDateStr ? new Date(startDateStr) : new Date();

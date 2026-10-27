@@ -81,6 +81,24 @@ const INITIAL_SIGNALS: TradeSignal[] = [
     entryPrice: 82.10, stopLoss: 79.50, targetPrice: 88.00,
     confidence: 9, rationale: 'RSI rebounded from oversold territory (RSI 32). Dividend yield expanding above historical average.',
     market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD'
+  },
+  {
+    symbol: 'BIMAS', name: 'BİM Birleşik Mağazalar', strategy: 'Anchored VWAP Bounce',
+    entryPrice: 472.50, stopLoss: 458.00, targetPrice: 510.00,
+    confidence: 9, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (468.20). Low breached and quickly reclaimed with strong institutional buying wick.',
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
+  },
+  {
+    symbol: 'AAPL', name: 'Apple Inc.', strategy: 'Liquidity Sweep Reclaim',
+    entryPrice: 228.40, stopLoss: 222.50, targetPrice: 242.00,
+    confidence: 8, rationale: 'Flushed retail stop loss pool below 20-day swing low ($224.80) with a 45% absorption wick and reclaimed previous support on high volume.',
+    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD'
+  },
+  {
+    symbol: 'ASELS', name: 'Aselsan', strategy: 'Relative Strength Leader',
+    entryPrice: 64.80, stopLoss: 61.50, targetPrice: 72.00,
+    confidence: 9, rationale: 'Demonstrating significant Relative Strength (+6.2% vs XU100 -2.4% over 15 days). Holding firmly above 20 and 50 EMAs with institutional volume accumulation.',
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
   }
 ];
 
@@ -161,6 +179,9 @@ const INITIAL_DIVIDENDS: DividendAsset[] = [
 const INITIAL_STRATEGIES: StrategyStat[] = [
   { strategy: '50 EMA Pullback in Uptrend', totalTrades: 382, winRate: 68.4, profitFactor: 2.14, avgGain: 6.8, avgLoss: 2.9, expectancy: 0.85 },
   { strategy: 'Volatility Breakout (20D High + 2x Vol)', totalTrades: 426, winRate: 59.2, profitFactor: 1.86, avgGain: 8.4, avgLoss: 3.8, expectancy: 0.72 },
+  { strategy: 'Anchored VWAP Bounce', totalTrades: 194, winRate: 71.1, profitFactor: 2.38, avgGain: 7.9, avgLoss: 2.7, expectancy: 0.96 },
+  { strategy: 'Liquidity Sweep Reclaim', totalTrades: 168, winRate: 67.8, profitFactor: 2.22, avgGain: 9.1, avgLoss: 3.2, expectancy: 0.89 },
+  { strategy: 'Relative Strength Leader', totalTrades: 142, winRate: 69.7, profitFactor: 2.45, avgGain: 10.4, avgLoss: 3.6, expectancy: 1.05 },
   { strategy: 'Mean Reversion (RSI < 30)', totalTrades: 215, winRate: 56.8, profitFactor: 1.62, avgGain: 5.2, avgLoss: 3.1, expectancy: 0.48 },
   { strategy: '200 EMA Trend Following', totalTrades: 150, winRate: 54.0, profitFactor: 1.58, avgGain: 11.2, avgLoss: 5.4, expectancy: 0.65 }
 ];
@@ -2857,6 +2878,9 @@ export default function Home() {
                     if (filterKey === 'MOMENTUM_BREAKOUT') return s.includes('BREAKOUT') || (s.includes('MOMENTUM') && !s.includes('FUND'));
                     if (filterKey === 'VOLATILITY_SQUEEZE') return s.includes('SQUEEZE');
                     if (filterKey === 'FUND_MOMENTUM') return s.includes('FUND');
+                    if (filterKey === 'ANCHORED_VWAP') return s.includes('VWAP') || s.includes('AVWAP');
+                    if (filterKey === 'LIQUIDITY_SWEEP') return s.includes('SWEEP') || s.includes('HUNT') || s.includes('LIQUIDITY');
+                    if (filterKey === 'RELATIVE_STRENGTH') return s.includes('RELATIVE') || s.includes('STRENGTH') || s.includes('RS');
                     return s === filterKey.toUpperCase();
                   };
 
@@ -2908,6 +2932,9 @@ export default function Home() {
                     { key: 'MOMENTUM_BREAKOUT', icon: '⚡', label: language === 'tr' ? 'Momentum Kırılımı' : 'Momentum Breakout', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'MOMENTUM_BREAKOUT')).length },
                     { key: 'VOLATILITY_SQUEEZE', icon: '💥', label: language === 'tr' ? 'Sıkışma Patlaması' : 'Volatility Squeeze', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'VOLATILITY_SQUEEZE')).length },
                     { key: 'FUND_MOMENTUM', icon: '🏦', label: language === 'tr' ? 'Fon Momentumu' : 'Fund Momentum', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'FUND_MOMENTUM')).length },
+                    { key: 'ANCHORED_VWAP', icon: '🏛️', label: language === 'tr' ? 'Kurumsal AVWAP' : 'Anchored VWAP', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'ANCHORED_VWAP')).length },
+                    { key: 'LIQUIDITY_SWEEP', icon: '🧲', label: language === 'tr' ? 'Likidite Avı & Geri Alım' : 'Liquidity Sweep', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'LIQUIDITY_SWEEP')).length },
+                    { key: 'RELATIVE_STRENGTH', icon: '💎', label: language === 'tr' ? 'Göreceli Güç Lideri' : 'Relative Strength Leader', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'RELATIVE_STRENGTH')).length },
                   ].filter(opt => opt.count > 0 || opt.key === selectedStrategyFilter);
 
                   const latestDate = activeDisplaySignals.length > 0 
@@ -3060,6 +3087,9 @@ export default function Home() {
                       if (filterKey === 'MOMENTUM_BREAKOUT') return s.includes('BREAKOUT') || (s.includes('MOMENTUM') && !s.includes('FUND'));
                       if (filterKey === 'VOLATILITY_SQUEEZE') return s.includes('SQUEEZE');
                       if (filterKey === 'FUND_MOMENTUM') return s.includes('FUND');
+                      if (filterKey === 'ANCHORED_VWAP') return s.includes('VWAP') || s.includes('AVWAP');
+                      if (filterKey === 'LIQUIDITY_SWEEP') return s.includes('SWEEP') || s.includes('HUNT') || s.includes('LIQUIDITY');
+                      if (filterKey === 'RELATIVE_STRENGTH') return s.includes('RELATIVE') || s.includes('STRENGTH') || s.includes('RS');
                       return s === filterKey.toUpperCase();
                     };
 

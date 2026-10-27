@@ -26,6 +26,7 @@ from pathlib import Path
 from app.services.data_fetcher import fetch_us_prices, fetch_bist_prices, fetch_fx_rate, _normalize_ohlcv_columns
 from app.services.indicators import compute_all_indicators
 from app.services.screener import run_all_screens
+from app.services.institutional_screener import run_institutional_screens
 from app.services.market_regime import evaluate_regime
 from app.services.risk_manager import calculate_position_size, calculate_risk_reward
 from app.services.trade_evaluator import backtest_all_historical_signals, calculate_performance_summary
@@ -556,11 +557,13 @@ def build_market_regime_sheet(us_data, bist_data):
 
 
 def build_trade_signals_sheet(all_enriched, asset_info):
-    """Run screeners and build trade signals sheet."""
-    signals = run_all_screens(all_enriched, asset_info)
+    """Run both standard and institutional screeners and build combined trade signals sheet."""
+    std_signals = run_all_screens(all_enriched, asset_info)
+    inst_signals = run_institutional_screens(all_enriched, asset_info)
+    all_signals = std_signals + inst_signals
     
     rows = []
-    for sig in signals:
+    for sig in all_signals:
         sym = sig.get("symbol", "").replace(".IS", "")
         info = asset_info.get(sig.get("symbol"), {})
         currency = info.get("Currency", "USD")
@@ -575,7 +578,7 @@ def build_trade_signals_sheet(all_enriched, asset_info):
         
         rows.append({
             "Symbol": sym,
-            "Market": info.get("Market", ""),
+            "Market": info.get("Market", "BIST" if ".IS" in sig.get("symbol", "") else "US"),
             "Strategy": sig.get("strategy", ""),
             "Signal Date": str(sig.get("signal_date", "")),
             "Entry Price": round(float(entry), 2) if entry else "",
@@ -588,6 +591,43 @@ def build_trade_signals_sheet(all_enriched, asset_info):
             "Currency": currency,
         })
     
+    return pd.DataFrame(rows)
+
+
+def build_institutional_signals_sheet(all_enriched, asset_info):
+    """Run institutional screeners (AVWAP, Liquidity Sweep, Relative Strength) and build dedicated tab."""
+    inst_signals = run_institutional_screens(all_enriched, asset_info)
+    
+    rows = []
+    for sig in inst_signals:
+        sym = sig.get("symbol", "").replace(".IS", "")
+        info = asset_info.get(sig.get("symbol"), {})
+        currency = info.get("Currency", "USD")
+        account = ACCOUNT_SIZE_USD if currency == "USD" else ACCOUNT_SIZE_TRY
+        
+        entry = sig.get("entry_price", 0)
+        stop = sig.get("stop_loss", 0)
+        target_1 = sig.get("target_1", 0)
+        target_2 = sig.get("target_2", 0)
+        
+        sizing = calculate_position_size(account, RISK_PCT, entry, stop) if entry and stop else {}
+        rr = calculate_risk_reward(entry, stop, target_1) if entry and stop and target_1 else 0
+        
+        rows.append({
+            "Symbol": sym,
+            "Market": info.get("Market", "BIST" if ".IS" in sig.get("symbol", "") else "US"),
+            "Institutional Strategy": sig.get("strategy", ""),
+            "Signal Date": str(sig.get("signal_date", "")),
+            "Entry Price": round(float(entry), 2) if entry else "",
+            "Stop Loss": round(float(stop), 2) if stop else "",
+            "Target 1": round(float(target_1), 2) if target_1 else "",
+            "Target 2": round(float(target_2), 2) if target_2 else "",
+            "R:R Ratio": round(float(rr), 2) if rr else "",
+            "Risk Amount": round(float(sizing.get("risk_amount", 0)), 2) if sizing else "",
+            "Shares to Buy": sizing.get("shares_to_buy", ""),
+            "Position Value": round(float(sizing.get("position_value", 0)), 2) if sizing else "",
+            "Currency": currency,
+        })
     return pd.DataFrame(rows)
 
 
@@ -776,6 +816,7 @@ def main():
         "📈 Scorecard & KPIs": kpi_df,
         "🔬 Strategy Breakdown": strat_df,
         "🎯 Trade Signals": build_trade_signals_sheet(all_enriched, asset_info),
+        "🏛️ Institutional Setups": build_institutional_signals_sheet(all_enriched, asset_info),
         "🚦 Market Regime": build_market_regime_sheet(us_data, bist_data),
         "📋 Assets": build_assets_sheet(us_data, bist_data),
         "💱 USD-TRY Rate": build_fx_sheet(fx_data, top_n_days=252),

@@ -493,6 +493,12 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
                 max_days = 15
             elif "reversion" in strat_lower:
                 max_days = 10
+            elif "vwap" in strat_lower:
+                max_days = 15
+            elif "sweep" in strat_lower:
+                max_days = 10
+            elif "strength" in strat_lower or "rs" in strat_lower:
+                max_days = 18
 
             # Calculate business days passed
             sig_date_str = str(orig.get("signal_date", ""))[:10]
