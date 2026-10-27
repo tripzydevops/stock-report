@@ -12,7 +12,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from pathlib import Path
 
 # Load env variables from backend/.env
@@ -180,6 +180,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
 
     price_snapshot_rows = []
     stock_movement_rows = []
+    latest_asset_quotes = {}
 
     for _, row in df_dash.iterrows():
         sym = str(row["Symbol"]).strip()
@@ -197,6 +198,13 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         v = _clean_float(row.get("Volume"))
         chg_pct = _clean_float(row.get("Change %"))
         chg_amt = (c - o) if (c is not None and o is not None) else None
+
+        latest_asset_quotes[asset_id] = {
+            "open": o,
+            "high": h,
+            "low": l,
+            "close": c
+        }
 
         price_snapshot_rows.append({
             "asset_id": asset_id,
@@ -413,44 +421,161 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
             "status": "open",
         })
         
-    if signal_rows:
+    try:
+        # USER CONSTRAINT: If user is holding the stock in portfolio_positions, NEVER remove or auto-archive it!
+        held_asset_ids = set()
         try:
-            # Preserve original trigger entry prices, stop-loss, targets, and trigger dates for existing open trades
-            existing_open = client.table("trade_signals").select("*").eq("status", "open").execute()
-            existing_map = {}
-            if existing_open.data:
-                for row in existing_open.data:
-                    existing_map[row["asset_id"]] = row
-            
-            final_signal_rows = []
-            seen_assets = set()
-            for sig in signal_rows:
-                aid = sig["asset_id"]
-                if aid in existing_map:
-                    # Keep original trigger setup and original trigger date
-                    orig = existing_map[aid]
-                    sig["entry_price"] = orig["entry_price"]
-                    sig["stop_loss"] = orig["stop_loss"]
-                    sig["target_1"] = orig["target_1"]
-                    sig["risk_reward_ratio"] = orig.get("risk_reward_ratio") or sig.get("risk_reward_ratio")
-                    sig["signal_date"] = orig["signal_date"]
-                    orig_rat = orig.get("ai_rationale", "")
-                    sig["ai_rationale"] = orig_rat if "RE-CONFIRMED" in orig_rat else f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
-                final_signal_rows.append(sig)
-                seen_assets.add(aid)
-
-            # Preserve existing open trades that did not trigger again today (they remain active until target/stop hit)
-            for aid, orig in existing_map.items():
-                if aid not in seen_assets:
-                    clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
-                    final_signal_rows.append(clean_orig)
-                    seen_assets.add(aid)
-
-            client.table("trade_signals").delete().eq("status", "open").execute()
-            client.table("trade_signals").insert(final_signal_rows).execute()
-            print(f"✅ Recorded {len(final_signal_rows)} active trade signals in Supabase (multi-day active setups & original trigger dates preserved).")
+            held_res = client.table("portfolio_positions").select("asset_id, quantity, is_open").eq("is_open", True).gt("quantity", 0).execute()
+            if held_res.data:
+                for p in held_res.data:
+                    if p.get("asset_id"):
+                        held_asset_ids.add(p["asset_id"])
         except Exception as e:
-            print(f"Error inserting signals: {e}")
+            print(f"Note checking held portfolio assets: {e}")
+
+        # Fetch current open trade signals from Supabase
+        existing_open = client.table("trade_signals").select("*").eq("status", "open").execute()
+        existing_map = {}
+        if existing_open.data:
+            for row in existing_open.data:
+                existing_map[row["asset_id"]] = row
+        
+        final_signal_rows = []
+        resolved_signals = []
+        seen_assets = set()
+        today_date = date.today()
+        today_str = today_date.strftime("%Y-%m-%d")
+
+        # 1. Process new daily triggers from spreadsheet
+        for sig in signal_rows:
+            aid = sig["asset_id"]
+            if aid in existing_map:
+                # Keep original trigger setup and original trigger date
+                orig = existing_map[aid]
+                sig["entry_price"] = orig["entry_price"]
+                sig["stop_loss"] = orig["stop_loss"]
+                sig["target_1"] = orig["target_1"]
+                sig["risk_reward_ratio"] = orig.get("risk_reward_ratio") or sig.get("risk_reward_ratio")
+                sig["signal_date"] = orig["signal_date"]
+                orig_rat = orig.get("ai_rationale", "")
+                sig["ai_rationale"] = orig_rat if "RE-CONFIRMED" in orig_rat else f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
+            final_signal_rows.append(sig)
+            seen_assets.add(aid)
+
+        # 2. Process existing open trades that did not re-trigger today
+        for aid, orig in existing_map.items():
+            if aid in seen_assets:
+                continue
+
+            # USER CRITICAL RULE: If the user holds this stock, DO NOT REMOVE OR ARCHIVE IT!
+            if aid in held_asset_ids:
+                clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
+                clean_orig["status"] = "open"
+                final_signal_rows.append(clean_orig)
+                seen_assets.add(aid)
+                continue
+
+            # For UNOWNED prospective signals: evaluate outcome against latest quotes and time-stop
+            entry_p = float(orig.get("entry_price") or 0)
+            stop_l = float(orig.get("stop_loss") or 0) if orig.get("stop_loss") else None
+            target_p = float(orig.get("target_1") or 0) if orig.get("target_1") else None
+            quote = latest_asset_quotes.get(aid, {})
+            high_p = quote.get("high")
+            low_p = quote.get("low")
+            close_p = quote.get("close")
+
+            # Determine strategy max holding days
+            strat_lower = str(orig.get("strategy", "")).lower()
+            max_days = 20
+            if "breakout" in strat_lower or "momentum" in strat_lower:
+                max_days = 12
+            elif "squeeze" in strat_lower:
+                max_days = 15
+            elif "reversion" in strat_lower:
+                max_days = 10
+
+            # Calculate business days passed
+            sig_date_str = str(orig.get("signal_date", ""))[:10]
+            days_passed = 0
+            try:
+                s_dt = datetime.strptime(sig_date_str, "%Y-%m-%d").date()
+                cur = s_dt
+                while cur < today_date:
+                    cur += timedelta(days=1)
+                    if cur.weekday() < 5:
+                        days_passed += 1
+            except Exception:
+                days_passed = 0
+
+            # Outcome Evaluation:
+            if low_p is not None and stop_l and low_p <= stop_l:
+                # Stopped out (Unowned) -> Archive to audit ledger
+                pnl = round(((stop_l - entry_p) / entry_p) * 100, 2) if entry_p > 0 else -5.0
+                resolved_signals.append({
+                    "asset_id": aid,
+                    "strategy": orig["strategy"],
+                    "signal_date": sig_date_str,
+                    "entry_price": entry_p,
+                    "stop_loss": stop_l,
+                    "target_1": target_p,
+                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
+                    "confidence_score": orig.get("confidence_score", 8.0),
+                    "ai_rationale": f"Disciplined stop loss triggered at {stop_l} (Low hit {low_p}). Archived to audit ledger.",
+                    "status": "stopped_out",
+                    "outcome_pnl_pct": pnl,
+                    "closed_at": today_str
+                })
+            elif high_p is not None and target_p and high_p >= target_p:
+                # Target hit (Unowned) -> Archive to audit ledger
+                pnl = round(((target_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 10.0
+                resolved_signals.append({
+                    "asset_id": aid,
+                    "strategy": orig["strategy"],
+                    "signal_date": sig_date_str,
+                    "entry_price": entry_p,
+                    "stop_loss": stop_l,
+                    "target_1": target_p,
+                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
+                    "confidence_score": orig.get("confidence_score", 8.0),
+                    "ai_rationale": f"Target 1 objective reached at {target_p} (High hit {high_p}). Archived to audit ledger.",
+                    "status": "target_hit",
+                    "outcome_pnl_pct": pnl,
+                    "closed_at": today_str
+                })
+            elif days_passed >= max_days:
+                # Expired (Unowned) -> Archive to audit ledger
+                exit_p = close_p or entry_p
+                pnl = round(((exit_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 0.0
+                resolved_signals.append({
+                    "asset_id": aid,
+                    "strategy": orig["strategy"],
+                    "signal_date": sig_date_str,
+                    "entry_price": entry_p,
+                    "stop_loss": stop_l,
+                    "target_1": target_p,
+                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
+                    "confidence_score": orig.get("confidence_score", 8.0),
+                    "ai_rationale": f"Max holding period ({max_days} trading days) expired without target. Closed at {exit_p}.",
+                    "status": "stopped_out" if pnl < 0 else "target_hit",
+                    "outcome_pnl_pct": pnl,
+                    "closed_at": today_str
+                })
+            else:
+                # Still within window and valid
+                clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
+                final_signal_rows.append(clean_orig)
+
+            seen_assets.add(aid)
+
+        # Clear existing open signals and replace with active open + record resolved to audit ledger
+        client.table("trade_signals").delete().eq("status", "open").execute()
+        if final_signal_rows:
+            client.table("trade_signals").insert(final_signal_rows).execute()
+        if resolved_signals:
+            client.table("trade_signals").insert(resolved_signals).execute()
+        print(f"✅ Processed trade signals: {len(final_signal_rows)} active open, {len(resolved_signals)} unowned resolved to audit ledger (Held stocks strictly preserved).")
+    except Exception as e:
+        print(f"Error processing trade signals lifecycle: {e}")
 
     # 6. Sync Portfolio Positions
     portfolio_file = Path(__file__).parent / "portfolio.json"

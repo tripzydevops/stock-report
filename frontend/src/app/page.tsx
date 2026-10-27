@@ -43,6 +43,7 @@ import {
 } from '../lib/supabaseClient';
 import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES, KNOWN_DIVIDEND_LIST } from '../lib/dividendForecastMath';
 import { calculateLedgerCash } from '../lib/cashLedger';
+import { calculateExitDate } from '../lib/tradeTiming';
 
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
   signals: { icon: '🎯', tr: 'Sinyaller', en: 'Signals' },
@@ -2818,10 +2819,18 @@ export default function Home() {
                           const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
                           const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
                           const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
+                          
+                          // USER CRITICAL RULE: If holding the stock, NEVER remove it!
+                          if (userHasShares) return true;
+
                           const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
                           const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
-                          if (isTargetHit && !userHasShares) return false;
-                          if (isStoppedOut && !userHasShares) return false;
+                          if (isTargetHit || isStoppedOut) return false;
+
+                          // Filter unowned expired setups
+                          const timing = calculateExitDate(sig.date, sig.strategy, false);
+                          if (timing.isExpired) return false;
+
                           return true;
                         }).length;
                         return `${count} ${t.common.active}`;
@@ -2835,9 +2844,10 @@ export default function Home() {
                   const todayStr = new Date().toISOString().slice(0, 10);
                   
                   // USER RULE: Filter signals so that:
-                  // - If a trade hits target and user kept shares for Target 2 -> it stays!
-                  // - If user sold all shares (or has 0 shares) -> it disappears from active trades!
-                  // - If a trade stopped out and user has 0 shares -> it disappears from active trades!
+                  // - If user is HOLDING the stock -> NEVER remove it! It stays visible with full position controls!
+                  // - If user has 0 shares:
+                  //   - If it hit target or stopped out -> filtered out (archived in Scorecard)
+                  //   - If its holding period expired -> filtered out (archived in Scorecard)
                   // Helper to match trade types across variations
                   const matchesStrategy = (sigStrategy: string, filterKey: string): boolean => {
                     if (!filterKey || filterKey === 'ALL') return true;
@@ -2855,11 +2865,27 @@ export default function Home() {
                     const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
                     const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
 
+                    // USER CRITICAL RULE: If user is holding the stock, NEVER remove it!
+                    if (userHasShares) {
+                      if (turmoilGuard && selectedStrategyFilter !== 'MEAN_REVERSION' && sig.strategy.toLowerCase().includes('reversion')) {
+                        return false;
+                      }
+                      if (dateFilter && dateFilter.preset !== 'ALL') {
+                        const matchesDate = isDateInRange(sig.date, dateFilter) || isDateInRange(sig.lastConfirmedDate, dateFilter);
+                        if (!matchesDate) return false;
+                      }
+                      return true;
+                    }
+
+                    // For unowned prospective signals:
                     const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
                     const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
 
-                    if (isTargetHit && !userHasShares) return false;
-                    if (isStoppedOut && !userHasShares) return false;
+                    if (isTargetHit || isStoppedOut) return false;
+
+                    // Exclude unowned setups whose time-stop horizon has expired
+                    const timing = calculateExitDate(sig.date, sig.strategy, false);
+                    if (timing.isExpired) return false;
 
                     // Turmoil Guard: When active, suppress dangerous Mean Reversion falling-knife trades
                     // BUT if the user explicitly selected 'MEAN_REVERSION' in the Trade Type dropdown, allow viewing them!

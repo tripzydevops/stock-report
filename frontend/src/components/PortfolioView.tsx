@@ -1523,9 +1523,13 @@ export default function PortfolioView({
                                   >
                                     🛡️ Breakeven
                                   </button>
+                                ) : item.stopLoss > 0 && item.currentPrice <= item.stopLoss ? (
+                                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-600 text-white animate-pulse block mt-0.5" title={language === 'tr' ? "Fiyat stop seviyesini kırdı — pozisyon portföyünüzde korunmaktadır" : "Price breached stop loss — position remains protected in your portfolio"}>
+                                    {language === 'tr' ? '⚠️ STOP DELİNDİ' : '⚠️ STOP BREACHED'}
+                                  </span>
                                 ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
                                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
-                                    ⚠️ AT STOP RISK
+                                    {language === 'tr' ? '⚠️ STOP RİSKİ' : '⚠️ STOP RISK'}
                                   </span>
                                 ) : (
                                   <span className="text-[10px] text-gray-500 block mt-0.5">
