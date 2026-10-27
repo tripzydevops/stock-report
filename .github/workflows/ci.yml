@@ -30,8 +30,10 @@ jobs:
       - name: Run Backend Tests
         env:
           PYTHONPATH: backend
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://dummy.supabase.co' }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'dummy-anon-key' }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || 'dummy-service-key' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'dummy-gemini-key' }}
         run: |
           pytest backend/tests -v
 
