@@ -67,6 +67,98 @@ def compute_52w_high_low(close: pd.Series) -> tuple[pd.Series, pd.Series]:
     low_52w = close.rolling(window=252, min_periods=1).min()
     return high_52w, low_52w
 
+def compute_supertrend(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = 10,
+    multiplier: float = 3.0,
+) -> tuple[pd.Series, pd.Series]:
+    """
+    Computes SuperTrend indicator and trend direction.
+    Returns: (supertrend_series, direction_series: 1 for Bullish, -1 for Bearish)
+    """
+    atr = compute_atr(high, low, close, period)
+    hl2 = (high + low) / 2.0
+    basic_upper = hl2 + (multiplier * atr)
+    basic_lower = hl2 - (multiplier * atr)
+
+    final_upper = pd.Series(0.0, index=close.index)
+    final_lower = pd.Series(0.0, index=close.index)
+    supertrend = pd.Series(0.0, index=close.index)
+    direction = pd.Series(1, index=close.index)
+
+    for i in range(len(close)):
+        if i == 0:
+            final_upper.iloc[i] = basic_upper.iloc[i]
+            final_lower.iloc[i] = basic_lower.iloc[i]
+            supertrend.iloc[i] = basic_lower.iloc[i]
+            direction.iloc[i] = 1
+            continue
+
+        prev_upper = final_upper.iloc[i-1]
+        prev_lower = final_lower.iloc[i-1]
+        prev_close = close.iloc[i-1]
+
+        # Upper band ratchet
+        if basic_upper.iloc[i] < prev_upper or prev_close > prev_upper:
+            final_upper.iloc[i] = basic_upper.iloc[i]
+        else:
+            final_upper.iloc[i] = prev_upper
+
+        # Lower band ratchet
+        if basic_lower.iloc[i] > prev_lower or prev_close < prev_lower:
+            final_lower.iloc[i] = basic_lower.iloc[i]
+        else:
+            final_lower.iloc[i] = prev_lower
+
+        # Direction flip
+        prev_supertrend = supertrend.iloc[i-1]
+        prev_dir = direction.iloc[i-1]
+
+        if prev_supertrend == prev_upper and close.iloc[i] > final_upper.iloc[i]:
+            direction.iloc[i] = 1
+            supertrend.iloc[i] = final_lower.iloc[i]
+        elif prev_supertrend == prev_lower and close.iloc[i] < final_lower.iloc[i]:
+            direction.iloc[i] = -1
+            supertrend.iloc[i] = final_upper.iloc[i]
+        else:
+            direction.iloc[i] = prev_dir
+            supertrend.iloc[i] = final_lower.iloc[i] if prev_dir == 1 else final_upper.iloc[i]
+
+    return supertrend, direction
+
+def compute_chaikin_money_flow(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    period: int = 20,
+) -> pd.Series:
+    """Computes Chaikin Money Flow (CMF)."""
+    hl_diff = high - low
+    # Avoid zero division
+    hl_diff = np.where(hl_diff == 0, 1e-8, hl_diff)
+    mfm = ((close - low) - (high - close)) / hl_diff
+    mfv = mfm * volume
+    vol_sum = volume.rolling(window=period).sum()
+    vol_sum = np.where(vol_sum == 0, 1e-8, vol_sum)
+    cmf = mfv.rolling(window=period).sum() / vol_sum
+    return pd.Series(cmf, index=close.index)
+
+def compute_vwap(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+) -> pd.Series:
+    """Computes cumulative Volume Weighted Average Price (VWAP)."""
+    typical_price = (high + low + close) / 3.0
+    cum_vol = volume.cumsum()
+    cum_vol = np.where(cum_vol == 0, 1e-8, cum_vol)
+    vwap = (typical_price * volume).cumsum() / cum_vol
+    return pd.Series(vwap, index=close.index)
+
 def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Computes and adds all indicators to the DataFrame."""
     if df.empty or 'close' not in df.columns:
@@ -94,5 +186,9 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     out['volume_ratio'] = compute_volume_ratio(volume, 20)
     
     out['high_52w'], out['low_52w'] = compute_52w_high_low(close)
+
+    out['supertrend'], out['supertrend_direction'] = compute_supertrend(high, low, close)
+    out['cmf_20'] = compute_chaikin_money_flow(high, low, close, volume)
+    out['vwap'] = compute_vwap(high, low, close, volume)
     
     return validate_indicators_dataframe(out, strict=False)

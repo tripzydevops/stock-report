@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import datetime, date
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 class AssetClass(str, Enum):
@@ -187,5 +188,63 @@ class StockMovementResponse(BaseModel):
     metadata: dict | None = None
     report_file_id: str | None = None
     created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class BacktestConfig(BaseModel):
+    initial_capital: float = 100_000.0
+    commission_bps: float = 10.0  # 10 bps = 0.10% per leg
+    slippage_bps: float = 5.0     # 5 bps = 0.05% per leg
+    risk_per_trade_pct: float = 1.0  # 1% equity risk per trade
+    max_open_positions: int = 10
+    max_hold_days: int = 20
+    risk_free_rate: float = 0.04  # 4% annual risk-free rate
+    model_config = ConfigDict(from_attributes=True)
+
+class BacktestTradeLog(BaseModel):
+    symbol: str
+    strategy: str
+    entry_date: str
+    entry_price: float
+    exit_date: str | None = None
+    exit_price: float
+    shares: int
+    position_value: float
+    pnl: float
+    pnl_pct: float
+    fees: float
+    days_held: int
+    outcome: str  # WIN, LOSS, OPEN
+    exit_reason: str  # TARGET_HIT, STOPPED_OUT, EXPIRED, ACTIVE
+    model_config = ConfigDict(from_attributes=True)
+
+class BacktestEquityPoint(BaseModel):
+    date: str
+    equity: float
+    cash: float
+    positions_value: float
+    drawdown_pct: float
+    model_config = ConfigDict(from_attributes=True)
+
+class BacktestResult(BaseModel):
+    config: BacktestConfig
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate: float
+    profit_factor: float
+    expectancy: float
+    initial_capital: float
+    final_equity: float
+    total_return_pct: float
+    cagr_pct: float
+    max_drawdown_pct: float
+    sharpe_ratio: float
+    sortino_ratio: float
+    calmar_ratio: float
+    avg_trade_pnl_pct: float
+    avg_holding_days: float
+    equity_curve: list[BacktestEquityPoint] = []
+    trades: list[BacktestTradeLog] = []
+    strategy_breakdown: dict[str, dict[str, Any]] = {}
     model_config = ConfigDict(from_attributes=True)
 

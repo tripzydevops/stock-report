@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { 
   createChart, 
   CandlestickSeries, 
@@ -8,8 +8,7 @@ import {
   LineSeries,
   LineStyle,
   ColorType,
-  IChartApi,
-  ISeriesApi
+  IChartApi
 } from 'lightweight-charts';
 
 export interface ChartPriceBar {
@@ -31,6 +30,27 @@ interface InteractiveCanvasChartProps {
   height?: number;
 }
 
+function calculateEMA(data: { time: string; close: number }[], period: number) {
+  if (data.length < period) return [];
+  const k = 2 / (period + 1);
+  const result: { time: string; value: number }[] = [];
+
+  // Initial SMA as seed for EMA
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += data[i].close;
+  }
+  let prevEma = sum / period;
+  result.push({ time: data[period - 1].time, value: Number(prevEma.toFixed(2)) });
+
+  for (let i = period; i < data.length; i++) {
+    const currentEma = data[i].close * k + prevEma * (1 - k);
+    result.push({ time: data[i].time, value: Number(currentEma.toFixed(2)) });
+    prevEma = currentEma;
+  }
+  return result;
+}
+
 export default function InteractiveCanvasChart({
   data,
   symbol,
@@ -42,7 +62,12 @@ export default function InteractiveCanvasChart({
 }: InteractiveCanvasChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
-  const [showBollinger, setShowBollinger] = useState(true);
+
+  const [showBollinger, setShowBollinger] = useState(false);
+  const [showEma20, setShowEma20] = useState(true);
+  const [showEma50, setShowEma50] = useState(true);
+  const [showEma200, setShowEma200] = useState(false);
+
   const [crosshairInfo, setCrosshairInfo] = useState<{
     time: string;
     open: number;
@@ -53,15 +78,15 @@ export default function InteractiveCanvasChart({
     volume?: number;
   } | null>(null);
 
-  useEffect(() => {
-    if (!chartContainerRef.current || !data || data.length === 0) return;
-
-    // Sort ascending by time (strict requirement of lightweight-charts)
-    const sortedData = [...data]
+  const sortedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    return [...data]
       .filter(d => d.open > 0 && d.close > 0 && d.time)
       .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  }, [data]);
 
-    if (sortedData.length === 0) return;
+  useEffect(() => {
+    if (!chartContainerRef.current || sortedData.length === 0) return;
 
     // Clean up any existing chart instance
     if (chartInstanceRef.current) {
@@ -122,14 +147,13 @@ export default function InteractiveCanvasChart({
       wickDownColor: '#ef4444'
     });
 
-    const candleData = sortedData.map(d => ({
+    candleSeries.setData(sortedData.map(d => ({
       time: d.time,
       open: d.open,
       high: d.high,
       low: d.low,
       close: d.close
-    }));
-    candleSeries.setData(candleData);
+    })));
 
     // 2. Volume Histogram Series (Bottom 25%)
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -147,12 +171,11 @@ export default function InteractiveCanvasChart({
       }
     });
 
-    const volumeData = sortedData.map(d => ({
+    volumeSeries.setData(sortedData.map(d => ({
       time: d.time,
       value: d.volume || 0,
       color: d.close >= d.open ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'
-    }));
-    volumeSeries.setData(volumeData);
+    })));
 
     // 3. Strategy Trigger Overlays (Entry, Stop Loss, Target)
     const currSym = currency === 'USD' ? '$' : '₺';
@@ -190,7 +213,52 @@ export default function InteractiveCanvasChart({
       });
     }
 
-    // 4. Bollinger Bands (20, 2.0σ) Overlay
+    // 4. EMA 20 Overlay (Amber)
+    if (showEma20 && sortedData.length >= 20) {
+      const ema20Data = calculateEMA(sortedData, 20);
+      if (ema20Data.length > 0) {
+        const ema20Series = chart.addSeries(LineSeries, {
+          color: '#f59e0b',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        ema20Series.setData(ema20Data);
+      }
+    }
+
+    // 5. EMA 50 Overlay (Cyan)
+    if (showEma50 && sortedData.length >= 50) {
+      const ema50Data = calculateEMA(sortedData, 50);
+      if (ema50Data.length > 0) {
+        const ema50Series = chart.addSeries(LineSeries, {
+          color: '#06b6d4',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        ema50Series.setData(ema50Data);
+      }
+    }
+
+    // 6. EMA 200 Overlay (Pink/Magenta)
+    if (showEma200 && sortedData.length >= 200) {
+      const ema200Data = calculateEMA(sortedData, 200);
+      if (ema200Data.length > 0) {
+        const ema200Series = chart.addSeries(LineSeries, {
+          color: '#ec4899',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false
+        });
+        ema200Series.setData(ema200Data);
+      }
+    }
+
+    // 7. Bollinger Bands (20, 2.0σ) Overlay
     if (showBollinger && sortedData.length >= 5) {
       const period = Math.min(20, sortedData.length);
       const upperData: { time: string; value: number }[] = [];
@@ -306,7 +374,24 @@ export default function InteractiveCanvasChart({
         chartInstanceRef.current = null;
       }
     };
-  }, [data, entryPrice, stopLoss, targetPrice, currency, height, showBollinger]);
+  }, [sortedData, entryPrice, stopLoss, targetPrice, currency, height, showBollinger, showEma20, showEma50, showEma200]);
+
+  const setZoom = (months: number) => {
+    if (!chartInstanceRef.current || sortedData.length === 0) return;
+    if (months === 0) {
+      chartInstanceRef.current.timeScale().fitContent();
+      return;
+    }
+    const lastDate = new Date(sortedData[sortedData.length - 1].time);
+    const startDate = new Date(lastDate);
+    startDate.setMonth(startDate.getMonth() - months);
+    const startStr = startDate.toISOString().split('T')[0];
+
+    chartInstanceRef.current.timeScale().setVisibleRange({
+      from: startStr as any,
+      to: sortedData[sortedData.length - 1].time as any
+    });
+  };
 
   const currSym = currency === 'USD' ? '$' : '₺';
 
@@ -314,23 +399,100 @@ export default function InteractiveCanvasChart({
     <div className="relative w-full rounded-2xl overflow-hidden border border-gray-800 bg-gray-950 shadow-2xl flex flex-col">
       {/* Real-Time Crosshair HUD Header */}
       <div className="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-black text-white font-mono text-sm">{symbol}</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">
-            Interactive Daily Candlesticks
+            Interactive Candlesticks
           </span>
+
+          {/* Indicator Toggles */}
+          <button
+            type="button"
+            onClick={() => setShowEma20(!showEma20)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all ${
+              showEma20 
+                ? 'bg-amber-950/80 text-amber-300 border-amber-600' 
+                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+            }`}
+            title="Exponential Moving Average (20 period)"
+          >
+            EMA 20
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEma50(!showEma50)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all ${
+              showEma50 
+                ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600' 
+                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+            }`}
+            title="Exponential Moving Average (50 period)"
+          >
+            EMA 50
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEma200(!showEma200)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all ${
+              showEma200 
+                ? 'bg-pink-950/80 text-pink-300 border-pink-600' 
+                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+            }`}
+            title="Exponential Moving Average (200 period)"
+          >
+            EMA 200
+          </button>
           <button
             type="button"
             onClick={() => setShowBollinger(!showBollinger)}
             className={`px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-all ${
               showBollinger 
-                ? 'bg-purple-950/90 text-purple-300 border-purple-600 shadow-xs' 
-                : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
+                ? 'bg-purple-950/90 text-purple-300 border-purple-600' 
+                : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
             }`}
-            title="Bollinger Bands (20 period, 2.0 standard deviation)"
+            title="Bollinger Bands (20 period, 2.0σ)"
           >
-            📊 BB (20, 2σ) {showBollinger ? 'ON' : 'OFF'}
+            BB (20, 2σ)
           </button>
+
+          {/* Timeframe Zoom Controls */}
+          <div className="flex items-center space-x-1 pl-2 border-l border-gray-800">
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            >
+              1M
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(3)}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            >
+              3M
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(6)}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            >
+              6M
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(12)}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            >
+              1Y
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(0)}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
+            >
+              ALL
+            </button>
+          </div>
         </div>
 
         {crosshairInfo && (
