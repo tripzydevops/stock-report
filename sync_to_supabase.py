@@ -164,22 +164,30 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         if not asset_id:
             continue
             
-        dt_str = str(row["Date"])[:10]
+        dt_str = str(row.get("Date", date.today()))[:10] if pd.notna(row.get("Date")) else str(date.today())
+        def _get_float(r, col):
+            if col in r and pd.notna(r[col]) and r[col] != "":
+                try:
+                    return float(r[col])
+                except (ValueError, TypeError):
+                    return None
+            return None
+
         indicator_rows.append({
             "asset_id": asset_id,
             "date": dt_str,
-            "ema_20": float(row["EMA 20"]) if pd.notna(row["EMA 20"]) and row["EMA 20"] != "" else None,
-            "ema_50": float(row["EMA 50"]) if pd.notna(row["EMA 50"]) and row["EMA 50"] != "" else None,
-            "ema_200": float(row["EMA 200"]) if pd.notna(row["EMA 200"]) and row["EMA 200"] != "" else None,
-            "rsi_14": float(row["RSI (14)"]) if pd.notna(row["RSI (14)"]) and row["RSI (14)"] != "" else None,
-            "atr_14": float(row["ATR (14)"]) if pd.notna(row["ATR (14)"]) and row["ATR (14)"] != "" else None,
-            "macd": float(row["MACD"]) if pd.notna(row["MACD"]) and row["MACD"] != "" else None,
-            "macd_signal": float(row["MACD Signal"]) if pd.notna(row["MACD Signal"]) and row["MACD Signal"] != "" else None,
-            "bb_upper": float(row["BB Upper"]) if pd.notna(row["BB Upper"]) and row["BB Upper"] != "" else None,
-            "bb_lower": float(row["BB Lower"]) if pd.notna(row["BB Lower"]) and row["BB Lower"] != "" else None,
-            "volume_ratio": float(row["Volume Ratio"]) if pd.notna(row["Volume Ratio"]) and row["Volume Ratio"] != "" else None,
-            "high_52w": float(row["52W High"]) if pd.notna(row["52W High"]) and row["52W High"] != "" else None,
-            "low_52w": float(row["52W Low"]) if pd.notna(row["52W Low"]) and row["52W Low"] != "" else None,
+            "ema_20": _get_float(row, "EMA 20"),
+            "ema_50": _get_float(row, "EMA 50"),
+            "ema_200": _get_float(row, "EMA 200"),
+            "rsi_14": _get_float(row, "RSI (14)") if _get_float(row, "RSI (14)") is not None else _get_float(row, "RSI"),
+            "atr_14": _get_float(row, "ATR (14)") if _get_float(row, "ATR (14)") is not None else _get_float(row, "ATR"),
+            "macd": _get_float(row, "MACD"),
+            "macd_signal": _get_float(row, "MACD Signal"),
+            "bb_upper": _get_float(row, "BB Upper"),
+            "bb_lower": _get_float(row, "BB Lower"),
+            "volume_ratio": _get_float(row, "Volume Ratio"),
+            "high_52w": _get_float(row, "52W High"),
+            "low_52w": _get_float(row, "52W Low"),
         })
         
     indicator_errors = 0
@@ -345,13 +353,16 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         if regime_status not in ["bullish", "neutral", "bearish"]:
             regime_status = "neutral"
             
+        close_val = row.get("Index Close") if pd.notna(row.get("Index Close")) else row.get("Close")
+        ema50_val = row.get("EMA 50")
+        ema200_val = row.get("EMA 200")
         regime_rows.append({
             "market": market_code,
             "date": today_str,
             "regime": regime_status,
-            "index_close": float(row["Index Close"]) if pd.notna(row["Index Close"]) else None,
-            "ema_50": float(row["EMA 50"]) if pd.notna(row["EMA 50"]) else None,
-            "ema_200": float(row["EMA 200"]) if pd.notna(row["EMA 200"]) else None,
+            "index_close": float(close_val) if pd.notna(close_val) else None,
+            "ema_50": float(ema50_val) if pd.notna(ema50_val) else None,
+            "ema_200": float(ema200_val) if pd.notna(ema200_val) else None,
             "notes": str(row.get("Notes", "")),
         })
         
@@ -685,6 +696,8 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
                         print(f"ℹ️ Preserving {len(existing_pos.data)} active user-managed positions in Supabase (no overwrite).")
                 except Exception as e:
                     print(f"Error checking/syncing portfolio positions: {e}")
+        except Exception as e:
+            print(f"Error loading portfolio.json: {e}")
     # 7. Final Sync Health Summary & Non-Zero Exit on Critical Failures
     print("\n" + "=" * 60)
     print("📊 SUPABASE SYNCHRONIZATION SUMMARY")

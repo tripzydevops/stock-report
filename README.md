@@ -2,8 +2,10 @@
 
 [![CI Pipeline](https://github.com/tripzydevops/stock-report/actions/workflows/ci.yml/badge.svg)](https://github.com/tripzydevops/stock-report/actions/workflows/ci.yml)
 [![MarketPulse Cron](https://github.com/tripzydevops/stock-report/actions/workflows/market_pulse_cron.yml/badge.svg)](https://github.com/tripzydevops/stock-report/actions/workflows/market_pulse_cron.yml)
+[![Supabase Migrations](https://github.com/tripzydevops/stock-report/actions/workflows/supabase_migrations.yml/badge.svg)](https://github.com/tripzydevops/stock-report/actions/workflows/supabase_migrations.yml)
 [![Database](https://img.shields.io/badge/Database-Supabase%20Postgres-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
-[![Framework](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Storage](https://img.shields.io/badge/Storage-marketpulse--reports-blue?logo=supabase&logoColor=white)](https://supabase.com)
+[![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Frontend](https://img.shields.io/badge/Frontend-Next.js%2015-black?logo=next.js&logoColor=white)](https://nextjs.org)
 [![Validation](https://img.shields.io/badge/Data%20Contracts-Pandera%20%26%20Pydantic-blue)](https://pandera.readthedocs.io)
 
@@ -117,14 +119,7 @@ Located in [`backend/app/models/data_contracts.py`](./backend/app/models/data_co
 - **Spot Trade Setup Sanity:** Rejects inverted long trades where $\text{Target} \le \text{Entry}$ or $\text{Stop} \ge \text{Entry}$.
 - **Automatic Sanitization:** Drops corrupt split/tick anomalies before database persistence without crashing batch pipelines.
 
-### 9. Supabase Migration Linter & Quality Gates
-Located in [`scripts/validate_migrations.py`](./scripts/validate_migrations.py):
-- Enforces strict timestamped naming convention (`YYYYMMDDHHMMSS_<name>.sql`).
-- Guards against destructive commands (`DROP SCHEMA public`, unchecked `TRUNCATE TABLE`).
-- Validates delimiter pairing and UTF-8 encoding across all migration files.
-- Automated as a dedicated GitHub Actions CI quality gate.
-
-### 10. Multi-Platform Responsiveness & Playwright E2E Verification
+### 9. Multi-Platform Responsiveness & Playwright E2E Verification
 Full end-to-end testing across both Desktop and Mobile devices using Playwright:
 - **Desktop Chrome (1440x900):** Collapsible sidebar, multi-column analytics, interactive charts, and zero horizontal overflow.
 - **Mobile Devices (Pixel 7 & iPhone 14):** 1-tap `MobileBottomNav`, off-canvas slideover drawer, prominent header sync buttons, and touch-optimized date filters.
@@ -151,20 +146,46 @@ All database tables include Row-Level Security (RLS) policies:
 | `portfolio_orders` | User trade execution history | `id` |
 | `portfolio_transfers` | Cash deposits and withdrawals | `id` |
 
-Migrations are located in [`supabase/migrations/`](./supabase/migrations/) and mirrored in [`database/schema.sql`](./database/schema.sql).
+### Supabase Storage Bucket
+MarketPulse stores immutable report workbooks in the **`marketpulse-reports`** bucket:
+- **Bucket Type:** Private (restricted via RLS).
+- **Naming Pattern:** `YYYY/MM/DD/MarketPulse_YYYY-MM-DDTHH-mm-ss-fff.xlsx`
+- **Security:** Presigned download URLs generated on demand with short expiration (`expiresIn: 3600`).
+- **Immutability:** Every upload enforces `upsert: false`.
+
+### Supabase Migrations
+All schema definitions are managed via timestamped SQL migrations in [`supabase/migrations/`](./supabase/migrations/):
+- [`20260922141511_initial_core_schema.sql`](./supabase/migrations/20260922141511_initial_core_schema.sql): Foundational tables (`assets`, `price_history`, `daily_indicators`, `trade_signals`, `market_regime`, `fx_rates`, `portfolio_positions`), views (`v_latest_prices`, `v_open_signals`), and RLS policies.
+- [`20261027000000_report_files_and_movements.sql`](./supabase/migrations/20261027000000_report_files_and_movements.sql): Immutable report storage registry (`report_files`), intraday point-in-time captures (`price_snapshots`), tick signal logs (`stock_movements`), ORB gap bias (`opening_direction`), KAP disclosures (`market_catalysts`), and user cash/order ledgers.
+
+**Migration Commands:**
+```bash
+# 1. Validate migrations locally (linting & safety checks)
+python scripts/validate_migrations.py
+
+# 2. Deploy migrations via Supabase CLI
+supabase link --project-ref <your-project-id>
+supabase db push
+```
 
 ---
 
-## 🛠️ Tech Stack & Requirements
+## 🔑 Required Secrets & Environment Variables
 
-- **Backend:** Python 3.11+, FastAPI, Pandas, Pandera, NumPy, OpenPyXL, YFinance, Pytest.
-- **Frontend:** Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Lucide Icons.
-- **Cloud & Database:** Supabase PostgreSQL, Supabase Storage, Supabase Auth.
-- **CI/CD:** GitHub Actions (Automated Pytest, TypeScript typecheck, Next.js build, and scheduled sync).
+| Variable | Description | Where Required |
+| :--- | :--- | :--- |
+| `SUPABASE_URL` | Supabase Project URL (`https://<id>.supabase.co`) | Backend, Sync, Cron, CI |
+| `SUPABASE_KEY` | Supabase Anon / Public API Key | Backend, Next.js Client |
+| `SUPABASE_SERVICE_KEY` | Supabase Service Role Key (Admin rights for uploads/sync) | Backend Sync, Cron Workflow |
+| `NEXT_PUBLIC_SUPABASE_URL` | Public Supabase URL exposed to browser | Frontend (`frontend/.env.local`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public Anon key exposed to browser | Frontend (`frontend/.env.local`) |
+| `GEMINI_API_KEY` | Google Gemini API Key for autonomous rationale generation | Backend AI Analyst |
+| `SUPABASE_ACCESS_TOKEN` | Personal Access Token for Supabase CLI | Migration Deployment Workflow |
+| `SUPABASE_DB_PASSWORD` | PostgreSQL Database password for Supabase CLI | Migration Deployment Workflow |
 
 ---
 
-## 🚀 Quickstart & Setup
+## 🚀 Quickstart & Local Setup
 
 ### 1. Clone & Environment Setup
 ```bash
@@ -172,13 +193,12 @@ git clone https://github.com/tripzydevops/stock-report.git
 cd stock-report
 ```
 
-Copy the environment templates:
+Configure local environment variables:
 ```bash
-cp .env.example .env
 cp backend/.env.example backend/.env
 ```
 
-Set your Supabase credentials in `.env`:
+Edit `backend/.env`:
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-anon-key
@@ -190,6 +210,7 @@ GEMINI_API_KEY=your-gemini-api-key
 ```bash
 cd backend
 python -m venv .venv
+
 # On Windows:
 .venv\Scripts\activate
 # On Linux/macOS:
@@ -198,9 +219,9 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run tests:
+Run backend test suite with coverage:
 ```bash
-pytest tests -v
+pytest tests -v --cov=app --cov-report=term-missing
 ```
 
 Run FastAPI server:
@@ -216,12 +237,33 @@ npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Running the Daily MarketPulse Pipeline
-To generate an immutable report and sync all data to Supabase:
+### 4. Running the MarketPulse Pipeline
+To generate an immutable report, upload to storage, and sync to Supabase:
 ```bash
 # From repository root:
 python export_to_spreadsheet.py
 ```
+
+### 5. Pipeline Liveness & Retention Health Monitor
+To verify report freshness, storage accessibility, and database row counts:
+```bash
+python scripts/check_pipeline_health.py --max-age-hours 36
+```
+
+---
+
+## ⏰ Automated Cron Schedules & Triggers
+
+The automated market pipeline is orchestrated via [`.github/workflows/market_pulse_cron.yml`](./.github/workflows/market_pulse_cron.yml):
+
+- **Cron Schedule (Mon–Fri UTC):**
+  - `07:15 UTC` (10:15 TRT): 15 minutes after BIST market open (ORB scans & opening gap bias).
+  - `13:45 UTC` (16:45 TRT): 15 minutes after US market open (US breakout & momentum scans).
+  - `15:15 UTC` (18:15 TRT): BIST market close (daily price history, indicators, and stage 2 checks).
+  - `20:15 UTC` (23:15 TRT): US market close (daily close evaluation, regime assessment, and summary).
+- **Manual Triggering:** Can be triggered anytime on-demand from GitHub Actions via the **Run workflow** (`workflow_dispatch`) button.
+- **Concurrency Guard:** Guarded with `group: market-pulse-cron, cancel-in-progress: false` to ensure scheduled runs never collide or terminate in-flight syncs.
+- **Storage Safety:** Generates and uploads `.xlsx` files exclusively to the `marketpulse-reports` Supabase Storage bucket and stores workflow artifacts. Does **not** commit binary spreadsheets into git.
 
 ---
 
@@ -234,13 +276,6 @@ This repository includes official reusable **Antigravity Skills** in [`.agents/s
 - **[`idempotent-sync`](./.agents/skills/idempotent-sync/SKILL.md):** Conflict keys, chunking, and non-destructive signal reconciliation.
 - **[`backtesting`](./.agents/skills/backtesting/SKILL.md):** Realistic trade friction (BIST commission + BSMV), slippage, and out-of-sample testing.
 - **[`frontend-data`](./.agents/skills/frontend-data/SKILL.md):** Typed API client standards, dynamic cash ledger math, and model portfolio cold start.
-
----
-
-## 🔄 CI/CD & Automated Pipelines
-
-- **CI Workflow (`.github/workflows/ci.yml`):** Runs on every push and pull request to `main`. Executes backend unit tests (`pytest`), frontend TypeScript typecheck (`npx tsc --noEmit`), and production build (`npm run build`).
-- **Daily Market Sync (`.github/workflows/market_pulse_cron.yml`):** Automated cron execution scheduled 4 times daily to capture opening gaps, midday trends, and end-of-day market wraps.
 
 ---
 

@@ -874,21 +874,26 @@ def main():
     
     # 7. Upload to Supabase Storage ('marketpulse-reports') and register in public.report_files
     report_record = None
+    has_supabase = bool(os.getenv("SUPABASE_URL"))
     try:
         print("☁️ Uploading immutable report to Supabase Storage & registering in report_files...")
         report_record = upload_report_to_storage(timestamped_output, dt=now_utc)
         print(f"✅ Report registered with ID: {report_record.get('id')} at path: {report_record.get('storage_path')}")
     except Exception as upload_err:
         print(f"⚠️ Report upload failed: {upload_err}")
+        if has_supabase:
+            raise RuntimeError(f"Critical failure: Supabase report upload failed: {upload_err}") from upload_err
         
     # 8. Record permanently into Supabase PostgreSQL database (idempotent upsert)
     try:
         from sync_to_supabase import sync_all_to_supabase
         sync_all_to_supabase(excel_path=timestamped_output, report_record=report_record)
     except Exception as e:
-        print(f"⚠️ Note: Database sync skipped: {e}")
-    
-    # 8. Summary
+        print(f"⚠️ Note: Database sync failed: {e}")
+        if has_supabase:
+            raise RuntimeError(f"Critical failure: Database sync failed: {e}") from e
+
+    # 9. Summary
     dashboard = sheets.get("📊 Dashboard", pd.DataFrame())
     signals = sheets.get("🎯 Trade Signals", pd.DataFrame())
     
@@ -897,7 +902,7 @@ def main():
     print(f"   • {len(signals)} new trade signals found")
     print(f"   • {len(outcomes_df)} historical trades evaluated")
     print(f"   • {len(sheets)} total tabs exported")
-    print(f"\n💡 Upload '{output_path}' to Google Drive → Open with Google Sheets")
+    print(f"\n💡 Upload '{timestamped_output}' to Google Drive → Open with Google Sheets")
 
 
 if __name__ == "__main__":

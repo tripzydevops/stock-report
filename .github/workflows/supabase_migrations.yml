@@ -1,0 +1,69 @@
+name: Supabase Migration CI & Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/validate_migrations.py'
+      - '.github/workflows/supabase_migrations.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/validate_migrations.py'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Verify migrations only (true) or push to live Supabase DB (false)'
+        required: true
+        default: 'true'
+
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
+
+jobs:
+  lint-and-validate:
+    name: Lint & Validate SQL Migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Lint Migration Files
+        run: python scripts/validate_migrations.py
+
+  deploy-migrations:
+    name: Deploy to Supabase Database
+    needs: lint-and-validate
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link and Push Migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID || 'erzxltcalghadzfevfjx' }}
+        run: |
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "🚀 Linking project $PROJECT_ID and pushing migrations..."
+            supabase link --project-ref "$PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+            supabase db push --password "$SUPABASE_DB_PASSWORD"
+            echo "✅ Supabase migrations deployed successfully!"
+          else
+            echo "ℹ️ SUPABASE_ACCESS_TOKEN or SUPABASE_DB_PASSWORD secret not set. Migrations validated; skipping remote db push."
+          fi
