@@ -14,10 +14,19 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'Desktop Chrome',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+      },
+      testMatch: /desktop-view\.spec\.ts/,
+    },
+    {
       name: 'Mobile Chrome (Pixel 7)',
       use: {
         ...devices['Pixel 7'],
       },
+      testMatch: /mobile-view\.spec\.ts/,
     },
     {
       name: 'Mobile iPhone Emulation (iPhone 14 / Chromium)',
@@ -29,6 +38,7 @@ export default defineConfig({
         hasTouch: true,
         userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       },
+      testMatch: /mobile-view\.spec\.ts/,
     },
   ],
 });

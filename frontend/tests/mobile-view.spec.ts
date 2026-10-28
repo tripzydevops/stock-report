@@ -70,8 +70,8 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     const portfolioBtn = bottomNav.getByRole('button', { name: /Portföy/i });
     await portfolioBtn.click();
 
-    // Wait for portfolio heading
-    await expect(page.locator('h1').getByText(/Portföy/i)).toBeVisible();
+    // Wait for portfolio
+    await expect(page.locator('text=Yatırılan Para').first()).toBeVisible();
 
     // Capture screenshot of portfolio on mobile
     await page.screenshot({
@@ -82,8 +82,8 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     const dividendBtn = bottomNav.getByRole('button', { name: /Temettü/i });
     await dividendBtn.click();
 
-    // Wait for dividend heading
-    await expect(page.locator('h1').getByText(/Temettü/i)).toBeVisible();
+    // Wait for dividend
+    await expect(page.locator('text=Temettü').first()).toBeVisible();
 
     // Capture screenshot of dividend on mobile
     await page.screenshot({

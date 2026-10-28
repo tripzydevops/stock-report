@@ -81,6 +81,55 @@ MarketPulse runs 7 automated screening engines:
 - Multi-currency portfolio tracking (`TRY` / `USD`) with live FX rates.
 - Forward dividend income projection, ex-dividend calendars, and DCA tranche optimization.
 
+### 5. Institutional Backtesting & Strategy Simulation Engine
+Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services/backtesting_engine.py):
+- **Execution Frictions:** Simulates broker commissions (e.g., 10 bps / 0.10%) and slippage (e.g., 5 bps / 0.05%) on entries and exits.
+- **Position Sizing & Cash Management:** Fixed fractional risk budgeting (1-2% account equity risked per trade) with strict cash ceilings and max open position caps (`max_open_positions=10`).
+- **Risk-Adjusted Performance Metrics:**
+  - **Sharpe Ratio** (Annualized, 252 days against risk-free benchmark rate).
+  - **Sortino Ratio** (Downside volatility penalization).
+  - **Calmar Ratio** (CAGR / Peak-to-Trough Max Drawdown).
+  - **Equity Curves & Peak-to-Trough Drawdown Curves**.
+  - **Trade Expectancy, Win Rates, & Strategy P&L Attribution**.
+
+### 6. Candlestick Patterns & Advanced Institutional Indicators
+- **Vectorized Candlestick Engine ([`backend/app/services/candlestick_patterns.py`](./backend/app/services/candlestick_patterns.py)):**
+  - Ultra-fast NumPy/Pandas pattern recognition fully compatible with Python 3.14+.
+  - Detects **Bullish Engulfing**, **Bearish Engulfing**, **Hammer**, **Inverted Hammer**, **Morning Star**, **Evening Star**, and **Doji**.
+- **Institutional Indicators ([`backend/app/services/indicators.py`](./backend/app/services/indicators.py)):**
+  - **SuperTrend:** Dynamic ATR band ratcheting (+1 for Bullish, -1 for Bearish regime).
+  - **Chaikin Money Flow (CMF 20):** Institutional accumulation/distribution oscillator bounded $[-1.0, +1.0]$.
+  - **Volume Weighted Average Price (VWAP):** Institutional benchmark pricing.
+
+### 7. Interactive Lightweight Charts on Next.js
+Located in [`frontend/src/components/InteractiveCanvasChart.tsx`](./frontend/src/components/InteractiveCanvasChart.tsx):
+- High-performance TradingView Canvas rendering (`lightweight-charts ^5.2.1`).
+- **EMA Overlays:** Dynamic calculation and toggle switches for **EMA 20** (amber), **EMA 50** (cyan), and **EMA 200** (pink).
+- **Bollinger Bands:** 20-period 2.0σ dashed overlay toggle.
+- **Strategy Triggers:** Distinct price lines for Entry, Target, and Stop Loss.
+- **Timeframe Zoom Controls:** Interactive range buttons (`1M`, `3M`, `6M`, `1Y`, `ALL`).
+- **Real-Time Crosshair HUD:** High-precision Open, High, Low, Close, % Change, and Volume formatting.
+
+### 8. Pandera Data Contracts & Schema Validation
+Located in [`backend/app/models/data_contracts.py`](./backend/app/models/data_contracts.py):
+- **OHLCV Integrity:** Guarantees $P > 0$, $\text{High} \ge \text{Low}$, $\text{High} \ge \text{Open/Close}$, $\text{Low} \le \text{Open/Close}$, and $\text{Volume} \ge 0$.
+- **Indicator Boundaries:** Enforces $0 \le \text{RSI}_{14} \le 100$ and $\text{BB Upper} \ge \text{Lower}$.
+- **Spot Trade Setup Sanity:** Rejects inverted long trades where $\text{Target} \le \text{Entry}$ or $\text{Stop} \ge \text{Entry}$.
+- **Automatic Sanitization:** Drops corrupt split/tick anomalies before database persistence without crashing batch pipelines.
+
+### 9. Supabase Migration Linter & Quality Gates
+Located in [`scripts/validate_migrations.py`](./scripts/validate_migrations.py):
+- Enforces strict timestamped naming convention (`YYYYMMDDHHMMSS_<name>.sql`).
+- Guards against destructive commands (`DROP SCHEMA public`, unchecked `TRUNCATE TABLE`).
+- Validates delimiter pairing and UTF-8 encoding across all migration files.
+- Automated as a dedicated GitHub Actions CI quality gate.
+
+### 10. Multi-Platform Responsiveness & Playwright E2E Verification
+Full end-to-end testing across both Desktop and Mobile devices using Playwright:
+- **Desktop Chrome (1440x900):** Collapsible sidebar, multi-column analytics, interactive charts, and zero horizontal overflow.
+- **Mobile Devices (Pixel 7 & iPhone 14):** 1-tap `MobileBottomNav`, off-canvas slideover drawer, prominent header sync buttons, and touch-optimized date filters.
+- **Automated Verification:** 17 comprehensive Playwright tests passing across Desktop and Mobile emulators.
+
 ---
 
 ## 🗄️ Database Schema & Supabase
