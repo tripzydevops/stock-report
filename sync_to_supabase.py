@@ -24,6 +24,12 @@ if env_path.exists():
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from app.core.database import get_supabase_client, upsert_rows, select_rows, insert_rows
 from app.services.report_storage import compute_sha256
+from app.models.data_contracts import (
+    validate_ohlcv_dataframe,
+    validate_indicators_dataframe,
+    validate_movements_dataframe,
+    validate_trade_signals_dataframe,
+)
 
 def sync_all_to_supabase(excel_path=None, report_record=None):
     from datetime import timezone
@@ -85,6 +91,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
     # 2. Sync Price History (last 30 days per asset to Supabase for efficiency)
     print("📥 Reading Price History from spreadsheet...")
     df_prices = pd.read_excel(excel_path, sheet_name="📅 Price History")
+    df_prices = validate_ohlcv_dataframe(df_prices, strict=False, preserve_original_columns=True)
     print(f"Found {len(df_prices)} total price rows.")
     
     # We will upload the most recent 15 days of bars per symbol
@@ -442,6 +449,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
     # 5. Sync Trade Signals
     print("📥 Syncing Trade Signals...")
     df_sig = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
+    df_sig = validate_trade_signals_dataframe(df_sig, strict=False, preserve_original_columns=True)
     signal_rows = []
     
     for _, row in df_sig.iterrows():

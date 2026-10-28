@@ -3,11 +3,12 @@ import yfinance as yf
 import pandas as pd
 import httpx
 from typing import Dict, List, Any
+from app.models.data_contracts import validate_ohlcv_dataframe
 
 logger = logging.getLogger(__name__)
 
 def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Safely extracts standard OHLCV column names regardless of MultiIndex structure."""
+    """Safely extracts standard OHLCV column names regardless of MultiIndex structure and validates against data contracts."""
     if df.empty:
         return df
     if isinstance(df.columns, pd.MultiIndex):
@@ -21,7 +22,7 @@ def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
             df.columns = [str(c[-1]).lower().replace(' ', '_') for c in df.columns]
     else:
         df.columns = [str(col).lower().replace(' ', '_') for col in df.columns]
-    return df
+    return validate_ohlcv_dataframe(df, strict=False)
 
 def fetch_us_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.DataFrame]:
     """
@@ -141,7 +142,7 @@ def fetch_tefas_prices(fund_codes: List[str], start_date: str, end_date: str) ->
                         df['volume'] = df['PAY_SAYISI'].astype(float) if 'PAY_SAYISI' in df.columns else 0.0
                         df['adj_close'] = df['close']
                         df.set_index('date', inplace=True)
-                        results[code] = df
+                        results[code] = validate_ohlcv_dataframe(df, strict=False)
             except Exception as e:
                 logger.error(f"Error fetching TEFAS prices for {code}: {str(e)}")
                 

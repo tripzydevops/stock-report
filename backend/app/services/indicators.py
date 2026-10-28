@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from app.models.data_contracts import validate_indicators_dataframe
 
 def compute_ema(series: pd.Series, period: int) -> pd.Series:
     """Computes Exponential Moving Average."""
@@ -94,4 +95,4 @@ def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     
     out['high_52w'], out['low_52w'] = compute_52w_high_low(close)
     
-    return out
+    return validate_indicators_dataframe(out, strict=False)
