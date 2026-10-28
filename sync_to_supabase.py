@@ -23,18 +23,23 @@ if env_path.exists():
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from app.core.database import get_supabase_client, upsert_rows, select_rows, insert_rows
+from app.services.report_storage import compute_sha256
 
 def sync_all_to_supabase(excel_path=None, report_record=None):
     from datetime import timezone
     print("🚀 Connecting to Supabase...")
     client = get_supabase_client()
     
+    # Critical section tracking for non-zero exit and enterprise error handling
+    critical_sections = ["price_history", "daily_indicators", "price_snapshots", "stock_movements", "trade_signals"]
+    sync_results = {}
+    critical_errors = []
+    
     # 1. Fetch asset symbol -> id map
     res = client.table("assets").select("id, symbol").execute()
     assets = res.data if res.data else []
     if not assets:
-        print("❌ No assets found in Supabase. Run seed_assets.sql first.")
-        return
+        raise RuntimeError("No assets found in Supabase. Seed assets first.")
         
     symbol_to_id = {}
     for a in assets:
@@ -52,19 +57,27 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         excel_path = Path(excel_path)
 
     if not excel_path.exists():
-        print(f"❌ {excel_path} not found. Run export_to_spreadsheet.py first.")
-        return
+        raise FileNotFoundError(f"{excel_path} not found. Run export_to_spreadsheet.py first.")
 
-    # If report_record not provided, try to fetch latest from report_files
+    # Mandatory report record check: match by checksum or require upload first
     if report_record is None:
+        checksum = compute_sha256(excel_path)
         try:
-            from app.services.report_storage import get_latest_report
-            report_record = get_latest_report(client=client)
-        except Exception:
-            report_record = None
+            res_reg = client.table("report_files").select("*").eq("checksum_sha256", checksum).order("created_at", desc=True).limit(1).execute()
+            if res_reg.data and len(res_reg.data) > 0:
+                report_record = res_reg.data[0]
+                print(f"✅ Resolved report_record from database via checksum: {report_record.get('storage_path')}")
+        except Exception as lookup_err:
+            print(f"⚠️ Checksum registry lookup note: {lookup_err}")
 
-    report_file_id = report_record.get("id") if report_record else None
-    snapshot_time = report_record.get("generated_at") if report_record else datetime.now(timezone.utc).isoformat()
+    if report_record is None:
+        raise ValueError(
+            f"No matching report_files record found for {excel_path}. "
+            "Refusing to sync unregistered report. Call upload_report_to_storage() before sync_all_to_supabase()."
+        )
+
+    report_file_id = report_record.get("id")
+    snapshot_time = report_record.get("generated_at")
     if snapshot_time and isinstance(snapshot_time, datetime):
         snapshot_time = snapshot_time.isoformat()
     print(f"🔗 Linked to Report File ID: {report_file_id} (Snapshot Time: {snapshot_time})")
@@ -117,14 +130,21 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         })
         
     print(f"Upserting {len(price_rows)} price bars to Supabase (chunks of 100)...")
+    price_errors = 0
     for i in range(0, len(price_rows), 100):
         chunk = price_rows[i:i+100]
         try:
             client.table("price_history").upsert(chunk, on_conflict="asset_id,date").execute()
         except Exception as e:
+            price_errors += 1
             print(f"Error upserting prices chunk {i}: {e}")
-            
-    print("✅ Price history recorded in Supabase.")
+            critical_errors.append(f"price_history chunk {i}: {e}")
+
+    if price_errors == 0:
+        sync_results["price_history"] = {"status": "SUCCESS", "count": len(price_rows)}
+        print("✅ Price history recorded in Supabase.")
+    else:
+        sync_results["price_history"] = {"status": "FAILED", "errors": price_errors}
 
     # 3. Sync Daily Indicators (from Dashboard sheet)
     print("📥 Syncing Daily Indicators...")
@@ -155,14 +175,21 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
             "low_52w": float(row["52W Low"]) if pd.notna(row["52W Low"]) and row["52W Low"] != "" else None,
         })
         
+    indicator_errors = 0
     for i in range(0, len(indicator_rows), 100):
         chunk = indicator_rows[i:i+100]
         try:
             client.table("daily_indicators").upsert(chunk, on_conflict="asset_id,date").execute()
         except Exception as e:
+            indicator_errors += 1
             print(f"Error upserting indicators chunk {i}: {e}")
-            
-    print(f"✅ Recorded {len(indicator_rows)} daily indicator snapshots.")
+            critical_errors.append(f"daily_indicators chunk {i}: {e}")
+
+    if indicator_errors == 0:
+        sync_results["daily_indicators"] = {"status": "SUCCESS", "count": len(indicator_rows)}
+        print(f"✅ Recorded {len(indicator_rows)} daily indicator snapshots.")
+    else:
+        sync_results["daily_indicators"] = {"status": "FAILED", "errors": indicator_errors}
 
     # 3b. Sync Normalized Price Snapshots & Stock Movements (Immutable Point-in-time)
     print("📥 Syncing Normalized Price Snapshots & Stock Movements...")
@@ -197,7 +224,16 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         l = _clean_float(row.get("Low"))
         v = _clean_float(row.get("Volume"))
         chg_pct = _clean_float(row.get("Change %"))
-        chg_amt = (c - o) if (c is not None and o is not None) else None
+
+        # Calculate true daily dollar change matching Change % (Close - Previous Close)
+        prev_close = None
+        if chg_pct is not None and chg_pct != -100.0:
+            prev_close = c / (1.0 + (chg_pct / 100.0))
+            daily_chg_amt = round(c - prev_close, 4)
+        else:
+            daily_chg_amt = round(c - o, 4) if (c is not None and o is not None) else None
+
+        intraday_chg_amt = round(c - o, 4) if (c is not None and o is not None) else None
 
         latest_asset_quotes[asset_id] = {
             "open": o,
@@ -238,14 +274,16 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
             "ema_200": _clean_float(row.get("EMA 200")),
             "volume_ratio": _clean_float(row.get("Volume Ratio")),
             "high_52w": _clean_float(row.get("52W High")),
-            "low_52w": _clean_float(row.get("52W Low"))
+            "low_52w": _clean_float(row.get("52W Low")),
+            "intraday_change_amount": intraday_chg_amt,
+            "previous_close": round(prev_close, 4) if prev_close is not None else None
         }
 
         stock_movement_rows.append({
             "asset_id": asset_id,
             "movement_time": snapshot_time,
             "direction": direction,
-            "change_amount": chg_amt,
+            "change_amount": daily_chg_amt,
             "change_pct": chg_pct,
             "signal": sig_name,
             "score": sig_score,
@@ -254,22 +292,38 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         })
 
     # Upsert price_snapshots in chunks of 100
+    snapshot_errors = 0
     for i in range(0, len(price_snapshot_rows), 100):
         chunk = price_snapshot_rows[i:i+100]
         try:
             client.table("price_snapshots").upsert(chunk, on_conflict="asset_id,snapshot_time").execute()
         except Exception as e:
+            snapshot_errors += 1
             print(f"Error upserting price_snapshots chunk {i}: {e}")
-    print(f"✅ Recorded {len(price_snapshot_rows)} price snapshots in public.price_snapshots.")
+            critical_errors.append(f"price_snapshots chunk {i}: {e}")
+
+    if snapshot_errors == 0:
+        sync_results["price_snapshots"] = {"status": "SUCCESS", "count": len(price_snapshot_rows)}
+        print(f"✅ Recorded {len(price_snapshot_rows)} price snapshots in public.price_snapshots.")
+    else:
+        sync_results["price_snapshots"] = {"status": "FAILED", "errors": snapshot_errors}
 
     # Upsert stock_movements in chunks of 100
+    movement_errors = 0
     for i in range(0, len(stock_movement_rows), 100):
         chunk = stock_movement_rows[i:i+100]
         try:
             client.table("stock_movements").upsert(chunk, on_conflict="asset_id,movement_time").execute()
         except Exception as e:
+            movement_errors += 1
             print(f"Error upserting stock_movements chunk {i}: {e}")
-    print(f"✅ Recorded {len(stock_movement_rows)} normalized stock movements in public.stock_movements.")
+            critical_errors.append(f"stock_movements chunk {i}: {e}")
+
+    if movement_errors == 0:
+        sync_results["stock_movements"] = {"status": "SUCCESS", "count": len(stock_movement_rows)}
+        print(f"✅ Recorded {len(stock_movement_rows)} normalized stock movements in public.stock_movements.")
+    else:
+        sync_results["stock_movements"] = {"status": "FAILED", "errors": movement_errors}
 
     # 4. Sync Market Regime
     print("📥 Syncing Market Regime...")
@@ -438,41 +492,46 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
         existing_map = {}
         if existing_open.data:
             for row in existing_open.data:
-                existing_map[row["asset_id"]] = row
+                key = (row["asset_id"], str(row.get("strategy", "")).lower().strip())
+                existing_map[key] = row
         
-        final_signal_rows = []
-        resolved_signals = []
-        seen_assets = set()
+        signals_to_insert = []
+        signals_to_resolve = []
+        signals_reconfirmed = 0
+        seen_keys = set()
         today_date = date.today()
         today_str = today_date.strftime("%Y-%m-%d")
 
         # 1. Process new daily triggers from spreadsheet
         for sig in signal_rows:
-            aid = sig["asset_id"]
-            if aid in existing_map:
-                # Keep original trigger setup and original trigger date
-                orig = existing_map[aid]
-                sig["entry_price"] = orig["entry_price"]
-                sig["stop_loss"] = orig["stop_loss"]
-                sig["target_1"] = orig["target_1"]
-                sig["risk_reward_ratio"] = orig.get("risk_reward_ratio") or sig.get("risk_reward_ratio")
-                sig["signal_date"] = orig["signal_date"]
+            key = (sig["asset_id"], sig["strategy"])
+            seen_keys.add(key)
+            if key in existing_map:
+                # Signal already exists in DB! Do NOT delete. Re-confirm without duplicate insertion.
+                orig = existing_map[key]
+                signals_reconfirmed += 1
                 orig_rat = orig.get("ai_rationale", "")
-                sig["ai_rationale"] = orig_rat if "RE-CONFIRMED" in orig_rat else f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
-            final_signal_rows.append(sig)
-            seen_assets.add(aid)
+                if "RE-CONFIRMED" not in orig_rat:
+                    try:
+                        client.table("trade_signals").update({
+                            "ai_rationale": f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
+                        }).eq("id", orig["id"]).execute()
+                    except Exception:
+                        pass
+            else:
+                # Brand new signal trigger: queue for insertion
+                signals_to_insert.append(sig)
 
         # 2. Process existing open trades that did not re-trigger today
-        for aid, orig in existing_map.items():
-            if aid in seen_assets:
+        for key, orig in existing_map.items():
+            if key in seen_keys:
                 continue
+
+            aid = orig.get("asset_id")
 
             # USER CRITICAL RULE: If the user holds this stock, DO NOT REMOVE OR ARCHIVE IT!
             if aid in held_asset_ids:
-                clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
-                clean_orig["status"] = "open"
-                final_signal_rows.append(clean_orig)
-                seen_assets.add(aid)
+                # Keep active open
                 continue
 
             # For UNOWNED prospective signals: evaluate outcome against latest quotes and time-stop
@@ -515,73 +574,73 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
 
             # Outcome Evaluation:
             if low_p is not None and stop_l and low_p <= stop_l:
-                # Stopped out (Unowned) -> Archive to audit ledger
+                # Stopped out (Unowned) -> Update to audit ledger
                 pnl = round(((stop_l - entry_p) / entry_p) * 100, 2) if entry_p > 0 else -5.0
-                resolved_signals.append({
-                    "asset_id": aid,
-                    "strategy": orig["strategy"],
-                    "signal_date": sig_date_str,
-                    "entry_price": entry_p,
-                    "stop_loss": stop_l,
-                    "target_1": target_p,
-                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
-                    "confidence_score": orig.get("confidence_score", 8.0),
-                    "ai_rationale": f"Disciplined stop loss triggered at {stop_l} (Low hit {low_p}). Archived to audit ledger.",
+                signals_to_resolve.append({
+                    "id": orig["id"],
                     "status": "stopped_out",
                     "outcome_pnl_pct": pnl,
-                    "closed_at": today_str
+                    "closed_at": today_str,
+                    "ai_rationale": f"Disciplined stop loss triggered at {stop_l} (Low hit {low_p}). Archived to audit ledger."
                 })
             elif high_p is not None and target_p and high_p >= target_p:
-                # Target hit (Unowned) -> Archive to audit ledger
+                # Target hit (Unowned) -> Update to audit ledger
                 pnl = round(((target_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 10.0
-                resolved_signals.append({
-                    "asset_id": aid,
-                    "strategy": orig["strategy"],
-                    "signal_date": sig_date_str,
-                    "entry_price": entry_p,
-                    "stop_loss": stop_l,
-                    "target_1": target_p,
-                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
-                    "confidence_score": orig.get("confidence_score", 8.0),
-                    "ai_rationale": f"Target 1 objective reached at {target_p} (High hit {high_p}). Archived to audit ledger.",
+                signals_to_resolve.append({
+                    "id": orig["id"],
                     "status": "target_hit",
                     "outcome_pnl_pct": pnl,
-                    "closed_at": today_str
+                    "closed_at": today_str,
+                    "ai_rationale": f"Target 1 objective reached at {target_p} (High hit {high_p}). Archived to audit ledger."
                 })
             elif days_passed >= max_days:
-                # Expired (Unowned) -> Archive to audit ledger
+                # Expired (Unowned) -> Update to audit ledger
                 exit_p = close_p or entry_p
                 pnl = round(((exit_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 0.0
-                resolved_signals.append({
-                    "asset_id": aid,
-                    "strategy": orig["strategy"],
-                    "signal_date": sig_date_str,
-                    "entry_price": entry_p,
-                    "stop_loss": stop_l,
-                    "target_1": target_p,
-                    "risk_reward_ratio": orig.get("risk_reward_ratio"),
-                    "confidence_score": orig.get("confidence_score", 8.0),
-                    "ai_rationale": f"Max holding period ({max_days} trading days) expired without target. Closed at {exit_p}.",
+                signals_to_resolve.append({
+                    "id": orig["id"],
                     "status": "stopped_out" if pnl < 0 else "target_hit",
                     "outcome_pnl_pct": pnl,
-                    "closed_at": today_str
+                    "closed_at": today_str,
+                    "ai_rationale": f"Max holding period ({max_days} trading days) expired without target. Closed at {exit_p}."
                 })
-            else:
-                # Still within window and valid
-                clean_orig = {k: v for k, v in orig.items() if k not in ["id", "created_at", "assets"]}
-                final_signal_rows.append(clean_orig)
 
-            seen_assets.add(aid)
+        # Apply safe reconciliation: NO DELETIONS
+        resolved_count = 0
+        for res_sig in signals_to_resolve:
+            try:
+                client.table("trade_signals").update({
+                    "status": res_sig["status"],
+                    "outcome_pnl_pct": res_sig["outcome_pnl_pct"],
+                    "closed_at": res_sig["closed_at"],
+                    "ai_rationale": res_sig["ai_rationale"]
+                }).eq("id", res_sig["id"]).execute()
+                resolved_count += 1
+            except Exception as update_err:
+                print(f"Error resolving signal {res_sig['id']}: {update_err}")
 
-        # Clear existing open signals and replace with active open + record resolved to audit ledger
-        client.table("trade_signals").delete().eq("status", "open").execute()
-        if final_signal_rows:
-            client.table("trade_signals").insert(final_signal_rows).execute()
-        if resolved_signals:
-            client.table("trade_signals").insert(resolved_signals).execute()
-        print(f"✅ Processed trade signals: {len(final_signal_rows)} active open, {len(resolved_signals)} unowned resolved to audit ledger (Held stocks strictly preserved).")
+        inserted_count = 0
+        if signals_to_insert:
+            for i in range(0, len(signals_to_insert), 50):
+                chunk = signals_to_insert[i:i+50]
+                try:
+                    client.table("trade_signals").insert(chunk).execute()
+                    inserted_count += len(chunk)
+                except Exception as insert_err:
+                    print(f"Error inserting new signals chunk: {insert_err}")
+                    critical_errors.append(f"trade_signals insert: {insert_err}")
+
+        sync_results["trade_signals"] = {
+            "status": "SUCCESS",
+            "inserted": inserted_count,
+            "reconfirmed": signals_reconfirmed,
+            "resolved": resolved_count
+        }
+        print(f"✅ Safe trade signals reconciliation complete: {inserted_count} new inserted, {signals_reconfirmed} re-confirmed open, {resolved_count} unowned resolved (Zero delete risk, held stocks strictly preserved).")
     except Exception as e:
         print(f"Error processing trade signals lifecycle: {e}")
+        critical_errors.append(f"trade_signals lifecycle: {e}")
+        sync_results["trade_signals"] = {"status": "FAILED", "error": str(e)}
 
     # 6. Sync Portfolio Positions
     portfolio_file = Path(__file__).parent / "portfolio.json"
@@ -618,10 +677,26 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
                         print(f"ℹ️ Preserving {len(existing_pos.data)} active user-managed positions in Supabase (no overwrite).")
                 except Exception as e:
                     print(f"Error checking/syncing portfolio positions: {e}")
-        except Exception as e:
-            print(f"Error reading portfolio.json: {e}")
+    # 7. Final Sync Health Summary & Non-Zero Exit on Critical Failures
+    print("\n" + "=" * 60)
+    print("📊 SUPABASE SYNCHRONIZATION SUMMARY")
+    print("=" * 60)
+    for sec, res_data in sync_results.items():
+        status = res_data.get("status")
+        icon = "✅" if status == "SUCCESS" else "❌"
+        info = f"{res_data.get('count', '')} rows" if "count" in res_data else str(res_data)
+        print(f" {icon} {sec:<22} : {status} ({info})")
 
-    print("\n🎉 ALL EXTRACTED DATA IS FULLY RECORDED IN SUPABASE POSTGRESQL!")
+    if critical_errors:
+        print("\n❌ CRITICAL SYNCHRONIZATION FAILURES DETECTED:")
+        for err in critical_errors:
+            print(f"  • {err}")
+        print("=" * 60)
+        raise RuntimeError(f"Supabase synchronization failed with {len(critical_errors)} critical errors.")
+
+    print("=" * 60)
+    print("🎉 ALL EXTRACTED DATA IS FULLY & IMMUTABLY RECORDED IN SUPABASE!")
+    return sync_results
 
 if __name__ == "__main__":
     sync_all_to_supabase()

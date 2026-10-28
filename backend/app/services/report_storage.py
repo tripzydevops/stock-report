@@ -42,7 +42,8 @@ def generate_storage_path(dt: Optional[datetime] = None) -> Tuple[str, str]:
     year = dt.strftime("%Y")
     month = dt.strftime("%m")
     day = dt.strftime("%d")
-    timestamp_str = dt.strftime("%Y-%m-%dT%H-%M-%S")
+    # Sub-second precision (milliseconds) to guarantee strict path uniqueness across concurrent runs
+    timestamp_str = dt.strftime("%Y-%m-%dT%H-%M-%S-%f")[:23]
     filename = f"MarketPulse_{timestamp_str}.xlsx"
     storage_path = f"{year}/{month}/{day}/{filename}"
     return storage_path, filename
@@ -147,12 +148,9 @@ def upload_report_to_storage(
         # Check if error is because bucket doesn't exist
         raise RuntimeError(f"Failed uploading to storage bucket '{BUCKET_NAME}': {e}")
 
-    # 2. Database Insert & Atomic 'is_latest' Toggle
+    # 2. Database Insert & Safe 'is_latest' Transition
+    # Insert new report as is_latest = true FIRST, so there is never a zero-latest window
     try:
-        # Set all previous reports of this type to is_latest = false
-        client.table("report_files").update({"is_latest": False}).eq("report_type", report_type).execute()
-
-        # Insert new report as is_latest = true
         record = {
             "report_type": report_type,
             "storage_path": storage_path,
@@ -164,7 +162,21 @@ def upload_report_to_storage(
             "is_latest": True,
         }
         res = client.table("report_files").insert(record).execute()
-        created = res.data[0] if res.data else record
+        if not res.data:
+            raise RuntimeError("Database insert returned empty record data.")
+        created = res.data[0]
+        new_id = created.get("id")
+
+        # Now clear is_latest on all older reports of this type
+        if new_id:
+            try:
+                client.table("report_files").update({"is_latest": False}) \
+                    .eq("report_type", report_type) \
+                    .neq("id", new_id) \
+                    .execute()
+            except Exception as clear_err:
+                print(f"⚠️ Warning: Clearing prior is_latest flags failed: {clear_err}")
+
         return created
     except Exception as db_err:
         # Cleanup orphaned storage file on database failure

@@ -20,8 +20,8 @@ def test_generate_storage_path_format():
     dt = datetime(2026, 10, 27, 9, 30, 0, tzinfo=timezone.utc)
     storage_path, filename = generate_storage_path(dt)
     
-    assert filename == "MarketPulse_2026-10-27T09-30-00.xlsx"
-    assert storage_path == "2026/10/27/MarketPulse_2026-10-27T09-30-00.xlsx"
+    assert filename == "MarketPulse_2026-10-27T09-30-00-000.xlsx"
+    assert storage_path == "2026/10/27/MarketPulse_2026-10-27T09-30-00-000.xlsx"
 
 
 def test_compute_sha256(tmp_path):
