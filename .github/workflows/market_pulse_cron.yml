@@ -52,10 +52,33 @@ jobs:
           python export_to_spreadsheet.py
           python backend/scripts/sync_live_catalysts.py
 
+      - name: Verify Post-Sync Pipeline Health & Data Freshness
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python scripts/check_pipeline_health.py --max-age-hours 2
+
       - name: Upload Latest Spreadsheet as Workflow Artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: MarketPulse_Latest_Spreadsheet
           path: MarketPulse_*.xlsx
           retention-days: 30
           if-no-files-found: warn
+
+      - name: Dispatch Pipeline Failure Alert (Webhook)
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/send_pipeline_alert.py \
+            --workflow "MarketPulse Automated Cloud Sync" \
+            --run-id "${{ github.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --details "Market extraction, Supabase database sync, or data freshness verification failed."

@@ -182,6 +182,11 @@ supabase db push
 | `GEMINI_API_KEY` | Google Gemini API Key for autonomous rationale generation | Backend AI Analyst |
 | `SUPABASE_ACCESS_TOKEN` | Personal Access Token for Supabase CLI | Migration Deployment Workflow |
 | `SUPABASE_DB_PASSWORD` | PostgreSQL Database password for Supabase CLI | Migration Deployment Workflow |
+| `SUPABASE_STAGING_PROJECT_ID` | (Optional) Staging project ref for PR dry-runs | Migration Deployment Workflow |
+| `DISCORD_WEBHOOK_URL` | (Optional) Discord Webhook URL for instant failure alerts | Cron & Sync Pipelines |
+| `SLACK_WEBHOOK_URL` | (Optional) Slack Incoming Webhook URL for channel alerts | Cron & Sync Pipelines |
+| `TELEGRAM_BOT_TOKEN` | (Optional) Telegram Bot API token for direct alerts | Cron & Sync Pipelines |
+| `TELEGRAM_CHAT_ID` | (Optional) Telegram Chat ID for direct alerts | Cron & Sync Pipelines |
 
 ---
 
