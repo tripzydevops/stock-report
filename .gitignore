@@ -41,6 +41,7 @@ portfolio_transfers.json
 MarketPulse_*.xlsx
 backtest_results_*.csv
 pullback_reclaim_*.csv
+post_exit_reclaim_*.csv
 *.pkl
 *.parquet
 
