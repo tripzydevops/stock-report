@@ -42,6 +42,7 @@ MarketPulse_*.xlsx
 backtest_results_*.csv
 pullback_reclaim_*.csv
 post_exit_reclaim_*.csv
+us_backtest_*.csv
 *.pkl
 *.parquet
 
