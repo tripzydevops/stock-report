@@ -57,14 +57,15 @@ flowchart TD
 ## ✨ Core Features
 
 ### 1. Institutional Screening Algorithms
-MarketPulse runs 7 automated screening engines:
-- **Anchored VWAP Bounce:** Identifies high-volume structural retests of swing lows/highs.
-- **Liquidity Sweep & Reclaim:** Detects stop hunts below key support followed by swift intraday reclaim.
-- **Relative Strength Leader:** Flags assets outperforming the BIST 100 benchmark during market pullbacks.
-- **50 EMA Pullback in Uptrend:** Trend-following entries in established bull trends.
+MarketPulse runs 8 automated screening engines with decoupled market profiles (BIST vs. US):
+- **Trend Pullback Reclaim (Core Production Engine):** 5-year empirical strategy backtested across 158,000+ daily bars. Detects Stage 2 bull trends ($\text{Close} > \text{EMA}_{50} > \text{EMA}_{200}$), $2.5\% \text{ to } 7.0\%$ pullbacks from 20-day highs within 5–6 sessions, and reclaims prior-day highs on $>1.2\times$ volume with an upper 40% candle close.
+- **Anchored VWAP Bounce:** Identifies high-volume structural retests of swing lows/highs from major institutional pivot dates.
+- **Liquidity Sweep & Reclaim:** Detects stop hunts below key support followed by swift intraday reclaim and smart money absorption.
+- **Relative Strength Leader:** Flags assets outperforming their respective local benchmarks (`XU100.IS` for BIST, `SPY` for US) during broad market pullbacks.
 - **Volatility Breakout:** 20-day high breakout with $\ge 2\times$ 20-day volume surge.
-- **Volatility Squeeze:** Bollinger Bands contraction inside Keltner Channels.
-- **Mean Reversion:** Extreme oversold RSI ($< 30$) with bullish reversal candle.
+- **Volatility Squeeze:** Bollinger Bands contraction inside Keltner Channels (explosive volatility expansion setup).
+- **Mean Reversion:** Extreme oversold RSI ($< 30$) with bullish reversal candle and circuit-breaker protection.
+- **Fund & Sector Momentum:** Identifies top-quartile ETF/fund inflows and momentum rotation.
 
 ### 2. Immutable Report Archive & Storage
 - Generates comprehensive multi-tab Excel reports (`MarketPulse_{YYYY-MM-DDTHH-mm-ss-fff}.xlsx`).
@@ -83,18 +84,26 @@ MarketPulse runs 7 automated screening engines:
 - Multi-currency portfolio tracking (`TRY` / `USD`) with live FX rates.
 - Forward dividend income projection, ex-dividend calendars, and DCA tranche optimization.
 
-### 5. Institutional Backtesting & Strategy Simulation Engine
-Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services/backtesting_engine.py):
-- **Execution Frictions:** Simulates broker commissions (e.g., 10 bps / 0.10%) and slippage (e.g., 5 bps / 0.05%) on entries and exits.
-- **Position Sizing & Cash Management:** Fixed fractional risk budgeting (1-2% account equity risked per trade) with strict cash ceilings and max open position caps (`max_open_positions=10`).
-- **Risk-Adjusted Performance Metrics:**
-  - **Sharpe Ratio** (Annualized, 252 days against risk-free benchmark rate).
-  - **Sortino Ratio** (Downside volatility penalization).
-  - **Calmar Ratio** (CAGR / Peak-to-Trough Max Drawdown).
-  - **Equity Curves & Peak-to-Trough Drawdown Curves**.
-  - **Trade Expectancy, Win Rates, & Strategy P&L Attribution**.
+### 5. Institutional Backtesting & 5-Year Empirical Strategy Verification
+Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services/backtesting_engine.py) and runnable via standalone CLI scripts:
+- **5-Year BIST Backtest ([`scripts/run_pullback_reclaim_backtest.py`](./scripts/run_pullback_reclaim_backtest.py)):**
+  - **Sample Size:** 101 BIST equities across ~116,000 daily bars (2021–2026), generating 1,221 setups and 525 closed trades.
+  - **Results:** **+455.41% Total Return** (41.17% CAGR), **1.64 Sharpe Ratio** (vs. XU100 Benchmark 1.53), **2.33 Sortino Ratio**, **52.6% Win Rate**, **1.72 Win/Loss Payoff Ratio** (+13.2% avg win vs. -7.6% avg loss), and max portfolio drawdown capped at **-24.18%**.
+- **Post-Exit Reclaim Analysis ([`scripts/analyze_post_exit_reclaims.py`](./scripts/analyze_post_exit_reclaims.py)):**
+  - Evaluated stopped-out positions to quantify stop efficacy vs. whipsaws:
+  - 88.7% of stopped-out Stage 2 stocks eventually reclaimed their entry price, but with a median delay of **12 trading sessions** and an **average further post-stop drop of -15.75%** (60.6% plunged $>10\%$ deeper). This mathematically validated the stop-loss as crucial protection against multi-month capital lockup and catastrophic drawdowns.
+  - For positions closed at the 20-day time limit, **96.9%** reclaimed their entry within a median of **2 sessions**, proving that extending holding windows slightly or using trailing ATR stops saves trades from premature time-decay exits.
+- **5-Year US Market Backtest ([`scripts/run_us_pullback_backtest.py`](./scripts/run_us_pullback_backtest.py)):**
+  - Evaluated 32 US equities/ETFs vs. the S&P 500 (`SPY`).
+  - Proved that sector divergence matters in the US: running trend pullbacks on high-dividend REITs underperformed during Fed rate hikes, whereas running on **US Growth & Tech Leaders** surged to **+77.01% Total Return** (12.15% CAGR, **0.78 Sharpe** vs. SPY 0.69), outperforming the market with less than half the drawdown (**-9.96% vs. -25.36%**).
 
-### 6. Candlestick Patterns & Advanced Institutional Indicators
+### 6. Decoupled Market Architecture (`MarketProfile`)
+Located in [`backend/app/services/market_profiles.py`](./backend/app/services/market_profiles.py):
+- Decouples screening mechanics and risk guards based on the asset's primary exchange:
+  - **🇹🇷 BIST Engine:** $2.5\% \text{ to } 5.8\%$ pullback, max 5 sessions, strict Taban/Devre Kesici circuit-breaker filter ($\le -4.5\%$), wide $2.0\times\text{ATR}$ stop, and benchmarked against `XU100.IS`.
+  - **🇺🇸 US Engine:** $3.0\% \text{ to } 7.0\%$ pullback, max 6 sessions, restricted to Growth/Tech momentum leaders (`NVDA`, `AAPL`, `MSFT`, `SMH`, `AVGO`), $2.0\times\text{ATR}$ stop, $8\%$ maximum initial risk ceiling, and benchmarked against `SPY`. REITs and defensive income assets (`O`, `VICI`, `TLT`) are automatically routed to the Dividend/DCA Engine.
+
+### 7. Candlestick Patterns & Advanced Institutional Indicators
 - **Vectorized Candlestick Engine ([`backend/app/services/candlestick_patterns.py`](./backend/app/services/candlestick_patterns.py)):**
   - Ultra-fast NumPy/Pandas pattern recognition fully compatible with Python 3.14+.
   - Detects **Bullish Engulfing**, **Bearish Engulfing**, **Hammer**, **Inverted Hammer**, **Morning Star**, **Evening Star**, and **Doji**.
@@ -103,7 +112,7 @@ Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services
   - **Chaikin Money Flow (CMF 20):** Institutional accumulation/distribution oscillator bounded $[-1.0, +1.0]$.
   - **Volume Weighted Average Price (VWAP):** Institutional benchmark pricing.
 
-### 7. Interactive Lightweight Charts on Next.js
+### 8. Interactive Lightweight Charts on Next.js
 Located in [`frontend/src/components/InteractiveCanvasChart.tsx`](./frontend/src/components/InteractiveCanvasChart.tsx):
 - High-performance TradingView Canvas rendering (`lightweight-charts ^5.2.1`).
 - **EMA Overlays:** Dynamic calculation and toggle switches for **EMA 20** (amber), **EMA 50** (cyan), and **EMA 200** (pink).
@@ -112,14 +121,14 @@ Located in [`frontend/src/components/InteractiveCanvasChart.tsx`](./frontend/src
 - **Timeframe Zoom Controls:** Interactive range buttons (`1M`, `3M`, `6M`, `1Y`, `ALL`).
 - **Real-Time Crosshair HUD:** High-precision Open, High, Low, Close, % Change, and Volume formatting.
 
-### 8. Pandera Data Contracts & Schema Validation
+### 9. Pandera Data Contracts & Schema Validation
 Located in [`backend/app/models/data_contracts.py`](./backend/app/models/data_contracts.py):
 - **OHLCV Integrity:** Guarantees $P > 0$, $\text{High} \ge \text{Low}$, $\text{High} \ge \text{Open/Close}$, $\text{Low} \le \text{Open/Close}$, and $\text{Volume} \ge 0$.
 - **Indicator Boundaries:** Enforces $0 \le \text{RSI}_{14} \le 100$ and $\text{BB Upper} \ge \text{Lower}$.
 - **Spot Trade Setup Sanity:** Rejects inverted long trades where $\text{Target} \le \text{Entry}$ or $\text{Stop} \ge \text{Entry}$.
 - **Automatic Sanitization:** Drops corrupt split/tick anomalies before database persistence without crashing batch pipelines.
 
-### 9. Multi-Platform Responsiveness & Playwright E2E Verification
+### 10. Multi-Platform Responsiveness & Playwright E2E Verification
 Full end-to-end testing across both Desktop and Mobile devices using Playwright:
 - **Desktop Chrome (1440x900):** Collapsible sidebar, multi-column analytics, interactive charts, and zero horizontal overflow.
 - **Mobile Devices (Pixel 7 & iPhone 14):** 1-tap `MobileBottomNav`, off-canvas slideover drawer, prominent header sync buttons, and touch-optimized date filters.
@@ -253,6 +262,19 @@ python export_to_spreadsheet.py
 To verify report freshness, storage accessibility, and database row counts:
 ```bash
 python scripts/check_pipeline_health.py --max-age-hours 36
+```
+
+### 6. Executing Strategy Backtests (5-Year Horizon)
+To run the full 5-year empirical simulations and post-trade reclaim analytics:
+```bash
+# 5-Year BIST Trend Pullback Reclaim vs XU100 Benchmark
+python scripts/run_pullback_reclaim_backtest.py
+
+# Quantitative Post-Stop & Post-Date-Limit Reclaim Analysis
+python scripts/analyze_post_exit_reclaims.py
+
+# 5-Year US Market Comparative Backtest vs S&P 500 (SPY)
+python scripts/run_us_pullback_backtest.py
 ```
 
 ---
