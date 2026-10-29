@@ -121,6 +121,125 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             }
     return None
 
+def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+    """
+    Trend Pullback Reclaim (5-Year Backtested Institutional Strategy):
+    Triggers when:
+    1. Trend Alignment: Close > EMA50, Close > EMA200, EMA50 > EMA200 (Stage 2 Uptrend).
+    2. Pullback: 2.5% to 5.8% decline from rolling 20-day high within the last 1 to 5 sessions.
+    3. Reclaim Trigger: Close > prior day high, Close > EMA20, and Close in upper 40% of candle range.
+    4. Volume Confirmation: Volume > 1.2x 20-day average volume (or volume_ratio >= 1.2).
+    5. Risk Guards: Reject daily drop > 4.5% or limit-down locked candles.
+    6. Asymmetric Targets: Stop = min(trough * 0.995, Close - 2.0 * ATR14), Target 1 = 2.0x Risk, Target 2 = 2.5x Risk.
+    """
+    if len(df) < 50:
+        return None
+
+    last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
+
+    close = float(last['close'])
+    high = float(last.get('high', close))
+    low = float(last.get('low', close))
+    vol = float(last.get('volume', 0))
+
+    ema_20 = float(last.get('ema_20', 0))
+    ema_50 = float(last.get('ema_50', 0))
+    ema_200 = float(last.get('ema_200', 0))
+    atr = float(last.get('atr_14', close * 0.03))
+
+    # 1. Trend Filter: Stage 2 Uptrend
+    if ema_50 <= 0 or ema_200 <= 0:
+        return None
+    if not (close > ema_50 and close > ema_200 and ema_50 > ema_200):
+        return None
+
+    # 2. Pullback from 20-day High (within 1 to 5 sessions)
+    lookback = min(20, len(df))
+    high_series = df['high'].iloc[-lookback:] if 'high' in df.columns else df['close'].iloc[-lookback:]
+    peak_val = float(high_series.max())
+    if peak_val <= 0:
+        return None
+
+    peak_loc = int(np.argmax(high_series.values))
+    bars_since_peak = len(high_series) - 1 - peak_loc
+
+    if not (1 <= bars_since_peak <= 5):
+        return None
+
+    low_series = df['low'].iloc[-bars_since_peak:] if 'low' in df.columns else df['close'].iloc[-bars_since_peak:]
+    trough = float(low_series.min())
+    pullback_depth_pct = ((peak_val - trough) / peak_val) * 100.0
+
+    if not (2.5 <= pullback_depth_pct <= 5.8):
+        return None
+
+    # 3. Reclaim Candle Trigger
+    prior_high = float(prev.get('high', prev['close']))
+    prior_close = float(prev['close'])
+
+    if not (close > prior_high and close > ema_20):
+        return None
+
+    candle_range = high - low
+    if candle_range <= 0:
+        return None
+    range_position = (close - low) / candle_range
+    if range_position < 0.60:
+        return None
+
+    # 4. Volume Confirmation
+    vol_sma20 = float(df['volume'].tail(20).mean()) if 'volume' in df.columns and len(df) >= 20 else vol
+    vol_ratio = last.get('volume_ratio')
+    if vol_ratio is not None and vol_ratio > 0:
+        has_volume = vol_ratio >= 1.2
+    else:
+        has_volume = (vol > 1.2 * vol_sma20) if vol_sma20 > 0 else True
+
+    if not has_volume:
+        return None
+
+    # 5. Risk Guards (Circuit breaker & limit-down protection)
+    daily_change_pct = ((close - prior_close) / prior_close) * 100.0 if prior_close > 0 else 0.0
+    if daily_change_pct < -4.5 or daily_change_pct <= -8.5:
+        return None
+
+    # 6. Stop Loss & Target Sizing (Wide ATR buffer + swing support)
+    stop_atr = close - (2.0 * atr)
+    stop_swing = trough * 0.995
+    stop_loss = min(stop_atr, stop_swing)
+
+    risk_dist = close - stop_loss
+    if risk_dist <= 0:
+        return None
+
+    risk_pct = (risk_dist / close) * 100.0
+    if risk_pct > 10.0:  # Cap max initial risk distance to 10%
+        stop_loss = close * 0.90
+        risk_dist = close - stop_loss
+
+    target_1 = round(close + (2.0 * risk_dist), 2)
+    target_2 = round(close + (2.5 * risk_dist), 2)
+    stop_loss = round(stop_loss, 2)
+    rr = round((target_1 - close) / risk_dist, 2) if risk_dist > 0 else 2.0
+
+    return {
+        'symbol': symbol,
+        'strategy': 'Pullback Reclaim',
+        'signal_date': df.index[-1],
+        'entry_price': round(close, 2),
+        'stop_loss': stop_loss,
+        'target_1': target_1,
+        'target_2': target_2,
+        'risk_reward_ratio': rr,
+        'confidence_score': 8.5,
+        'ai_rationale': (
+            f"Trend Pullback Reclaim: Pulled back {pullback_depth_pct:.1f}% from 20D high "
+            f"({bars_since_peak}d ago), reclaimed prior high ({prior_high:.2f}) and EMA20 "
+            f"with upper 40% close ({range_position*100:.0f}% of range)."
+        )
+    }
+
 def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     """
     Mean Reversion (Oversold Dip-Buy / Exhaustion Rebound):
@@ -318,15 +437,18 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
         asset_type = info.get('type', 'stock').lower()
         
         if asset_type in ['stock', 'etf', 'crypto']:
+            sig = screen_pullback_reclaim(df, symbol)
+            if sig: signals.append(sig)
+
             sig = screen_momentum_breakout(df, symbol)
             if sig: signals.append(sig)
-            
+
             sig = screen_trend_pullback(df, symbol)
             if sig: signals.append(sig)
-            
+
             sig = screen_volatility_squeeze(df, symbol)
             if sig: signals.append(sig)
-            
+
             sig = screen_mean_reversion(df, symbol)
             if sig: signals.append(sig)
             

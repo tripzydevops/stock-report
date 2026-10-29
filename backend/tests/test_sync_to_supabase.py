@@ -1,13 +1,17 @@
-"""
-Unit & Integration Tests for Supabase Sync & Report Storage.
-Uses fully mocked Supabase clients so tests execute deterministically
-in any CI/CD or offline environment without requiring live credentials.
-"""
+import sys
+from pathlib import Path
+
+# Ensure root repo directory and backend are on sys.path
+root_dir = str(Path(__file__).resolve().parent.parent.parent)
+backend_dir = str(Path(__file__).resolve().parent.parent)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone, date
-from pathlib import Path
 import pandas as pd
 import openpyxl
 

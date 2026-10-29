@@ -45,7 +45,7 @@ export function calculateExitDate(
     targetTradingDays = 12;
   } else if (stratUpper.includes('SQUEEZE')) {
     targetTradingDays = 15;
-  } else if (stratUpper.includes('PULLBACK')) {
+  } else if (stratUpper.includes('PULLBACK') || stratUpper.includes('RECLAIM')) {
     targetTradingDays = 20;
   } else if (stratUpper.includes('REVERSION') || stratUpper.includes('MEAN')) {
     targetTradingDays = 10;

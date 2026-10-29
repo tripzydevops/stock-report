@@ -34,6 +34,7 @@ class MarketRegimeStatus(str, Enum):
 class StrategyName(str, Enum):
     momentum_breakout = "momentum_breakout"
     trend_pullback = "trend_pullback"
+    pullback_reclaim = "pullback_reclaim"
     volatility_squeeze = "volatility_squeeze"
     fund_momentum = "fund_momentum"
     mean_reversion = "mean_reversion"

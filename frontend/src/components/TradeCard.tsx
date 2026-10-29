@@ -66,7 +66,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
     if (s.includes('sweep')) return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/80 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 font-bold';
     if (s.includes('strength') || s.includes('relative')) return 'bg-amber-100 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold';
     if (s.includes('breakout')) return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-    if (s.includes('pullback')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+    if (s.includes('pullback') || s.includes('reclaim')) return 'bg-purple-100 text-purple-800 dark:bg-purple-900/80 dark:text-purple-200 border border-purple-300 dark:border-purple-700 font-bold';
     if (s.includes('squeeze')) return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
     if (s.includes('reversion') || s.includes('mean')) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
