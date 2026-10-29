@@ -121,18 +121,27 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             }
     return None
 
-def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_pullback_reclaim(
+    df: pd.DataFrame,
+    symbol: str,
+    market: str = "BIST"
+) -> Optional[Dict]:
     """
-    Trend Pullback Reclaim (5-Year Backtested Institutional Strategy):
-    Triggers when:
-    1. Trend Alignment: Close > EMA50, Close > EMA200, EMA50 > EMA200 (Stage 2 Uptrend).
-    2. Pullback: 2.5% to 5.8% decline from rolling 20-day high within the last 1 to 5 sessions.
-    3. Reclaim Trigger: Close > prior day high, Close > EMA20, and Close in upper 40% of candle range.
-    4. Volume Confirmation: Volume > 1.2x 20-day average volume (or volume_ratio >= 1.2).
-    5. Risk Guards: Reject daily drop > 4.5% or limit-down locked candles.
-    6. Asymmetric Targets: Stop = min(trough * 0.995, Close - 2.0 * ATR14), Target 1 = 2.0x Risk, Target 2 = 2.5x Risk.
+    Trend Pullback Reclaim (Market-Differentiated Institutional Strategy):
+    Automatically applies market-specific dynamics (BIST vs. US):
+    - BIST: 2.5%-5.8% pullback, max 5 sessions, Taban/Devre Kesici guard (-4.5%), 2.0x ATR stop.
+    - US: 3.0%-7.0% pullback, max 6 sessions, Growth/Tech universe filter, 2.0x ATR stop, 8% risk cap.
     """
     if len(df) < 50:
+        return None
+
+    from app.services.market_profiles import get_market_profile, US_GROWTH_MOMENTUM_UNIVERSE, MarketType
+    profile = get_market_profile(market)
+
+    # For US market, restrict Pullback Reclaim to growth/momentum universe
+    # Income/REIT assets (O, VICI, TLT) are reserved for Dividend/DCA engine
+    clean_sym = symbol.replace(".IS", "").upper()
+    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
         return None
 
     last = df.iloc[-1]
@@ -154,7 +163,7 @@ def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     if not (close > ema_50 and close > ema_200 and ema_50 > ema_200):
         return None
 
-    # 2. Pullback from 20-day High (within 1 to 5 sessions)
+    # 2. Pullback from 20-day High (parameterized by market profile)
     lookback = min(20, len(df))
     high_series = df['high'].iloc[-lookback:] if 'high' in df.columns else df['close'].iloc[-lookback:]
     peak_val = float(high_series.max())
@@ -164,14 +173,14 @@ def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     peak_loc = int(np.argmax(high_series.values))
     bars_since_peak = len(high_series) - 1 - peak_loc
 
-    if not (1 <= bars_since_peak <= 5):
+    if not (1 <= bars_since_peak <= profile.pullback_max_sessions):
         return None
 
     low_series = df['low'].iloc[-bars_since_peak:] if 'low' in df.columns else df['close'].iloc[-bars_since_peak:]
     trough = float(low_series.min())
     pullback_depth_pct = ((peak_val - trough) / peak_val) * 100.0
 
-    if not (2.5 <= pullback_depth_pct <= 5.8):
+    if not (profile.pullback_min_pct <= pullback_depth_pct <= profile.pullback_max_pct):
         return None
 
     # 3. Reclaim Candle Trigger
@@ -185,27 +194,27 @@ def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     if candle_range <= 0:
         return None
     range_position = (close - low) / candle_range
-    if range_position < 0.60:
+    if range_position < profile.candle_range_position_min:
         return None
 
     # 4. Volume Confirmation
     vol_sma20 = float(df['volume'].tail(20).mean()) if 'volume' in df.columns and len(df) >= 20 else vol
     vol_ratio = last.get('volume_ratio')
     if vol_ratio is not None and vol_ratio > 0:
-        has_volume = vol_ratio >= 1.2
+        has_volume = vol_ratio >= profile.volume_surge_multiplier
     else:
-        has_volume = (vol > 1.2 * vol_sma20) if vol_sma20 > 0 else True
+        has_volume = (vol > profile.volume_surge_multiplier * vol_sma20) if vol_sma20 > 0 else True
 
     if not has_volume:
         return None
 
-    # 5. Risk Guards (Circuit breaker & limit-down protection)
+    # 5. Risk Guards (Market-specific daily drop limit)
     daily_change_pct = ((close - prior_close) / prior_close) * 100.0 if prior_close > 0 else 0.0
-    if daily_change_pct < -4.5 or daily_change_pct <= -8.5:
+    if daily_change_pct < profile.max_daily_drop_guard_pct or daily_change_pct <= -8.5:
         return None
 
-    # 6. Stop Loss & Target Sizing (Wide ATR buffer + swing support)
-    stop_atr = close - (2.0 * atr)
+    # 6. Stop Loss & Target Sizing
+    stop_atr = close - (profile.atr_stop_multiplier * atr)
     stop_swing = trough * 0.995
     stop_loss = min(stop_atr, stop_swing)
 
@@ -214,17 +223,18 @@ def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         return None
 
     risk_pct = (risk_dist / close) * 100.0
-    if risk_pct > 10.0:  # Cap max initial risk distance to 10%
-        stop_loss = close * 0.90
+    if risk_pct > profile.max_initial_risk_pct:
+        stop_loss = close * (1.0 - (profile.max_initial_risk_pct / 100.0))
         risk_dist = close - stop_loss
 
-    target_1 = round(close + (2.0 * risk_dist), 2)
-    target_2 = round(close + (2.5 * risk_dist), 2)
+    target_1 = round(close + (profile.rr_target_1 * risk_dist), 2)
+    target_2 = round(close + (profile.rr_target_2 * risk_dist), 2)
     stop_loss = round(stop_loss, 2)
-    rr = round((target_1 - close) / risk_dist, 2) if risk_dist > 0 else 2.0
+    rr = round((target_1 - close) / risk_dist, 2) if risk_dist > 0 else profile.rr_target_1
 
     return {
         'symbol': symbol,
+        'market': profile.market.value,
         'strategy': 'Pullback Reclaim',
         'signal_date': df.index[-1],
         'entry_price': round(close, 2),
@@ -234,9 +244,9 @@ def screen_pullback_reclaim(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         'risk_reward_ratio': rr,
         'confidence_score': 8.5,
         'ai_rationale': (
-            f"Trend Pullback Reclaim: Pulled back {pullback_depth_pct:.1f}% from 20D high "
+            f"Trend Pullback Reclaim ({profile.market.value}): Pulled back {pullback_depth_pct:.1f}% from 20D high "
             f"({bars_since_peak}d ago), reclaimed prior high ({prior_high:.2f}) and EMA20 "
-            f"with upper 40% close ({range_position*100:.0f}% of range)."
+            f"with upper close ({range_position*100:.0f}% of range). Benchmarked against {profile.benchmark_symbol}."
         )
     }
 
@@ -435,9 +445,10 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
             
         info = asset_info.get(symbol, {})
         asset_type = info.get('type', 'stock').lower()
-        
+        market_val = info.get('market', info.get('Market', 'BIST' if '.IS' in symbol else 'US'))
+
         if asset_type in ['stock', 'etf', 'crypto']:
-            sig = screen_pullback_reclaim(df, symbol)
+            sig = screen_pullback_reclaim(df, symbol, market=market_val)
             if sig: signals.append(sig)
 
             sig = screen_momentum_breakout(df, symbol)

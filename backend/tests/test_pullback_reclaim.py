@@ -161,3 +161,37 @@ def test_pullback_reclaim_rejects_severe_daily_drop():
 
     signal = screen_pullback_reclaim(df, "THYAO")
     assert signal is None
+
+
+def test_pullback_reclaim_us_growth_allowed():
+    """US Growth leader (NVDA) triggers signal under US market profile."""
+    df = _create_synthetic_ohlcv(
+        pullback_bars_ago=4,
+        pullback_pct=4.5,
+        today_volume_mult=1.3,
+        today_close_in_upper_pct=0.70,
+        today_reclaims_prior_high=True,
+        close_above_ema200=True,
+    )
+
+    signal = screen_pullback_reclaim(df, "NVDA", market="US")
+    assert signal is not None
+    assert signal["strategy"] == "Pullback Reclaim"
+    assert signal["market"] == "US"
+    assert "SPY" in signal["ai_rationale"]
+
+
+def test_pullback_reclaim_us_reit_filtered():
+    """Defensive/Income REIT (O) must be filtered from US Pullback Reclaim and reserved for DCA/Dividend."""
+    df = _create_synthetic_ohlcv(
+        pullback_bars_ago=4,
+        pullback_pct=4.5,
+        today_volume_mult=1.3,
+        today_close_in_upper_pct=0.70,
+        today_reclaims_prior_high=True,
+        close_above_ema200=True,
+    )
+
+    signal = screen_pullback_reclaim(df, "O", market="US")
+    assert signal is None
+
