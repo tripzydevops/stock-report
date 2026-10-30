@@ -84,6 +84,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
   const getStrategyColor = (strategy: string) => {
     const s = strategy.toLowerCase();
+    if (s.includes('vcp') || s.includes('minervini')) return 'bg-violet-100 text-violet-800 dark:bg-violet-900/80 dark:text-violet-200 border border-violet-300 dark:border-violet-700 font-bold';
+    if (s.includes('flag') || s.includes('htf')) return 'bg-rose-100 text-rose-800 dark:bg-rose-900/80 dark:text-rose-200 border border-rose-300 dark:border-rose-700 font-bold';
+    if (s.includes('connors') || s.includes('rsi-2') || s.includes('rsi2')) return 'bg-teal-100 text-teal-800 dark:bg-teal-900/80 dark:text-teal-200 border border-teal-300 dark:border-teal-700 font-bold';
     if (s.includes('vwap')) return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/80 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700 font-bold';
     if (s.includes('sweep')) return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/80 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 font-bold';
     if (s.includes('strength') || s.includes('relative')) return 'bg-amber-100 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200 border border-amber-300 dark:border-amber-700 font-bold';

@@ -12,6 +12,7 @@ from app.core.database import get_supabase_client, upsert_rows, select_rows, ins
 from app.services.data_fetcher import fetch_all_prices
 from app.services.indicators import compute_all_indicators
 from app.services.screener import run_all_screens
+from app.services.institutional_screener import run_institutional_screens
 from app.services.market_regime import get_all_regimes
 from app.services.ai_analyst import batch_analyze_signals
 
@@ -352,9 +353,11 @@ def run_daily_pipeline():
     db_upsert_regimes(regimes)
     logger.info(f"Step 5/9: Market regimes → US: {regimes.get('US', {}).get('regime', '?')}, BIST: {regimes.get('BIST', {}).get('regime', '?')}")
 
-    # 6. Run screeners
-    signals = run_all_screens(enriched_prices, assets_map)
-    logger.info(f"Step 6/9: Screeners found {len(signals)} potential signals.")
+    # 6. Run screeners (whitelisted standard & institutional engines)
+    std_signals = run_all_screens(enriched_prices, assets_map)
+    inst_signals = run_institutional_screens(enriched_prices, assets_map)
+    signals = std_signals + inst_signals
+    logger.info(f"Step 6/9: Screeners found {len(signals)} potential signals ({len(std_signals)} standard + {len(inst_signals)} institutional).")
 
     # 7. AI Analysis
     if signals:

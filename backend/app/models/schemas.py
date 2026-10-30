@@ -41,6 +41,9 @@ class StrategyName(str, Enum):
     anchored_vwap_bounce = "anchored_vwap_bounce"
     liquidity_sweep_reclaim = "liquidity_sweep_reclaim"
     relative_strength_divergence = "relative_strength_divergence"
+    minervini_vcp = "minervini_vcp"
+    high_tight_flag = "high_tight_flag"
+    connors_rsi2_rebound = "connors_rsi2_rebound"
 
 class AssetCreate(BaseModel):
     symbol: str = Field(max_length=20)

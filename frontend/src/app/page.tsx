@@ -3093,6 +3093,9 @@ export default function Home() {
                     if (filterKey === 'ANCHORED_VWAP') return s.includes('VWAP') || s.includes('AVWAP');
                     if (filterKey === 'LIQUIDITY_SWEEP') return s.includes('SWEEP') || s.includes('HUNT') || s.includes('LIQUIDITY');
                     if (filterKey === 'RELATIVE_STRENGTH') return s.includes('RELATIVE') || s.includes('STRENGTH') || s.includes('RS');
+                    if (filterKey === 'MINERVINI_VCP') return s.includes('VCP') || s.includes('MINERVINI');
+                    if (filterKey === 'HIGH_TIGHT_FLAG') return s.includes('FLAG') || s.includes('HTF');
+                    if (filterKey === 'CONNORS_RSI') return s.includes('CONNORS') || s.includes('RSI-2') || s.includes('RSI2');
                     return s === filterKey.toUpperCase();
                   };
 
@@ -3143,6 +3146,9 @@ export default function Home() {
                     { key: 'TREND_PULLBACK', icon: '📈', label: language === 'tr' ? 'Trend Düzeltmesi' : 'Trend Pullback', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'TREND_PULLBACK')).length },
                     { key: 'MOMENTUM_BREAKOUT', icon: '⚡', label: language === 'tr' ? 'Momentum Kırılımı' : 'Momentum Breakout', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'MOMENTUM_BREAKOUT')).length },
                     { key: 'VOLATILITY_SQUEEZE', icon: '💥', label: language === 'tr' ? 'Sıkışma Patlaması' : 'Volatility Squeeze', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'VOLATILITY_SQUEEZE')).length },
+                    { key: 'MINERVINI_VCP', icon: '📐', label: language === 'tr' ? 'Minervini VCP' : 'Minervini VCP', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'MINERVINI_VCP')).length },
+                    { key: 'HIGH_TIGHT_FLAG', icon: '🚩', label: language === 'tr' ? 'High Tight Flag' : 'High Tight Flag', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'HIGH_TIGHT_FLAG')).length },
+                    { key: 'CONNORS_RSI', icon: '⚡', label: language === 'tr' ? 'Connors RSI-2 Rebound' : 'Connors RSI-2 Rebound', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'CONNORS_RSI')).length },
                     { key: 'FUND_MOMENTUM', icon: '🏦', label: language === 'tr' ? 'Fon Momentumu' : 'Fund Momentum', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'FUND_MOMENTUM')).length },
                     { key: 'ANCHORED_VWAP', icon: '🏛️', label: language === 'tr' ? 'Kurumsal AVWAP' : 'Anchored VWAP', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'ANCHORED_VWAP')).length },
                     { key: 'LIQUIDITY_SWEEP', icon: '🧲', label: language === 'tr' ? 'Likidite Avı & Geri Alım' : 'Liquidity Sweep', count: activeDisplaySignals.filter(s => matchesStrategy(s.strategy, 'LIQUIDITY_SWEEP')).length },
@@ -3306,6 +3312,9 @@ export default function Home() {
                       if (filterKey === 'ANCHORED_VWAP') return s.includes('VWAP') || s.includes('AVWAP');
                       if (filterKey === 'LIQUIDITY_SWEEP') return s.includes('SWEEP') || s.includes('HUNT') || s.includes('LIQUIDITY');
                       if (filterKey === 'RELATIVE_STRENGTH') return s.includes('RELATIVE') || s.includes('STRENGTH') || s.includes('RS');
+                      if (filterKey === 'MINERVINI_VCP') return s.includes('VCP') || s.includes('MINERVINI');
+                      if (filterKey === 'HIGH_TIGHT_FLAG') return s.includes('FLAG') || s.includes('HTF');
+                      if (filterKey === 'CONNORS_RSI') return s.includes('CONNORS') || s.includes('RSI-2') || s.includes('RSI2');
                       return s === filterKey.toUpperCase();
                     };
 
