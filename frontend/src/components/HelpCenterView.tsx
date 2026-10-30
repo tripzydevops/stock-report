@@ -25,7 +25,7 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<HelpCategory>('all');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0); // First FAQ open by default
-  const [activeWalkthroughTab, setActiveWalkthroughTab] = useState<'dca' | 'stoploss' | 'dividend' | 'gemini'>('dca');
+  const [activeWalkthroughTab, setActiveWalkthroughTab] = useState<'signals' | 'dca' | 'stoploss' | 'dividend' | 'gemini'>('signals');
 
   const categories: { id: HelpCategory; labelTr: string; labelEn: string; icon: string }[] = [
     { id: 'all', labelTr: 'Tümü', labelEn: 'All Topics', icon: '🌐' },
@@ -61,6 +61,30 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
       aEn: 'Entry: The statistically optimal price level where algorithmic edge is confirmed. Target (1 & 2): Technical resistance zones where taking profit is recommended. Stop-Loss: The protective invalidation level that caps your maximum downside risk. If the price closes below the stop level, capital preservation dictates closing the trade.',
       category: 'signals',
       tag: 'Sinyal Mantığı',
+    },
+    {
+      qTr: 'Sinyal kartlarındaki "Neden Tetiklendi?" ve "Geçersizlik Kuralı" ne anlama gelir?',
+      qEn: 'What do "Why It Fired" and "Invalidation Rule" mean on the Trade Cards?',
+      aTr: 'MarketPulse "kara kutu" (black-box) yapay zeka çalıştırmaz. Bir sinyal üretildiğinde, karşılanan tüm nicel kurallar (örneğin: EMA20 geri kazanımı, 20 günlük zirveden %4 düzeltme, 1.8x hacim patlaması, mum kapanışının üst %35 bantta olması) şeffaf bir kontrol listesi olarak "Neden Tetiklendi?" kutusunda listelenir. "Geçersizlik Kuralı" (Invalidation Rule) ise stratejinin teknik tezinin hangi kesin piyasa olayında çökeceğini belirtir (örneğin: \'Kapanışın EMA20 altında kalması veya breakout mumunun dip seviyesinin kırılması tezi bozar\'). Bu, stop-loss tetiklenmeden önce bile tezi çürüyen işlemlerden erken çıkış disiplini kazandırır.',
+      aEn: 'MarketPulse never operates as an opaque black box. When a signal fires, every quantitative parameter satisfied (e.g. EMA20 reclaim, pullback 4.2% off 20-day high, 1.8x volume surge, closing in upper 35% of daily range) is explicitly itemized in the "Why It Fired" checklist. The "Invalidation Rule" dictates the exact price or structural condition that invalidates the underlying trade thesis (e.g., \'Daily close below EMA20 cancels the breakout setup\'). This instills disciplined execution, allowing traders to exit invalidated positions even before a hard stop is tagged.',
+      category: 'signals',
+      tag: 'Şeffaf Algoritma',
+    },
+    {
+      qTr: 'BIST ve ABD (US) hisseleri için sinyal ve risk kuralları neden farklıdır?',
+      qEn: 'Why do BIST and US (Midas) stocks use different signal and risk parameters?',
+      aTr: 'BIST ve ABD borsaları tamamen farklı mikro-yapılara sahiptir. BIST\'te günlük %10 taban/tavan marj limitleri ve devre kesici (circuit breaker) rejimleri bulunur; bu sebeple stop-loss seviyeleri taban kilidi riskini önleyecek şekilde dinamik ATR tamponlarıyla (örn. %4-%6) korunur ve kâr hedefleri tavan sınırlarına göre optimize edilir. ABD hisselerinde ise marj sınırı yoktur, yüksek likidite ve bilanço/kazanç (earnings) gap riskleri mevcuttur; bu nedenle momentum kırılımları daha agresif trend sürerken (runner hedefleri daha geniş), bilanço dönemlerinde hacim ve gap filtreleri daha sıkı tutulur.',
+      aEn: 'BIST and US exchanges operate under fundamentally distinct market dynamics. BIST enforces daily +/-10% circuit breaker price bands; consequently, stop losses use dynamic ATR buffers (typically 4%–6%) to guard against lock-limit traps, and profit targets respect daily price caps. Conversely, US equities trade without daily circuit breaker limits, presenting massive liquidity but high earnings gap volatility. US momentum algorithms therefore allow wider trend runners (+2.25R to +3.5R) while applying stringent volume thresholds and earnings date filters.',
+      category: 'signals',
+      tag: 'Piyasa Dinamikleri',
+    },
+    {
+      qTr: 'Kademeli Çıkış Planı (Hedef 1 ve Hedef 2 Koşucu) nasıl uygulanır?',
+      qEn: 'How should Multi-Tier Targets (Target 1 & Target 2 Runner) be executed?',
+      aTr: 'Profesyonel risk yönetiminde tüm pozisyonu tek bir fiyattan satmak yerine kademeli kâr realizasyonu (scale-out) uygulanır. MarketPulse her sinyal için 2 kademeli hedef belirler: 1) Hedef 1 (+1.25R): Pozisyonun %50\'si bu seviyede nakde çevrilerek ilk kâr kilitlenir ve kalan hisselerin stop-loss seviyesi giriş maliyetine (Breakeven) çekilerek işlem tamamen risksiz hale getirilir. 2) Hedef 2 (+2.25R Koşucu / Runner): Kalan %50 hisse ile büyük trend dalgası sürülür. Ayrıca swing işlemleri için T0 (+%3) hızlı kâr alma seviyesi gün içi koruma sunar.',
+      aEn: 'Institutional risk management avoids all-or-nothing exits by scaling out across multiple targets. MarketPulse provides a structured multi-tier blueprint: 1) Target 1 (+1.25R): Sell 50% of the position to secure banked profit, immediately moving your stop-loss on the remaining shares to Breakeven (entry price) for a risk-free trade. 2) Target 2 (+2.25R Runner): The remaining 50% rides the larger macro trend expansion. For short-term swings, a T0 (+3%) quick profit target provides intra-week profit acceleration.',
+      category: 'signals',
+      tag: 'Kademeli Çıkış',
     },
     {
       qTr: 'Güvenli Mod (Turmoil Guard) nedir ve neden açmalıyım?',
@@ -297,11 +321,22 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
         </div>
 
         {/* Tab Controls for Walkthrough */}
-        <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('signals')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeWalkthroughTab === 'signals'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🎯 {language === 'tr' ? 'Sinyal & İşlem Planı' : 'Signals & Trade Plan'}
+          </button>
           <button
             type="button"
             onClick={() => setActiveWalkthroughTab('dca')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeWalkthroughTab === 'dca'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -312,7 +347,7 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           <button
             type="button"
             onClick={() => setActiveWalkthroughTab('stoploss')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeWalkthroughTab === 'stoploss'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -323,7 +358,7 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           <button
             type="button"
             onClick={() => setActiveWalkthroughTab('dividend')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeWalkthroughTab === 'dividend'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -334,7 +369,7 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           <button
             type="button"
             onClick={() => setActiveWalkthroughTab('gemini')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeWalkthroughTab === 'gemini'
                 ? 'bg-purple-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -345,6 +380,114 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
         </div>
 
         {/* Walkthrough Content Panes */}
+        {activeWalkthroughTab === 'signals' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Structured Explanation Banner */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-slate-900/10 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900/40 border border-blue-500/30 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🧠</span>
+                <span className="text-xs font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                  {language === 'tr' ? 'Şeffaf Algoritma: Neden ve Nasıl Tetiklenir?' : 'Non-Black-Box Algorithmic Edge'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'MarketPulse asla "kara kutu" tahminler üretmez. Her sinyal kartında algoritmanın doğruladığı kesin nicel şartlar, strateji tezi ve matematiksel risk/ödül haritası listelenir. Böylece bir hisseyi neden aldığınızı ve hangi şartta çıkacağınızı her zaman tam olarak bilirsiniz.'
+                  : 'MarketPulse never relies on opaque black-box predictions. Every trade card explicitly enumerates the exact mathematical conditions satisfied, trade thesis rationale, and calculated risk-to-reward ratios so you always know why a setup triggered and where to exit.'}
+              </p>
+            </div>
+
+            {/* 3 Pillars of Trade Rationale */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              {/* Pillar 1 */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs">✓</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {language === 'tr' ? '1. Neden Tetiklendi? (Tetikleyiciler)' : '1. Why It Fired (Triggers)'}
+                  </span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {language === 'tr'
+                    ? 'Fiyatın EMA20 üzerine geri çıkması, 20 günlük zirveden kontrollü düzeltme derinliği, 1.5x+ hacim patlaması ve mum gövdesinin üst %35 bantta kapanması gibi somut kurallar teyit edilir.'
+                    : 'Confirms price reclaiming EMA20, controlled pullback depth off 20-day highs, 1.5x+ volume expansion, and bullish wick closure in the top 35% of the daily range.'}
+                </p>
+              </div>
+
+              {/* Pillar 2 */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">🎯</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {language === 'tr' ? '2. Çok Kademeli Çıkış Planı' : '2. Multi-Tier Exit Blueprint'}
+                  </span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {language === 'tr'
+                    ? 'Hedef 1 (+1.25R) seviyesinde pozisyonun %50\'si satılır ve stop maliyete (breakeven) çekilerek sıfır riskli "Free Trade" moduna geçilir. Hedef 2 (+2.25R Koşucu) ile trend sürülür.'
+                    : 'Target 1 (+1.25R) scales out 50% profit and shifts stop-loss to Breakeven for a risk-free ride. Target 2 (+2.25R Runner) lets remaining shares capture the extended macro trend.'}
+                </p>
+              </div>
+
+              {/* Pillar 3 */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold text-xs">🛡️</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {language === 'tr' ? '3. Geçersizlik Kuralı (Invalidation)' : '3. Thesis Invalidation Rule'}
+                  </span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  {language === 'tr'
+                    ? 'Fiyat stop seviyesine varmasa dahi teknik yapının çöktüğü anı (örneğin: "Kapanış EMA20 veya breakout barının altında gerçekleşirse") tespit ederek erken ve ucuz çıkış disiplini sağlar.'
+                    : 'Specifies the precise technical event that dismantles the setup thesis (e.g., closing below EMA20), enabling disciplined capital defense before full stops are triggered.'}
+                </p>
+              </div>
+            </div>
+
+            {/* BIST vs US Market Dynamics Comparison Box */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚖️</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-blue-400">
+                    {language === 'tr' ? 'BIST vs. ABD (US) Piyasa Dinamikleri Farkı' : 'BIST vs. US Equities Market Dynamics'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-900/60 text-blue-300 border border-blue-700/50">
+                  Adaptive Regimes
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700/70 space-y-1.5">
+                  <div className="flex items-center gap-2 text-rose-400 font-bold">
+                    <span>🇹🇷</span>
+                    <span>{language === 'tr' ? 'BIST (Borsa İstanbul) Kuralları' : 'BIST Exchange Mechanics'}</span>
+                  </div>
+                  <ul className="space-y-1 text-slate-300 list-disc list-inside">
+                    <li>{language === 'tr' ? 'Günlük +/- %10 taban/tavan marj sınırları ve devre kesici koruması' : '+/-10% daily circuit breaker bands and trading halt mechanisms'}</li>
+                    <li>{language === 'tr' ? 'Taban kilidi riskini önleyen dinamik ATR stop tamponu (%4-%6)' : 'Dynamic ATR stop buffers (4%–6%) guarding against lock-limit traps'}</li>
+                    <li>{language === 'tr' ? 'T0 (+%3) ve Hedef 1 tavan tavan senaryolarına göre optimize' : 'T0 (+3%) and Target 1 calibrated to respect daily price ceilings'}</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700/70 space-y-1.5">
+                  <div className="flex items-center gap-2 text-blue-400 font-bold">
+                    <span>🇺🇸</span>
+                    <span>{language === 'tr' ? 'ABD (Midas / US) Kuralları' : 'US Market Mechanics'}</span>
+                  </div>
+                  <ul className="space-y-1 text-slate-300 list-disc list-inside">
+                    <li>{language === 'tr' ? 'Fiyat marj sınırı yok; devasa likidite ve küresel kurumsal hacim' : 'No price ceiling bands; massive global institutional liquidity'}</li>
+                    <li>{language === 'tr' ? 'Bilanço (Earnings) öncesi gap riskini engelleyen filtreler' : 'Strict pre-earnings filters preventing overnight gap-down shocks'}</li>
+                    <li>{language === 'tr' ? 'Genişletilmiş koşucu (+2.25R - +3.5R) ile mega trend sürüşü' : 'Extended runner targets (+2.25R to +3.5R) riding secular macro trends'}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeWalkthroughTab === 'dca' && (
           <div className="space-y-4 animate-in fade-in duration-200">
             <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 space-y-2">
@@ -445,13 +588,15 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                   {language === 'tr' ? 'Sinyaller & Fırsatlar' : 'Signals & Alpha Picks'}
                 </h3>
-                <span className="text-[10px] text-slate-400">Algoritmik Alım Fırsatları & Kademeli Alım</span>
+                <span className="text-[10px] text-slate-400">
+                  {language === 'tr' ? 'Şeffaf Algoritmik Sinyaller & Çok Kademeli Plan' : 'Transparent Signals & Multi-Tier Execution Plan'}
+                </span>
               </div>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {language === 'tr'
-                ? '50 EMA Pullback, Trend Kırılımı ve Aşırı Satım modelleriyle taranan aktif fırsatlar. Her kartta giriş seviyesi, stop-loss ve DCA kademe önerisi bulunur.'
-                : 'Scanned setups utilizing 50 EMA pullbacks, momentum breakouts, and mean reversion. Every card provides validated entry, stop loss, and DCA accumulation rationale.'}
+                ? 'Pullback Reclaim, Momentum Breakout ve Kurumsal Likidite modelleriyle çalışan şeffaf sinyaller. Her kartta "Neden Tetiklendi?" kontrol listesi, Geçersizlik Kuralı, Hedef 1/2 kademeli kâr planı ve BIST/ABD risk dinamikleri yer alır.'
+                : 'Transparent setups powered by Pullback Reclaim, Momentum Breakout, and Institutional Flow models. Every card includes an itemized "Why It Fired" checklist, Invalidation Rule, Target 1/2 scale-out blueprint, and BIST vs. US risk dynamics.'}
             </p>
             <div className="flex items-center gap-2 pt-1">
               <button

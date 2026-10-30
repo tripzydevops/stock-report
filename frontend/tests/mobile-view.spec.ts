@@ -130,17 +130,26 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     // Verify 3-step quick start
     await expect(page.locator('text=3 Adımda Kolay Başlangıç Kılavuzu').first()).toBeVisible();
 
-    // Verify Interactive Strategy Tabs
+    // Verify Structured Signal Walkthrough tab is active
+    const signalsTab = page.locator('button:has-text("Sinyal & İşlem Planı")');
+    await expect(signalsTab.first()).toBeVisible();
+    await expect(page.locator('text=Şeffaf Algoritma: Neden ve Nasıl Tetiklenir?').first()).toBeVisible();
+    await signalsTab.first().scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_help_center_signals.png'),
+    });
+
+    // Verify Interactive Strategy Tabs switching
     const stoplossTab = page.locator('button:has-text("Zarar Kes (Stop-Loss)")');
     await expect(stoplossTab.first()).toBeVisible();
     await stoplossTab.first().click();
     await expect(page.locator('text=Stop-Loss Ne Zaman Çalıştırılmalı?').first()).toBeVisible();
 
-    // Test Search Functionality
+    // Test Search Functionality with new FAQ
     const searchInput = page.locator('input[placeholder*="Örn: Kademeli Alım"]');
     await expect(searchInput).toBeVisible();
-    await searchInput.fill('panik');
-    await expect(page.locator('text=Hisselerim %10 - %20 düştü, ne yapmalıyım?').first()).toBeVisible();
+    await searchInput.fill('Geçersizlik');
+    await expect(page.locator('text=Sinyal kartlarındaki "Neden Tetiklendi?" ve "Geçersizlik Kuralı"').first()).toBeVisible();
 
     // Capture screenshot of Help Center on mobile
     await page.screenshot({
