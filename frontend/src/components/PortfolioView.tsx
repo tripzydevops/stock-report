@@ -97,7 +97,7 @@ export default function PortfolioView({
     return 0;
   };
 
-  const getBuyLotsForHolding = (item: PortfolioItem) => {
+  const getTranchesForHolding = (item: PortfolioItem) => {
     const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
 
     // 1. Sort all BUY orders by timestamp ASCENDING (oldest to newest)
@@ -110,24 +110,109 @@ export default function PortfolioView({
       .filter(o => o.side === 'SELL' && o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym)
       .sort((a, b) => parseOrderTimestamp(a) - parseOrderTimestamp(b));
 
-    // 3. FIFO consumption: exclude shares that have already been liquidated in past closed trades
-    let totalSold = allSells.reduce((acc, s) => acc + s.quantity, 0);
+    const buyTrackers = allBuys.map(bo => ({
+      order: bo,
+      activeShares: bo.quantity,
+    }));
 
-    const activeBuys: { order: ExecutedOrder; activeShares: number }[] = [];
-    for (const bo of allBuys) {
-      if (totalSold >= bo.quantity) {
-        totalSold -= bo.quantity;
-      } else if (totalSold > 0) {
-        const remaining = bo.quantity - totalSold;
-        totalSold = 0;
-        activeBuys.push({ order: bo, activeShares: remaining });
-      } else {
-        activeBuys.push({ order: bo, activeShares: bo.quantity });
+    const closedLots: {
+      id: string;
+      date: string;
+      shares: number;
+      buyPrice: number;
+      sellPrice: number;
+      realizedPnl: number;
+      realizedPnlPct: number;
+      note: string;
+    }[] = [];
+    const unmatchedSells: ExecutedOrder[] = [];
+
+    // Phase 1: Specific Tranche Identification & Intraday Scalp Matching
+    for (const so of allSells) {
+      let matched = false;
+
+      // Check if sell note explicitly refers to a tranche buy: e.g. "Tranche Buy: 151 @ ₺3.07"
+      const trancheMatch = so.dcaNote?.match(/tranche buy:\s*(\d+(?:\.\d+)?)\s*@\s*₺?([\d\.]+)/i);
+      if (trancheMatch) {
+        const targetShares = parseFloat(trancheMatch[1]);
+        const targetPrice = parseFloat(trancheMatch[2]);
+        const targetBuy = buyTrackers.find(b => 
+          b.activeShares >= targetShares && Math.abs(b.order.price - targetPrice) < 0.05
+        );
+        if (targetBuy) {
+          targetBuy.activeShares -= targetShares;
+          const pnl = (so.price - targetBuy.order.price) * targetShares;
+          const pnlPct = targetBuy.order.price > 0 ? (pnl / (targetBuy.order.price * targetShares)) * 100 : 0;
+          closedLots.push({
+            id: `closed-${so.id}`,
+            date: so.dateTime,
+            shares: targetShares,
+            buyPrice: targetBuy.order.price,
+            sellPrice: so.price,
+            realizedPnl: pnl,
+            realizedPnlPct: pnlPct,
+            note: so.dcaNote || 'Specific Tranche Scalp Matched'
+          });
+          matched = true;
+        }
+      }
+
+      // Check for same-day scalp round-trip (same execution date, same quantity)
+      if (!matched) {
+        const soDate = so.dateTime.slice(0, 10);
+        const intradayBuy = buyTrackers.find(b => 
+          b.order.dateTime.slice(0, 10) === soDate && b.activeShares === so.quantity
+        );
+        if (intradayBuy) {
+          intradayBuy.activeShares -= so.quantity;
+          const pnl = (so.price - intradayBuy.order.price) * so.quantity;
+          const pnlPct = intradayBuy.order.price > 0 ? (pnl / (intradayBuy.order.price * so.quantity)) * 100 : 0;
+          closedLots.push({
+            id: `closed-${so.id}`,
+            date: so.dateTime,
+            shares: so.quantity,
+            buyPrice: intradayBuy.order.price,
+            sellPrice: so.price,
+            realizedPnl: pnl,
+            realizedPnlPct: pnlPct,
+            note: so.dcaNote || 'Intraday Scalp Matched'
+          });
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        unmatchedSells.push(so);
       }
     }
 
+    // Phase 2: Standard FIFO consumption for general position reductions
+    for (const so of unmatchedSells) {
+      let remainingToSell = so.quantity;
+      for (const b of buyTrackers) {
+        if (b.activeShares <= 0) continue;
+        const take = Math.min(b.activeShares, remainingToSell);
+        b.activeShares -= take;
+        remainingToSell -= take;
+        const pnl = (so.price - b.order.price) * take;
+        const pnlPct = b.order.price > 0 ? (pnl / (b.order.price * take)) * 100 : 0;
+        closedLots.push({
+          id: `closed-fifo-${so.id}-${b.order.id}`,
+          date: so.dateTime,
+          shares: take,
+          buyPrice: b.order.price,
+          sellPrice: so.price,
+          realizedPnl: pnl,
+          realizedPnlPct: pnlPct,
+          note: so.dcaNote || `FIFO matched against Lot @ ${formatCurr(b.order.price, item.currency)}`
+        });
+        if (remainingToSell <= 0) break;
+      }
+    }
+
+    // Phase 3: Active buys mapping
+    const activeBuys = buyTrackers.filter(b => b.activeShares > 0);
     if (activeBuys.length > 0) {
-      // Map lots with chronological identity: Lot #1 is ALWAYS the earliest initial entry
       const mappedLots = activeBuys.map((entry, idx) => {
         const bo = entry.order;
         const lotShares = entry.activeShares;
@@ -141,7 +226,7 @@ export default function PortfolioView({
         return {
           id: bo.id,
           ref: bo.ref,
-          lotNumber: idx + 1, // Lot #1 is ALWAYS the initial purchase
+          lotNumber: idx + 1,
           isInitial: isInitial,
           isLatest: isLatest,
           date: bo.dateTime,
@@ -156,33 +241,39 @@ export default function PortfolioView({
         };
       });
 
-      // Display according to chosen sort order
-      return lotSortOrder === 'desc' ? [...mappedLots].reverse() : mappedLots;
+      const sortedActive = lotSortOrder === 'desc' ? [...mappedLots].reverse() : mappedLots;
+      return { activeLots: sortedActive, closedLots };
     }
 
     const lotCost = item.shares * item.entryPrice;
     const lotValue = item.shares * item.currentPrice;
     const lotPnl = lotValue - lotCost;
     const lotPnlPct = lotCost > 0 ? (lotPnl / lotCost) * 100 : 0;
-    return [{
-      id: `lot-init-${item.symbol}`,
-      ref: `#INIT-${cleanSym}`,
-      lotNumber: 1,
-      isInitial: true,
-      isLatest: false,
-      date: item.entryDate 
-        ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-        : 'Initial',
-      shares: item.shares,
-      price: item.entryPrice,
-      totalCost: lotCost,
-      currentValue: lotValue,
-      pnl: lotPnl,
-      pnlPct: lotPnlPct,
-      note: 'Initial Position Base',
-      timestamp: 0
-    }];
+    return {
+      activeLots: [{
+        id: `lot-init-${item.symbol}`,
+        ref: `#INIT-${cleanSym}`,
+        lotNumber: 1,
+        isInitial: true,
+        isLatest: false,
+        date: item.entryDate 
+          ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : 'Initial',
+        shares: item.shares,
+        price: item.entryPrice,
+        totalCost: lotCost,
+        currentValue: lotValue,
+        pnl: lotPnl,
+        pnlPct: lotPnlPct,
+        note: 'Core Holding Outlay',
+        timestamp: 0
+      }],
+      closedLots
+    };
   };
+
+  const getBuyLotsForHolding = (item: PortfolioItem) => getTranchesForHolding(item).activeLots;
+  const getClosedLotsForHolding = (item: PortfolioItem) => getTranchesForHolding(item).closedLots;
 
   // Sector concentration and risk profile
   const sectorRisk = calculateSectorRisk(portfolio, usdTryRate);
@@ -974,6 +1065,40 @@ export default function PortfolioView({
                         </div>
                       ))}
                     </div>
+
+                    {/* Mobile Closed Lots / Realized Scalps Section */}
+                    {(() => {
+                      const closedLots = getClosedLotsForHolding(item);
+                      if (!closedLots || closedLots.length === 0) return null;
+                      return (
+                        <div className="mt-2.5 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                          <div className="flex justify-between items-center text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                            <span className="flex items-center gap-1">
+                              <span>🏷️</span>
+                              <span>{language === 'tr' ? 'Kapatılan Satışlar / Scalp' : 'Closed Sells / Scalps'}</span>
+                            </span>
+                            <span className="text-[10px] text-emerald-600 font-mono">
+                              {closedLots.length} {language === 'tr' ? 'İşlem' : 'Trades'}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {closedLots.map((cLot, cIdx) => (
+                              <div key={cIdx} className="bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700 flex justify-between items-center text-[10px]">
+                                <div>
+                                  <div className="font-bold text-gray-900 dark:text-white">
+                                    {cLot.shares} lot: Alış {formatCurr(cLot.buyPrice, item.currency)} ➔ Satış {formatCurr(cLot.sellPrice, item.currency)}
+                                  </div>
+                                  <div className="text-gray-400 text-[9px]">{cLot.date} · {cLot.note}</div>
+                                </div>
+                                <div className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  +{formatCurr(cLot.realizedPnl, item.currency)} (+{cLot.realizedPnlPct.toFixed(1)}%)
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1978,6 +2103,59 @@ export default function PortfolioView({
                                 </tbody>
                               </table>
                             </div>
+
+                            {/* Closed Tranches & Realized Sells Section */}
+                            {(() => {
+                              const closedLots = getClosedLotsForHolding(item);
+                              if (!closedLots || closedLots.length === 0) return null;
+                              return (
+                                <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                                  <div className="flex items-center justify-between text-xs font-black text-slate-800 dark:text-slate-200">
+                                    <span className="flex items-center gap-1.5">
+                                      <span>🏷️</span>
+                                      <span>{language === 'tr' ? 'Satışlar & Kapatılan Mahsuplaşma Kademeleri' : 'Executed Sells & Closed Tranches'}</span>
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                      {closedLots.length} {language === 'tr' ? 'İşlem' : 'Trades'}
+                                    </span>
+                                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                      <thead className="text-[10px] font-bold uppercase text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-800">
+                                        <tr>
+                                          <th className="py-1 px-2">{language === 'tr' ? 'İşlem Türü' : 'Type'}</th>
+                                          <th className="py-1 px-2">{language === 'tr' ? 'Tarih' : 'Date'}</th>
+                                          <th className="py-1 px-2 text-right">{language === 'tr' ? 'Lot Adedi' : 'Shares'}</th>
+                                          <th className="py-1 px-2 text-right">{language === 'tr' ? 'Alış Fiyatı' : 'Buy Price'}</th>
+                                          <th className="py-1 px-2 text-right">{language === 'tr' ? 'Satış Fiyatı' : 'Sell Price'}</th>
+                                          <th className="py-1 px-2 text-right">{language === 'tr' ? 'Net Kâr' : 'Realized P&L'}</th>
+                                          <th className="py-1 px-2">{language === 'tr' ? 'Mahsuplaşma Notu' : 'Netting Note'}</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                        {closedLots.map((cLot, cIdx) => (
+                                          <tr key={cIdx} className="hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20">
+                                            <td className="py-1.5 px-2">
+                                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                                                ⚡ {language === 'tr' ? 'Kapatılan Scalp' : 'Closed Scalp'}
+                                              </span>
+                                            </td>
+                                            <td className="py-1.5 px-2 font-mono text-[11px] text-gray-600 dark:text-gray-300">{cLot.date}</td>
+                                            <td className="py-1.5 px-2 text-right font-bold text-gray-900 dark:text-white font-mono">{cLot.shares}</td>
+                                            <td className="py-1.5 px-2 text-right font-mono text-gray-600 dark:text-gray-400">{formatCurr(cLot.buyPrice, item.currency)}</td>
+                                            <td className="py-1.5 px-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurr(cLot.sellPrice, item.currency)}</td>
+                                            <td className="py-1.5 px-2 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                              +{formatCurr(cLot.realizedPnl, item.currency)} (+{cLot.realizedPnlPct.toFixed(2)}%)
+                                            </td>
+                                            <td className="py-1.5 px-2 text-[10px] text-gray-500 dark:text-gray-400 truncate max-w-xs">{cLot.note}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
