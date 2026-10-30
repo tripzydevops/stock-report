@@ -224,6 +224,16 @@ export default function PortfolioView({
     return deriveDividendsFromPortfolio(portfolio);
   }, [portfolio]);
 
+  // Cumulative swing gains per symbol from realized trades (used for Maliyet Düşürme / House Money tracking)
+  const swingGainsBySymbol = React.useMemo(() => {
+    const map: { [sym: string]: number } = {};
+    (realizedTrades || []).forEach(rt => {
+      const sym = rt.symbol.replace('.IS', '').trim().toUpperCase();
+      map[sym] = (map[sym] || 0) + (rt.realizedPnl || 0);
+    });
+    return map;
+  }, [realizedTrades]);
+
   const totalAnnualDivTRY = React.useMemo(() => {
     return dividendAssets.reduce((acc, d) => {
       const p = d.currency === 'USD' ? d.annualPayout * usdTryRate : d.annualPayout;
@@ -691,6 +701,8 @@ export default function PortfolioView({
             const lots = getBuyLotsForHolding(item);
             const isExpanded = !!expandedLots[item.symbol];
             const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+            const symbolSwingGains = swingGainsBySymbol[cleanSym] || 0;
+            const isHouseMoney = item.entryPrice <= 0.05 || (item.shares > 0 && symbolSwingGains > 0 && (item.shares * item.entryPrice) <= symbolSwingGains);
             const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
             const effTarget = item.targetPrice && item.targetPrice > 0
               ? item.targetPrice
@@ -761,9 +773,19 @@ export default function PortfolioView({
                     <div className="font-bold text-gray-900 dark:text-white mt-0.5">
                       {formatCurr(item.currentPrice, item.currency)}
                     </div>
-                    <div className="text-[11px] text-gray-500">
-                      Mal: {formatCurr(item.entryPrice, item.currency)}
+                    <div className="text-[11px] text-gray-500 flex items-center gap-1 flex-wrap">
+                      <span>Mal: {formatCurr(item.entryPrice, item.currency)}</span>
+                      {symbolSwingGains > 0 && (
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
+                          (-{formatCurr(symbolSwingGains, item.currency)})
+                        </span>
+                      )}
                     </div>
+                    {isHouseMoney && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse mt-0.5">
+                        👑 Bedava Hisse (House Money)
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-right">
@@ -1010,6 +1032,8 @@ export default function PortfolioView({
                   ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
                   : null;
                 const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+                const symbolSwingGains = swingGainsBySymbol[cleanSym] || 0;
+                const isHouseMoney = item.entryPrice <= 0.05 || (item.shares > 0 && symbolSwingGains > 0 && (item.shares * item.entryPrice) <= symbolSwingGains);
                 const matchedSig = signals?.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
                 const defaultStop = item.stopLoss > 0 ? item.stopLoss : Number((item.entryPrice * 0.95).toFixed(2));
                 const calcT2 = Number((item.entryPrice + 2 * Math.abs(item.entryPrice - defaultStop)).toFixed(2));
@@ -1111,9 +1135,21 @@ export default function PortfolioView({
                             <div className="font-bold text-gray-900 dark:text-white font-mono">
                               {formatCurr(item.currentPrice, item.currency)}
                             </div>
-                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
-                              Mal: {formatCurr(item.entryPrice, item.currency)}
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono flex items-center justify-end gap-1">
+                              <span>Mal: {formatCurr(item.entryPrice, item.currency)}</span>
+                              {symbolSwingGains > 0 && (
+                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
+                                  (-{formatCurr(symbolSwingGains, item.currency)})
+                                </span>
+                              )}
                             </div>
+                            {isHouseMoney && (
+                              <div className="mt-0.5">
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse">
+                                  👑 Bedava Hisse (House Money)
+                                </span>
+                              </div>
+                            )}
                           </td>
 
                           {/* Col 4: Net K/Z (P&L) */}

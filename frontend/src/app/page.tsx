@@ -2268,7 +2268,8 @@ export default function Home() {
     sharesToSell: number, 
     sellPrice: number, 
     tradeDate?: string,
-    specificEntryPrice?: number
+    specificEntryPrice?: number,
+    reduceCostBasis: boolean = true
   ) => {
     const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
     const target = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
@@ -2298,11 +2299,17 @@ export default function Home() {
     const realizedPnlPct = costBasis > 0 ? ((sellPrice - costBasis) / costBasis) * 100 : 0;
     const chosenCloseDate = tradeDate || new Date().toISOString().slice(0, 10);
 
-    // Compute remaining shares and restored cost basis
+    // Compute remaining shares and restored/netted cost basis (Maliyet Düşürme Modu)
     const remainingShares = Math.max(0, target.shares - actualSold);
     let newAvgEntryPrice = target.entryPrice;
-    if (isTrancheMatched && remainingShares > 0) {
-      const remainingTotalCost = Math.max(0, (target.shares * target.entryPrice) - (actualSold * costBasis));
+    if (remainingShares > 0) {
+      let remainingTotalCost = (target.shares * target.entryPrice) - (actualSold * costBasis);
+      if (remainingTotalCost < 0) remainingTotalCost = 0;
+
+      // When Maliyet Düşürme is enabled, deduct the swing profit from remaining capital
+      if (reduceCostBasis && realizedPnl > 0) {
+        remainingTotalCost = Math.max(0, remainingTotalCost - realizedPnl);
+      }
       newAvgEntryPrice = Number((remainingTotalCost / remainingShares).toFixed(4));
     }
 
@@ -2455,9 +2462,12 @@ export default function Home() {
         ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
         : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
+      const costReductionNote = (reduceCostBasis && realizedPnl > 0 && remainingShares > 0)
+        ? ` (Kalan ${remainingShares} hissenin maliyeti ₺${newAvgEntryPrice.toFixed(4)} seviyesine çekildi)`
+        : '';
       const orderNote = isTrancheMatched
-        ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`
-        : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`;
+        ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
+        : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`;
 
       try {
         await supabase.from('portfolio_orders').insert([{
@@ -2493,7 +2503,7 @@ export default function Home() {
         dateTime: displayDateTime,
         executedAt: executionIso,
         status: 'Filled',
-        dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})`
+        dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})${costReductionNote}`
       };
       const updatedOrders = [newSellOrder, ...executedOrders];
       setExecutedOrders(updatedOrders);

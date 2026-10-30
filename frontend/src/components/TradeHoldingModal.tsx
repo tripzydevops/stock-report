@@ -10,7 +10,14 @@ interface TradeHoldingModalProps {
   recentOrders?: ExecutedOrder[];
   onClose: () => void;
   onBuyMore: (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => void;
-  onSell: (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string, specificEntryPrice?: number) => void;
+  onSell: (
+    symbol: string, 
+    sharesToSell: number, 
+    sellPrice: number, 
+    tradeDate?: string, 
+    specificEntryPrice?: number,
+    reduceCostBasis?: boolean
+  ) => void;
 }
 
 export default function TradeHoldingModal({
@@ -29,6 +36,7 @@ export default function TradeHoldingModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [useTrancheMatch, setUseTrancheMatch] = useState<boolean>(true);
   const [selectedTranchePrice, setSelectedTranchePrice] = useState<number | null>(null);
+  const [reduceCostBasis, setReduceCostBasis] = useState<boolean>(true);
 
   useEffect(() => {
     if (holding) {
@@ -103,7 +111,7 @@ export default function TradeHoldingModal({
         return;
       }
       const passedEntryPrice = effectiveCostBasis !== holding.entryPrice ? effectiveCostBasis : undefined;
-      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice);
+      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice, reduceCostBasis);
     }
     onClose();
   };
@@ -613,6 +621,100 @@ export default function TradeHoldingModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Cost-Reduction (Maliyet Düşürme / House Money) Mode */}
+                {!isFullExit && remainingShares > 0 && (
+                  <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={reduceCostBasis}
+                          onChange={(e) => setReduceCostBasis(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-gray-300 dark:border-gray-600"
+                        />
+                        <div>
+                          <span className="text-xs font-black text-emerald-950 dark:text-emerald-200 block">
+                            {language === 'tr' ? '🛡️ Maliyet Düşürme Modu (Netting)' : '🛡️ Cost-Reduction Mode (Netting)'}
+                          </span>
+                          <span className="text-[11px] text-gray-600 dark:text-gray-300 leading-tight block mt-0.5">
+                            {language === 'tr' 
+                              ? 'Kârı kalan hisselerin maliyetinden düş. Birden çok işlemle anapara sıfırlanıp hisse "Bedava Hisse (House Money)" olur.'
+                              : 'Deduct trade profit from remaining shares cost basis to drive cost toward zero (House Money).'}
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {reduceCostBasis && (
+                      <div className="pt-2 border-t border-emerald-200/80 dark:border-emerald-800/80 space-y-2">
+                        {(() => {
+                          const remainingBaseCost = Math.max(0, (holding.shares * holding.entryPrice) - (sellShares * effectiveCostBasis));
+                          const baseRemainingAvg = remainingShares > 0 ? (remainingBaseCost / remainingShares) : holding.entryPrice;
+                          const profitDeduction = realizedPnl > 0 ? realizedPnl : 0;
+                          const simulatedNetCost = Math.max(0, remainingBaseCost - profitDeduction);
+                          const simulatedNewAvg = remainingShares > 0 ? (simulatedNetCost / remainingShares) : 0;
+                          const isHouseMoney = simulatedNewAvg <= 0.001;
+                          const costReductionPerShare = baseRemainingAvg - simulatedNewAvg;
+
+                          return (
+                            <>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="bg-white/90 dark:bg-gray-800/90 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/60">
+                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 block font-semibold">
+                                    {language === 'tr' ? 'Mevcut Kalan Lot' : 'Remaining Shares'}
+                                  </span>
+                                  <span className="font-bold text-gray-900 dark:text-white font-mono mt-0.5 block">
+                                    {remainingShares.toLocaleString()} {t.common.shares}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-mono">
+                                    @ {currencySymbol}{baseRemainingAvg.toFixed(4)}
+                                  </span>
+                                </div>
+
+                                <div className="bg-white/90 dark:bg-gray-800/90 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/60">
+                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 block font-semibold">
+                                    {language === 'tr' ? 'Düşülecek Net Kâr' : 'Profit Deducted'}
+                                  </span>
+                                  <span className={`font-bold font-mono mt-0.5 block ${realizedPnl > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`}>
+                                    {realizedPnl > 0 ? `+${currencySymbol}${realizedPnl.toFixed(2)}` : `${currencySymbol}0.00`}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {realizedPnl > 0 ? (language === 'tr' ? 'Maliyete yedirilir' : 'Applied to basis') : (language === 'tr' ? 'Kâr yok' : 'No gain')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="bg-emerald-600/10 dark:bg-emerald-500/10 border border-emerald-400/40 dark:border-emerald-600/40 rounded-xl p-2.5 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[11px] font-black text-emerald-900 dark:text-emerald-200 block">
+                                    {language === 'tr' ? 'Yeni Efektif Birim Maliyet:' : 'New Effective Cost Basis:'}
+                                  </span>
+                                  {isHouseMoney ? (
+                                    <span className="inline-flex items-center gap-1 text-xs font-black text-amber-600 dark:text-amber-300 animate-pulse mt-0.5">
+                                      👑 BEDAVA HİSSE (HOUSE MONEY)
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold block">
+                                      {costReductionPerShare > 0 
+                                        ? (language === 'tr' ? `(Hisse başı ₺${costReductionPerShare.toFixed(4)} ucuzladı)` : `(${currencySymbol}${costReductionPerShare.toFixed(4)} lower per share)`)
+                                        : (language === 'tr' ? 'Maliyet korundu' : 'Cost maintained')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-base font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                                    {isHouseMoney ? `${currencySymbol}0.00` : `${currencySymbol}${simulatedNewAvg.toFixed(4)}`}
+                                  </span>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
