@@ -2263,15 +2263,48 @@ export default function Home() {
     }
   };
 
-  const handleSellHolding = async (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string) => {
+  const handleSellHolding = async (
+    symbol: string, 
+    sharesToSell: number, 
+    sellPrice: number, 
+    tradeDate?: string,
+    specificEntryPrice?: number
+  ) => {
     const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
     const target = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
     if (!target) return;
 
+    // Automatic or Explicit Lot / Tranche Matching
+    let costBasis = target.entryPrice;
+    let isTrancheMatched = false;
+    if (specificEntryPrice && specificEntryPrice > 0) {
+      costBasis = specificEntryPrice;
+      isTrancheMatched = true;
+    } else {
+      // Auto-detect matching buy tranche if exact quantity matches
+      const matchingBuy = executedOrders.find(o => 
+        o.side === 'BUY' && 
+        o.symbol.replace('.IS', '').toUpperCase() === cleanSymUpper &&
+        Math.abs(o.quantity - sharesToSell) < 0.01
+      );
+      if (matchingBuy && matchingBuy.price > 0) {
+        costBasis = matchingBuy.price;
+        isTrancheMatched = true;
+      }
+    }
+
     const actualSold = Math.min(sharesToSell, target.shares);
-    const realizedPnl = (sellPrice - target.entryPrice) * actualSold;
-    const realizedPnlPct = target.entryPrice > 0 ? ((sellPrice - target.entryPrice) / target.entryPrice) * 100 : 0;
+    const realizedPnl = (sellPrice - costBasis) * actualSold;
+    const realizedPnlPct = costBasis > 0 ? ((sellPrice - costBasis) / costBasis) * 100 : 0;
     const chosenCloseDate = tradeDate || new Date().toISOString().slice(0, 10);
+
+    // Compute remaining shares and restored cost basis
+    const remainingShares = Math.max(0, target.shares - actualSold);
+    let newAvgEntryPrice = target.entryPrice;
+    if (isTrancheMatched && remainingShares > 0) {
+      const remainingTotalCost = Math.max(0, (target.shares * target.entryPrice) - (actualSold * costBasis));
+      newAvgEntryPrice = Number((remainingTotalCost / remainingShares).toFixed(4));
+    }
 
     // Record realized trade with execution discipline analytics
     const cleanSym = target.symbol.replace('.IS', '').toUpperCase();
@@ -2280,8 +2313,8 @@ export default function Home() {
     const currSymbol = target.currency === 'USD' ? '$' : '₺';
     const livePrice = matchedAsset?.price || sellPrice;
     const recommendedTarget = target.targetPrice || matchedSig?.targetPrice || (target.entryPrice > 0 ? Number((target.entryPrice * 1.12).toFixed(2)) : sellPrice);
-    const targetPnl = (recommendedTarget - target.entryPrice) * actualSold;
-    const targetPnlPercent = target.entryPrice > 0 ? ((recommendedTarget - target.entryPrice) / target.entryPrice) * 100 : 0;
+    const targetPnl = (recommendedTarget - costBasis) * actualSold;
+    const targetPnlPercent = costBasis > 0 ? ((recommendedTarget - costBasis) / costBasis) * 100 : 0;
 
     let verdict: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' = 'RUNNING';
     let leftOnTable = 0;
@@ -2319,7 +2352,7 @@ export default function Home() {
       market: target.market,
       currency: target.currency,
       sharesSold: actualSold,
-      entryPrice: target.entryPrice,
+      entryPrice: costBasis,
       exitPrice: sellPrice,
       realizedPnl: realizedPnl,
       realizedPnlPercent: realizedPnlPct,
@@ -2345,8 +2378,7 @@ export default function Home() {
       setPortfolio(prev => {
         return prev.map(item => {
           if (item.symbol !== symbol) return item;
-          const remainingShares = item.shares - actualSold;
-          const newTotalCost = remainingShares * item.entryPrice;
+          const newTotalCost = remainingShares * newAvgEntryPrice;
           const newCurrentValue = remainingShares * item.currentPrice;
           const newPnlAmount = newCurrentValue - newTotalCost;
           const newPnlPercent = newTotalCost > 0 ? (newPnlAmount / newTotalCost) * 100 : 0;
@@ -2354,6 +2386,7 @@ export default function Home() {
           return {
             ...item,
             shares: remainingShares,
+            entryPrice: newAvgEntryPrice,
             totalCost: newTotalCost,
             currentValue: newCurrentValue,
             pnlAmount: newPnlAmount,
@@ -2365,7 +2398,6 @@ export default function Home() {
       setDividends(prev => {
         return prev.map(div => {
           if (div.symbol !== symbol) return div;
-          const remainingShares = div.shares - actualSold;
           return {
             ...div,
             shares: remainingShares,
@@ -2398,7 +2430,10 @@ export default function Home() {
           await delQuery;
         } else {
           let updQuery = posMutQuery
-            .update({ quantity: target.shares - actualSold })
+            .update({ 
+              quantity: remainingShares,
+              avg_entry_price: newAvgEntryPrice 
+            })
             .eq('asset_id', assetData[0].id)
             .eq('is_open', true);
           if (user && !isDemoMode) {
@@ -2420,6 +2455,10 @@ export default function Home() {
         ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
         : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
+      const orderNote = isTrancheMatched
+        ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`
+        : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`;
+
       try {
         await supabase.from('portfolio_orders').insert([{
           user_id: user ? user.id : null,
@@ -2433,7 +2472,7 @@ export default function Home() {
           currency: target.currency || 'TRY',
           executed_at: executionIso,
           status: 'Filled',
-          notes: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}`
+          notes: orderNote
         }]);
       } catch (ordErr) {
         console.warn('Could not save sell order to Supabase:', ordErr);
@@ -3600,6 +3639,7 @@ export default function Home() {
       <TradeHoldingModal
         isOpen={tradeModalOpen}
         holding={selectedHolding}
+        recentOrders={executedOrders}
         onClose={() => {
           setTradeModalOpen(false);
           setSelectedHolding(null);

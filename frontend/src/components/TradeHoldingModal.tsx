@@ -1,20 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PortfolioItem } from '../lib/supabaseClient';
+import { PortfolioItem, ExecutedOrder } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
 
 interface TradeHoldingModalProps {
   isOpen: boolean;
   holding: PortfolioItem | null;
+  recentOrders?: ExecutedOrder[];
   onClose: () => void;
   onBuyMore: (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => void;
-  onSell: (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string) => void;
+  onSell: (symbol: string, sharesToSell: number, sellPrice: number, tradeDate?: string, specificEntryPrice?: number) => void;
 }
 
 export default function TradeHoldingModal({
   isOpen,
   holding,
+  recentOrders = [],
   onClose,
   onBuyMore,
   onSell,
@@ -25,6 +27,8 @@ export default function TradeHoldingModal({
   const [priceStr, setPriceStr] = useState<string>('0');
   const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [useTrancheMatch, setUseTrancheMatch] = useState<boolean>(true);
+  const [selectedTranchePrice, setSelectedTranchePrice] = useState<number | null>(null);
 
   useEffect(() => {
     if (holding) {
@@ -35,6 +39,7 @@ export default function TradeHoldingModal({
       setPriceStr(String(holding.currentPrice || holding.entryPrice));
       setTradeDate(new Date().toISOString().slice(0, 10));
       setErrorMsg(null);
+      setSelectedTranchePrice(null);
     }
   }, [holding, tab]);
 
@@ -57,8 +62,24 @@ export default function TradeHoldingModal({
   const sellShares = Math.min(sharesInput, holding.shares);
   const sellExecPrice = priceInput;
   const remainingShares = Math.max(0, holding.shares - sellShares);
-  const realizedPnl = (sellExecPrice - holding.entryPrice) * sellShares;
-  const realizedPnlPct = holding.entryPrice > 0 ? ((sellExecPrice - holding.entryPrice) / holding.entryPrice) * 100 : 0;
+
+  // Tranche / Lot Matching Logic
+  const cleanHoldingSym = holding.symbol.replace('.IS', '').trim().toUpperCase();
+  const priorBuys = (recentOrders || []).filter((o: ExecutedOrder) =>
+    o.side === 'BUY' &&
+    o.symbol?.replace('.IS', '').trim().toUpperCase() === cleanHoldingSym
+  );
+  const exactMatchingBuy = priorBuys.find((b: ExecutedOrder) => Math.abs(Number(b.quantity) - sellShares) < 0.01);
+
+  let effectiveCostBasis = holding.entryPrice;
+  if (selectedTranchePrice !== null) {
+    effectiveCostBasis = selectedTranchePrice;
+  } else if (useTrancheMatch && exactMatchingBuy) {
+    effectiveCostBasis = Number(exactMatchingBuy.price);
+  }
+
+  const realizedPnl = (sellExecPrice - effectiveCostBasis) * sellShares;
+  const realizedPnlPct = effectiveCostBasis > 0 ? ((sellExecPrice - effectiveCostBasis) / effectiveCostBasis) * 100 : 0;
   const isFullExit = sellShares >= holding.shares;
 
   const handleQuickPercent = (pct: number) => {
@@ -81,7 +102,8 @@ export default function TradeHoldingModal({
         setErrorMsg(language === 'tr' ? 'Lütfen geçerli bir satış adedi ve fiyatı girin.' : 'Please specify a valid number of shares to sell and sell price.');
         return;
       }
-      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate);
+      const passedEntryPrice = effectiveCostBasis !== holding.entryPrice ? effectiveCostBasis : undefined;
+      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice);
     }
     onClose();
   };
@@ -416,6 +438,85 @@ export default function TradeHoldingModal({
                   );
                 })()}
 
+                {/* Tranche / Lot-Matching Cost Basis Selector */}
+                {priorBuys.length > 0 && (
+                  <div className="bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl p-3.5 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                        <span>🏷️</span>
+                        <span>{language === 'tr' ? 'Maliyet Esası (Lot / Tranche Eşleştirme):' : 'Cost Basis (Lot / Tranche Matching):'}</span>
+                      </span>
+                      {exactMatchingBuy && (
+                        <span className="text-[9px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white animate-pulse">
+                          {language === 'tr' ? '✓ EŞLEŞEN TRANCHE' : '✓ MATCHING TRANCHE'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUseTrancheMatch(false);
+                          setSelectedTranchePrice(null);
+                        }}
+                        className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                          !useTrancheMatch || (!exactMatchingBuy && selectedTranchePrice === null)
+                            ? 'bg-white dark:bg-gray-800 border-blue-500 shadow-xs ring-1 ring-blue-500'
+                            : 'bg-white/60 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 opacity-75'
+                        }`}
+                      >
+                        <span className="text-[10px] block font-semibold text-gray-500 dark:text-gray-400">
+                          {language === 'tr' ? 'Portföy Havuz Ortalaması' : 'Holding Blended Average'}
+                        </span>
+                        <span className="font-black text-xs text-gray-900 dark:text-white mt-0.5 block">
+                          {currencySymbol}{holding.entryPrice.toFixed(2)}
+                        </span>
+                      </button>
+
+                      {exactMatchingBuy ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseTrancheMatch(true);
+                            setSelectedTranchePrice(Number(exactMatchingBuy.price));
+                          }}
+                          className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                            useTrancheMatch
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 shadow-xs ring-1 ring-emerald-500'
+                              : 'bg-white/60 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700 opacity-75'
+                          }`}
+                        >
+                          <span className="text-[10px] block font-semibold text-emerald-600 dark:text-emerald-400">
+                            {language === 'tr' ? `Alım Tranche'ı (${exactMatchingBuy.quantity} lot)` : `Buy Tranche (${exactMatchingBuy.quantity} shs)`}
+                          </span>
+                          <span className="font-black text-xs text-emerald-700 dark:text-emerald-300 mt-0.5 block">
+                            {currencySymbol}{Number(exactMatchingBuy.price).toFixed(2)}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const latestBuy = priorBuys[priorBuys.length - 1];
+                            setUseTrancheMatch(true);
+                            setSelectedTranchePrice(Number(latestBuy.price));
+                            setSharesStr(String(latestBuy.quantity));
+                          }}
+                          className="p-2.5 rounded-xl bg-white dark:bg-gray-800 border border-dashed border-gray-300 dark:border-gray-600 text-left cursor-pointer hover:border-blue-400 transition-all"
+                        >
+                          <span className="text-[10px] block text-gray-500 dark:text-gray-400">
+                            {language === 'tr' ? `Son Alım (${priorBuys[priorBuys.length - 1].quantity} lot)` : `Last Buy (${priorBuys[priorBuys.length - 1].quantity} shs)`}
+                          </span>
+                          <span className="font-black text-xs text-blue-600 dark:text-blue-400 mt-0.5 block">
+                            {currencySymbol}{Number(priorBuys[priorBuys.length - 1].price).toFixed(2)}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -487,11 +588,17 @@ export default function TradeHoldingModal({
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-600 dark:text-gray-400">{language === 'tr' ? 'Hesaba Esas Maliyet:' : 'Applied Cost Basis:'}</span>
+                    <span className="font-bold text-gray-900 dark:text-white">
+                      {currencySymbol}{effectiveCostBasis.toFixed(2)} {effectiveCostBasis !== holding.entryPrice ? (language === 'tr' ? '(Tranche Eşleşmesi)' : '(Tranche Matched)') : (language === 'tr' ? '(Portföy Ort.)' : '(Blended Avg)')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-600 dark:text-gray-400">{t.tradeModal.remainingShares}:</span>
                     <span className="font-bold text-gray-900 dark:text-white">
                       {isFullExit 
                         ? (language === 'tr' ? '0 (Tamamen Kapatıldı)' : '0 (Full Position Exit)') 
-                        : `${remainingShares.toLocaleString()} ${t.common.shares} @ ${currencySymbol}${holding.entryPrice.toFixed(2)}`}
+                        : `${remainingShares.toLocaleString()} ${t.common.shares}`}
                     </span>
                   </div>
                   <div className="pt-2 border-t border-rose-200 dark:border-rose-800 flex justify-between items-center">
