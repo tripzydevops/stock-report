@@ -146,8 +146,31 @@ Market microstructures in Istanbul and New York differ drastically. MarketPulse 
 
 ---
 
+---
+
 ## 7. Automated Testing & Verification Suite
 
-- **Backend Pytest:** 107/107 tests passing (`backend/tests/test_signal_explainer.py` covering schema validity, all 9 strategies, edge cases, and zero-history handling).
+- **Backend Pytest:** 114/114 tests passing (`backend/tests/test_signal_explainer.py` & `backend/tests/test_sync_to_supabase.py` covering schema validity, all 9 strategies, edge cases, zero-history handling, memory handoff, Excel round-trips, and reconfirmation isolation).
 - **Frontend Next.js Build:** Turbopack production build passing cleanly (`next build`) with strict TypeScript type-checking.
-- **Frontend Playwright E2E:** 7/7 mobile tests passing (`tests/mobile-view.spec.ts` & `tests/mobile-tradecard.spec.ts`).
+- **Frontend Playwright E2E:** Mobile tests passing (`tests/mobile-view.spec.ts` & `tests/mobile-tradecard.spec.ts`).
+
+---
+
+## 8. Pipeline Synchronization, Reconfirmation Isolation & Confidence Governance
+
+### 8.1 Direct Memory Handoff & Lossless Fallback
+In scheduled execution (`export_to_spreadsheet.py` triggered via `.github/workflows/market_pulse_cron.yml`), full screener signals are passed directly in memory via `raw_signals=all_trade_signals` into `sync_all_to_supabase()`. In addition, the spreadsheet generation writes a dedicated `"Full Explainer JSON"` column into the Excel export. When syncing from a spreadsheet file without memory context, `sync_to_supabase.py` recovers the serialized JSON payload, ensuring zero explainer data loss across executions.
+
+### 8.2 Historical Integrity & Reconfirmation Isolation
+Signal identity in Supabase `trade_signals` is keyed by `(asset_id, strategy)`. When a stock triggers an existing active setup again on subsequent trading days:
+1. **Preserve Original Trade Plan:** The initial `entry_price`, `stop_loss`, `target_1`, and `risk_reward_ratio` are immutable.
+2. **Append-Only Observation Log:** Today's scan metrics and timestamp are appended to `reconfirmations: [...]` and stored in `latest_reconfirmation`.
+3. **No Retroactive Target Modification:** Today's `target_2` is not attached to an older trade plan.
+4. **Risk Profile Protection:** Historical trade risk numbers are preserved; today's ATR and stop distance are not substituted for original trade risk.
+5. **Legacy Signal Migration:** Existing unparsed plain-text records are upgraded to structured JSON with `original_explainer_status: "legacy_unstructured"`, cleanly stripping legacy `"RE-CONFIRMED: "` string prefixes.
+
+### 8.3 Strategy Target 2 Priority & Fallback Badging
+`TradeCard.tsx` honors strategy targets first. If a strategy specifies `target2`, it renders directly. When a strategy only supplies `target_1` and a 2R extension fallback is calculated by the client, it is unambiguously labeled as `(Tahmini / Est.)` across all card sections (summary strips, quick cards, scale-out table, and expanded parameters).
+
+### 8.4 Confidence Score Standardization
+Confidence scores are normalized to a uniform 0–100 integer scale at the frontend boundary (`page.tsx`), and rendered with true 10-star resolution (`Math.round(conf100 / 10)`), resolving 10-star overflow. Scores are labeled honestly as **"Güven Skoru / Setup Quality"**, preventing any confusion with uncalibrated win probability.
