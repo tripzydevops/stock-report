@@ -12,6 +12,7 @@ if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
 import pandas as pd
+import json
 from datetime import datetime, timedelta, date
 from pathlib import Path
 
@@ -31,7 +32,7 @@ from app.models.data_contracts import (
     validate_trade_signals_dataframe,
 )
 
-def sync_all_to_supabase(excel_path=None, report_record=None):
+def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
     from datetime import timezone
     print("🚀 Connecting to Supabase...")
     client = get_supabase_client()
@@ -459,41 +460,120 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
 
     # 5. Sync Trade Signals
     print("📥 Syncing Trade Signals...")
-    df_sig = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
-    df_sig = validate_trade_signals_dataframe(df_sig, strict=False, preserve_original_columns=True)
     signal_rows = []
-    
-    for _, row in df_sig.iterrows():
-        sym = str(row["Symbol"]).strip()
-        asset_id = symbol_to_id.get(sym) or symbol_to_id.get(f"{sym}.IS")
-        if not asset_id:
-            continue
-            
-        sig_date = str(row["Signal Date"])[:10]
-        strategy = str(row["Strategy"]).lower().replace(" ", "_")
-        entry_p = float(row["Entry Price"]) if pd.notna(row["Entry Price"]) else 0
-        stop_l = float(row["Stop Loss"]) if pd.notna(row["Stop Loss"]) else None
-        target_p = float(row["Target"]) if pd.notna(row["Target"]) else None
+    today_date = date.today()
+    today_str = today_date.strftime("%Y-%m-%d")
 
-        # Sanity check: Spot equities MUST be long setups (target > entry and stop < entry)
-        if target_p is not None and stop_l is not None and entry_p > 0:
-            if target_p <= entry_p or stop_l >= entry_p:
-                print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_p})")
+    if raw_signals is not None:
+        # PATH A: Direct in-memory structured signals from screener engine (Lossless)
+        for sig in raw_signals:
+            raw_sym = str(sig.get("symbol", "")).strip()
+            sym = raw_sym.replace(".IS", "")
+            asset_id = symbol_to_id.get(sym) or symbol_to_id.get(f"{sym}.IS") or symbol_to_id.get(raw_sym)
+            if not asset_id:
                 continue
-        
-        signal_rows.append({
-            "asset_id": asset_id,
-            "strategy": strategy,
-            "signal_date": sig_date,
-            "entry_price": entry_p,
-            "stop_loss": stop_l,
-            "target_1": target_p,
-            "risk_reward_ratio": float(row["R:R Ratio"]) if pd.notna(row["R:R Ratio"]) else None,
-            "confidence_score": 8.0,
-            "ai_rationale": f"{row['Strategy']} trigger for {sym}. Target: {row['Target']}, Stop: {row['Stop Loss']}.",
-            "status": "open",
-        })
-        
+
+            sig_date = str(sig.get("signal_date", today_str))[:10]
+            strategy = str(sig.get("strategy", "")).lower().replace(" ", "_")
+            entry_p = float(sig.get("entry_price", 0)) if sig.get("entry_price") else 0.0
+            stop_l = float(sig.get("stop_loss", 0)) if sig.get("stop_loss") else None
+            target_1 = float(sig.get("target_1", 0)) if sig.get("target_1") else None
+            target_2 = float(sig.get("target_2", 0)) if sig.get("target_2") else None
+            rr = float(sig.get("risk_reward_ratio", 0)) if sig.get("risk_reward_ratio") else None
+            conf = float(sig.get("confidence_score", 80.0)) if sig.get("confidence_score") else 80.0
+
+            # Spot equities sanity: target > entry and stop < entry
+            if target_1 is not None and stop_l is not None and entry_p > 0:
+                if target_1 <= entry_p or stop_l >= entry_p:
+                    print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_1})")
+                    continue
+
+            # Full structured explainer package
+            explanation_payload = {
+                "symbol": sym,
+                "strategy": sig.get("strategy") or strategy,
+                "trigger_reasons": sig.get("trigger_reasons", []),
+                "failed_checks": sig.get("failed_checks", []),
+                "invalidation": sig.get("invalidation", ""),
+                "market_context": sig.get("market_context", {}),
+                "risk": sig.get("risk", {}),
+                "rationale": sig.get("rationale") or f"{sig.get('strategy')} trigger for {sym}.",
+                "entry_mode": sig.get("entry_mode", "next_open"),
+                "direction": sig.get("direction", "LONG"),
+                "signal_date": sig_date,
+            }
+
+            signal_rows.append({
+                "asset_id": asset_id,
+                "strategy": strategy,
+                "signal_date": sig_date,
+                "entry_price": entry_p,
+                "stop_loss": stop_l,
+                "target_1": target_1,
+                "target_2": target_2,
+                "risk_reward_ratio": rr,
+                "confidence_score": conf,
+                "ai_rationale": json.dumps(explanation_payload, ensure_ascii=False),
+                "status": "open",
+            })
+    else:
+        # PATH B: Fallback from Excel spreadsheet
+        df_sig = pd.read_excel(excel_path, sheet_name="🎯 Trade Signals")
+        df_sig = validate_trade_signals_dataframe(df_sig, strict=False, preserve_original_columns=True)
+
+        for _, row in df_sig.iterrows():
+            sym = str(row["Symbol"]).strip()
+            asset_id = symbol_to_id.get(sym) or symbol_to_id.get(f"{sym}.IS")
+            if not asset_id:
+                continue
+
+            sig_date = str(row["Signal Date"])[:10]
+            strategy = str(row["Strategy"]).lower().replace(" ", "_")
+            entry_p = float(row["Entry Price"]) if pd.notna(row["Entry Price"]) else 0
+            stop_l = float(row["Stop Loss"]) if pd.notna(row["Stop Loss"]) else None
+            target_p = float(row["Target"]) if pd.notna(row["Target"]) else None
+            target_2 = float(row["Target 2"]) if "Target 2" in row and pd.notna(row["Target 2"]) else None
+            conf = float(row["Confidence %"]) if "Confidence %" in row and pd.notna(row["Confidence %"]) else 80.0
+
+            if target_p is not None and stop_l is not None and entry_p > 0:
+                if target_p <= entry_p or stop_l >= entry_p:
+                    print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_p})")
+                    continue
+
+            # Check if Full Explainer JSON column exists in Excel
+            if "Full Explainer JSON" in row and pd.notna(row["Full Explainer JSON"]):
+                ai_rat_str = str(row["Full Explainer JSON"])
+            else:
+                why_fired = [r.strip() for r in str(row.get("Why It Fired", "")).split(" | ") if r.strip()]
+                explanation_payload = {
+                    "symbol": sym,
+                    "strategy": str(row["Strategy"]),
+                    "trigger_reasons": why_fired or [f"{row['Strategy']} trigger confirmed for {sym}."],
+                    "failed_checks": [],
+                    "invalidation": str(row.get("Invalidation Rule", f"Daily close below stop loss ({stop_l}) cancels the setup.")),
+                    "market_context": {"market": str(row.get("Market", "BIST"))},
+                    "risk": {"rr_ratio": float(row.get("R:R Ratio", 2.0)) if pd.notna(row.get("R:R Ratio")) else 2.0},
+                    "rationale": str(row.get("Rationale", f"{row['Strategy']} trigger for {sym}. Target: {target_p}, Stop: {stop_l}.")),
+                    "entry_mode": str(row.get("Entry Mode", "next_open")),
+                    "direction": "LONG",
+                    "signal_date": sig_date,
+                }
+                ai_rat_str = json.dumps(explanation_payload, ensure_ascii=False)
+
+            signal_rows.append({
+                "asset_id": asset_id,
+                "strategy": strategy,
+                "signal_date": sig_date,
+                "entry_price": entry_p,
+                "stop_loss": stop_l,
+                "target_1": target_p,
+                "target_2": target_2,
+                "risk_reward_ratio": float(row["R:R Ratio"]) if pd.notna(row["R:R Ratio"]) else None,
+                "confidence_score": conf,
+                "ai_rationale": ai_rat_str,
+                "status": "open",
+            })
+
     try:
         # USER CONSTRAINT: If user is holding the stock in portfolio_positions, NEVER remove or auto-archive it!
         held_asset_ids = set()
@@ -513,30 +593,59 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
             for row in existing_open.data:
                 key = (row["asset_id"], str(row.get("strategy", "")).lower().strip())
                 existing_map[key] = row
-        
+
         signals_to_insert = []
         signals_to_resolve = []
         signals_reconfirmed = 0
         seen_keys = set()
-        today_date = date.today()
-        today_str = today_date.strftime("%Y-%m-%d")
 
-        # 1. Process new daily triggers from spreadsheet
+        # 1. Process new daily triggers
         for sig in signal_rows:
             key = (sig["asset_id"], sig["strategy"])
             seen_keys.add(key)
             if key in existing_map:
-                # Signal already exists in DB! Do NOT delete. Re-confirm without duplicate insertion.
+                # Signal already exists in DB! Re-confirm without duplicate insertion.
                 orig = existing_map[key]
                 signals_reconfirmed += 1
-                orig_rat = orig.get("ai_rationale", "")
-                if "RE-CONFIRMED" not in orig_rat:
+                orig_rat = orig.get("ai_rationale") or ""
+
+                update_fields = {}
+                is_legacy = not (orig_rat.strip().startswith("{") and orig_rat.strip().endswith("}"))
+
+                if is_legacy:
+                    # UPGRADE LEGACY SIGNAL: Replace generic template with full structured explainer!
+                    update_fields["ai_rationale"] = sig["ai_rationale"]
+                    if sig.get("target_2") and not orig.get("target_2"):
+                        update_fields["target_2"] = sig["target_2"]
+                    if sig.get("confidence_score") and (not orig.get("confidence_score") or float(orig.get("confidence_score")) == 8.0):
+                        update_fields["confidence_score"] = sig["confidence_score"]
+                else:
+                    # Already structured JSON. Preserve original entry evidence & append reconfirmation metadata:
                     try:
-                        client.table("trade_signals").update({
-                            "ai_rationale": f"RE-CONFIRMED: {orig_rat or sig['ai_rationale']}"
-                        }).eq("id", orig["id"]).execute()
+                        orig_payload = json.loads(orig_rat)
+                        reconf_list = orig_payload.get("reconfirmations", [])
+                        if today_str not in reconf_list:
+                            reconf_list.append(today_str)
+                            orig_payload["reconfirmations"] = reconf_list
+                            orig_payload["last_reconfirmed_date"] = today_str
+
+                            # Keep latest market context updated if available from new trigger
+                            try:
+                                new_payload = json.loads(sig["ai_rationale"])
+                                if "market_context" in new_payload:
+                                    orig_payload["latest_market_context"] = new_payload["market_context"]
+                            except Exception:
+                                pass
+
+                            update_fields["ai_rationale"] = json.dumps(orig_payload, ensure_ascii=False)
                     except Exception:
-                        pass
+                        update_fields["ai_rationale"] = sig["ai_rationale"]
+
+                if update_fields:
+                    try:
+                        client.table("trade_signals").update(update_fields).eq("id", orig["id"]).execute()
+                    except Exception as upd_err:
+                        print(f"Note updating reconfirmed signal {orig['id']}: {upd_err}")
             else:
                 # Brand new signal trigger: queue for insertion
                 signals_to_insert.append(sig)
@@ -550,7 +659,6 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
 
             # USER CRITICAL RULE: If the user holds this stock, DO NOT REMOVE OR ARCHIVE IT!
             if aid in held_asset_ids:
-                # Keep active open
                 continue
 
             # For UNOWNED prospective signals: evaluate outcome against latest quotes and time-stop
@@ -592,36 +700,52 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
                 days_passed = 0
 
             # Outcome Evaluation:
+            outcome_status = None
+            pnl = 0.0
+            exit_msg = ""
+            exit_p = entry_p
+
             if low_p is not None and stop_l and low_p <= stop_l:
-                # Stopped out (Unowned) -> Update to audit ledger
+                outcome_status = "stopped_out"
+                exit_p = stop_l
                 pnl = round(((stop_l - entry_p) / entry_p) * 100, 2) if entry_p > 0 else -5.0
-                signals_to_resolve.append({
-                    "id": orig["id"],
-                    "status": "stopped_out",
-                    "outcome_pnl_pct": pnl,
-                    "closed_at": today_str,
-                    "ai_rationale": f"Disciplined stop loss triggered at {stop_l} (Low hit {low_p}). Archived to audit ledger."
-                })
+                exit_msg = f"Disciplined stop loss triggered at {stop_l} (Low hit {low_p}). Archived to audit ledger."
             elif high_p is not None and target_p and high_p >= target_p:
-                # Target hit (Unowned) -> Update to audit ledger
+                outcome_status = "target_hit"
+                exit_p = target_p
                 pnl = round(((target_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 10.0
-                signals_to_resolve.append({
-                    "id": orig["id"],
-                    "status": "target_hit",
-                    "outcome_pnl_pct": pnl,
-                    "closed_at": today_str,
-                    "ai_rationale": f"Target 1 objective reached at {target_p} (High hit {high_p}). Archived to audit ledger."
-                })
+                exit_msg = f"Target 1 objective reached at {target_p} (High hit {high_p}). Archived to audit ledger."
             elif days_passed >= max_days:
-                # Expired (Unowned) -> Update to audit ledger
                 exit_p = close_p or entry_p
                 pnl = round(((exit_p - entry_p) / entry_p) * 100, 2) if entry_p > 0 else 0.0
+                outcome_status = "stopped_out" if pnl < 0 else "target_hit"
+                exit_msg = f"Max holding period ({max_days} trading days) expired without target. Closed at {exit_p}."
+
+            if outcome_status:
+                orig_rat = orig.get("ai_rationale") or ""
+                # Preserve original entry rationale rather than overwriting it
+                if orig_rat.strip().startswith("{") and orig_rat.strip().endswith("}"):
+                    try:
+                        resolved_payload = json.loads(orig_rat)
+                        resolved_payload["resolution"] = {
+                            "status": outcome_status,
+                            "exit_price": exit_p,
+                            "outcome_pnl_pct": pnl,
+                            "closed_at": today_str,
+                            "exit_reason": exit_msg,
+                        }
+                        final_rationale = json.dumps(resolved_payload, ensure_ascii=False)
+                    except Exception:
+                        final_rationale = f"{orig_rat} | Exit: {exit_msg}"
+                else:
+                    final_rationale = f"{orig_rat} | Exit: {exit_msg}"
+
                 signals_to_resolve.append({
                     "id": orig["id"],
-                    "status": "stopped_out" if pnl < 0 else "target_hit",
+                    "status": outcome_status,
                     "outcome_pnl_pct": pnl,
                     "closed_at": today_str,
-                    "ai_rationale": f"Max holding period ({max_days} trading days) expired without target. Closed at {exit_p}."
+                    "ai_rationale": final_rationale
                 })
 
         # Apply safe reconciliation: NO DELETIONS
@@ -664,7 +788,6 @@ def sync_all_to_supabase(excel_path=None, report_record=None):
     # 6. Sync Portfolio Positions
     portfolio_file = Path(__file__).parent / "portfolio.json"
     if portfolio_file.exists():
-        import json
         print("📥 Syncing Portfolio Positions...")
         try:
             with open(portfolio_file, "r", encoding="utf-8") as f:

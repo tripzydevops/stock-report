@@ -586,11 +586,14 @@ def build_market_regime_sheet(us_data, bist_data):
     return pd.DataFrame(rows)
 
 
-def build_trade_signals_sheet(all_enriched, asset_info):
+def build_trade_signals_sheet(all_enriched, asset_info, signals=None):
     """Run both standard and institutional screeners and build combined trade signals sheet."""
-    std_signals = run_all_screens(all_enriched, asset_info)
-    inst_signals = run_institutional_screens(all_enriched, asset_info)
-    all_signals = std_signals + inst_signals
+    if signals is None:
+        std_signals = run_all_screens(all_enriched, asset_info)
+        inst_signals = run_institutional_screens(all_enriched, asset_info)
+        all_signals = std_signals + inst_signals
+    else:
+        all_signals = signals
     
     rows = []
     for sig in all_signals:
@@ -602,10 +605,23 @@ def build_trade_signals_sheet(all_enriched, asset_info):
         entry = sig.get("entry_price", 0)
         stop = sig.get("stop_loss", 0)
         target = sig.get("target_1", 0)
+        target_2 = sig.get("target_2", 0)
         
         sizing = calculate_position_size(account, RISK_PCT, entry, stop) if entry and stop else {}
         rr = calculate_risk_reward(entry, stop, target) if entry and stop and target else 0
         
+        # Package full structured explainer for human and downstream consumer readability
+        explainer_payload = {
+            "trigger_reasons": sig.get("trigger_reasons", []),
+            "failed_checks": sig.get("failed_checks", []),
+            "invalidation": sig.get("invalidation", ""),
+            "market_context": sig.get("market_context", {}),
+            "risk": sig.get("risk", {}),
+            "rationale": sig.get("rationale") or f"{sig.get('strategy')} trigger for {sym}.",
+            "entry_mode": sig.get("entry_mode", "next_open"),
+            "direction": sig.get("direction", "LONG"),
+        }
+
         rows.append({
             "Symbol": sym,
             "Market": info.get("Market", "BIST" if ".IS" in sig.get("symbol", "") else "US"),
@@ -614,7 +630,14 @@ def build_trade_signals_sheet(all_enriched, asset_info):
             "Entry Price": round(float(entry), 2) if entry else "",
             "Stop Loss": round(float(stop), 2) if stop else "",
             "Target": round(float(target), 2) if target else "",
+            "Target 2": round(float(target_2), 2) if target_2 else "",
             "R:R Ratio": round(float(rr), 2) if rr else "",
+            "Confidence %": sig.get("confidence_score", 80),
+            "Entry Mode": sig.get("entry_mode", "next_open"),
+            "Why It Fired": " | ".join(sig.get("trigger_reasons", [])) if sig.get("trigger_reasons") else "",
+            "Invalidation Rule": sig.get("invalidation", ""),
+            "Rationale": sig.get("rationale", ""),
+            "Full Explainer JSON": json.dumps(explainer_payload, ensure_ascii=False),
             "Risk Amount": round(float(sizing.get("risk_amount", 0)), 2) if sizing else "",
             "Shares to Buy": sizing.get("shares_to_buy", ""),
             "Position Value": round(float(sizing.get("position_value", 0)), 2) if sizing else "",
@@ -624,9 +647,9 @@ def build_trade_signals_sheet(all_enriched, asset_info):
     return pd.DataFrame(rows)
 
 
-def build_institutional_signals_sheet(all_enriched, asset_info):
+def build_institutional_signals_sheet(all_enriched, asset_info, signals=None):
     """Run institutional screeners (AVWAP, Liquidity Sweep, Relative Strength) and build dedicated tab."""
-    inst_signals = run_institutional_screens(all_enriched, asset_info)
+    inst_signals = run_institutional_screens(all_enriched, asset_info) if signals is None else signals
     
     rows = []
     for sig in inst_signals:
@@ -653,6 +676,9 @@ def build_institutional_signals_sheet(all_enriched, asset_info):
             "Target 1": round(float(target_1), 2) if target_1 else "",
             "Target 2": round(float(target_2), 2) if target_2 else "",
             "R:R Ratio": round(float(rr), 2) if rr else "",
+            "Why It Fired": " | ".join(sig.get("trigger_reasons", [])) if sig.get("trigger_reasons") else "",
+            "Invalidation Rule": sig.get("invalidation", ""),
+            "Rationale": sig.get("rationale", ""),
             "Risk Amount": round(float(sizing.get("risk_amount", 0)), 2) if sizing else "",
             "Shares to Buy": sizing.get("shares_to_buy", ""),
             "Position Value": round(float(sizing.get("position_value", 0)), 2) if sizing else "",
@@ -837,6 +863,11 @@ def main():
     print("🔔 Scanning opening session, gaps & daily direction bias...")
     opening_df, breadth_summary = scan_all_openings(all_enriched, asset_info)
     
+    print("🎯 Running algorithmic & institutional strategy screeners...")
+    std_signals = run_all_screens(all_enriched, asset_info)
+    inst_signals = run_institutional_screens(all_enriched, asset_info)
+    all_trade_signals = std_signals + inst_signals
+    
     sheets = {
         "📊 Dashboard": build_latest_prices_sheet(all_enriched, asset_info),
         "💼 My Portfolio": build_portfolio_sheet(all_enriched, asset_info, fx_data),
@@ -845,8 +876,8 @@ def main():
         "🏆 Trade Outcomes": outcomes_df,
         "📈 Scorecard & KPIs": kpi_df,
         "🔬 Strategy Breakdown": strat_df,
-        "🎯 Trade Signals": build_trade_signals_sheet(all_enriched, asset_info),
-        "🏛️ Institutional Setups": build_institutional_signals_sheet(all_enriched, asset_info),
+        "🎯 Trade Signals": build_trade_signals_sheet(all_enriched, asset_info, signals=all_trade_signals),
+        "🏛️ Institutional Setups": build_institutional_signals_sheet(all_enriched, asset_info, signals=inst_signals),
         "🚦 Market Regime": build_market_regime_sheet(us_data, bist_data),
         "📋 Assets": build_assets_sheet(us_data, bist_data),
         "💱 USD-TRY Rate": build_fx_sheet(fx_data, top_n_days=252),
@@ -884,10 +915,14 @@ def main():
         if has_supabase:
             raise RuntimeError(f"Critical failure: Supabase report upload failed: {upload_err}") from upload_err
         
-    # 8. Record permanently into Supabase PostgreSQL database (idempotent upsert)
+    # 8. Record permanently into Supabase PostgreSQL database (idempotent upsert with direct structured signals)
     try:
         from sync_to_supabase import sync_all_to_supabase
-        sync_all_to_supabase(excel_path=timestamped_output, report_record=report_record)
+        sync_all_to_supabase(
+            excel_path=timestamped_output,
+            report_record=report_record,
+            raw_signals=all_trade_signals,
+        )
     except Exception as e:
         print(f"⚠️ Note: Database sync failed: {e}")
         if has_supabase:
