@@ -57,53 +57,67 @@ flowchart TD
 ## ✨ Core Features
 
 ### 1. Institutional Screening Algorithms
-MarketPulse runs 8 automated screening engines with decoupled market profiles (BIST vs. US):
+MarketPulse runs 9 automated screening engines with decoupled market profiles (BIST vs. US):
 - **Trend Pullback Reclaim (Core Production Engine):** 5-year empirical strategy backtested across 158,000+ daily bars. Detects Stage 2 bull trends ($\text{Close} > \text{EMA}_{50} > \text{EMA}_{200}$), $2.5\% \text{ to } 7.0\%$ pullbacks from 20-day highs within 5–6 sessions, and reclaims prior-day highs on $>1.2\times$ volume with an upper 40% candle close.
+- **Momentum Breakout:** 20-day high breakout with $\ge 1.8\times$ 20-day volume surge and RSI expansion (55–75).
+- **Trend Pullback (50 EMA):** High-probability structural retests within 1.5% of the rising 50 EMA during healthy market pullbacks.
 - **Anchored VWAP Bounce:** Identifies high-volume structural retests of swing lows/highs from major institutional pivot dates.
 - **Liquidity Sweep & Reclaim:** Detects stop hunts below key support followed by swift intraday reclaim and smart money absorption.
 - **Relative Strength Leader:** Flags assets outperforming their respective local benchmarks (`XU100.IS` for BIST, `SPY` for US) during broad market pullbacks.
-- **Volatility Breakout:** 20-day high breakout with $\ge 2\times$ 20-day volume surge.
 - **Volatility Squeeze:** Bollinger Bands contraction inside Keltner Channels (explosive volatility expansion setup).
 - **Mean Reversion:** Extreme oversold RSI ($< 30$) with bullish reversal candle and circuit-breaker protection.
 - **Fund & Sector Momentum:** Identifies top-quartile ETF/fund inflows and momentum rotation.
 
-### 2. Immutable Report Archive & Storage
+### 2. Non-Black-Box Structured Trade Explainer & "Why & Plan"
+Located in [`backend/app/services/signal_explainer.py`](./backend/app/services/signal_explainer.py) and rendered via [`frontend/src/components/TradeCard.tsx`](./frontend/src/components/TradeCard.tsx):
+- **Itemized Trigger Checklist (`trigger_reasons`):** Every card displays the exact quantitative conditions satisfied (e.g. EMA20 reclaim, pullback depth %, volume multiplier, wick closure).
+- **Deterministic Invalidation Rules (`invalidation`):** The precise technical event that dismantles the setup thesis, instilling disciplined exits before full stop-losses are tagged.
+- **Multi-Tier Execution Roadmap:**
+  - **Entry Mode (`next_open`):** Seans auction or opening limit confirmation rather than chasing emotional spikes.
+  - **Target 1 (+1.25R):** 50% scale-out with immediate stop-loss adjustment to entry (Breakeven) for a mathematically zero-risk "Free Trade".
+  - **Target 2 (+2.25R Runner):** Riding the macro trend expansion to full potential.
+  - **T0 (+3.0%):** Optional intra-week velocity profit target.
+- **Adaptive Market Dynamics:** Automatically adjusts stop sizing and risk guards for **BIST** (+/-10% circuit breakers, ATR stop buffers) vs. **US Equities** (unlimited range, pre-earnings gap defense, extended runners). See [Technical Blueprint](./docs/STRUCTURED_SIGNALS_AND_TRADING_BLUEPRINT.md).
+
+### 3. Immutable Report Archive & Storage
 - Generates comprehensive multi-tab Excel reports (`MarketPulse_{YYYY-MM-DDTHH-mm-ss-fff}.xlsx`).
 - Uploads directly to private Supabase Storage (`marketpulse-reports`) with **`upsert: false`** guaranteeing strict immutability.
 - Pre-upload quality gates enforce SHA-256 checksums, non-zero file size, workbook health, and minimum row counts.
 - Maintains an atomic `report_files` registry with short-lived presigned download URLs.
 
-### 3. Safe, Non-Destructive Signal Lifecycle
+### 4. Safe, Non-Destructive Signal Lifecycle
 - Open trade signals are keyed by composite `(asset_id, strategy)`, allowing multiple concurrent setups per asset.
 - **Held Stock Protection:** Open positions in active portfolios are never auto-archived or closed.
 - **Zero Deletion:** Unowned expired or stopped signals transition to `stopped_out` or `target_hit` in the audit ledger without deleting active setups.
 
-### 4. Dynamic Cash Ledger & Portfolio Lab
+### 5. Dynamic Cash Ledger & Portfolio Lab
 - Strictly calculates available cash from transaction history:
   $$\text{Cash Balance} = \sum \text{Deposits} + \sum \text{Sells} - \sum \text{Buys} - \sum \text{Withdrawals}$$
 - Multi-currency portfolio tracking (`TRY` / `USD`) with live FX rates.
 - Forward dividend income projection, ex-dividend calendars, and DCA tranche optimization.
 
-### 5. Institutional Backtesting & 5-Year Empirical Strategy Verification
-Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services/backtesting_engine.py) and runnable via standalone CLI scripts:
-- **5-Year BIST Backtest ([`scripts/run_pullback_reclaim_backtest.py`](./scripts/run_pullback_reclaim_backtest.py)):**
+### 6. Institutional Backtesting & Empirical Strategy Verification
+Located in [`backend/app/services/backtesting_engine.py`](./backend/app/services/backtesting_engine.py) and documented in [`docs/`](./docs/):
+- **5-Year BIST Backtest ([`docs/STRATEGY_BACKTEST_WHITEPAPER.md`](./docs/STRATEGY_BACKTEST_WHITEPAPER.md)):**
   - **Sample Size:** 101 BIST equities across ~116,000 daily bars (2021–2026), generating 1,221 setups and 525 closed trades.
   - **Results:** **+455.41% Total Return** (41.17% CAGR), **1.64 Sharpe Ratio** (vs. XU100 Benchmark 1.53), **2.33 Sortino Ratio**, **52.6% Win Rate**, **1.72 Win/Loss Payoff Ratio** (+13.2% avg win vs. -7.6% avg loss), and max portfolio drawdown capped at **-24.18%**.
 - **Post-Exit Reclaim Analysis ([`scripts/analyze_post_exit_reclaims.py`](./scripts/analyze_post_exit_reclaims.py)):**
   - Evaluated stopped-out positions to quantify stop efficacy vs. whipsaws:
   - 88.7% of stopped-out Stage 2 stocks eventually reclaimed their entry price, but with a median delay of **12 trading sessions** and an **average further post-stop drop of -15.75%** (60.6% plunged $>10\%$ deeper). This mathematically validated the stop-loss as crucial protection against multi-month capital lockup and catastrophic drawdowns.
-  - For positions closed at the 20-day time limit, **96.9%** reclaimed their entry within a median of **2 sessions**, proving that extending holding windows slightly or using trailing ATR stops saves trades from premature time-decay exits.
+- **User Portfolio Holdings Backtest ([`docs/PORTFOLIO_HOLDINGS_BACKTEST_REPORT.md`](./docs/PORTFOLIO_HOLDINGS_BACKTEST_REPORT.md)):**
+  - Evaluated core personal holdings: `TURSG` (66.7% win, 2.41 PF), `ISMEN` (63.6% win, 2.18 PF), `FROTO` (62.5% win), `ASELS` (57.9% win), `NVDA` (61.9% win, +24.6% avg win), `MSFT` (64.7% win), and `AAPL` (61.1% win).
+  - Outlined dual-engine allocation: Trend Pullback Reclaim for industrial/tech momentum vs. 3-Tranche DCA & DRIP for dividend compounders (`SCHD`, `O`, `TURSG`, `ISMEN`).
 - **5-Year US Market Backtest ([`scripts/run_us_pullback_backtest.py`](./scripts/run_us_pullback_backtest.py)):**
   - Evaluated 32 US equities/ETFs vs. the S&P 500 (`SPY`).
-  - Proved that sector divergence matters in the US: running trend pullbacks on high-dividend REITs underperformed during Fed rate hikes, whereas running on **US Growth & Tech Leaders** surged to **+77.01% Total Return** (12.15% CAGR, **0.78 Sharpe** vs. SPY 0.69), outperforming the market with less than half the drawdown (**-9.96% vs. -25.36%**).
+  - Running on **US Growth & Tech Leaders** surged to **+77.01% Total Return** (12.15% CAGR, **0.78 Sharpe** vs. SPY 0.69), outperforming the market with less than half the drawdown (**-9.96% vs. -25.36%**).
 
-### 6. Decoupled Market Architecture (`MarketProfile`)
+### 7. Decoupled Market Architecture (`MarketProfile`)
 Located in [`backend/app/services/market_profiles.py`](./backend/app/services/market_profiles.py):
 - Decouples screening mechanics and risk guards based on the asset's primary exchange:
   - **🇹🇷 BIST Engine:** $2.5\% \text{ to } 5.8\%$ pullback, max 5 sessions, strict Taban/Devre Kesici circuit-breaker filter ($\le -4.5\%$), wide $2.0\times\text{ATR}$ stop, and benchmarked against `XU100.IS`.
   - **🇺🇸 US Engine:** $3.0\% \text{ to } 7.0\%$ pullback, max 6 sessions, restricted to Growth/Tech momentum leaders (`NVDA`, `AAPL`, `MSFT`, `SMH`, `AVGO`), $2.0\times\text{ATR}$ stop, $8\%$ maximum initial risk ceiling, and benchmarked against `SPY`. REITs and defensive income assets (`O`, `VICI`, `TLT`) are automatically routed to the Dividend/DCA Engine.
 
-### 7. Candlestick Patterns & Advanced Institutional Indicators
+### 8. Candlestick Patterns & Advanced Institutional Indicators
 - **Vectorized Candlestick Engine ([`backend/app/services/candlestick_patterns.py`](./backend/app/services/candlestick_patterns.py)):**
   - Ultra-fast NumPy/Pandas pattern recognition fully compatible with Python 3.14+.
   - Detects **Bullish Engulfing**, **Bearish Engulfing**, **Hammer**, **Inverted Hammer**, **Morning Star**, **Evening Star**, and **Doji**.
@@ -112,7 +126,7 @@ Located in [`backend/app/services/market_profiles.py`](./backend/app/services/ma
   - **Chaikin Money Flow (CMF 20):** Institutional accumulation/distribution oscillator bounded $[-1.0, +1.0]$.
   - **Volume Weighted Average Price (VWAP):** Institutional benchmark pricing.
 
-### 8. Interactive Lightweight Charts on Next.js
+### 9. Interactive Lightweight Charts on Next.js
 Located in [`frontend/src/components/InteractiveCanvasChart.tsx`](./frontend/src/components/InteractiveCanvasChart.tsx):
 - High-performance TradingView Canvas rendering (`lightweight-charts ^5.2.1`).
 - **EMA Overlays:** Dynamic calculation and toggle switches for **EMA 20** (amber), **EMA 50** (cyan), and **EMA 200** (pink).
@@ -121,18 +135,30 @@ Located in [`frontend/src/components/InteractiveCanvasChart.tsx`](./frontend/src
 - **Timeframe Zoom Controls:** Interactive range buttons (`1M`, `3M`, `6M`, `1Y`, `ALL`).
 - **Real-Time Crosshair HUD:** High-precision Open, High, Low, Close, % Change, and Volume formatting.
 
-### 9. Pandera Data Contracts & Schema Validation
+### 10. Pandera Data Contracts & Schema Validation
 Located in [`backend/app/models/data_contracts.py`](./backend/app/models/data_contracts.py):
 - **OHLCV Integrity:** Guarantees $P > 0$, $\text{High} \ge \text{Low}$, $\text{High} \ge \text{Open/Close}$, $\text{Low} \le \text{Open/Close}$, and $\text{Volume} \ge 0$.
 - **Indicator Boundaries:** Enforces $0 \le \text{RSI}_{14} \le 100$ and $\text{BB Upper} \ge \text{Lower}$.
 - **Spot Trade Setup Sanity:** Rejects inverted long trades where $\text{Target} \le \text{Entry}$ or $\text{Stop} \ge \text{Entry}$.
 - **Automatic Sanitization:** Drops corrupt split/tick anomalies before database persistence without crashing batch pipelines.
 
-### 10. Multi-Platform Responsiveness & Playwright E2E Verification
+### 11. Multi-Platform Responsiveness & Playwright E2E Verification
 Full end-to-end testing across both Desktop and Mobile devices using Playwright:
 - **Desktop Chrome (1440x900):** Collapsible sidebar, multi-column analytics, interactive charts, and zero horizontal overflow.
 - **Mobile Devices (Pixel 7 & iPhone 14):** 1-tap `MobileBottomNav`, off-canvas slideover drawer, prominent header sync buttons, and touch-optimized date filters.
-- **Automated Verification:** 17 comprehensive Playwright tests passing across Desktop and Mobile emulators.
+- **Automated Verification:** Full suite of Playwright tests passing across Desktop and Mobile emulators.
+
+---
+
+## 📚 Technical Whitepapers & Research Documentation
+
+Detailed mathematical specifications, backtest data, and execution blueprints are archived in [`docs/`](./docs/):
+
+| Document | Purpose | Key Findings |
+| :--- | :--- | :--- |
+| [**Strategy Backtest Whitepaper**](./docs/STRATEGY_BACKTEST_WHITEPAPER.md) | 5-year continuous backtest across 158,500 daily bars (BIST 101 & US 32) | **+455.4% BIST return** (1.64 Sharpe), **+77.0% US Tech return** (0.78 Sharpe vs SPY 0.69). Validates stop-loss necessity (averts -15.75% post-stop plunge). |
+| [**Structured Signals & Trading Blueprint**](./docs/STRUCTURED_SIGNALS_AND_TRADING_BLUEPRINT.md) | Non-black-box architecture, 9 strategy explainers, and execution plans | Structured schema (`trigger_reasons`, `invalidation`, `market_context`), Next Open entry, Target 1 (+1.25R / 50% scale-out), Target 2 (+2.25R runner), BIST vs US adaptive dynamics. |
+| [**Portfolio Holdings Backtest Report**](./docs/PORTFOLIO_HOLDINGS_BACKTEST_REPORT.md) | Empirical backtest of user's personal core holdings (`TURSG`, `ISMEN`, `AKBNK`, `NVDA`, `SCHD`, etc.) | High win rates on dividend compounders (`TURSG` 66.7%, `ISMEN` 63.6%, `NVDA` 61.9% with +24.6% avg win). Establishes dual-engine trend vs. DRIP allocation. |
 
 ---
 
