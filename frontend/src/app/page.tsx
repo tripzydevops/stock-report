@@ -1227,9 +1227,11 @@ export default function Home() {
             }
 
             // Confidence score is standardized to 0-100 in database storage
-            // No heuristic multiplication: a genuine 8/100 remains 8, and unrated signals default cleanly to 0
+            // Strict range validation with Number.isFinite(): reject NaN/Infinity/negative and clamp to [0, 100]
             const rawConf = s.confidence_score !== null && s.confidence_score !== undefined ? Number(s.confidence_score) : 0;
-            const standardizedConf = !isNaN(rawConf) && rawConf > 0 ? Math.round(rawConf) : 0;
+            const standardizedConf = typeof rawConf === 'number' && Number.isFinite(rawConf)
+              ? Math.min(100, Math.max(0, Math.round(rawConf)))
+              : 0;
 
             return {
               id: s.id,
@@ -1312,7 +1314,7 @@ export default function Home() {
               entryPrice: item.entryPrice > 0 ? item.entryPrice : effEntry,
               stopLoss: item.stopLoss > 0 ? item.stopLoss : effStop,
               targetPrice: item.targetPrice > 0 ? item.targetPrice : effTarget,
-              confidence: Math.round(item.confidence),
+              confidence: typeof item.confidence === 'number' && Number.isFinite(item.confidence) ? Math.min(100, Math.max(0, Math.round(item.confidence))) : 0,
               rationale: item.aiRationale
             }));
 
@@ -1323,7 +1325,7 @@ export default function Home() {
               entryPrice: effEntry, // Keep validated entry price of the setup
               stopLoss: effStop,
               targetPrice: effTarget,
-              confidence: Math.round(latest.confidence),
+              confidence: typeof latest.confidence === 'number' && Number.isFinite(latest.confidence) ? Math.min(100, Math.max(0, Math.round(latest.confidence))) : 0,
               rationale: latest.aiRationale,
               market: earliest.market,
               date: originalDate,

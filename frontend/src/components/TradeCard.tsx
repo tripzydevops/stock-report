@@ -375,13 +375,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         </div>
 
         {(() => {
-          // Calculate dynamic bar width from actual risk and reward distances
-          // e.g. 1:1 -> 50%/50%, 1:2 -> 33%/67%, 1:3 -> 25%/75%
-          // Clamped between 15% and 85% to ensure both zones remain visually distinguishable
+          // Calculate dynamic bar width strictly proportional to actual risk and reward distances
+          // e.g. 1:1 -> 50%/50%, 1:2 -> 33.3%/66.7%, 1:3 -> 25%/75%, 1:10 -> 9.1%/90.9%
+          // Using exact proportional calculation with min-width styling rather than artificial 15%/85% clamping
           const totalDistance = risk + reward;
-          const rawRiskPct = totalDistance > 0 ? (risk / totalDistance) * 100 : 33.3;
-          const riskBarPct = Math.min(85, Math.max(15, Math.round(rawRiskPct)));
-          const rewardBarPct = 100 - riskBarPct;
+          const exactRiskPct = totalDistance > 0 ? Number(((risk / totalDistance) * 100).toFixed(1)) : 33.3;
+          const exactRewardPct = Number((100 - exactRiskPct).toFixed(1));
           const numRr = risk > 0 ? reward / risk : 2.0;
 
           return (
@@ -392,14 +391,14 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               </div>
               <div className="w-full h-2 flex rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
                 <div 
-                  className="bg-red-500 h-full transition-all" 
-                  style={{ width: `${riskBarPct}%` }}
-                  title={`Risk (1R): %${riskBarPct}`}
+                  className="bg-red-500 h-full transition-all shrink-0" 
+                  style={{ width: `${exactRiskPct}%`, minWidth: '4px' }}
+                  title={`Risk (1R): %${exactRiskPct}`}
                 ></div>
                 <div 
-                  className="bg-green-500 h-full transition-all" 
-                  style={{ width: `${rewardBarPct}%` }}
-                  title={`Reward (${numRr.toFixed(2)}R): %${rewardBarPct}`}
+                  className="bg-green-500 h-full transition-all shrink-0" 
+                  style={{ width: `${exactRewardPct}%`, minWidth: '4px' }}
+                  title={`Reward (${numRr.toFixed(2)}R): %${exactRewardPct}`}
                 ></div>
               </div>
             </div>
@@ -408,9 +407,11 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
 
         <div className="mb-2 flex items-center flex-wrap gap-y-1">
           {(() => {
-            const hasRawConf = typeof signal.confidence === 'number' && !isNaN(signal.confidence);
-            const conf100 = hasRawConf ? Math.round(signal.confidence) : 0;
-            const isEvaluated = hasRawConf && conf100 > 0;
+            const rawConf = signal.confidence;
+            const isFiniteNumber = typeof rawConf === 'number' && Number.isFinite(rawConf);
+            // Strict range validation: clamp to [0, 100] and reject non-finite/NaN/Infinity
+            const conf100 = isFiniteNumber ? Math.min(100, Math.max(0, Math.round(rawConf))) : 0;
+            const isEvaluated = isFiniteNumber && conf100 > 0;
             // Zero confidence produces 0 stars (no Math.max(1, ...))
             const starCount = isEvaluated ? Math.min(10, Math.max(0, Math.round(conf100 / 10))) : 0;
 
@@ -841,7 +842,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                         SL: {formatPrice(item.stopLoss)}
                       </span>
                       <span className="text-amber-500 font-bold text-[10px]">
-                        ⭐ {item.confidence > 0 ? `${Math.round(item.confidence <= 10 ? item.confidence : item.confidence / 10)}/10` : '—'}
+                        ⭐ {typeof item.confidence === 'number' && Number.isFinite(item.confidence) && item.confidence > 0 ? `${Math.round(Math.min(10, Math.max(0, item.confidence <= 10 ? item.confidence : item.confidence / 10)))}/10` : '—'}
                       </span>
                     </div>
                   </div>

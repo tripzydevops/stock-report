@@ -15,6 +15,11 @@ from app.services.screener import run_all_screens
 from app.services.institutional_screener import run_institutional_screens
 from app.services.market_regime import get_all_regimes
 from app.services.ai_analyst import batch_analyze_signals
+from app.services.signal_persistence import (
+    persist_trade_signals,
+    reconcile_open_signals_lifecycle,
+    validate_and_normalize_confidence,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -93,198 +98,26 @@ def db_upsert_indicators(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.
 
 
 def db_insert_signals(asset_id_map: Dict[str, str], signals: List[Dict]):
-    """Insert new signals into trade_signals table with deduplication."""
+    """
+    Insert new signals into trade_signals table with structured explainer preservation and deduplication.
+    Delegates to the canonical signal_persistence service.
+    """
     if not signals:
         return
-
     client = get_supabase_client()
-    try:
-        existing_res = client.table("trade_signals").select("id, asset_id, signal_date, strategy, status, ai_rationale").execute()
-        existing_keys = {
-            (
-                r.get("asset_id"),
-                str(r.get("signal_date"))[:10],
-                r.get("strategy", "").lower().replace(" ", "_")
-            )
-            for r in (existing_res.data or [])
-        }
-        # Map of currently open signals: (asset_id, strategy_key) -> row
-        open_signals_map = {
-            (
-                r.get("asset_id"),
-                r.get("strategy", "").lower().replace(" ", "_")
-            ): r
-            for r in (existing_res.data or [])
-            if r.get("status") == "open"
-        }
-    except Exception as e:
-        logger.warning(f"Could not load existing signals for deduplication: {e}")
-        existing_keys = set()
-        open_signals_map = {}
-
-    rows = []
-    for sig in signals:
-        asset_id = asset_id_map.get(sig.get("symbol"))
-        if not asset_id:
-            continue
-
-        raw_date = sig.get("signal_date")
-        date_str = raw_date.strftime("%Y-%m-%d") if hasattr(raw_date, "strftime") else str(raw_date)[:10]
-        strat_key = sig.get("strategy", "unknown").lower().replace(" ", "_")
-
-        # 1. Exact duplicate check for the same date
-        if (asset_id, date_str, strat_key) in existing_keys:
-            logger.info(f"Skipping duplicate signal for {sig.get('symbol')} on {date_str} ({sig.get('strategy')})")
-            continue
-
-        # 2. CONTINUATION CHECK: Is there an existing open signal from an earlier date?
-        open_sig = open_signals_map.get((asset_id, strat_key))
-        if open_sig and str(open_sig.get("signal_date"))[:10] < date_str:
-            # Re-confirmation of ongoing setup! Update rationale rather than creating a duplicate trade
-            orig_date = str(open_sig.get("signal_date"))[:10]
-            ai = sig.get("ai_analysis", {})
-            updated_rationale = f"🔄 RE-CONFIRMED on {date_str} (Still in Buy Zone · Orig: {orig_date}) | {ai.get('thesis', '')} | {ai.get('risk_assessment', '')}"
-            try:
-                client.table("trade_signals").update({
-                    "ai_rationale": updated_rationale,
-                    "confidence_score": ai.get("conviction_score"),
-                }).eq("id", open_sig["id"]).execute()
-                logger.info(f"Re-confirmed existing open signal {open_sig['id']} for {sig.get('symbol')} on {date_str}")
-            except Exception as upd_err:
-                logger.warning(f"Could not update re-confirmation: {upd_err}")
-            continue
-
-        ai = sig.get("ai_analysis", {})
-        rows.append({
-            "asset_id": asset_id,
-            "strategy": sig.get("strategy", "unknown"),
-            "signal_date": date_str,
-            "entry_price": float(sig.get("entry_price", 0)),
-            "stop_loss": float(sig.get("stop_loss", 0)) if sig.get("stop_loss") else None,
-            "target_1": float(sig.get("target_1", 0)) if sig.get("target_1") else None,
-            "risk_reward_ratio": float(sig.get("risk_reward_ratio", 0)) if sig.get("risk_reward_ratio") else None,
-            "confidence_score": ai.get("conviction_score"),
-            "ai_rationale": ai.get("thesis", "") + " | " + ai.get("risk_assessment", ""),
-            "status": "open",
-        })
-        existing_keys.add((asset_id, date_str, strat_key))
-
-    if rows:
-        try:
-            insert_rows("trade_signals", rows)
-            logger.info(f"Inserted {len(rows)} new trade signals.")
-        except Exception as e:
-            logger.error(f"Error inserting signals: {e}")
+    return persist_trade_signals(client, signals, asset_id_map)
 
 
 def db_update_open_signals(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.DataFrame]):
     """
     Check existing open signals for stop-loss hits or target hits and update status.
-    CRITICAL RULE:
-    Trade signals are entered at the daily close of signal_date.
-    They can ONLY be evaluated against subsequent price bars (bar_date > signal_date).
-    Evaluating against the same day's intraday low falsely triggers premature stop-outs!
+    Delegates to the canonical reconcile_open_signals_lifecycle service:
+    1. Protects user-held portfolio assets from auto-expiration.
+    2. Strictly evaluates only subsequent future price bars (bar_date > signal_date).
+    3. Enforces strategy-dependent time horizon limits (Breakout: 12, Squeeze: 15, Reversion: 7, Default: 20).
     """
-    try:
-        result = select_rows("trade_signals", {"status": "open"})
-        open_signals = result.data if result.data else []
-    except Exception as e:
-        logger.error(f"Error fetching open signals: {e}")
-        return
-
-    # Build reverse map: asset_id -> symbol
-    id_to_symbol = {v: k for k, v in asset_id_map.items()}
     client = get_supabase_client()
-
-    for sig in open_signals:
-        symbol = id_to_symbol.get(sig["asset_id"])
-        if not symbol or symbol not in asset_data:
-            continue
-
-        df = asset_data[symbol]
-        if df.empty:
-            continue
-
-        sig_date_str = str(sig.get("signal_date", ""))[:10]
-        if not sig_date_str:
-            continue
-
-        try:
-            sig_date_obj = datetime.date.fromisoformat(sig_date_str)
-        except Exception:
-            continue
-
-        dates = []
-        for idx in df.index:
-            ts = pd.to_datetime(idx)
-            if getattr(ts, "tzinfo", None) is not None:
-                ts = ts.tz_localize(None)
-            dates.append(ts.date())
-
-        # Strict future check: only evaluate on bars AFTER the signal date
-        future_indices = [i for i, d in enumerate(dates) if d > sig_date_obj]
-        if not future_indices:
-            # Signal was generated on or after the latest bar in df.
-            # Trade is currently ACTIVE / OPEN; do not evaluate against historical morning dips!
-            continue
-
-        entry = float(sig.get("entry_price") or 0)
-        stop = float(sig.get("stop_loss") or 0) if sig.get("stop_loss") else None
-        target = float(sig.get("target_1") or 0) if sig.get("target_1") else None
-
-        if entry <= 0:
-            continue
-
-        for i in future_indices:
-            bar = df.iloc[i]
-            bar_date = dates[i]
-            high = float(bar.get("high", bar["close"]))
-            low = float(bar.get("low", bar["close"]))
-
-            hit_stop = (stop is not None and low <= stop)
-            hit_target = (target is not None and high >= target)
-
-            if hit_stop and hit_target:
-                pnl = ((stop - entry) / entry) * 100
-                client.table("trade_signals").update({
-                    "status": "stopped_out",
-                    "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date}T18:00:00Z",
-                }).eq("id", sig["id"]).execute()
-                logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT on {bar_date} at {stop}")
-                break
-            elif hit_target:
-                pnl = ((target - entry) / entry) * 100
-                client.table("trade_signals").update({
-                    "status": "target_hit",
-                    "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date}T18:00:00Z",
-                }).eq("id", sig["id"]).execute()
-                logger.info(f"Signal {sig['id']} for {symbol} TARGET HIT on {bar_date} at {target}")
-                break
-            elif hit_stop:
-                pnl = ((stop - entry) / entry) * 100
-                client.table("trade_signals").update({
-                    "status": "stopped_out",
-                    "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date}T18:00:00Z",
-                }).eq("id", sig["id"]).execute()
-                logger.info(f"Signal {sig['id']} for {symbol} STOPPED OUT on {bar_date} at {stop}")
-                break
-        else:
-            # Holding Period Constraint: Maximum holding horizon is 20 trading sessions (1 month).
-            # If neither target nor stop was touched after 20 sessions, expire the trade at Day 20 close.
-            if len(future_indices) >= 20:
-                bar_20 = df.iloc[future_indices[19]]
-                bar_date_20 = dates[future_indices[19]]
-                exit_price = float(bar_20["close"])
-                pnl = ((exit_price - entry) / entry) * 100
-                client.table("trade_signals").update({
-                    "status": "expired",
-                    "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date_20}T18:00:00Z",
-                }).eq("id", sig["id"]).execute()
-                logger.info(f"Signal {sig['id']} for {symbol} EXPIRED after 20 sessions (1 month) on {bar_date_20} at {exit_price}")
+    return reconcile_open_signals_lifecycle(client, asset_id_map, asset_data)
 
 
 def db_upsert_regimes(regimes: Dict[str, Dict]):

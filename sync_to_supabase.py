@@ -32,20 +32,11 @@ from app.models.data_contracts import (
     validate_trade_signals_dataframe,
 )
 
+from app.services.signal_persistence import validate_and_normalize_confidence
+
 def _normalize_confidence(raw: float) -> float:
-    """Canonicalize confidence to a 0-100 scale at the write boundary.
-    
-    Rules:
-      - 0 or missing  → 0.0  (unknown / not evaluated — stored as zero, NOT a default)
-      - 0 < raw <= 10 → raw * 10  (legacy 0-10 scale migration)
-      - 10 < raw <=100 → round(raw)  (already on the right scale)
-      - raw > 100      → 100.0  (cap)
-    """
-    if raw <= 0:
-        return 0.0
-    if raw <= 10.0:
-        return round(raw * 10.0)
-    return min(100.0, round(raw))
+    """Canonicalize confidence to a 0-100 scale at the write boundary."""
+    return validate_and_normalize_confidence(raw)
 
 def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
     from datetime import timezone
