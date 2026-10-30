@@ -391,22 +391,21 @@ def run_institutional_screens(
         info = asset_info.get(symbol, {})
         asset_type = info.get('type', 'stock').lower()
         market = info.get('Market', 'BIST' if '.IS' in symbol else 'US').upper()
+        is_us = market in ['US', 'NASDAQ', 'NYSE']
 
         if asset_type in ['stock', 'etf']:
-            # 1. Anchored VWAP Bounce
-            sig = screen_anchored_vwap_bounce(df, symbol, market=market)
-            if sig:
-                signals.append(sig)
-
-            # 2. Liquidity Sweep Reclaim
+            # 1. Liquidity Sweep Reclaim: Verified alpha on BOTH BIST (+80.8%) and US (+21.7%)
             sig = screen_liquidity_sweep_reclaim(df, symbol, market=market)
             if sig:
                 signals.append(sig)
 
-            # 3. Relative Strength Leader
-            bench_df = xu100_df if market == 'BIST' else spy_df
-            sig = screen_relative_strength_leaders(df, symbol, benchmark_df=bench_df, market=market)
-            if sig:
-                signals.append(sig)
+            # 2. Anchored VWAP Bounce: Verified on BIST (+210.2%, 0.86 Sharpe); retired on US due to lag
+            if not is_us:
+                sig = screen_anchored_vwap_bounce(df, symbol, market=market)
+                if sig:
+                    signals.append(sig)
+
+            # Note: Relative Strength Leaders retired from active screening due to empirical underperformance (0.10 Sharpe)
 
     return signals
+

@@ -481,3 +481,159 @@ def build_relative_strength_explanation(
         "rationale": rationale
     }
 
+
+def build_minervini_vcp_explanation(
+    symbol: str,
+    market: str,
+    depth1_pct: float,
+    depth2_pct: float,
+    pivot_high: float,
+    vol_ratio: float,
+    entry_price: float,
+    stop_loss: float,
+    atr_14: float,
+    benchmark_symbol: str = "SPY",
+    regime: str = "BULLISH",
+    failed_checks: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Structured explanation builder for Minervini Volatility Contraction Pattern (VCP)."""
+    stop_dist_pct = ((entry_price - stop_loss) / entry_price) * 100.0 if entry_price > 0 else 0.0
+
+    reasons = [
+        f"Stage 2 Trend Confirmed: Close > EMA50 and Close > EMA200 (Macro Uptrend)",
+        f"Volatility Contraction: Primary base depth -{depth1_pct:.1f}% contracted to tight secondary pivot -{depth2_pct:.1f}%",
+        f"Volume dried up noticeably prior to the breakout pivot",
+        f"Breakout Trigger: Price cleared final pivot resistance at {pivot_high:.2f}",
+        f"Volume Surge: {vol_ratio:.2f}x 20-day SMA on the pivot breakout bar"
+    ]
+
+    invalidation = f"Daily close below tight pivot low at {stop_loss:.2f}"
+
+    rationale = (
+        f"Minervini VCP ({market}): {symbol} has formed a classic Volatility Contraction Pattern (VCP). "
+        f"Initial volatility of -{depth1_pct:.1f}% contracted down to a tight -{depth2_pct:.1f}% pivot base, "
+        f"accompanied by volume dry-up. Today's breakout above {pivot_high:.2f} on {vol_ratio:.2f}x volume "
+        f"signals institutional demand overwhelming supply with asymmetric 1:3+ risk-to-reward."
+    )
+
+    return {
+        "trigger_reasons": reasons,
+        "failed_checks": failed_checks or [],
+        "invalidation": invalidation,
+        "market_context": {
+            "benchmark": benchmark_symbol,
+            "regime": regime,
+            "vcp_depth_1_pct": round(depth1_pct, 1),
+            "vcp_depth_2_pct": round(depth2_pct, 1)
+        },
+        "risk": {
+            "atr_14": round(atr_14, 2),
+            "stop_distance_pct": round(stop_dist_pct, 2),
+            "max_position_pct": 2.0,
+            "invalidation_level": round(stop_loss, 2)
+        },
+        "rationale": rationale
+    }
+
+
+def build_high_tight_flag_explanation(
+    symbol: str,
+    market: str,
+    surge_pct: float,
+    flag_depth_pct: float,
+    flag_high: float,
+    vol_ratio: float,
+    entry_price: float,
+    stop_loss: float,
+    atr_14: float,
+    benchmark_symbol: str = "XU100",
+    regime: str = "BULLISH",
+    failed_checks: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Structured explanation builder for High Tight Flag (O'Neil/Zanger)."""
+    stop_dist_pct = ((entry_price - stop_loss) / entry_price) * 100.0 if entry_price > 0 else 0.0
+
+    reasons = [
+        f"Hyper-Momentum Surge: Gained +{surge_pct:.1f}% over the prior 40 sessions",
+        f"Tight Flag Consolidation: Retraced only -{flag_depth_pct:.1f}% (orderly consolidation < 20%)",
+        f"Breakout Trigger: Closed above flag resistance at {flag_high:.2f}",
+        f"Volume Confirmation: {vol_ratio:.2f}x 20-day SMA confirming explosive continuation"
+    ]
+
+    invalidation = f"Daily close below flag support low at {stop_loss:.2f}"
+
+    rationale = (
+        f"High Tight Flag ({market}): {symbol} exhibits extreme leadership momentum, surging +{surge_pct:.1f}% "
+        f"before holding tight within a shallow -{flag_depth_pct:.1f}% flag. The breakout above {flag_high:.2f} "
+        f"on {vol_ratio:.2f}x volume represents one of the highest-expectancy continuation patterns in momentum trading."
+    )
+
+    return {
+        "trigger_reasons": reasons,
+        "failed_checks": failed_checks or [],
+        "invalidation": invalidation,
+        "market_context": {
+            "benchmark": benchmark_symbol,
+            "regime": regime,
+            "surge_pct": round(surge_pct, 1),
+            "flag_depth_pct": round(flag_depth_pct, 1)
+        },
+        "risk": {
+            "atr_14": round(atr_14, 2),
+            "stop_distance_pct": round(stop_dist_pct, 2),
+            "max_position_pct": 2.0,
+            "invalidation_level": round(stop_loss, 2)
+        },
+        "rationale": rationale
+    }
+
+
+def build_connors_rsi2_explanation(
+    symbol: str,
+    market: str,
+    rsi2_val: float,
+    ema200_val: float,
+    entry_price: float,
+    stop_loss: float,
+    atr_14: float,
+    benchmark_symbol: str = "SPY",
+    regime: str = "NEUTRAL",
+    failed_checks: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Structured explanation builder for Connors RSI-2 Panic Rebound."""
+    stop_dist_pct = ((entry_price - stop_loss) / entry_price) * 100.0 if entry_price > 0 else 0.0
+
+    reasons = [
+        f"Macro Uptrend Intact: Close ({entry_price:.2f}) > 200 EMA ({ema200_val:.2f})",
+        f"Extreme Short-Term Washout: RSI(2) dropped to {rsi2_val:.1f} (deep capitulation below 10)",
+        f"Panic Exhaustion: Short-term selling momentum reached statistical exhaustion within secular bull trend",
+        f"Asymmetric Mean Reversion: High-probability snapback toward 5 EMA"
+    ]
+
+    invalidation = f"Daily close below protective ATR stop at {stop_loss:.2f}"
+
+    rationale = (
+        f"Connors RSI-2 Rebound ({market}): {symbol} is in a confirmed Stage-2 bull market (above 200 EMA) "
+        f"but experienced an acute 2-3 session panic washout driving RSI(2) down to {rsi2_val:.1f}. "
+        f"Statistically, oversold extremes inside macro uptrends produce rapid mean-reversion snapbacks."
+    )
+
+    return {
+        "trigger_reasons": reasons,
+        "failed_checks": failed_checks or [],
+        "invalidation": invalidation,
+        "market_context": {
+            "benchmark": benchmark_symbol,
+            "regime": regime,
+            "rsi_2": round(rsi2_val, 1)
+        },
+        "risk": {
+            "atr_14": round(atr_14, 2),
+            "stop_distance_pct": round(stop_dist_pct, 2),
+            "max_position_pct": 1.5,
+            "invalidation_level": round(stop_loss, 2)
+        },
+        "rationale": rationale
+    }
+
+

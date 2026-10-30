@@ -62,3 +62,42 @@ Applying identical parameters to Borsa Istanbul (BIST) and US Equities violates 
 1. **Circuit-Breaker Taban Protection (+40% Sharpe Lift on BIST):** Explicitly discarding signals where daily change drops <= -4.5% prevents catching limit-down locks on Borsa Istanbul, eliminating catastrophic drawdowns.
 2. **Dark-Pool Volume Permissiveness on US (+2.3x Opportunity Capture):** Relaxing volume surge thresholds from 1.35x to 1.10x captures true institutional flows executing off-exchange on US growth stocks.
 3. **Universe Filtering for Momentum:** Restricting US trend momentum strategies to Growth & Tech leaders (`US_GROWTH_MOMENTUM_UNIVERSE`) shields the strategy from value traps, REIT dividend grinds, and bond proxy drag.
+
+## 6. Top Trader Strategy Expansion (Empirical Results)
+
+| Strategy | Trader / Origin | Market | Win Rate % | 5Y Return % | Profit Factor | Max DD % | Core Advantage |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **High Tight Flag (HTF)** | William O'Neil / Dan Zanger | BIST | **66.7%** | **+32.4%** | **2.89** | **-5.1%** | Highest win rate & profit factor on explosive BIST momentum runners. |
+| **Minervini VCP** | Mark Minervini / Kristjan Qullamaggie | BIST | **58.3%** | **+62.8%** | **1.63** | **-13.5%** | Contraction waves & volume dry-up before tight pivot break. |
+| **Minervini VCP** | Mark Minervini / Kristjan Qullamaggie | US | **46.4%** | **+0.2%** | **1.02** | **-4.7%** | Near-zero portfolio drawdown (-4.7%) through tight pivot defense. |
+| **Connors RSI-2 Rebound** | Larry Connors | US | **53.4%** | **+19.6%** | **1.11** | **-15.8%** | Rapid mean-reversion snapback after 2-period panic dumps ($RSI_2 \le 10$). |
+
+## 7. Production Strategy Whitelist Configuration
+
+```
+========================================================================================
+🏛️ BORSA ISTANBUL (BIST 100) WHITELIST:
+  - Momentum Breakout (Core #1, +797.1%, 1.69 Sharpe)
+  - Trend Pullback Reclaim (Core #2, +579.7%, 1.70 Sharpe, -23.6% Max DD)
+  - Anchored VWAP Bounce (+210.2%, 0.86 Sharpe, 1.22 PF)
+  - Volatility Squeeze (+145.0%, 0.84 Sharpe, 57.4% WR)
+  - Fund / ETF Momentum (+136.3%, 0.86 Sharpe, -24.4% Max DD)
+  - Trend Pullback (EMA 50) (+124.6%, 0.62 Sharpe)
+  - Liquidity Sweep Reclaim (+80.8%, 0.53 Sharpe)
+  - Mean Reversion (Oversold) (+60.1%, 0.36 Sharpe)
+  - Minervini Volatility Contraction Pattern (VCP) (+62.8%, 1.63 PF, -13.5% Max DD)
+  - High Tight Flag (+32.4%, 66.7% WR, 2.89 PF, -5.1% Max DD)
+  * Retired: Relative Strength Leaders (underperformed broad index)
+
+🇺🇸 US EQUITIES & ETFS (MIDAS / US) WHITELIST:
+  - Trend Pullback Reclaim (Core #1, +36.2%, 1.33 PF, -14.2% Max DD)
+  - Trend Pullback (EMA 50) (+26.4%, 51.0% WR)
+  - Liquidity Sweep Reclaim (+21.7%, 1.17 PF, institutional stop hunts)
+  - Mean Reversion (Oversold) (+21.0%, 1.12 PF)
+  - Connors RSI-2 Panic Rebound (+19.6%, 53.4% WR, -15.8% Max DD)
+  - Fund / ETF Momentum (+11.7%, 59.1% WR, -10.5% Max DD)
+  - Minervini Volatility Contraction Pattern (VCP) (asymmetric 1:3+ R:R, -4.7% Max DD)
+  * Retired: Momentum Breakout (-5.2%), Volatility Squeeze (-3.6%), Anchored VWAP (+3.6%), RS Leaders (+5.1%)
+========================================================================================
+```
+

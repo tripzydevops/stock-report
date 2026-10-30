@@ -25,7 +25,8 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<HelpCategory>('all');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0); // First FAQ open by default
-  const [activeWalkthroughTab, setActiveWalkthroughTab] = useState<'signals' | 'dca' | 'stoploss' | 'dividend' | 'gemini'>('signals');
+  const [activeWalkthroughTab, setActiveWalkthroughTab] = useState<'signals' | 'dca' | 'stoploss' | 'dividend' | 'gemini' | 'backtest'>('signals');
+
 
   const categories: { id: HelpCategory; labelTr: string; labelEn: string; icon: string }[] = [
     { id: 'all', labelTr: 'Tümü', labelEn: 'All Topics', icon: '🌐' },
@@ -78,6 +79,23 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
       category: 'signals',
       tag: 'Piyasa Dinamikleri',
     },
+    {
+      qTr: 'Hangi stratejiler BIST ve ABD için aktif, hangileri neden devre dışı bırakıldı?',
+      qEn: 'Which strategies are active for BIST vs. US, and why were some retired?',
+      aTr: '5 yıllık nicel geriye dönük test (backtest) sonuçlarımıza göre piyasa bazlı filtreleme uygulanmıştır: 1) BIST için: Momentum Breakout (+%797 getiri, 1.69 Sharpe) ve Pullback Reclaim (+%579 getiri, 1.70 Sharpe) ana motorlardır. Ayrıca VCP, Squeeze, AVWAP, Likidite Avı ve High Tight Flag devrededir. Zayıf kalan Göreceli Güç (RS) devreden çıkarılmıştır. 2) ABD (US) için: Pullback Reclaim (+%36 getiri, sadece -%14.2 Max DD), Likidite Avı (+%21.7 getiri), Connors RSI-2 ve Minervini VCP devrededir. ABD büyük ölçekli hisselerinde çok fazla sahte kırılım (whipsaw) üreten Momentum Breakout (-%5.2) ve Squeeze (-%3.6) ABD taramasından kaldırılmıştır.',
+      aEn: 'Based on our empirical 5-year simulation, each market uses a strictly verified strategy whitelist: 1) For BIST: Momentum Breakout (+797% return, 1.69 Sharpe) and Pullback Reclaim (+579%, 1.70 Sharpe) lead the alpha engine, supported by VCP, Squeeze, AVWAP, Liquidity Sweeps, and High Tight Flags. Underperforming RS Leaders was retired. 2) For US: Pullback Reclaim (+36.2% return, only -14.2% Max DD), Liquidity Sweeps (+21.7%), Connors RSI-2, and Minervini VCP are active. Daily breakouts (-5.2%) and Squeezes (-3.6%) were retired for US equities due to excessive institutional false breakouts.',
+      category: 'signals',
+      tag: 'Backtest & Whitelist',
+    },
+    {
+      qTr: 'Minervini VCP ve High Tight Flag stratejileri nedir ve nasıl çalışır?',
+      qEn: 'What are Minervini VCP and High Tight Flag strategies, and how do they work?',
+      aTr: '1) Minervini VCP (Volatility Contraction Pattern - Oynaklık Daralma Kalıbı): Mark Minervini\'nin ABD Şampiyonu stratejisidir. Fiyatın dalgalanması birbirini takip eden dalgalarda giderek daralır (örneğin: önce -%15, sonra -%8, en son -%3). Hacim kurur (VDU) ve dar pivot kırıldığında çok sıkı (%3-%5) stopla 1:3+ kâr hedeflenir. 2) High Tight Flag (Yüksek Dar Bayrak): William O\'Neil ve Dan Zanger\'ın patlayıcı modelidir; hisse 40 barda en az +%60 yükselir, ardından 10 barda %20\'den daha sığ bir bayrakta konsolide olup hacim patlamasıyla yeni zirveye kırılır. BIST\'te %66.7 kazanma oranı ve 2.89 kâr faktörü üretmiştir.',
+      aEn: '1) Minervini VCP (Volatility Contraction Pattern): Developed by US Investing Champion Mark Minervini. Price volatility contracts through consecutive waves (e.g. -15% -> -8% -> -3%) while volume dries up, triggering on a tight pivot break with minimal 3-5% risk and 1:3+ reward. 2) High Tight Flag (HTF): Created by William O\'Neil and Dan Zanger; stock surges >= 60% over 40 bars, consolidates tightly (<20% depth) over 10 bars, and breaks out on heavy volume. It demonstrated a 66.7% win rate and 2.89 profit factor on BIST.',
+      category: 'quant',
+      tag: 'Top Trader Stratejileri',
+    },
+
     {
       qTr: 'Kademeli Çıkış Planı (Hedef 1 ve Hedef 2 Koşucu) nasıl uygulanır?',
       qEn: 'How should Multi-Tier Targets (Target 1 & Target 2 Runner) be executed?',
@@ -377,7 +395,19 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           >
             🤖 {language === 'tr' ? 'AI Gemini Danışmanı' : 'AI Gemini Engine'}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('backtest')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeWalkthroughTab === 'backtest'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🏆 {language === 'tr' ? '5Y Backtest & Strateji Karnesi' : '5Y Backtest & Scorecard'}
+          </button>
         </div>
+
 
         {/* Walkthrough Content Panes */}
         {activeWalkthroughTab === 'signals' && (
@@ -570,7 +600,156 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
             )}
           </div>
         )}
+
+        {activeWalkthroughTab === 'backtest' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Header banner */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-slate-900/10 dark:from-amber-950/40 dark:via-orange-950/20 dark:to-slate-900/40 border border-amber-500/30 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏆</span>
+                <span className="text-xs font-black text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                  {language === 'tr' ? '5 Yıllık Gerçekleşen İstatistiksel Backtest Raporu (2021–2026)' : '5-Year Empirical Institutional Backtest Report (2021–2026)'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'BIST 100 (101 hisse) ve ABD (32 mega-cap hisse ve ETF) üzerinde 5 yıllık geçmiş veride tüm stratejiler komisyon ve kayma (slippage) dahil edilerek test edilmiştir. Tek tip kurallar yerine piyasa mikro-yapılarına göre ayrıştırılmış strateji filtreleri uygulanmaktadır.'
+                  : 'All quantitative strategies were tested across 5 years of historical data on 101 BIST stocks and 32 US tickers with realistic commissions and slippage. Market-differentiated rules outperform universal static models by aligning with each exchange\'s microstructure.'}
+              </p>
+            </div>
+
+            {/* Scorecard Table Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+              {/* BIST Card */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+                    <span>🇹🇷</span>
+                    <span>Borsa İstanbul (BIST 100) — En İyi Stratejiler</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+                    Kombine: +%749.9 (1.55 Sharpe)
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">🚀 Momentum Breakout</span>
+                      <span className="text-[11px] text-slate-500">20 Günlük Zirve Kırılımı + Hacim</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%797.1</span>
+                      <span className="text-[10px] text-slate-400">Sharpe: 1.69 | %56.7 WR</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">🛡️ Trend Pullback Reclaim</span>
+                      <span className="text-[11px] text-slate-500">Düzeltme & EMA20 Geri Kazanımı</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%579.7</span>
+                      <span className="text-[10px] text-slate-400">Sharpe: 1.70 | MaxDD: -%23.6</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">⚓ Anchored VWAP Bounce</span>
+                      <span className="text-[11px] text-slate-500">60G Kurumsal Dip Testi</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%210.2</span>
+                      <span className="text-[10px] text-slate-400">Sharpe: 0.86 | PF: 1.22</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">⚡ High Tight Flag (HTF)</span>
+                      <span className="text-[11px] text-slate-500">+%60+ Yükseliş Sonrası Dar Bayrak</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%32.4</span>
+                      <span className="text-[10px] text-slate-400">%66.7 WR | PF: 2.89 | MaxDD: -%5.1</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* US Card */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+                    <span>🇺🇸</span>
+                    <span>ABD Borsaları (Midas / US) — En İyi Stratejiler</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold">
+                    Düşük Risk / Drawdown Odaklı
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">🛡️ Trend Pullback Reclaim</span>
+                      <span className="text-[11px] text-slate-500">ABD'nin #1 Numaralı Trend Motoru</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%36.2</span>
+                      <span className="text-[10px] text-slate-400">PF: 1.33 | MaxDD: Sadece -%14.2</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">🪤 Liquidity Sweep Reclaim</span>
+                      <span className="text-[11px] text-slate-500">20G Stop Avı & Kurumsal Emilim</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%21.7</span>
+                      <span className="text-[10px] text-slate-400">PF: 1.17 | Kurumsal Dark-Pool</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">🎯 Connors RSI-2 Rebound</span>
+                      <span className="text-[11px] text-slate-500">Stage-2'de Panik Dip Dönüşü (RSI2 &le; 10)</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">+%19.6</span>
+                      <span className="text-[10px] text-slate-400">%53.4 WR | MaxDD: -%15.8</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">📐 Minervini VCP Pattern</span>
+                      <span className="text-[11px] text-slate-500">Oynaklık Daralması & Dar Pivot Kırılımı</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400 block">Sıfır Risk Savunması</span>
+                      <span className="text-[10px] text-slate-400">MaxDD: -%4.7 | 1:3+ Asimetrik</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Whitelist Gating Note */}
+            <div className="p-3.5 rounded-xl bg-slate-900 text-white border border-slate-800 text-xs space-y-1.5">
+              <span className="font-bold text-amber-400 block">⚠️ ABD'de Ham Breakout Neden Kaldırıldı?</span>
+              <p className="text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'ABD mega-cap hisselerinde (AAPL, NVDA, MSFT vb.) basit 20 günlük tepe kırılımları (-%5.2) kurumsal algoritmaların likidite avı nedeniyle sıkça sahte kırılıma (whipsaw) yol açar. Bu nedenle ABD pazarında kırılımlar yerine Minervini VCP (dar pivot), Pullback Reclaim (+%36.2) ve Likidite Avı (+%21.7) kullanılmaktadır. BIST\'te ise taban kuralı korumasıyla ham kırılımlar (+%797.1) lider durumdadır.'
+                  : 'In US large caps, naive 20-day breakouts (-5.2%) are frequently exploited by institutional algorithms as liquidity traps. Thus, US screening focuses on Volatility Contractions (VCP), Pullback Reclaims (+36.2%), and Liquidity Sweeps (+21.7%). Conversely, on BIST, cluster momentum and circuit breaker guards make raw breakouts (+797.1%) the highest alpha generator.'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Every Page in the App Explained */}
       <div className="space-y-4">
