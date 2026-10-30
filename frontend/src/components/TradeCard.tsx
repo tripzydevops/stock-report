@@ -33,6 +33,27 @@ export interface TradeSignal {
   lastConfirmedDate?: string;
   daysInZone?: number;
   triggerHistory?: TriggerHistoryItem[];
+  direction?: 'LONG' | 'SHORT' | string;
+  entryMode?: string;
+  target1?: number;
+  target2?: number;
+  triggerReasons?: string[];
+  failedChecks?: string[];
+  invalidation?: string;
+  marketContext?: {
+    benchmark?: string;
+    regime?: string;
+    relative_strength_20d?: number | null;
+    [key: string]: any;
+  };
+  risk?: {
+    atr_14?: number;
+    stop_distance_pct?: number;
+    max_position_pct?: number;
+    invalidation_level?: number;
+    [key: string]: any;
+  };
+  riskMetrics?: any;
 }
 
 interface TradeCardProps {
@@ -528,36 +549,177 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           )}
         </div>
 
-        {expanded && (
-          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900 p-2.5 rounded-lg border border-gray-100 dark:border-gray-800 space-y-2">
-            <div className="leading-relaxed">{signal.rationale}</div>
-            {signal.strategy.toLowerCase().includes('mean reversion') && (
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-1.5 text-[10px]">
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">📊 {language === 'tr' ? 'Teknik Onaylar:' : 'Technical Triggers:'}</span>
-                <span className="bg-indigo-50 dark:bg-indigo-950/70 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-mono">
-                  {language === 'tr' ? 'Alt Bollinger (20, 2.0σ) Tabanı' : 'Lower BB (20, 2.0σ) Touch'}
+        {expanded && (() => {
+          let reasons = signal.triggerReasons || [];
+          let failedChecks = signal.failedChecks || [];
+          let invalidationRule = signal.invalidation;
+          let marketCtx = signal.marketContext;
+          let riskData = signal.risk || signal.riskMetrics;
+          let displayNarrative = signal.rationale;
+          let entryModeStr = signal.entryMode || 'next_open';
+          let directionStr = signal.direction || 'LONG';
+
+          // Auto-parse if rationale was saved as JSON string
+          if ((!reasons || reasons.length === 0) && signal.rationale && signal.rationale.trim().startsWith('{')) {
+            try {
+              const parsed = JSON.parse(signal.rationale);
+              if (Array.isArray(parsed.trigger_reasons)) reasons = parsed.trigger_reasons;
+              if (Array.isArray(parsed.failed_checks)) failedChecks = parsed.failed_checks;
+              if (parsed.invalidation) invalidationRule = parsed.invalidation;
+              if (parsed.market_context) marketCtx = parsed.market_context;
+              if (parsed.risk) riskData = parsed.risk;
+              if (parsed.rationale) displayNarrative = parsed.rationale;
+              if (parsed.entry_mode) entryModeStr = parsed.entry_mode;
+              if (parsed.direction) directionStr = parsed.direction;
+            } catch (e) {}
+          }
+
+          const stopDist = riskData?.stop_distance_pct ?? (
+            signal.entryPrice > 0 && signal.stopLoss > 0
+              ? Number((((signal.entryPrice - signal.stopLoss) / signal.entryPrice) * 100).toFixed(2))
+              : null
+          );
+          const t1Val = signal.target1 || signal.targetPrice;
+          const t2Val = signal.target2 || Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+
+          return (
+            <div className="mt-3 text-xs bg-gray-50 dark:bg-gray-900/90 p-3 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3.5 animate-in fade-in duration-200">
+              {/* Context Badges Bar */}
+              <div className="flex flex-wrap items-center gap-1.5 pb-2.5 border-b border-gray-200 dark:border-gray-800 text-[11px]">
+                <span className="font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  {directionStr}
                 </span>
-                <span className="bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono">
-                  {language === 'tr' ? 'RSI <= 36 Dönüşü' : 'RSI <= 36 Rebound'}
+                <span className="font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                  <span>⏱️</span>
+                  <span>
+                    {language === 'tr'
+                      ? (entryModeStr === 'next_open' ? 'Giriş: Açılış Seansı (MOO)' : entryModeStr)
+                      : (entryModeStr === 'next_open' ? 'Entry: Next Open (MOO)' : entryModeStr)}
+                  </span>
                 </span>
-                <span className="bg-blue-50 dark:bg-blue-950/70 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono">
-                  {language === 'tr' ? 'Hedef: 20 Günlük Ortalama' : 'Target: 20 SMA Reversion'}
-                </span>
+                {marketCtx?.benchmark && (
+                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700 font-mono text-[10px]">
+                    📍 {marketCtx.benchmark} ({marketCtx.regime || 'BULLISH'})
+                  </span>
+                )}
+                {marketCtx?.relative_strength_20d && (
+                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono text-[10px]">
+                    ⚡ RS: {marketCtx.relative_strength_20d}x
+                  </span>
+                )}
               </div>
-            )}
-            {signal.strategy.toLowerCase().includes('squeeze') && (
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-1.5 text-[10px]">
-                <span className="font-bold text-purple-600 dark:text-purple-400">⚡ {language === 'tr' ? 'Sıkışma Teyidi:' : 'Squeeze Triggers:'}</span>
-                <span className="bg-purple-50 dark:bg-purple-950/70 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-mono">
-                  {language === 'tr' ? 'Bollinger < Keltner Kanalı' : 'BB < Keltner Compression'}
-                </span>
-                <span className="bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono">
-                  {language === 'tr' ? 'MACD Pozitif Histogram' : 'MACD Momentum Turn'}
-                </span>
+
+              {/* WHY: Trigger Conditions Passed */}
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-gray-800 dark:text-gray-200 mb-1.5 flex items-center gap-1.5">
+                  <span className="text-emerald-500">🎯</span>
+                  <span>{language === 'tr' ? 'Neden Tetiklendi? (Onaylanan Koşullar)' : 'Why It Fired (Trigger Conditions Passed)'}</span>
+                </div>
+                {reasons && reasons.length > 0 ? (
+                  <ul className="space-y-1.5 pl-0.5">
+                    {reasons.map((reason, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-300 leading-snug">
+                        <span className="shrink-0 text-emerald-500 dark:text-emerald-400 font-bold">✓</span>
+                        <span>{reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-[11px] text-gray-600 dark:text-gray-400 italic">
+                    {language === 'tr' ? 'Tüm teknik filtre ve momentum eşik onayları sağlandı.' : 'All technical filter & momentum threshold conditions confirmed.'}
+                  </div>
+                )}
+
+                {/* Near-miss or Failed Checks if present */}
+                {failedChecks && failedChecks.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-800">
+                    <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{language === 'tr' ? 'Yakın Reddedilen / Başarısız Kontroller' : 'Near-Miss / Failed Checks'}</span>
+                    </div>
+                    <ul className="space-y-1 pl-0.5">
+                      {failedChecks.map((fCheck, fIdx) => (
+                        <li key={fIdx} className="flex items-start gap-1.5 text-[10px] text-amber-800 dark:text-amber-300">
+                          <span className="shrink-0 font-bold">✕</span>
+                          <span>{fCheck}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+
+              {/* PLAN: Execution, Scale-Out Targets & Invalidation */}
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                <div className="text-[11px] font-black uppercase tracking-wider text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-1.5">
+                  <span className="text-blue-500">📋</span>
+                  <span>{language === 'tr' ? 'İşlem Planı & Risk Yönetimi' : 'Execution Plan & Risk Management'}</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-[11px] mb-2.5">
+                  <div className="p-2 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">
+                      {language === 'tr' ? 'Hedef 1 (+1.25R / %50 Satış)' : 'Target 1 (+1.25R / 50% Exit)'}
+                    </span>
+                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs mt-0.5">
+                      {formatPrice(t1Val)}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
+                      {language === 'tr' ? 'Hedef 2 (+2.25R Koşucu)' : 'Target 2 (+2.25R Runner)'}
+                    </span>
+                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs mt-0.5">
+                      {formatPrice(t2Val)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Invalidation Box */}
+                <div className="p-2 rounded-lg bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 mb-2">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black text-rose-700 dark:text-rose-300">
+                    <span>🛑</span>
+                    <span>{language === 'tr' ? 'Geçersizlik Kuralı (Stop Invalidation):' : 'Invalidation Rule:'}</span>
+                  </div>
+                  <p className="text-[11px] text-rose-900 dark:text-rose-200 font-mono mt-0.5">
+                    {invalidationRule || (language === 'tr' 
+                      ? `${formatPrice(signal.stopLoss)} altı günlük kapanış kurulumu geçersiz kılar.` 
+                      : `Daily close below ${formatPrice(signal.stopLoss)} invalidates this setup.`)}
+                  </p>
+                </div>
+
+                {/* Sizing & ATR Metrics */}
+                <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono text-gray-600 dark:text-gray-400 px-1">
+                  {stopDist !== null && (
+                    <span>
+                      {language === 'tr' ? 'Stop Mesafesi:' : 'Stop Dist:'} <strong className="text-gray-900 dark:text-gray-200">-%{stopDist}%</strong>
+                    </span>
+                  )}
+                  {riskData?.atr_14 && (
+                    <span>
+                      ATR(14): <strong className="text-gray-900 dark:text-gray-200">{formatPrice(riskData.atr_14)}</strong>
+                    </span>
+                  )}
+                  <span>
+                    {language === 'tr' ? 'Maks Risk Payı:' : 'Max Risk Sizing:'} <strong className="text-blue-600 dark:text-blue-400">%{riskData?.max_position_pct || 1.5}</strong>
+                  </span>
+                </div>
+              </div>
+
+              {/* RATIONALE NARRATIVE */}
+              {displayNarrative && (
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                  <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                    {language === 'tr' ? 'Yapay Zeka Mantıksal Özeti' : 'AI Strategic Narrative'}
+                  </div>
+                  <div className="text-[11px] text-gray-700 dark:text-gray-300 leading-relaxed italic bg-white/60 dark:bg-gray-800/60 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
+                    "{displayNarrative}"
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {showHistory && (
           <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs space-y-2 animate-in fade-in duration-150">

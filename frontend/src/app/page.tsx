@@ -62,43 +62,121 @@ const INITIAL_SIGNALS: TradeSignal[] = [
     symbol: 'THYAO', name: 'Türk Hava Yolları', strategy: 'Volatility Breakout',
     entryPrice: 310.50, stopLoss: 295.00, targetPrice: 350.00,
     confidence: 8, rationale: 'Price broke above 20-day high with 2x average volume. RSI showing strong momentum without being overbought.',
-    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
+    direction: 'LONG', entryMode: 'next_open', target1: 330.00, target2: 350.00,
+    triggerReasons: [
+      'Close broke above prior 20-day swing high at ₺308.20',
+      'Volume was 2.1x its 20-day average (strong institutional flow)',
+      'RSI(14) was 63.5, confirming momentum expansion without being overbought',
+      'Price closed above EMA50 and EMA200 (Stage-2 uptrend confirmed)'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below ₺295.00 or failure to defend breakout level',
+    marketContext: { benchmark: 'XU100', regime: 'BULLISH' },
+    risk: { atr_14: 8.20, stop_distance_pct: 4.99, max_position_pct: 1.5, invalidation_level: 295.00 }
   },
   {
     symbol: 'NVDA', name: 'NVIDIA Corp', strategy: 'EMA Pullback',
     entryPrice: 125.40, stopLoss: 118.00, targetPrice: 145.00,
     confidence: 7, rationale: 'Retracement to 50-day EMA in confirmed uptrend. Bullish divergence on MACD with volume stabilization.',
-    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD'
+    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
+    direction: 'LONG', entryMode: 'next_open', target1: 135.00, target2: 145.00,
+    triggerReasons: [
+      'Retracement to 50-day EMA ($124.50) dynamic trend support',
+      'RSI(14) reset to 47.5, within healthy bounce territory',
+      'Bullish momentum turn on MACD histogram',
+      'Candle confirmed lower wick buying absorption at support'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below $118.00 or loss of EMA50 support',
+    marketContext: { benchmark: 'SPY', regime: 'BULLISH' },
+    risk: { atr_14: 3.80, stop_distance_pct: 5.90, max_position_pct: 1.5, invalidation_level: 118.00 }
   },
   {
-    symbol: 'TUPRS', name: 'Tüpraş', strategy: '50 EMA Pullback',
+    symbol: 'TUPRS', name: 'Tüpraş', strategy: 'Pullback Reclaim',
     entryPrice: 165.20, stopLoss: 158.00, targetPrice: 182.00,
-    confidence: 8, rationale: 'Testing rising 50 EMA support after healthy consolidation. Refining margins remain resilient.',
-    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
+    confidence: 8, rationale: 'Trend Pullback Reclaim (BIST): Pulled back 3.8% from 20-day high over 3 sessions, reclaimed prior-day high (₺164.50) and EMA20 with upper range close.',
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
+    direction: 'LONG', entryMode: 'next_open', target1: 174.20, target2: 182.00,
+    triggerReasons: [
+      'Controlled 3.8% pullback from 20-day high over 3 sessions',
+      'Reclaimed prior-day high at ₺164.50',
+      'Reclaimed EMA20 dynamic trend support',
+      'Closed in upper 25% of daily candle range',
+      'Volume was 1.6x its 20-day average'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below ₺158.00 or new low below the pullback swing low',
+    marketContext: { benchmark: 'XU100', regime: 'BULLISH' },
+    risk: { atr_14: 4.20, stop_distance_pct: 4.36, max_position_pct: 1.5, invalidation_level: 158.00 }
   },
   {
     symbol: 'SCHD', name: 'Schwab US Dividend Equity', strategy: 'Mean Reversion',
     entryPrice: 82.10, stopLoss: 79.50, targetPrice: 88.00,
-    confidence: 9, rationale: 'RSI rebounded from oversold territory (RSI 32). Dividend yield expanding above historical average.',
-    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD'
+    confidence: 9, rationale: 'RSI rebounded from oversold territory (RSI 32). Lower Bollinger Band tested and defended with hammer bounce.',
+    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
+    direction: 'LONG', entryMode: 'next_open', target1: 85.50, target2: 88.00,
+    triggerReasons: [
+      'RSI(14) was 32.1, in oversold capitulation territory (threshold <= 36)',
+      'Tested lower Bollinger Band (2.0σ) support at $81.60',
+      'Candle showed hammer rejection wick and green bounce',
+      'Daily drop remained within safe limit thresholds'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below $79.50 or continuation below exhaustion low',
+    marketContext: { benchmark: 'SPY', regime: 'NEUTRAL' },
+    risk: { atr_14: 1.20, stop_distance_pct: 3.17, max_position_pct: 2.0, invalidation_level: 79.50 }
   },
   {
     symbol: 'BIMAS', name: 'BİM Birleşik Mağazalar', strategy: 'Anchored VWAP Bounce',
     entryPrice: 472.50, stopLoss: 458.00, targetPrice: 510.00,
     confidence: 9, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (468.20). Low breached and quickly reclaimed with strong institutional buying wick.',
-    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
+    direction: 'LONG', entryMode: 'next_open', target1: 494.00, target2: 510.00,
+    triggerReasons: [
+      'Tested Anchored VWAP support at ₺468.20 anchored from institutional pivot low',
+      'Intraday low dipped to AVWAP and closed back above at ₺472.50 (absorption wick)',
+      'RSI(14) was 52.0, confirming consolidation support',
+      'Price closed above key moving averages (macro Stage-2 trend)'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below ₺458.00 or decisive loss of AVWAP support (₺468.20)',
+    marketContext: { benchmark: 'XU100', regime: 'BULLISH' },
+    risk: { atr_14: 11.50, stop_distance_pct: 3.07, max_position_pct: 1.5, invalidation_level: 458.00 }
   },
   {
     symbol: 'AAPL', name: 'Apple Inc.', strategy: 'Liquidity Sweep Reclaim',
     entryPrice: 228.40, stopLoss: 222.50, targetPrice: 242.00,
     confidence: 8, rationale: 'Flushed retail stop loss pool below 20-day swing low ($224.80) with a 45% absorption wick and reclaimed previous support on high volume.',
-    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD'
+    market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
+    direction: 'LONG', entryMode: 'next_open', target1: 237.50, target2: 242.00,
+    triggerReasons: [
+      'Swept 20-day swing low at $224.80 (flushed retail stop pool)',
+      'Reclaimed support with strong close back above prior swing low at $228.40',
+      'Lower absorption wick comprised 45% of total daily range',
+      'Volume ratio was 1.35x average (institutional accumulation flow)'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below $222.50 or new breakdown below sweep low ($223.50)',
+    marketContext: { benchmark: 'SPY', regime: 'BULLISH' },
+    risk: { atr_14: 3.90, stop_distance_pct: 2.58, max_position_pct: 1.5, invalidation_level: 222.50 }
   },
   {
     symbol: 'ASELS', name: 'Aselsan', strategy: 'Relative Strength Leader',
     entryPrice: 64.80, stopLoss: 61.50, targetPrice: 72.00,
     confidence: 9, rationale: 'Demonstrating significant Relative Strength (+6.2% vs XU100 -2.4% over 15 days). Holding firmly above 20 and 50 EMAs with institutional volume accumulation.',
-    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY'
+    market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
+    direction: 'LONG', entryMode: 'next_open', target1: 69.50, target2: 72.00,
+    triggerReasons: [
+      'Stock gained +6.2% over 15 sessions while XU100 index fell -2.4%',
+      'Relative Strength ratio reached 1.09 (strong market divergence leader)',
+      'Price held firmly above rising EMA20 and EMA50 dynamic support',
+      'Candle showed positive buying accumulation on high turnover'
+    ],
+    failedChecks: [],
+    invalidation: 'Close below ₺61.50 or trend failure below EMA50',
+    marketContext: { benchmark: 'XU100', regime: 'BULLISH', relative_strength_20d: 1.09 },
+    risk: { atr_14: 1.85, stop_distance_pct: 5.09, max_position_pct: 1.5, invalidation_level: 61.50 }
   }
 ];
 
@@ -1119,6 +1197,29 @@ export default function Home() {
             const safeStop = Number(s.stop_loss) > 0 ? Number(s.stop_loss) : Number((safeEntry * 0.95).toFixed(2));
             const safeTarget = Number(s.target_1) > 0 ? Number(s.target_1) : Number((safeEntry + 2 * Math.abs(safeEntry - safeStop)).toFixed(2));
 
+            let triggerReasons: string[] = s.trigger_reasons || [];
+            let failedChecks: string[] = s.failed_checks || [];
+            let invalidationRule: string | undefined = s.invalidation;
+            let marketContextObj = s.market_context;
+            let riskObj = s.risk;
+            let displayRationale = s.ai_rationale || 'Autonomous strategy trigger confirmed.';
+            let entryModeStr = s.entry_mode || 'next_open';
+            let directionStr = s.direction || 'LONG';
+
+            if (s.ai_rationale && s.ai_rationale.trim().startsWith('{')) {
+              try {
+                const parsed = JSON.parse(s.ai_rationale);
+                if (Array.isArray(parsed.trigger_reasons)) triggerReasons = parsed.trigger_reasons;
+                if (Array.isArray(parsed.failed_checks)) failedChecks = parsed.failed_checks;
+                if (parsed.invalidation) invalidationRule = parsed.invalidation;
+                if (parsed.market_context) marketContextObj = parsed.market_context;
+                if (parsed.risk) riskObj = parsed.risk;
+                if (parsed.rationale) displayRationale = parsed.rationale;
+                if (parsed.entry_mode) entryModeStr = parsed.entry_mode;
+                if (parsed.direction) directionStr = parsed.direction;
+              } catch (e) {}
+            }
+
             return {
               id: s.id,
               symbol: cleanSym,
@@ -1134,8 +1235,17 @@ export default function Home() {
               status: s.status,
               outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
               closedAt: s.closed_at,
-              aiRationale: s.ai_rationale || 'Autonomous strategy trigger confirmed.',
-              currency: s.assets?.market === 'US' ? 'USD' : 'TRY'
+              aiRationale: displayRationale,
+              currency: s.assets?.market === 'US' ? 'USD' : 'TRY',
+              direction: directionStr,
+              entryMode: entryModeStr,
+              target1: Number(s.target_1) || safeTarget,
+              target2: Number(s.target_2) || undefined,
+              triggerReasons: triggerReasons,
+              failedChecks: failedChecks,
+              invalidation: invalidationRule,
+              marketContext: marketContextObj,
+              risk: riskObj
             };
           });
 
@@ -1210,7 +1320,16 @@ export default function Home() {
               currency: earliest.currency,
               currentPrice: matchedAsset ? matchedAsset.price : effEntry,
               changePercent: matchedAsset ? matchedAsset.changePercent : 0,
-              triggerHistory: triggerHistory
+              triggerHistory: triggerHistory,
+              direction: latest.direction || 'LONG',
+              entryMode: latest.entryMode || 'next_open',
+              target1: latest.target1 || effTarget,
+              target2: latest.target2,
+              triggerReasons: latest.triggerReasons,
+              failedChecks: latest.failedChecks,
+              invalidation: latest.invalidation,
+              marketContext: latest.marketContext,
+              risk: latest.risk
             };
           });
           if (openSignals.length > 0) {

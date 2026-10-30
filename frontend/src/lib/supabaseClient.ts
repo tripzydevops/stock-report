@@ -51,6 +51,26 @@ export interface ScannedTradeSignal {
   closedAt?: string | null;
   aiRationale: string;
   currency: 'TRY' | 'USD';
+  direction?: 'LONG' | 'SHORT' | string;
+  entryMode?: string;
+  target1?: number;
+  target2?: number;
+  triggerReasons?: string[];
+  failedChecks?: string[];
+  invalidation?: string;
+  marketContext?: {
+    benchmark?: string;
+    regime?: string;
+    relative_strength_20d?: number | null;
+    [key: string]: any;
+  };
+  risk?: {
+    atr_14?: number;
+    stop_distance_pct?: number;
+    max_position_pct?: number;
+    invalidation_level?: number;
+    [key: string]: any;
+  };
 }
 
 export interface PortfolioItem {

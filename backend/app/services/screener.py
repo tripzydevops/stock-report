@@ -2,7 +2,16 @@ import pandas as pd
 from typing import Dict, List, Optional
 import numpy as np
 
-def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+from app.services.signal_explainer import (
+    build_pullback_reclaim_explanation,
+    build_momentum_breakout_explanation,
+    build_trend_pullback_explanation,
+    build_mean_reversion_explanation,
+    build_volatility_squeeze_explanation,
+    build_fund_momentum_explanation
+)
+
+def screen_momentum_breakout(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     Momentum Breakout:
     Triggers when: close > 20-day high AND volume_ratio >= 1.35 AND rsi_14 > 52 AND close > ema_50.
@@ -39,20 +48,46 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         risk = entry - stop
         target_1 = round(entry + (1.25 * risk), 2)
         target_2 = round(entry + (2.25 * risk), 2)
+
+        benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+        exp = build_momentum_breakout_explanation(
+            symbol=symbol,
+            market=market,
+            prev_high_20=float(prev_high_20),
+            vol_ratio=float(vol_ratio),
+            rsi=float(rsi),
+            entry_price=float(entry),
+            stop_loss=float(stop),
+            atr_14=float(atr),
+            has_ema200=(len(df) >= 200 and ema_200 > 0),
+            benchmark_symbol=benchmark,
+            regime="BULLISH"
+        )
         
         return {
             'symbol': symbol,
+            'market': market,
             'strategy': 'Momentum Breakout',
+            'direction': 'LONG',
+            'entry_mode': 'next_open',
             'signal_date': df.index[-1],
             'entry_price': round(entry, 2),
             'stop_loss': stop,
             'target_1': target_1,
             'target_2': target_2,
-            'risk_reward_ratio': 1.25
+            'risk_reward_ratio': 1.25,
+            'confidence_score': 80.0,
+            'trigger_reasons': exp["trigger_reasons"],
+            'failed_checks': exp["failed_checks"],
+            'invalidation': exp["invalidation"],
+            'market_context': exp["market_context"],
+            'risk': exp["risk"],
+            'rationale': exp["rationale"],
+            'ai_rationale': exp["rationale"]
         }
     return None
 
-def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_trend_pullback(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     Trend Pullback:
     Triggers when:
@@ -109,15 +144,45 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         rr = (target_1 - entry) / risk if risk > 0 else 0
         
         if rr >= 1.2 and stop < entry and target_1 > entry and target_2 > target_1:
+            tested_ema = "EMA20" if abs(close - ema_20) <= abs(close - ema_50) else "EMA50"
+            support_val = ema_20 if tested_ema == "EMA20" else ema_50
+            dist_ema_pct = (abs(close - support_val) / support_val) * 100.0 if support_val > 0 else 0.0
+            benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+
+            exp = build_trend_pullback_explanation(
+                symbol=symbol,
+                market=market,
+                distance_to_ema=dist_ema_pct,
+                tested_ema=tested_ema,
+                support_level=float(support_val),
+                rsi=float(rsi),
+                entry_price=float(entry),
+                stop_loss=float(stop),
+                atr_14=float(atr),
+                benchmark_symbol=benchmark,
+                regime="BULLISH"
+            )
+
             return {
                 'symbol': symbol,
+                'market': market,
                 'strategy': 'Trend Pullback',
+                'direction': 'LONG',
+                'entry_mode': 'next_open',
                 'signal_date': df.index[-1],
                 'entry_price': round(entry, 2),
                 'stop_loss': stop,
                 'target_1': target_1,
                 'target_2': target_2,
-                'risk_reward_ratio': round(rr, 2)
+                'risk_reward_ratio': round(rr, 2),
+                'confidence_score': 75.0,
+                'trigger_reasons': exp["trigger_reasons"],
+                'failed_checks': exp["failed_checks"],
+                'invalidation': exp["invalidation"],
+                'market_context': exp["market_context"],
+                'risk': exp["risk"],
+                'rationale': exp["rationale"],
+                'ai_rationale': exp["rationale"]
             }
     return None
 
@@ -232,10 +297,28 @@ def screen_pullback_reclaim(
     stop_loss = round(stop_loss, 2)
     rr = round((target_1 - close) / risk_dist, 2) if risk_dist > 0 else profile.rr_target_1
 
+    calculated_vol_ratio = float(vol_ratio if vol_ratio is not None and vol_ratio > 0 else (vol / vol_sma20 if vol_sma20 > 0 else 1.0))
+    exp = build_pullback_reclaim_explanation(
+        symbol=symbol,
+        market=profile.market.value,
+        pullback_depth_pct=float(pullback_depth_pct),
+        bars_since_peak=int(bars_since_peak),
+        prior_high=float(prior_high),
+        range_position=float(range_position),
+        vol_ratio=calculated_vol_ratio,
+        stop_loss=float(stop_loss),
+        atr_14=float(atr),
+        entry_price=float(close),
+        benchmark_symbol=profile.benchmark_symbol,
+        regime="BULLISH"
+    )
+
     return {
         'symbol': symbol,
         'market': profile.market.value,
         'strategy': 'Pullback Reclaim',
+        'direction': 'LONG',
+        'entry_mode': 'next_open',
         'signal_date': df.index[-1],
         'entry_price': round(close, 2),
         'stop_loss': stop_loss,
@@ -243,14 +326,16 @@ def screen_pullback_reclaim(
         'target_2': target_2,
         'risk_reward_ratio': rr,
         'confidence_score': 8.5,
-        'ai_rationale': (
-            f"Trend Pullback Reclaim ({profile.market.value}): Pulled back {pullback_depth_pct:.1f}% from 20D high "
-            f"({bars_since_peak}d ago), reclaimed prior high ({prior_high:.2f}) and EMA20 "
-            f"with upper close ({range_position*100:.0f}% of range). Benchmarked against {profile.benchmark_symbol}."
-        )
+        'trigger_reasons': exp["trigger_reasons"],
+        'failed_checks': exp["failed_checks"],
+        'invalidation': exp["invalidation"],
+        'market_context': exp["market_context"],
+        'risk': exp["risk"],
+        'rationale': exp["rationale"],
+        'ai_rationale': exp["rationale"]
     }
 
-def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_mean_reversion(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     Mean Reversion (Oversold Dip-Buy / Exhaustion Rebound):
     Triggers when:
@@ -336,19 +421,47 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
         rr = (target_1 - entry) / risk if risk > 0 else 0
 
         if rr >= 1.2 and stop < entry and target_1 > entry and target_2 > target_1:
+            reversal_type = "Bullish green candle bounce" if is_green_candle else ("Higher close confirmation" if higher_close else "Hammer rejection wick")
+            benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+
+            exp = build_mean_reversion_explanation(
+                symbol=symbol,
+                market=market,
+                rsi=float(rsi),
+                bb_lower=float(bb_lower),
+                reversal_type=reversal_type,
+                entry_price=float(entry),
+                stop_loss=float(stop),
+                atr_14=float(atr),
+                target_1=float(target_1),
+                benchmark_symbol=benchmark,
+                regime="NEUTRAL"
+            )
+
             return {
                 'symbol': symbol,
+                'market': market,
                 'strategy': 'Mean Reversion',
+                'direction': 'LONG',
+                'entry_mode': 'next_open',
                 'signal_date': df.index[-1],
                 'entry_price': round(entry, 2),
                 'stop_loss': round(stop, 2),
                 'target_1': target_1,
                 'target_2': target_2,
-                'risk_reward_ratio': round(rr, 2)
+                'risk_reward_ratio': round(rr, 2),
+                'confidence_score': 75.0,
+                'trigger_reasons': exp["trigger_reasons"],
+                'failed_checks': exp["failed_checks"],
+                'invalidation': exp["invalidation"],
+                'market_context': exp["market_context"],
+                'risk': exp["risk"],
+                'rationale': exp["rationale"],
+                'ai_rationale': exp["rationale"]
             }
     return None
 
-def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_volatility_squeeze(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     Triggers when: squeeze just released (previous bar was squeezed, current bar is not).
     Squeeze: bb_upper < kc_upper AND bb_lower > kc_lower.
@@ -375,7 +488,8 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             return None
         
         # Bullish momentum release
-        if last.get('macd_histogram', 0) > 0:
+        macd_hist = float(last.get('macd_histogram', 0))
+        if macd_hist > 0:
             stop = last.get('kc_lower', entry - (1.5 * atr))
             if stop >= entry * 0.98 or pd.isna(stop):
                 stop = round(entry - (1.5 * atr), 2)
@@ -387,21 +501,44 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
             target_2 = round(entry + (2.25 * risk), 2)
             
             rr = (target_1 - entry) / risk if risk > 0 else 0
+
+            benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+            exp = build_volatility_squeeze_explanation(
+                symbol=symbol,
+                market=market,
+                macd_hist=macd_hist,
+                entry_price=float(entry),
+                stop_loss=float(stop),
+                atr_14=float(atr),
+                benchmark_symbol=benchmark,
+                regime="BULLISH"
+            )
             
             return {
                 'symbol': symbol,
+                'market': market,
                 'strategy': 'Volatility Squeeze',
+                'direction': 'LONG',
+                'entry_mode': 'next_open',
                 'signal_date': df.index[-1],
                 'entry_price': round(entry, 2),
                 'stop_loss': stop,
                 'target_1': target_1,
                 'target_2': target_2,
-                'risk_reward_ratio': round(rr, 2)
+                'risk_reward_ratio': round(rr, 2),
+                'confidence_score': 82.0,
+                'trigger_reasons': exp["trigger_reasons"],
+                'failed_checks': exp["failed_checks"],
+                'invalidation': exp["invalidation"],
+                'market_context': exp["market_context"],
+                'risk': exp["risk"],
+                'rationale': exp["rationale"],
+                'ai_rationale': exp["rationale"]
             }
         return None
     return None
 
-def screen_fund_momentum(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_fund_momentum(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     For funds/ETFs: 1-month return in top decile, positive 3-month return, max drawdown < 10%.
     Note: Top decile requires cross-sectional data, here we simplify to absolute thresholds:
@@ -420,18 +557,42 @@ def screen_fund_momentum(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
     max_dd = abs(drawdown.min())
     
     if ret_1m > 0.05 and ret_3m > 0 and max_dd < 0.10:
-        entry = close.iloc[-1]
-        stop = entry * 0.90 # 10% trailing stop
-        target = entry * 1.20
+        entry = float(close.iloc[-1])
+        stop = round(entry * 0.90, 2) # 10% trailing stop
+        target_1 = round(entry * 1.15, 2)
+        target_2 = round(entry * 1.25, 2)
+        benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "TEFAS"
+        exp = build_fund_momentum_explanation(
+            symbol=symbol,
+            market=market,
+            ret_1m=float(ret_1m),
+            ret_3m=float(ret_3m),
+            max_dd=float(max_dd),
+            entry_price=float(entry),
+            stop_loss=float(stop),
+            benchmark_symbol=benchmark
+        )
         
         return {
             'symbol': symbol,
+            'market': market,
             'strategy': 'Fund Momentum',
+            'direction': 'LONG',
+            'entry_mode': 'next_open',
             'signal_date': df.index[-1],
-            'entry_price': entry,
+            'entry_price': round(entry, 2),
             'stop_loss': stop,
-            'target_1': target,
-            'risk_reward_ratio': 2.0
+            'target_1': target_1,
+            'target_2': target_2,
+            'risk_reward_ratio': 2.0,
+            'confidence_score': 80.0,
+            'trigger_reasons': exp["trigger_reasons"],
+            'failed_checks': exp["failed_checks"],
+            'invalidation': exp["invalidation"],
+            'market_context': exp["market_context"],
+            'risk': exp["risk"],
+            'rationale': exp["rationale"],
+            'ai_rationale': exp["rationale"]
         }
     return None
 
@@ -451,20 +612,20 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
             sig = screen_pullback_reclaim(df, symbol, market=market_val)
             if sig: signals.append(sig)
 
-            sig = screen_momentum_breakout(df, symbol)
+            sig = screen_momentum_breakout(df, symbol, market=market_val)
             if sig: signals.append(sig)
 
-            sig = screen_trend_pullback(df, symbol)
+            sig = screen_trend_pullback(df, symbol, market=market_val)
             if sig: signals.append(sig)
 
-            sig = screen_volatility_squeeze(df, symbol)
+            sig = screen_volatility_squeeze(df, symbol, market=market_val)
             if sig: signals.append(sig)
 
-            sig = screen_mean_reversion(df, symbol)
+            sig = screen_mean_reversion(df, symbol, market=market_val)
             if sig: signals.append(sig)
             
         if asset_type in ['fund', 'mutual_fund', 'etf']:
-            sig = screen_fund_momentum(df, symbol)
+            sig = screen_fund_momentum(df, symbol, market=market_val)
             if sig: signals.append(sig)
             
     return signals

@@ -96,12 +96,20 @@ class TradeSignalCreate(BaseModel):
     strategy: StrategyName
     signal_date: date
     entry_price: float
+    entry_mode: str = "next_open"
+    direction: str = "LONG"
     stop_loss: float | None = None
     target_1: float | None = None
     target_2: float | None = None
     risk_reward_ratio: float | None = None
-    confidence_score: float | None = Field(None, ge=1.0, le=10.0)
+    confidence_score: float | None = Field(None, ge=1.0, le=100.0)
     ai_rationale: str | None = None
+    trigger_reasons: list[str] = Field(default_factory=list)
+    failed_checks: list[str] = Field(default_factory=list)
+    invalidation: str | None = None
+    market_context: dict[str, Any] = Field(default_factory=dict)
+    risk: dict[str, Any] = Field(default_factory=dict)
+    rationale: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class TradeCard(BaseModel):

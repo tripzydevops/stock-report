@@ -14,6 +14,12 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
 
+from app.services.signal_explainer import (
+    build_anchored_vwap_explanation,
+    build_liquidity_sweep_explanation,
+    build_relative_strength_explanation
+)
+
 
 def compute_anchored_vwap(df: pd.DataFrame, anchor_idx: int) -> pd.Series:
     """
@@ -42,7 +48,7 @@ def compute_anchored_vwap(df: pd.DataFrame, anchor_idx: int) -> pd.Series:
     return avwap
 
 
-def screen_anchored_vwap_bounce(df: pd.DataFrame, symbol: str) -> Optional[Dict]:
+def screen_anchored_vwap_bounce(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
     Anchored VWAP Bounce:
     1. Finds significant swing low within the last 60 bars (major institutional pivot).
@@ -106,22 +112,48 @@ def screen_anchored_vwap_bounce(df: pd.DataFrame, symbol: str) -> Optional[Dict]
         target_2 = round(entry + (2.5 * risk), 2)
         rr = round((target_1 - entry) / risk, 2)
 
+        benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+        exp = build_anchored_vwap_explanation(
+            symbol=symbol,
+            market=market,
+            avwap_val=avwap_val,
+            dist_pct=dist_pct,
+            dipped_and_reclaimed=dipped_and_reclaimed,
+            rsi=rsi,
+            entry_price=entry,
+            stop_loss=stop,
+            atr_14=atr,
+            benchmark_symbol=benchmark,
+            regime="BULLISH"
+        )
+
         return {
             'symbol': symbol,
+            'market': market,
             'strategy': 'Anchored VWAP Bounce',
+            'direction': 'LONG',
+            'entry_mode': 'next_open',
             'signal_date': df.index[-1],
             'entry_price': round(entry, 2),
             'stop_loss': stop,
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'category': 'INSTITUTIONAL'
+            'confidence_score': 85.0,
+            'category': 'INSTITUTIONAL',
+            'trigger_reasons': exp["trigger_reasons"],
+            'failed_checks': exp["failed_checks"],
+            'invalidation': exp["invalidation"],
+            'market_context': exp["market_context"],
+            'risk': exp["risk"],
+            'rationale': exp["rationale"],
+            'ai_rationale': exp["rationale"]
         }
 
     return None
 
 
-def screen_liquidity_sweep_reclaim(df: pd.DataFrame, symbol: str, lookback: int = 20) -> Optional[Dict]:
+def screen_liquidity_sweep_reclaim(df: pd.DataFrame, symbol: str, lookback: int = 20, market: str = "BIST") -> Optional[Dict]:
     """
     Liquidity Sweep & Reclaim (Institutional Stop Hunt):
     1. Identifies the prior 20-day swing low (retail stop pool).
@@ -170,16 +202,42 @@ def screen_liquidity_sweep_reclaim(df: pd.DataFrame, symbol: str, lookback: int 
         target_2 = round(entry + (2.6 * risk), 2)
         rr = round((target_1 - entry) / risk, 2)
 
+        benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+        exp = build_liquidity_sweep_explanation(
+            symbol=symbol,
+            market=market,
+            prior_low=prior_low,
+            low_p=low_p,
+            wick_ratio=wick_ratio,
+            vol_ratio=vol_ratio,
+            entry_price=entry,
+            stop_loss=stop,
+            atr_14=atr,
+            benchmark_symbol=benchmark,
+            regime="BULLISH"
+        )
+
         return {
             'symbol': symbol,
+            'market': market,
             'strategy': 'Liquidity Sweep Reclaim',
+            'direction': 'LONG',
+            'entry_mode': 'next_open',
             'signal_date': df.index[-1],
             'entry_price': round(entry, 2),
             'stop_loss': stop,
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'category': 'INSTITUTIONAL'
+            'confidence_score': 85.0,
+            'category': 'INSTITUTIONAL',
+            'trigger_reasons': exp["trigger_reasons"],
+            'failed_checks': exp["failed_checks"],
+            'invalidation': exp["invalidation"],
+            'market_context': exp["market_context"],
+            'risk': exp["risk"],
+            'rationale': exp["rationale"],
+            'ai_rationale': exp["rationale"]
         }
 
     return None
@@ -189,7 +247,8 @@ def screen_relative_strength_leaders(
     df: pd.DataFrame,
     symbol: str,
     benchmark_df: Optional[pd.DataFrame] = None,
-    window: int = 15
+    window: int = 15,
+    market: str = "BIST"
 ) -> Optional[Dict]:
     """
     Relative Strength (RS) Market Divergence:
@@ -217,6 +276,8 @@ def screen_relative_strength_leaders(
 
     # Benchmark comparison
     is_rs_divergent = False
+    bench_return = None
+    rs_ratio = None
     if benchmark_df is not None and len(benchmark_df) >= window + 5:
         bench_close = float(benchmark_df['close'].iloc[-1])
         bench_start = float(benchmark_df['close'].iloc[-(window + 1)])
@@ -248,16 +309,41 @@ def screen_relative_strength_leaders(
         target_2 = round(entry + (2.5 * risk), 2)
         rr = round((target_1 - entry) / risk, 2)
 
+        benchmark = "SPY" if market.upper() in ["US", "NASDAQ", "NYSE"] else "XU100"
+        exp = build_relative_strength_explanation(
+            symbol=symbol,
+            market=market,
+            stock_return=stock_return,
+            bench_return=bench_return,
+            rs_ratio=rs_ratio,
+            entry_price=entry,
+            stop_loss=stop,
+            atr_14=atr,
+            benchmark_symbol=benchmark,
+            regime="BULLISH"
+        )
+
         return {
             'symbol': symbol,
+            'market': market,
             'strategy': 'Relative Strength Leader',
+            'direction': 'LONG',
+            'entry_mode': 'next_open',
             'signal_date': df.index[-1],
             'entry_price': round(entry, 2),
             'stop_loss': stop,
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'category': 'INSTITUTIONAL'
+            'confidence_score': 85.0,
+            'category': 'INSTITUTIONAL',
+            'trigger_reasons': exp["trigger_reasons"],
+            'failed_checks': exp["failed_checks"],
+            'invalidation': exp["invalidation"],
+            'market_context': exp["market_context"],
+            'risk': exp["risk"],
+            'rationale': exp["rationale"],
+            'ai_rationale': exp["rationale"]
         }
 
     return None
@@ -287,18 +373,18 @@ def run_institutional_screens(
 
         if asset_type in ['stock', 'etf']:
             # 1. Anchored VWAP Bounce
-            sig = screen_anchored_vwap_bounce(df, symbol)
+            sig = screen_anchored_vwap_bounce(df, symbol, market=market)
             if sig:
                 signals.append(sig)
 
             # 2. Liquidity Sweep Reclaim
-            sig = screen_liquidity_sweep_reclaim(df, symbol)
+            sig = screen_liquidity_sweep_reclaim(df, symbol, market=market)
             if sig:
                 signals.append(sig)
 
             # 3. Relative Strength Leader
             bench_df = xu100_df if market == 'BIST' else spy_df
-            sig = screen_relative_strength_leaders(df, symbol, benchmark_df=bench_df)
+            sig = screen_relative_strength_leaders(df, symbol, benchmark_df=bench_df, market=market)
             if sig:
                 signals.append(sig)
 
