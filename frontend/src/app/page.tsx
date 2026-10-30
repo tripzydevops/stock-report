@@ -1205,6 +1205,8 @@ export default function Home() {
             let displayRationale = s.ai_rationale || 'Autonomous strategy trigger confirmed.';
             let entryModeStr = s.entry_mode || 'next_open';
             let directionStr = s.direction || 'LONG';
+            let isReconfirmed = false;
+            let lastConfirmedDate: string | undefined = undefined;
 
             if (s.ai_rationale && s.ai_rationale.trim().startsWith('{')) {
               try {
@@ -1217,8 +1219,18 @@ export default function Home() {
                 if (parsed.rationale) displayRationale = parsed.rationale;
                 if (parsed.entry_mode) entryModeStr = parsed.entry_mode;
                 if (parsed.direction) directionStr = parsed.direction;
+                if (parsed.last_reconfirmed_date) {
+                  isReconfirmed = true;
+                  lastConfirmedDate = parsed.last_reconfirmed_date;
+                }
               } catch (e) {}
             }
+
+            // Standardize confidence to single 0-100 scale
+            const rawConf = Number(s.confidence_score);
+            const standardizedConf = rawConf > 0 
+              ? (rawConf <= 10.0 ? Math.round(rawConf * 10) : Math.round(rawConf)) 
+              : 80;
 
             return {
               id: s.id,
@@ -1231,7 +1243,7 @@ export default function Home() {
               stopLoss: safeStop,
               targetPrice: safeTarget,
               riskReward: Number(s.risk_reward_ratio) || 2.0,
-              confidence: Number(s.confidence_score) || 8.0,
+              confidence: standardizedConf,
               status: s.status,
               outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
               closedAt: s.closed_at,
@@ -1245,7 +1257,9 @@ export default function Home() {
               failedChecks: failedChecks,
               invalidation: invalidationRule,
               marketContext: marketContextObj,
-              risk: riskObj
+              risk: riskObj,
+              isReconfirmed: isReconfirmed,
+              lastConfirmedDate: lastConfirmedDate
             };
           });
 

@@ -612,34 +612,95 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
                 update_fields = {}
                 is_legacy = not (orig_rat.strip().startswith("{") and orig_rat.strip().endswith("}"))
 
+                today_scan_payload = {}
+                try:
+                    today_scan_payload = json.loads(sig["ai_rationale"]) if isinstance(sig.get("ai_rationale"), str) else (sig.get("ai_rationale") or {})
+                except Exception:
+                    today_scan_payload = {}
+
+                reconf_entry = {
+                    "date": today_str,
+                    "reconfirmed_price": float(sig.get("entry_price") or 0),
+                    "reconfirmed_stop": float(sig.get("stop_loss") or 0) if sig.get("stop_loss") else None,
+                    "reconfirmed_target_1": float(sig.get("target_1") or 0) if sig.get("target_1") else None,
+                    "reconfirmed_target_2": float(sig.get("target_2") or 0) if sig.get("target_2") else None,
+                    "scan_risk": today_scan_payload.get("risk", {}),
+                    "trigger_reasons": today_scan_payload.get("trigger_reasons", []),
+                    "market_context": today_scan_payload.get("market_context", {}),
+                    "rationale": today_scan_payload.get("rationale", ""),
+                }
+
                 if is_legacy:
-                    # UPGRADE LEGACY SIGNAL: Replace generic template with full structured explainer!
-                    update_fields["ai_rationale"] = sig["ai_rationale"]
-                    if sig.get("target_2") and not orig.get("target_2"):
-                        update_fields["target_2"] = sig["target_2"]
-                    if sig.get("confidence_score") and (not orig.get("confidence_score") or float(orig.get("confidence_score")) == 8.0):
+                    # UPGRADE LEGACY SIGNAL SAFELY:
+                    # 1. Preserve original plan figures (entry, stop, targets, R:R). Never overwrite with today's scan!
+                    # 2. Mark original explainer as unavailable/legacy, never substituting today's risk for the original trade's risk.
+                    # 3. Store today's explanation cleanly as a dated reconfirmation.
+                    orig_entry_val = float(orig.get("entry_price") or 0)
+                    orig_stop_val = float(orig.get("stop_loss") or 0) if orig.get("stop_loss") else None
+                    orig_t1_val = float(orig.get("target_1") or 0) if orig.get("target_1") else None
+                    orig_t2_val = float(orig.get("target_2") or 0) if orig.get("target_2") else None
+                    orig_rr_val = float(orig.get("risk_reward_ratio") or 2.0) if orig.get("risk_reward_ratio") else 2.0
+
+                    clean_legacy_text = orig_rat.replace("RE-CONFIRMED: ", "").strip()
+
+                    upgraded_payload = {
+                        "symbol": sym,
+                        "strategy": orig.get("strategy") or sig.get("strategy"),
+                        "direction": orig.get("direction", "LONG"),
+                        "entry_mode": "original_scan",
+                        "signal_date": str(orig.get("signal_date")),
+                        "original_explainer_status": "legacy_unstructured" if clean_legacy_text else "not_recorded",
+                        "original_rationale": clean_legacy_text if clean_legacy_text else None,
+                        "rationale": clean_legacy_text if clean_legacy_text else f"Original {orig.get('strategy')} signal recorded prior to structured explainer engine.",
+                        "trigger_reasons": [clean_legacy_text] if clean_legacy_text else ["Original trigger conditions recorded prior to explainer upgrade."],
+                        "failed_checks": [],
+                        "invalidation": f"Daily close below original trade stop ({orig_stop_val}) cancels trade setup.",
+                        "market_context": {
+                            "note": "Historical scan context preserved from original signal date."
+                        },
+                        "risk": {
+                            "original_entry": orig_entry_val,
+                            "original_stop": orig_stop_val,
+                            "original_target_1": orig_t1_val,
+                            "original_target_2": orig_t2_val,
+                            "risk_reward_ratio": orig_rr_val,
+                            "note": "Original trade risk preserved; not substituted with today's scan risk."
+                        },
+                        "reconfirmations": [reconf_entry],
+                        "last_reconfirmed_date": today_str,
+                        "latest_reconfirmation": reconf_entry,
+                    }
+                    update_fields["ai_rationale"] = json.dumps(upgraded_payload, ensure_ascii=False)
+
+                    # Standardize confidence score
+                    orig_conf = float(orig.get("confidence_score") or 0)
+                    if sig.get("confidence_score") and (orig_conf == 0 or orig_conf == 8.0):
                         update_fields["confidence_score"] = sig["confidence_score"]
+                    elif 0 < orig_conf <= 10.0:
+                        update_fields["confidence_score"] = orig_conf * 10.0
                 else:
-                    # Already structured JSON. Preserve original entry evidence & append reconfirmation metadata:
+                    # Already structured JSON. Preserve original entry evidence & append dated reconfirmation:
                     try:
                         orig_payload = json.loads(orig_rat)
                         reconf_list = orig_payload.get("reconfirmations", [])
-                        if today_str not in reconf_list:
-                            reconf_list.append(today_str)
+                        
+                        reconf_dates = [r.get("date") if isinstance(r, dict) else r for r in reconf_list]
+                        if today_str not in reconf_dates:
+                            reconf_list.append(reconf_entry)
                             orig_payload["reconfirmations"] = reconf_list
-                            orig_payload["last_reconfirmed_date"] = today_str
 
-                            # Keep latest market context updated if available from new trigger
-                            try:
-                                new_payload = json.loads(sig["ai_rationale"])
-                                if "market_context" in new_payload:
-                                    orig_payload["latest_market_context"] = new_payload["market_context"]
-                            except Exception:
-                                pass
+                        orig_payload["last_reconfirmed_date"] = today_str
+                        orig_payload["latest_reconfirmation"] = reconf_entry
 
-                            update_fields["ai_rationale"] = json.dumps(orig_payload, ensure_ascii=False)
+                        # Crucial: NEVER overwrite original trade's trigger_reasons, invalidation, or risk figures!
+                        update_fields["ai_rationale"] = json.dumps(orig_payload, ensure_ascii=False)
                     except Exception:
-                        update_fields["ai_rationale"] = sig["ai_rationale"]
+                        pass
+
+                    # Normalize legacy confidence scale if needed
+                    orig_conf = float(orig.get("confidence_score") or 0)
+                    if 0 < orig_conf <= 10.0:
+                        update_fields["confidence_score"] = orig_conf * 10.0
 
                 if update_fields:
                     try:

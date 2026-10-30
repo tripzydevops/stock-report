@@ -296,7 +296,10 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
               const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
               const isT0Hit = Boolean(signal.currentPrice && signal.currentPrice >= signal.entryPrice * 1.03);
-              const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+              const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
+              const strategyT2Price = hasStrategyT2 ? signal.target2! : null;
+              const estimatedFallbackT2 = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+              const t2Price = strategyT2Price ?? estimatedFallbackT2;
               const isBist = signal.market === 'BIST' || signal.currency === 'TRY';
               const tavanCeiling = isBist ? Number((signal.entryPrice * 1.0999).toFixed(2)) : null;
               const isWithinSingleDayCeiling = tavanCeiling ? signal.targetPrice <= tavanCeiling : false;
@@ -329,8 +332,13 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   </div>
 
                   {t2Price > signal.targetPrice && (
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" title={language === 'tr' ? "2.0x Risk:Ödül Koşucu Hedefi" : "Extended 2.0x Risk:Reward Runner Target"}>
-                      T2: {formatPrice(t2Price)}
+                    <span 
+                      className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 font-mono" 
+                      title={hasStrategyT2 
+                        ? (language === 'tr' ? "Strateji Hedefi 2 (Koşucu)" : "Strategy Defined Target 2") 
+                        : (language === 'tr' ? "Tahmini 2.0x Risk:Ödül Koşucu Hedefi" : "Extended 2.0x Risk:Reward Estimated Target")}
+                    >
+                      T2: {formatPrice(t2Price)} {hasStrategyT2 ? '' : (language === 'tr' ? '(Tahmini)' : '(Est.)')}
                     </span>
                   )}
                   {isBist && tavanCeiling && (
@@ -372,15 +380,32 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           </div>
         </div>
 
-        <div className="mb-2 flex items-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">{t.tradeCard.confidence}:</span>
-          <div className="flex">
-            {[...Array(10)].map((_, i) => (
-              <svg key={i} className={`w-3 h-3 ${i < signal.confidence ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
-            ))}
-          </div>
+        <div className="mb-2 flex items-center flex-wrap gap-y-1">
+          {(() => {
+            const conf100 = signal.confidence > 10 ? Math.round(signal.confidence) : Math.round(signal.confidence * 10);
+            const starCount = Math.min(10, Math.max(1, Math.round(conf100 / 10)));
+
+            return (
+              <>
+                <span 
+                  className="text-xs text-gray-500 dark:text-gray-400 mr-1.5" 
+                  title={language === 'tr' ? 'Algoritmik kural doğrulanma kalitesi (Kazanma olasılığı değildir)' : 'Algorithmic setup quality score (Not calibrated win probability)'}
+                >
+                  {language === 'tr' ? 'Güven Skoru:' : 'Setup Quality:'}
+                </span>
+                <div className="flex" title={`${starCount}/10 (%${conf100})`}>
+                  {[...Array(10)].map((_, i) => (
+                    <svg key={i} className={`w-3 h-3 ${i < starCount ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 ml-1.5 font-mono">
+                  {starCount}/10 (%{conf100})
+                </span>
+              </>
+            );
+          })()}
         </div>
 
         {/* SCALE-OUT TARGET EXIT PLAN */}
@@ -390,7 +415,10 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           const t2Shares = isHolding ? userHolding!.shares - t1Shares : 0;
           const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
           const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
-          const t2Price = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+          const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
+          const strategyT2Price = hasStrategyT2 ? signal.target2! : null;
+          const estimatedFallbackT2 = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+          const t2Price = strategyT2Price ?? estimatedFallbackT2;
 
           if (isHolding) {
             return (
@@ -451,10 +479,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   <div className="p-2 rounded-lg bg-white/90 dark:bg-gray-800/90 border border-blue-100 dark:border-blue-900/60">
                     <div className="flex justify-between items-center text-[10px]">
                       <span className="font-bold text-gray-600 dark:text-gray-300">
-                        {language === 'tr' ? 'Hedef 2 Koşucu (%50)' : 'Target 2 Runner (50%)'}
+                        {hasStrategyT2
+                          ? (language === 'tr' ? 'Hedef 2 Koşucu (%50)' : 'Target 2 Runner (50%)')
+                          : (language === 'tr' ? 'Hedef 2 Tahmini (2R Koşucu)' : 'Target 2 Est. (2R Runner)')}
                       </span>
                       <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">
-                        {language === 'tr' ? 'Koşucu' : 'Runner'}
+                        {hasStrategyT2 ? (language === 'tr' ? 'Strateji Hedefi' : 'Strategy Target') : (language === 'tr' ? 'Tahmini 2R' : 'Estimated 2R')}
                       </span>
                     </div>
                     <div className="text-sm font-black text-gray-900 dark:text-white mt-0.5">
@@ -465,7 +495,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                       )}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5 flex justify-between">
-                      <span>@ {formatPrice(t2Price)}</span>
+                      <span>@ {formatPrice(t2Price)} {hasStrategyT2 ? '' : '*'}</span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold">
                         +{formatPrice((t2Price - userHolding!.entryPrice) * (t2Shares > 0 ? t2Shares : userHolding!.shares))}
                       </span>
@@ -483,9 +513,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               </span>
               <span className="font-mono text-[10px]">
                 {language === 'tr' ? (
-                  <><strong>⚡ T0 (%3-4):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)}</>
+                  <><strong>⚡ T0 (%3-4):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Tahmini)'}</>
                 ) : (
-                  <><strong>⚡ T0 (3-4%):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)}</>
+                  <><strong>⚡ T0 (3-4%):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Est.)'}</>
                 )}
               </span>
             </div>
@@ -579,8 +609,11 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               ? Number((((signal.entryPrice - signal.stopLoss) / signal.entryPrice) * 100).toFixed(2))
               : null
           );
+          const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
           const t1Val = signal.target1 || signal.targetPrice;
-          const t2Val = signal.target2 || Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
+          const t2Val = hasStrategyT2
+            ? signal.target2!
+            : Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
 
           return (
             <div className="mt-3 text-xs bg-gray-50 dark:bg-gray-900/90 p-3 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3.5 animate-in fade-in duration-200">
@@ -608,6 +641,20 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   </span>
                 )}
               </div>
+
+              {/* Reconfirmed Signal Notice if applicable */}
+              {signal.isReconfirmed && signal.lastConfirmedDate && (
+                <div className="p-2 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between text-[11px] flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5 text-indigo-900 dark:text-indigo-200 font-bold">
+                    <span>🔄</span>
+                    <span>{language === 'tr' ? 'Son Yeniden Teyit:' : 'Last Reconfirmed:'}</span>
+                    <span className="font-mono text-indigo-700 dark:text-indigo-300 font-black">{signal.lastConfirmedDate}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 italic">
+                    {language === 'tr' ? 'Orijinal işlem planı ve risk seviyeleri korunmuştur' : 'Original trade plan & risk preserved'}
+                  </span>
+                </div>
+              )}
 
               {/* WHY: Trigger Conditions Passed */}
               <div>
@@ -667,10 +714,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   </div>
                   <div className="p-2 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
                     <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
-                      {language === 'tr' ? 'Hedef 2 (+2.25R Koşucu)' : 'Target 2 (+2.25R Runner)'}
+                      {hasStrategyT2
+                        ? (language === 'tr' ? 'Hedef 2 (Strateji Koşucusu)' : 'Target 2 (Strategy Runner)')
+                        : (language === 'tr' ? 'Hedef 2 (Tahmini +2R Koşucu)' : 'Target 2 (Estimated +2R Runner)')}
                     </span>
                     <span className="font-mono font-black text-gray-900 dark:text-white text-xs mt-0.5">
-                      {formatPrice(t2Val)}
+                      {formatPrice(t2Val)} {hasStrategyT2 ? '' : '*'}
                     </span>
                   </div>
                 </div>
@@ -755,7 +804,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                         SL: {formatPrice(item.stopLoss)}
                       </span>
                       <span className="text-amber-500 font-bold text-[10px]">
-                        ⭐ {item.confidence}/10
+                        ⭐ {item.confidence > 10 ? Math.round(item.confidence / 10) : item.confidence}/10
                       </span>
                     </div>
                   </div>

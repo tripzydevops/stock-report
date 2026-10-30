@@ -445,15 +445,20 @@ def test_sync_reconfirm_upgrades_legacy_rationale(sample_excel_file, monkeypatch
     assert call["col"] == "id"
     assert call["val"] == "sig-legacy-1"
 
-    # Must upgrade ai_rationale to JSON, target_2, and confidence_score
+    # Must upgrade ai_rationale to JSON, preserve original trade plan, and record reconfirmation
     import json
     upd = call["fields"]
-    assert upd["confidence_score"] == 82
-    assert upd["target_2"] == 427.70
+    # Original trade plan preserves target_2 (not retroactively mutated from today's scan)
+    assert "target_2" not in upd or upd.get("target_2") is None
     parsed_rat = json.loads(upd["ai_rationale"])
-    assert parsed_rat["strategy"] == "Pullback Reclaim"
-    assert "Close reclaimed EMA20 on 2.1x volume" in parsed_rat["trigger_reasons"]
+    assert parsed_rat["strategy"].lower().replace(" ", "_") in ["pullback_reclaim", "pullback reclaim"]
     assert "RE-CONFIRMED: " not in upd["ai_rationale"]
+    # Today's evidence and target_2 are stored cleanly in reconfirmations
+    assert len(parsed_rat.get("reconfirmations", [])) >= 1
+    latest_reconf = parsed_rat["reconfirmations"][0]
+    assert "Close reclaimed EMA20 on 2.1x volume" in latest_reconf["trigger_reasons"]
+    assert latest_reconf["reconfirmed_target_2"] == 427.70
+    assert parsed_rat["original_explainer_status"] in ["legacy_unstructured", "not_recorded"]
 
 
 def test_sync_resolve_unowned_signal_preserves_explainer(sample_excel_file, monkeypatch):
