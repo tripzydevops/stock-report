@@ -32,6 +32,21 @@ from app.models.data_contracts import (
     validate_trade_signals_dataframe,
 )
 
+def _normalize_confidence(raw: float) -> float:
+    """Canonicalize confidence to a 0-100 scale at the write boundary.
+    
+    Rules:
+      - 0 or missing  → 0.0  (unknown / not evaluated — stored as zero, NOT a default)
+      - 0 < raw <= 10 → raw * 10  (legacy 0-10 scale migration)
+      - 10 < raw <=100 → round(raw)  (already on the right scale)
+      - raw > 100      → 100.0  (cap)
+    """
+    if raw <= 0:
+        return 0.0
+    if raw <= 10.0:
+        return round(raw * 10.0)
+    return min(100.0, round(raw))
+
 def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
     from datetime import timezone
     print("🚀 Connecting to Supabase...")
@@ -480,7 +495,8 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             target_1 = float(sig.get("target_1", 0)) if sig.get("target_1") else None
             target_2 = float(sig.get("target_2", 0)) if sig.get("target_2") else None
             rr = float(sig.get("risk_reward_ratio", 0)) if sig.get("risk_reward_ratio") else None
-            conf = float(sig.get("confidence_score", 80.0)) if sig.get("confidence_score") else 80.0
+            raw_conf = float(sig.get("confidence_score", 0)) if sig.get("confidence_score") else 0.0
+            conf = _normalize_confidence(raw_conf)
 
             # Spot equities sanity: target > entry and stop < entry
             if target_1 is not None and stop_l is not None and entry_p > 0:
@@ -533,7 +549,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             stop_l = float(row["Stop Loss"]) if pd.notna(row["Stop Loss"]) else None
             target_p = float(row["Target"]) if pd.notna(row["Target"]) else None
             target_2 = float(row["Target 2"]) if "Target 2" in row and pd.notna(row["Target 2"]) else None
-            conf = float(row["Confidence %"]) if "Confidence %" in row and pd.notna(row["Confidence %"]) else 80.0
+            conf = _normalize_confidence(float(row["Confidence %"]) if "Confidence %" in row and pd.notna(row["Confidence %"]) else 0.0)
 
             if target_p is not None and stop_l is not None and entry_p > 0:
                 if target_p <= entry_p or stop_l >= entry_p:
@@ -672,12 +688,14 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
                     }
                     update_fields["ai_rationale"] = json.dumps(upgraded_payload, ensure_ascii=False)
 
-                    # Standardize confidence score
+                    # Standardize confidence score via canonical normalizer
                     orig_conf = float(orig.get("confidence_score") or 0)
-                    if sig.get("confidence_score") and (orig_conf == 0 or orig_conf == 8.0):
-                        update_fields["confidence_score"] = sig["confidence_score"]
-                    elif 0 < orig_conf <= 10.0:
-                        update_fields["confidence_score"] = orig_conf * 10.0
+                    new_conf = _normalize_confidence(float(sig.get("confidence_score", 0)) if sig.get("confidence_score") else 0.0)
+                    if new_conf > 0 and (orig_conf == 0 or _normalize_confidence(orig_conf) != orig_conf):
+                        # New scan has a proper score and original was either missing or on legacy scale
+                        update_fields["confidence_score"] = new_conf
+                    elif orig_conf > 0:
+                        update_fields["confidence_score"] = _normalize_confidence(orig_conf)
                 else:
                     # Already structured JSON. Preserve original entry evidence & append dated reconfirmation:
                     try:
@@ -697,10 +715,11 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
                     except Exception:
                         pass
 
-                    # Normalize legacy confidence scale if needed
+                    # Normalize legacy confidence scale if needed via canonical normalizer
                     orig_conf = float(orig.get("confidence_score") or 0)
-                    if 0 < orig_conf <= 10.0:
-                        update_fields["confidence_score"] = orig_conf * 10.0
+                    norm_conf = _normalize_confidence(orig_conf)
+                    if norm_conf != orig_conf and norm_conf > 0:
+                        update_fields["confidence_score"] = norm_conf
 
                 if update_fields:
                     try:

@@ -53,6 +53,7 @@ export interface TradeSignal {
     invalidation_level?: number;
     [key: string]: any;
   };
+  riskReward?: number;
   riskMetrics?: any;
 }
 
@@ -294,8 +295,8 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           <div className="flex flex-col min-w-0">
             {(() => {
               const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
-              const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
-              const isT0Hit = Boolean(signal.currentPrice && signal.currentPrice >= signal.entryPrice * 1.03);
+              const t0Price = Number((signal.entryPrice * 1.03).toFixed(2));
+              const isT0Hit = Boolean(signal.currentPrice && signal.currentPrice >= t0Price);
               const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
               const strategyT2Price = hasStrategyT2 ? signal.target2! : null;
               const estimatedFallbackT2 = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
@@ -324,9 +325,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' 
                           : 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
                       }`}
-                      title={language === 'tr' ? "Kişisel Hedefiniz: Kısa vadede +%3 ila +%4 hızlı kâr realizasyonu" : "Your Personal Target: Quick +3% to +4% profit realization"}
+                      title={language === 'tr' ? "Kişisel Hedef: +%3.0 seviyesinde hızlı kâr realizasyonu başlar (%3-%4 bölgesi)" : "Personal Target: Quick profit realization begins at +3.0% (+3% to +4% zone)"}
                     >
-                      <span>⚡ T0 (%3-4): {formatPrice(t0Price)}</span>
+                      <span>⚡ T0 (+%3 Bölgesi): {formatPrice(t0Price)}</span>
                       {isT0Hit && <span className="text-emerald-600 dark:text-emerald-400">✓</span>}
                     </span>
                   </div>
@@ -370,20 +371,45 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           </div>
         </div>
 
-        <div className="mb-4">
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-600 dark:text-gray-300">{t.tradeCard.riskReward} ({rrRatio})</span>
-          </div>
-          <div className="w-full h-2 flex rounded-full overflow-hidden">
-            <div className="bg-red-500 h-full" style={{ width: '33%' }}></div>
-            <div className="bg-green-500 h-full" style={{ width: '67%' }}></div>
-          </div>
-        </div>
+        {(() => {
+          // Calculate dynamic bar width from actual risk and reward distances
+          // e.g. 1:1 -> 50%/50%, 1:2 -> 33%/67%, 1:3 -> 25%/75%
+          // Clamped between 15% and 85% to ensure both zones remain visually distinguishable
+          const totalDistance = risk + reward;
+          const rawRiskPct = totalDistance > 0 ? (risk / totalDistance) * 100 : 33.3;
+          const riskBarPct = Math.min(85, Math.max(15, Math.round(rawRiskPct)));
+          const rewardBarPct = 100 - riskBarPct;
+          const numRr = risk > 0 ? reward / risk : 2.0;
+
+          return (
+            <div className="mb-4">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-600 dark:text-gray-300">{t.tradeCard.riskReward} ({rrRatio})</span>
+                <span className="text-[10px] text-gray-400 font-mono">1R : {numRr.toFixed(2)}R</span>
+              </div>
+              <div className="w-full h-2 flex rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                <div 
+                  className="bg-red-500 h-full transition-all" 
+                  style={{ width: `${riskBarPct}%` }}
+                  title={`Risk (1R): %${riskBarPct}`}
+                ></div>
+                <div 
+                  className="bg-green-500 h-full transition-all" 
+                  style={{ width: `${rewardBarPct}%` }}
+                  title={`Reward (${numRr.toFixed(2)}R): %${rewardBarPct}`}
+                ></div>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="mb-2 flex items-center flex-wrap gap-y-1">
           {(() => {
-            const conf100 = signal.confidence > 10 ? Math.round(signal.confidence) : Math.round(signal.confidence * 10);
-            const starCount = Math.min(10, Math.max(1, Math.round(conf100 / 10)));
+            const hasRawConf = typeof signal.confidence === 'number' && !isNaN(signal.confidence);
+            const conf100 = hasRawConf ? Math.round(signal.confidence) : 0;
+            const isEvaluated = hasRawConf && conf100 > 0;
+            // Zero confidence produces 0 stars (no Math.max(1, ...))
+            const starCount = isEvaluated ? Math.min(10, Math.max(0, Math.round(conf100 / 10))) : 0;
 
             return (
               <>
@@ -393,16 +419,24 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 >
                   {language === 'tr' ? 'Güven Skoru:' : 'Setup Quality:'}
                 </span>
-                <div className="flex" title={`${starCount}/10 (%${conf100})`}>
-                  {[...Array(10)].map((_, i) => (
-                    <svg key={i} className={`w-3 h-3 ${i < starCount ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 ml-1.5 font-mono">
-                  {starCount}/10 (%{conf100})
-                </span>
+                {isEvaluated ? (
+                  <>
+                    <div className="flex" title={`${starCount}/10 (%${conf100})`}>
+                      {[...Array(10)].map((_, i) => (
+                        <svg key={i} className={`w-3 h-3 ${i < starCount ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 ml-1.5 font-mono">
+                      {starCount}/10 (%{conf100})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                    {language === 'tr' ? 'Değerlendirilmedi' : 'Not Evaluated'}
+                  </span>
+                )}
               </>
             );
           })()}
@@ -414,7 +448,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           const t1Shares = isHolding ? Math.max(1, Math.ceil(userHolding!.shares * 0.5)) : 0;
           const t2Shares = isHolding ? userHolding!.shares - t1Shares : 0;
           const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
-          const t0Price = Number((signal.entryPrice * 1.035).toFixed(2));
+          const t0Price = Number((signal.entryPrice * 1.03).toFixed(2));
           const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
           const strategyT2Price = hasStrategyT2 ? signal.target2! : null;
           const estimatedFallbackT2 = Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
@@ -513,9 +547,9 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               </span>
               <span className="font-mono text-[10px]">
                 {language === 'tr' ? (
-                  <><strong>⚡ T0 (%3-4):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Tahmini)'}</>
+                  <><strong>⚡ T0 (+%3):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Tahmini)'}</>
                 ) : (
-                  <><strong>⚡ T0 (3-4%):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Est.)'}</>
+                  <><strong>⚡ T0 (+3%):</strong> {formatPrice(t0Price)} · <strong>T1:</strong> {formatPrice(signal.targetPrice)} · <strong>T2:</strong> {formatPrice(t2Price)} {hasStrategyT2 ? '' : '(Est.)'}</>
                 )}
               </span>
             </div>
@@ -804,7 +838,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                         SL: {formatPrice(item.stopLoss)}
                       </span>
                       <span className="text-amber-500 font-bold text-[10px]">
-                        ⭐ {item.confidence > 10 ? Math.round(item.confidence / 10) : item.confidence}/10
+                        ⭐ {item.confidence > 0 ? `${Math.round(item.confidence <= 10 ? item.confidence : item.confidence / 10)}/10` : '—'}
                       </span>
                     </div>
                   </div>

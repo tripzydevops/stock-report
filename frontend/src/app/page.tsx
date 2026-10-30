@@ -1226,11 +1226,10 @@ export default function Home() {
               } catch (e) {}
             }
 
-            // Standardize confidence to single 0-100 scale
-            const rawConf = Number(s.confidence_score);
-            const standardizedConf = rawConf > 0 
-              ? (rawConf <= 10.0 ? Math.round(rawConf * 10) : Math.round(rawConf)) 
-              : 80;
+            // Confidence score is standardized to 0-100 in database storage
+            // No heuristic multiplication: a genuine 8/100 remains 8, and unrated signals default cleanly to 0
+            const rawConf = s.confidence_score !== null && s.confidence_score !== undefined ? Number(s.confidence_score) : 0;
+            const standardizedConf = !isNaN(rawConf) && rawConf > 0 ? Math.round(rawConf) : 0;
 
             return {
               id: s.id,

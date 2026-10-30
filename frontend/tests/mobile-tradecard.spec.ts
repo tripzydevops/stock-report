@@ -22,6 +22,18 @@ test.describe('Mobile TradeCard Expanded View', () => {
     const planHeader = page.locator('text=/İşlem Planı|Execution Plan/i').first();
     await expect(planHeader).toBeVisible();
 
+    // Verify dynamic R:R indicator exists
+    const rrIndicator = page.locator('text=/1R :/i').first();
+    await expect(rrIndicator).toBeVisible();
+
+    // Verify aligned T0 target (+%3 Bölgesi) exists
+    const t0Badge = page.locator('text=/T0.*%3/i').first();
+    await expect(t0Badge).toBeVisible();
+
+    // Verify Güven Skoru / Setup Quality label exists
+    const qualityLabel = page.locator('text=/Güven Skoru|Setup Quality/i').first();
+    await expect(qualityLabel).toBeVisible();
+
     // Scroll to the expanded card
     await whyHeader.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
