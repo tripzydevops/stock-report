@@ -16,6 +16,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'MarketPulse',
   description: 'Personal Market Intelligence & Trade Discovery',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'MarketPulse',
+  },
 };
 
 export default function RootLayout({

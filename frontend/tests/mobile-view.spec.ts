@@ -82,8 +82,8 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     const dividendBtn = bottomNav.getByRole('button', { name: /Temettü/i });
     await dividendBtn.click();
 
-    // Wait for dividend
-    await expect(page.locator('text=Temettü').first()).toBeVisible();
+    // Wait for dividend in main content
+    await expect(page.locator('main').getByText('Temettü').first()).toBeVisible();
 
     // Capture screenshot of dividend on mobile
     await page.screenshot({

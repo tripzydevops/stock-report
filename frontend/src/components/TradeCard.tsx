@@ -130,30 +130,43 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col transition-all duration-200 hover:shadow-xl">
       <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap sm:flex-nowrap justify-between items-start gap-2.5">
         <div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => onSelectTicker?.(signal.symbol)}
-              className="font-black text-lg text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1.5 transition-colors group cursor-pointer text-left"
-              title={language === 'tr' ? "Fiyat geçmişi ve indikatörleri görüntüleyin" : "Click to view full price history, daily OHLCV and indicators"}
-            >
-              <span className="group-hover:underline underline-offset-2">{signal.symbol}</span>
-              <span className="text-xs text-blue-500 opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all">📈</span>
-            </button>
-            {signal.currentPrice !== undefined && signal.currentPrice !== null && (
-              <button
-                onClick={() => onSelectTicker?.(signal.symbol)}
-                className={`text-xs px-2 py-0.5 rounded-md font-mono font-bold border transition-all cursor-pointer hover:ring-2 hover:ring-blue-400 ${
-                  (signal.changePercent || 0) >= 0 
-                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
-                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
-                }`}
-                title={language === 'tr' ? "Anlık fiyat — grafiği açmak için tıklayın" : "Current price — click to view price history & live chart"}
+          <div 
+            onClick={() => onSelectTicker?.(signal.symbol)}
+            className="cursor-pointer group/header select-none touch-manipulation"
+            title={language === 'tr' ? "Fiyat geçmişi ve indikatörleri görüntüleyin" : "Click to view full price history, daily OHLCV and indicators"}
+          >
+            <div className="flex items-center gap-2">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectTicker?.(signal.symbol);
+                }}
+                className="font-black text-lg text-gray-900 dark:text-white group-hover/header:text-blue-600 dark:group-hover/header:text-blue-400 flex items-center gap-1.5 transition-colors cursor-pointer text-left py-0.5"
               >
-                {formatPrice(signal.currentPrice)} {signal.changePercent !== undefined ? `(${signal.changePercent >= 0 ? '+' : ''}${signal.changePercent.toFixed(2)}%)` : ''}
+                <span className="group-hover/header:underline underline-offset-2">{signal.symbol}</span>
+                <span className="text-xs text-blue-500 opacity-60 group-hover/header:opacity-100 group-hover/header:scale-110 transition-all">📈</span>
               </button>
-            )}
+              {signal.currentPrice !== undefined && signal.currentPrice !== null && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectTicker?.(signal.symbol);
+                  }}
+                  className={`text-xs px-2 py-0.5 rounded-md font-mono font-bold border transition-all cursor-pointer hover:ring-2 hover:ring-blue-400 ${
+                    (signal.changePercent || 0) >= 0 
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' 
+                      : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200 dark:border-rose-800'
+                  }`}
+                  title={language === 'tr' ? "Anlık fiyat — grafiği açmak için tıklayın" : "Current price — click to view price history and live chart"}
+                >
+                  {formatPrice(signal.currentPrice)} {signal.changePercent !== undefined ? `(${signal.changePercent >= 0 ? '+' : ''}${signal.changePercent.toFixed(2)}%)` : ''}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">{signal.name}</p>
           {(() => {
             const isTargetHit = Boolean(signal.currentPrice && signal.targetPrice && signal.currentPrice >= signal.targetPrice);
             const isStoppedOut = Boolean(signal.currentPrice && signal.stopLoss && signal.currentPrice <= signal.stopLoss);

@@ -62,18 +62,29 @@ export default function AssetHistoryModal({
     setCurrentPrice(asset.price || 0);
     setCurrentChange(asset.changePercent || 0);
 
+    // Immediately seed with initial bars so mobile UI never hangs on empty screen
+    generateFallbackBars(asset);
+
+    let isMounted = true;
+
     async function fetchAssetHistory() {
-      setIsLoading(true);
+      // Create a timeout promise to prevent mobile hangs
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Fetch timeout')), 3500)
+      );
+
       try {
         const cleanSym = asset!.symbol.replace('.IS', '');
         const isSym = `${cleanSym}.IS`;
 
         // 1. Find asset in Supabase
-        const { data: assetRecords } = await supabase
+        const assetPromise = supabase
           .from('assets')
           .select('id, symbol, name, market, trade_signals(*)')
           .or(`symbol.eq.${cleanSym},symbol.eq.${isSym}`)
           .limit(1);
+
+        const { data: assetRecords } = await Promise.race([assetPromise, timeoutPromise]) as any;
 
         if (assetRecords && assetRecords.length > 0) {
           const matched = assetRecords[0];
@@ -204,6 +215,10 @@ export default function AssetHistoryModal({
     }
 
     fetchAssetHistory();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen, asset, tradeSignal]);
 
   if (!isOpen || !asset) return null;

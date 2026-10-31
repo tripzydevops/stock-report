@@ -1,0 +1,18 @@
+{
+  "name": "MarketPulse",
+  "short_name": "MarketPulse",
+  "description": "Personal Market Intelligence & Trade Discovery",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/globe.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

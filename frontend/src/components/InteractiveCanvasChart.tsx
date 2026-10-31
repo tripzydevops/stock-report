@@ -95,8 +95,12 @@ export default function InteractiveCanvasChart({
     }
 
     const container = chartContainerRef.current;
+    const initialWidth = container.clientWidth > 0
+      ? container.clientWidth
+      : (container.parentElement?.clientWidth || (typeof window !== 'undefined' ? Math.max(280, window.innerWidth - 32) : 340));
+
     const chart = createChart(container, {
-      width: container.clientWidth,
+      width: initialWidth,
       height: height,
       layout: {
         background: { type: ColorType.Solid, color: '#111827' },
@@ -357,18 +361,30 @@ export default function InteractiveCanvasChart({
 
     chart.timeScale().fitContent();
 
-    // Resize handler
+    // Resize handler (Window + ResizeObserver for modal animations)
     const handleResize = () => {
       if (chartContainerRef.current && chartInstanceRef.current) {
-        chartInstanceRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth
-        });
+        const newWidth = chartContainerRef.current.clientWidth;
+        if (newWidth > 0) {
+          chartInstanceRef.current.applyOptions({
+            width: newWidth
+          });
+        }
       }
     };
     window.addEventListener('resize', handleResize);
 
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && chartContainerRef.current) {
+      resizeObserver = new ResizeObserver(() => handleResize());
+      resizeObserver.observe(chartContainerRef.current);
+    }
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       if (chartInstanceRef.current) {
         chartInstanceRef.current.remove();
         chartInstanceRef.current = null;
