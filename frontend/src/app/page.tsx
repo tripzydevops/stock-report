@@ -1084,21 +1084,39 @@ export default function Home() {
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
     const matched = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === clean);
-    if (matched) {
-      setSelectedAssetForHistory(matched);
-    } else {
-      setSelectedAssetForHistory({
-        id: symbol,
-        symbol: symbol,
-        name: symbol,
-        market: symbol.endsWith('.IS') || !['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AMD', 'SPY', 'QQQ', 'IWM', 'GLD', 'TLT', 'XLF', 'XLE', 'ARKK'].includes(symbol) ? 'BIST' : 'US',
-        price: 0,
-        changePercent: 0,
-        rsi: 50,
-        emaStatus: 'Active Signal',
-        volumeRatio: 1.0
-      });
-    }
+    const portItem = portfolio.find(p => p.symbol.replace('.IS', '').toUpperCase() === clean);
+    const sigItem = signals.find(s => s.symbol.replace('.IS', '').toUpperCase() === clean);
+
+    const price = (matched?.price && matched.price > 0)
+      ? matched.price
+      : (portItem?.currentPrice && portItem.currentPrice > 0)
+        ? portItem.currentPrice
+        : (sigItem?.currentPrice && sigItem.currentPrice > 0)
+          ? sigItem.currentPrice
+          : (portItem?.entryPrice || 0);
+
+    const changePct = matched?.changePercent !== undefined && matched.changePercent !== 0
+      ? matched.changePercent
+      : sigItem?.changePercent !== undefined
+        ? sigItem.changePercent
+        : (portItem?.pnlPercent || 0);
+
+    const name = matched?.name || portItem?.name || sigItem?.name || clean;
+    const market = matched?.market || portItem?.market || sigItem?.market || (clean.length === 5 || symbol.endsWith('.IS') ? 'BIST' : 'US');
+
+    setSelectedAssetForHistory({
+      id: matched?.id || symbol,
+      symbol: clean,
+      name: name,
+      market: market,
+      price: price,
+      changePercent: changePct,
+      rsi: matched?.rsi || 50,
+      emaStatus: matched?.emaStatus || 'Active Signal',
+      volumeRatio: matched?.volumeRatio || 1.0,
+      high52w: matched?.high52w,
+      low52w: matched?.low52w
+    });
   };
 
   // Fetch real data from Supabase

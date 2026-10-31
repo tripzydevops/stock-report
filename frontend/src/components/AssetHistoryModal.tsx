@@ -51,12 +51,16 @@ export default function AssetHistoryModal({
   const [indicators, setIndicators] = useState<IndicatorDetails | null>(null);
   const [activeSignal, setActiveSignal] = useState<any>(tradeSignal || null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState<number>(asset?.price || 0);
+  const [currentChange, setCurrentChange] = useState<number>(asset?.changePercent || 0);
 
   useEffect(() => {
     if (!isOpen || !asset) return;
 
     setActiveTab('chart');
     setActiveSignal(tradeSignal || null);
+    setCurrentPrice(asset.price || 0);
+    setCurrentChange(asset.changePercent || 0);
 
     async function fetchAssetHistory() {
       setIsLoading(true);
@@ -67,14 +71,24 @@ export default function AssetHistoryModal({
         // 1. Find asset in Supabase
         const { data: assetRecords } = await supabase
           .from('assets')
-          .select('id, symbol, name, market, daily_indicators(*), trade_signals(*)')
+          .select('id, symbol, name, market, trade_signals(*)')
           .or(`symbol.eq.${cleanSym},symbol.eq.${isSym}`)
           .limit(1);
 
         if (assetRecords && assetRecords.length > 0) {
           const matched = assetRecords[0];
-          const ind = matched.daily_indicators?.[0] || null;
-          setIndicators(ind);
+
+          // Explicitly query the MOST RECENT daily_indicator record
+          const { data: indRecords } = await supabase
+            .from('daily_indicators')
+            .select('*')
+            .eq('asset_id', matched.id)
+            .order('date', { ascending: false })
+            .limit(1);
+
+          if (indRecords && indRecords.length > 0) {
+            setIndicators(indRecords[0]);
+          }
 
           // If no tradeSignal passed via prop, check if asset has an active signal in database
           if (!tradeSignal && matched.trade_signals && matched.trade_signals.length > 0) {
@@ -90,16 +104,42 @@ export default function AssetHistoryModal({
             }
           }
 
-          // 2. Fetch up to 60 daily price bars (OHLCV) sorted ascending for canvas chart
+          // 2. Fetch up to 60 MOST RECENT daily price bars (OHLCV) sorted DESCENDING
           const { data: priceBars } = await supabase
             .from('price_history')
             .select('date, open, high, low, close, volume')
             .eq('asset_id', matched.id)
-            .order('date', { ascending: true })
+            .order('date', { ascending: false })
             .limit(60);
 
           if (priceBars && priceBars.length > 0) {
-            const mappedBars: ChartPriceBar[] = priceBars.map((p: any) => ({
+            // Update live price and change from newest bar
+            const latestBar = priceBars[0];
+            const prevBar = priceBars[1];
+            const latestClose = Number(latestBar.close);
+            if (latestClose > 0) {
+              setCurrentPrice(latestClose);
+              if (prevBar && Number(prevBar.close) > 0) {
+                const diffPct = ((latestClose - Number(prevBar.close)) / Number(prevBar.close)) * 100;
+                setCurrentChange(diffPct);
+              }
+            }
+
+            // Table displays newest first (which is priceBars as returned)
+            setHistoryTable(
+              priceBars.map((p: any) => ({
+                date: p.date,
+                open: Number(p.open) || Number(p.close),
+                high: Number(p.high) || Number(p.close),
+                low: Number(p.low) || Number(p.close),
+                close: Number(p.close),
+                volume: Number(p.volume) || 0
+              }))
+            );
+
+            // Canvas chart requires chronological order (oldest to newest)
+            const chronological = [...priceBars].reverse();
+            const mappedBars: ChartPriceBar[] = chronological.map((p: any) => ({
               time: p.date,
               open: Number(p.open) || Number(p.close),
               high: Number(p.high) || Number(p.close),
@@ -107,19 +147,7 @@ export default function AssetHistoryModal({
               close: Number(p.close),
               volume: Number(p.volume) || 0
             }));
-
             setChartBars(mappedBars);
-            // Reverse for newest-first table
-            setHistoryTable(
-              [...mappedBars].reverse().map(b => ({
-                date: b.time,
-                open: b.open,
-                high: b.high,
-                low: b.low,
-                close: b.close,
-                volume: b.volume || 0
-              }))
-            );
           } else {
             generateFallbackBars(asset!);
           }
@@ -185,12 +213,15 @@ export default function AssetHistoryModal({
     return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const effectivePrice = currentPrice > 0 ? currentPrice : (asset.price || 0);
+  const effectiveChange = currentChange !== 0 ? currentChange : (asset.changePercent || 0);
+
   const todayBar = historyTable[0] || {
     date: 'Today',
-    open: asset.price,
-    high: asset.price * 1.01,
-    low: asset.price * 0.99,
-    close: asset.price,
+    open: effectivePrice,
+    high: effectivePrice * 1.01,
+    low: effectivePrice * 0.99,
+    close: effectivePrice,
     volume: 0
   };
 
@@ -224,10 +255,10 @@ export default function AssetHistoryModal({
           <div className="flex items-center space-x-4">
             <div className="text-right">
               <div className="text-2xl font-black text-gray-900 dark:text-white font-mono">
-                {formatMoney(asset.price)}
+                {formatMoney(effectivePrice)}
               </div>
-              <div className={`text-xs font-bold ${asset.changePercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {asset.changePercent >= 0 ? '▲ +' : '▼ '}{asset.changePercent.toFixed(2)}%
+              <div className={`text-xs font-bold ${effectiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {effectiveChange >= 0 ? '▲ +' : '▼ '}{effectiveChange.toFixed(2)}%
               </div>
             </div>
 
@@ -358,17 +389,17 @@ export default function AssetHistoryModal({
                 <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
                   <span className="text-gray-400 font-semibold">RSI (14):</span>
                   <span className={`font-bold font-mono ${
-                    asset.rsi < 35 ? 'text-emerald-500' : asset.rsi > 70 ? 'text-amber-500' : 'text-blue-400'
+                    (indicators?.rsi_14 ?? asset.rsi) < 35 ? 'text-emerald-500' : (indicators?.rsi_14 ?? asset.rsi) > 70 ? 'text-amber-500' : 'text-blue-400'
                   }`}>
-                    {asset.rsi.toFixed(1)}
+                    {(indicators?.rsi_14 ?? asset.rsi).toFixed(1)}
                   </span>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
                   <span className="text-gray-400 font-semibold">Volume Ratio:</span>
                   <span className={`font-bold font-mono ${
-                    asset.volumeRatio >= 1.5 ? 'text-emerald-500' : 'text-gray-300'
+                    (indicators?.volume_ratio ?? asset.volumeRatio) >= 1.5 ? 'text-emerald-500' : 'text-gray-300'
                   }`}>
-                    {asset.volumeRatio.toFixed(2)}x
+                    {(indicators?.volume_ratio ?? asset.volumeRatio).toFixed(2)}x
                   </span>
                 </div>
               </div>
@@ -443,20 +474,20 @@ export default function AssetHistoryModal({
                   <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
                     <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">RSI (14)</span>
                     <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {asset.rsi.toFixed(1)}
+                      {(indicators?.rsi_14 ?? asset.rsi).toFixed(1)}
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                      {asset.rsi < 35 ? 'Oversold Accumulation' : asset.rsi > 70 ? 'Overbought' : 'Neutral Momentum'}
+                      {(indicators?.rsi_14 ?? asset.rsi) < 35 ? 'Oversold Accumulation' : (indicators?.rsi_14 ?? asset.rsi) > 70 ? 'Overbought' : 'Neutral Momentum'}
                     </div>
                   </div>
 
                   <div className="bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-100 dark:border-amber-900/50">
                     <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">Volume Ratio</span>
                     <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {asset.volumeRatio.toFixed(2)}x
+                      {(indicators?.volume_ratio ?? asset.volumeRatio).toFixed(2)}x
                     </div>
                     <div className="text-[10px] text-gray-500 mt-0.5">
-                      {asset.volumeRatio >= 1.5 ? 'Institutional Spike' : 'Average Flow'}
+                      {(indicators?.volume_ratio ?? asset.volumeRatio) >= 1.5 ? 'Institutional Spike' : 'Average Flow'}
                     </div>
                   </div>
                 </div>
