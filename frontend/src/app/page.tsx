@@ -1155,26 +1155,83 @@ export default function Home() {
           setUsdTryRate(Number(fxRes.data[0].rate));
         }
 
-        // 2. Fetch Assets & Indicators
-        const { data: assetsData } = await supabase
-          .from('assets')
-          .select(`
-            id, symbol, name, market,
-            daily_indicators ( rsi_14, volume_ratio, high_52w, low_52w, ema_200 ),
-            price_history ( close, date )
-          `)
-          .limit(150);
+        // 2. Fetch Assets & Indicators & Live Price Feeds
+        const [
+          { data: assetsData },
+          { data: recentPriceBars },
+          { data: orbRecords }
+        ] = await Promise.all([
+          supabase
+            .from('assets')
+            .select(`
+              id, symbol, name, market,
+              daily_indicators ( rsi_14, volume_ratio, high_52w, low_52w, ema_200 )
+            `)
+            .limit(150),
+          supabase
+            .from('price_history')
+            .select('asset_id, close, date')
+            .order('date', { ascending: false })
+            .limit(600),
+          supabase
+            .from('opening_direction')
+            .select('symbol, current_price, prev_close, gap_percent, date')
+            .order('date', { ascending: false })
+            .limit(300)
+        ]);
+
+        // Build fast lookup maps for newest prices
+        const barsByAsset = new Map<string, { latest: number; prev: number; date: string }>();
+        if (recentPriceBars) {
+          for (const bar of recentPriceBars) {
+            if (!barsByAsset.has(bar.asset_id)) {
+              barsByAsset.set(bar.asset_id, { latest: Number(bar.close), prev: Number(bar.close), date: bar.date });
+            } else {
+              const existing = barsByAsset.get(bar.asset_id)!;
+              if (existing.prev === existing.latest && bar.date !== existing.date) {
+                existing.prev = Number(bar.close);
+              }
+            }
+          }
+        }
+
+        const orbBySymbol = new Map<string, { currentPrice: number; prevClose: number; changePercent: number; date: string }>();
+        if (orbRecords) {
+          for (const orb of orbRecords) {
+            const sym = (orb.symbol || '').replace('.IS', '').toUpperCase();
+            if (!orbBySymbol.has(sym)) {
+              const curr = Number(orb.current_price) || 0;
+              const prev = Number(orb.prev_close) || curr;
+              const chg = typeof orb.gap_percent === 'number' ? orb.gap_percent : (prev > 0 ? ((curr - prev) / prev) * 100 : 0);
+              orbBySymbol.set(sym, {
+                currentPrice: curr,
+                prevClose: prev,
+                changePercent: chg,
+                date: orb.date
+              });
+            }
+          }
+        }
 
         let loadedAssets: AssetData[] = [];
         if (assetsData && assetsData.length > 0) {
           const mapped: AssetData[] = assetsData.map((a: any) => {
             const ind = a.daily_indicators?.[0] || {};
-            const recentPrices = [...(a.price_history || [])].sort(
-              (x: any, y: any) => new Date(x.date).getTime() - new Date(y.date).getTime()
-            );
-            const latestPrice = recentPrices.length > 0 ? Number(recentPrices[recentPrices.length - 1].close) : 100;
-            const prevPrice = recentPrices.length > 1 ? Number(recentPrices[recentPrices.length - 2].close) : latestPrice;
-            const changePct = prevPrice > 0 ? ((latestPrice - prevPrice) / prevPrice) * 100 : 0;
+            const cleanSym = a.symbol.replace('.IS', '').toUpperCase();
+            const orb = orbBySymbol.get(cleanSym);
+            const barInfo = barsByAsset.get(a.id);
+
+            let latestPrice = 100;
+            let changePct = 0;
+
+            if (orb && orb.currentPrice > 0) {
+              latestPrice = orb.currentPrice;
+              changePct = orb.changePercent;
+            } else if (barInfo && barInfo.latest > 0) {
+              latestPrice = barInfo.latest;
+              changePct = barInfo.prev > 0 ? ((barInfo.latest - barInfo.prev) / barInfo.prev) * 100 : 0;
+            }
+
             const ema200 = ind.ema_200 || latestPrice;
             const emaStatus = latestPrice >= ema200 ? 'Above 200 EMA' : 'Below 200 EMA';
 
