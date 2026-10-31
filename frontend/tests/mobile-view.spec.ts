@@ -306,5 +306,52 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     await closeBtn.click({ force: true });
     await expect(modalHeading).not.toBeVisible();
   });
+
+  test('10. TradeCard has no redundant inline AI accordion; clicking unified "YZ Analiz & Planı" opens Co-Pilot modal with full criteria', async ({ page }) => {
+    // 1. Navigate to default signals view
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // 2. Verify redundant accordion text is completely absent
+    const oldAccordion = page.locator('text=/Yapay Zeka Analizini Göster/i');
+    await expect(oldAccordion).not.toBeVisible();
+
+    // 3. Capture screenshot of the clean, compact cards
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'clean_unified_trade_cards.png'),
+    });
+
+    // 4. Click the unified YZ Analiz & Planı button on first card
+    const aiBtn = page.getByRole('button', { name: /YZ Analiz & Planı|AI Analysis & Plan/i }).first();
+    await aiBtn.scrollIntoViewIfNeeded();
+    await expect(aiBtn).toBeVisible();
+    await aiBtn.click({ force: true });
+
+    // 5. Verify the Co-Pilot modal opens
+    const modalBadge = page.locator('text=/AI Trade Co-Pilot/i').first();
+    await expect(modalBadge).toBeVisible({ timeout: 6000 });
+
+    // 6. Verify the unified Blueprint tab shows Algorithmic Setup & Criteria
+    const blueprintTab = page.locator('button:has-text("YZ Kurulumu & Planı"), button:has-text("Tactical Blueprint"), button:has-text("AI Setup & Blueprint")').first();
+    if (await blueprintTab.isVisible()) {
+      await blueprintTab.click({ force: true });
+    }
+
+    const setupHeader = page.locator('text=/Algoritmik Kurulum|Algorithmic Setup/i').first();
+    await expect(setupHeader).toBeVisible();
+
+    const criteriaHeader = page.locator('text=/Neden Tetiklendi|Why It Fired/i').first();
+    await expect(criteriaHeader).toBeVisible();
+
+    // 7. Capture screenshot of the unified AI Co-Pilot modal
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'unified_ai_copilot_blueprint_modal.png'),
+    });
+
+    // 8. Close modal
+    const closeBtn = page.locator('div.p-6 button:has-text("✕")').first();
+    await closeBtn.click();
+    await expect(modalBadge).not.toBeVisible();
+  });
 });
 

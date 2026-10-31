@@ -97,8 +97,6 @@ interface TradeCardProps {
 
 export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
   const { t, language } = useLanguage();
-  const [expanded, setExpanded] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   
   const risk = Math.abs(signal.entryPrice - signal.stopLoss);
   const reward = Math.abs(signal.targetPrice - signal.entryPrice);
@@ -764,290 +762,27 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <button 
-            onClick={() => setExpanded(!expanded)} 
-            className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center cursor-pointer"
-          >
-            {expanded 
-              ? (language === 'tr' ? 'Gerekçeyi Gizle' : 'Hide Rationale') 
-              : (language === 'tr' ? 'Yapay Zeka Analizini Göster' : 'Show AI Rationale')}
-            <svg className={`w-3 h-3 ml-1 transform transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-          </button>
-
-          {(signal.isReconfirmed || (signal.triggerHistory && signal.triggerHistory.length > 1)) && (
-            <button
-              type="button"
-              onClick={() => setShowHistory(!showHistory)}
-              className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 font-bold flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              <span>🕒 {showHistory 
-                ? (language === 'tr' ? 'Tarama Geçmişini Gizle' : 'Hide Scan History') 
-                : (language === 'tr' ? `Günlük Taramaları Gör (${signal.triggerHistory?.length || signal.daysInZone || 2})` : `View Daily Scans (${signal.triggerHistory?.length || signal.daysInZone || 2})`)}</span>
-              <svg className={`w-3 h-3 transform transition-transform ${showHistory ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {expanded && (() => {
-          let reasons = signal.triggerReasons || [];
-          let failedChecks = signal.failedChecks || [];
-          let invalidationRule = signal.invalidation;
-          let marketCtx = signal.marketContext;
-          let riskData = signal.risk || signal.riskMetrics;
-          let displayNarrative = signal.rationale;
-          let entryModeStr = signal.entryMode || 'next_open';
-          let directionStr = signal.direction || 'LONG';
-
-          // Auto-parse if rationale was saved as JSON string
-          if ((!reasons || reasons.length === 0) && signal.rationale && signal.rationale.trim().startsWith('{')) {
-            try {
-              const parsed = JSON.parse(signal.rationale);
-              if (Array.isArray(parsed.trigger_reasons)) reasons = parsed.trigger_reasons;
-              if (Array.isArray(parsed.failed_checks)) failedChecks = parsed.failed_checks;
-              if (parsed.invalidation) invalidationRule = parsed.invalidation;
-              if (parsed.market_context) marketCtx = parsed.market_context;
-              if (parsed.risk) riskData = parsed.risk;
-              if (parsed.rationale) displayNarrative = parsed.rationale;
-              if (parsed.entry_mode) entryModeStr = parsed.entry_mode;
-              if (parsed.direction) directionStr = parsed.direction;
-            } catch (e) {}
-          }
-
-          const stopDist = riskData?.stop_distance_pct ?? (
-            signal.entryPrice > 0 && signal.stopLoss > 0
-              ? Number((((signal.entryPrice - signal.stopLoss) / signal.entryPrice) * 100).toFixed(2))
-              : null
-          );
-          const hasStrategyT2 = typeof signal.target2 === 'number' && signal.target2 > 0;
-          const t1Val = signal.target1 || signal.targetPrice;
-          const t2Val = hasStrategyT2
-            ? signal.target2!
-            : Number((signal.entryPrice + 2 * Math.abs(signal.entryPrice - signal.stopLoss)).toFixed(2));
-
-          return (
-            <div className="mt-3 text-xs bg-gray-50 dark:bg-gray-900/90 p-3 rounded-xl border border-gray-200 dark:border-gray-800 space-y-3.5 animate-in fade-in duration-200">
-              {/* Context Badges Bar */}
-              <div className="flex flex-wrap items-center gap-1.5 pb-2.5 border-b border-gray-200 dark:border-gray-800 text-[11px]">
-                <span className="font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                  {directionStr}
-                </span>
-                <span className="font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
-                  <span>⏱️</span>
-                  <span>
-                    {language === 'tr'
-                      ? (entryModeStr === 'next_open' ? 'Giriş: Açılış Seansı (MOO)' : entryModeStr)
-                      : (entryModeStr === 'next_open' ? 'Entry: Next Open (MOO)' : entryModeStr)}
-                  </span>
-                </span>
-                {marketCtx?.benchmark && (
-                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700 font-mono text-[10px]">
-                    📍 {marketCtx.benchmark} ({marketCtx.regime || 'BULLISH'})
-                  </span>
-                )}
-                {marketCtx?.relative_strength_20d && (
-                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono text-[10px]">
-                    ⚡ RS: {marketCtx.relative_strength_20d}x
-                  </span>
-                )}
-              </div>
-
-              {/* Reconfirmed Signal Notice if applicable */}
-              {signal.isReconfirmed && signal.lastConfirmedDate && (
-                <div className="p-2 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between text-[11px] flex-wrap gap-1">
-                  <div className="flex items-center gap-1.5 text-indigo-900 dark:text-indigo-200 font-bold">
-                    <span>🔄</span>
-                    <span>{language === 'tr' ? 'Son Yeniden Teyit:' : 'Last Reconfirmed:'}</span>
-                    <span className="font-mono text-indigo-700 dark:text-indigo-300 font-black">{signal.lastConfirmedDate}</span>
-                  </div>
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400 italic">
-                    {language === 'tr' ? 'Orijinal işlem planı ve risk seviyeleri korunmuştur' : 'Original trade plan & risk preserved'}
-                  </span>
-                </div>
-              )}
-
-              {/* WHY: Trigger Conditions Passed */}
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-wider text-gray-800 dark:text-gray-200 mb-1.5 flex items-center gap-1.5">
-                  <span className="text-emerald-500">🎯</span>
-                  <span>{language === 'tr' ? 'Neden Tetiklendi? (Onaylanan Koşullar)' : 'Why It Fired (Trigger Conditions Passed)'}</span>
-                </div>
-                {reasons && reasons.length > 0 ? (
-                  <ul className="space-y-1.5 pl-0.5">
-                    {reasons.map((reason, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-300 leading-snug">
-                        <span className="shrink-0 text-emerald-500 dark:text-emerald-400 font-bold">✓</span>
-                        <span>{reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-[11px] text-gray-600 dark:text-gray-400 italic">
-                    {language === 'tr' ? 'Tüm teknik filtre ve momentum eşik onayları sağlandı.' : 'All technical filter & momentum threshold conditions confirmed.'}
-                  </div>
-                )}
-
-                {/* Near-miss or Failed Checks if present */}
-                {failedChecks && failedChecks.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-800">
-                    <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1">
-                      <span>⚠️</span>
-                      <span>{language === 'tr' ? 'Yakın Reddedilen / Başarısız Kontroller' : 'Near-Miss / Failed Checks'}</span>
-                    </div>
-                    <ul className="space-y-1 pl-0.5">
-                      {failedChecks.map((fCheck, fIdx) => (
-                        <li key={fIdx} className="flex items-start gap-1.5 text-[10px] text-amber-800 dark:text-amber-300">
-                          <span className="shrink-0 font-bold">✕</span>
-                          <span>{fCheck}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* PLAN: Execution, Scale-Out Targets & Invalidation */}
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-                <div className="text-[11px] font-black uppercase tracking-wider text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-1.5">
-                  <span className="text-blue-500">📋</span>
-                  <span>{language === 'tr' ? 'İşlem Planı & Risk Yönetimi' : 'Execution Plan & Risk Management'}</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-[11px] mb-2.5">
-                  <div className="p-2 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold">
-                      {language === 'tr' ? 'Hedef 1 (+1.25R / %50 Satış)' : 'Target 1 (+1.25R / 50% Exit)'}
-                    </span>
-                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs mt-0.5">
-                      {formatPrice(t1Val)}
-                    </span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
-                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">
-                      {hasStrategyT2
-                        ? (language === 'tr' ? 'Hedef 2 (Strateji Koşucusu)' : 'Target 2 (Strategy Runner)')
-                        : (language === 'tr' ? 'Hedef 2 (Tahmini +2R Koşucu)' : 'Target 2 (Estimated +2R Runner)')}
-                    </span>
-                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs mt-0.5">
-                      {formatPrice(t2Val)} {hasStrategyT2 ? '' : '*'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Invalidation Box */}
-                <div className="p-2 rounded-lg bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 mb-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-black text-rose-700 dark:text-rose-300">
-                    <span>🛑</span>
-                    <span>{language === 'tr' ? 'Geçersizlik Kuralı (Stop Invalidation):' : 'Invalidation Rule:'}</span>
-                  </div>
-                  <p className="text-[11px] text-rose-900 dark:text-rose-200 font-mono mt-0.5">
-                    {invalidationRule || (language === 'tr' 
-                      ? `${formatPrice(signal.stopLoss)} altı günlük kapanış kurulumu geçersiz kılar.` 
-                      : `Daily close below ${formatPrice(signal.stopLoss)} invalidates this setup.`)}
-                  </p>
-                </div>
-
-                {/* Sizing & ATR Metrics */}
-                <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono text-gray-600 dark:text-gray-400 px-1">
-                  {stopDist !== null && (
-                    <span>
-                      {language === 'tr' ? 'Stop Mesafesi:' : 'Stop Dist:'} <strong className="text-gray-900 dark:text-gray-200">-%{stopDist}%</strong>
-                    </span>
-                  )}
-                  {riskData?.atr_14 && (
-                    <span>
-                      ATR(14): <strong className="text-gray-900 dark:text-gray-200">{formatPrice(riskData.atr_14)}</strong>
-                    </span>
-                  )}
-                  <span>
-                    {language === 'tr' ? 'Maks Risk Payı:' : 'Max Risk Sizing:'} <strong className="text-blue-600 dark:text-blue-400">%{riskData?.max_position_pct || 1.5}</strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* RATIONALE NARRATIVE */}
-              {displayNarrative && (
-                <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
-                  <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    {language === 'tr' ? 'Yapay Zeka Mantıksal Özeti' : 'AI Strategic Narrative'}
-                  </div>
-                  <div className="text-[11px] text-gray-700 dark:text-gray-300 leading-relaxed italic bg-white/60 dark:bg-gray-800/60 p-2 rounded-lg border border-gray-100 dark:border-gray-800">
-                    "{displayNarrative}"
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {showHistory && (
-          <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs space-y-2 animate-in fade-in duration-150">
-            <div className="text-[10px] font-black uppercase tracking-wider text-purple-800 dark:text-purple-300 flex justify-between items-center">
-              <span>{language === 'tr' 
-                ? `Tarama Zaman Çizelgesi (Alım Bölgesinde ${signal.triggerHistory?.length || signal.daysInZone || 2} Seans)` 
-                : `Scan Timeline (${signal.triggerHistory?.length || signal.daysInZone || 2} Sessions in Buy Zone)`}</span>
-              <span className="text-[9px] font-semibold text-purple-600 dark:text-purple-400">
-                {language === 'tr' ? 'Tüm Alım Tetikleyicileri' : 'All Buy Triggers'}
+        {/* Reconfirmation Status if in Buy Zone across multiple sessions */}
+        {signal.isReconfirmed && (
+          <div className="pt-2 flex items-center justify-between text-[11px] border-t border-gray-100 dark:border-gray-800 mt-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 font-bold text-[10px]">
+              <span>🔄</span>
+              <span>
+                {language === 'tr' 
+                  ? `${signal.triggerHistory?.length || signal.daysInZone || 2}. Seans Alım Bölgesinde` 
+                  : `Session ${signal.triggerHistory?.length || signal.daysInZone || 2} in Buy Zone`}
               </span>
-            </div>
-            <div className="space-y-1.5 divide-y divide-purple-100 dark:divide-purple-900/40">
-              {signal.triggerHistory && signal.triggerHistory.length > 1 ? (
-                signal.triggerHistory.map((item, i) => (
-                  <div key={item.id || i} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                        i === 0 
-                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300' 
-                          : 'bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300'
-                      }`}>
-                        {i === 0 
-                          ? (language === 'tr' ? '1. Gün (Tetik)' : 'Day 1 (Trigger)') 
-                          : (language === 'tr' ? `${i + 1}. Gün (Onay)` : `Day ${i + 1} (Re-confirm)`)}
-                      </span>
-                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{item.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 font-mono text-[11px]">
-                      <span className="text-gray-900 dark:text-white font-bold">
-                        {t.tradeCard.entry}: {formatPrice(item.entryPrice)}
-                      </span>
-                      <span className="text-gray-500 dark:text-gray-400 text-[10px] hidden sm:inline">
-                        SL: {formatPrice(item.stopLoss)}
-                      </span>
-                      <span className="text-amber-500 font-bold text-[10px]">
-                        ⭐ {typeof item.confidence === 'number' && Number.isFinite(item.confidence) && item.confidence > 0 ? `${Math.round(Math.min(10, Math.max(0, item.confidence <= 10 ? item.confidence : item.confidence / 10)))}/10` : '—'}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-                        {language === 'tr' ? '1. Gün (İlk Kurulum)' : 'Day 1 (Initial Setup)'}
-                      </span>
-                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.date}</span>
-                    </div>
-                    <span className="text-gray-900 dark:text-white font-bold font-mono text-[11px]">
-                      {t.tradeCard.entry}: {formatPrice(signal.entryPrice)}
-                    </span>
-                  </div>
-                  <div className="pt-1.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
-                        {language === 'tr' ? `${signal.daysInZone || 2}. Gün (Yeniden Doğrulandı)` : `Day ${signal.daysInZone || 2} (Re-confirmed)`}
-                      </span>
-                      <span className="font-mono text-gray-700 dark:text-gray-300 text-[11px] font-semibold">{signal.lastConfirmedDate || signal.date}</span>
-                    </div>
-                    <span className="text-purple-600 dark:text-purple-300 font-bold text-[10px]">
-                      {language === 'tr' ? '20/50 EMA Alım Bölgesinde Güçleniyor' : 'Consolidating in 20/50 EMA Buy Zone'}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
+            </span>
+            {onOpenCoPilot && (
+              <button
+                type="button"
+                onClick={() => onOpenCoPilot(signal)}
+                className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
+              >
+                <span>{language === 'tr' ? 'YZ Planı' : 'AI Plan'}</span>
+                <span>→</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1072,11 +807,13 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         <div className="flex items-center gap-2">
           {onOpenCoPilot && (
             <button
+              type="button"
               onClick={() => onOpenCoPilot(signal)}
-              className="px-2 py-0.5 rounded text-[11px] font-black text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
-              title={language === 'tr' ? "Yapay Zeka İşlem Planı ve Yol Haritası" : "Open AI Trade Co-Pilot Blueprint"}
+              className="px-2 py-1 rounded text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation"
+              title={language === 'tr' ? "Yapay Zeka Analizini ve İşlem Yol Haritasını Aç" : "Open AI Analysis & Trade Blueprint"}
             >
-              💡 {t.tradeCard.coPilot}
+              <span>💡</span>
+              <span>{t.tradeCard.coPilot}</span>
             </button>
           )}
           <button 

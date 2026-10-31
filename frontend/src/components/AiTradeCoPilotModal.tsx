@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 
 export interface CoPilotAssetContext {
   symbol: string;
@@ -25,6 +26,31 @@ export interface CoPilotAssetContext {
   lowestBuy?: number;
   highestBuy?: number;
   latestBuy?: number;
+  target1?: number;
+  target2?: number;
+  triggerReasons?: string[];
+  failedChecks?: string[];
+  invalidation?: string;
+  marketContext?: {
+    benchmark?: string;
+    regime?: string;
+    relative_strength_20d?: number | null;
+    [key: string]: any;
+  } | any;
+  risk?: {
+    atr_14?: number | null;
+    stop_distance_pct?: number | null;
+    max_position_pct?: number | null;
+    invalidation_level?: number | null;
+    [key: string]: any;
+  } | any;
+  direction?: string;
+  entryMode?: string;
+  isReconfirmed?: boolean;
+  lastConfirmedDate?: string;
+  daysInZone?: number;
+  triggerHistory?: any[];
+  confidence?: number;
 }
 
 interface AiTradeCoPilotModalProps {
@@ -72,6 +98,39 @@ export default function AiTradeCoPilotModal({
   const distToBreakevenPct = asset.currentPrice > 0 && entry > 0 
     ? ((entry - asset.currentPrice) / asset.currentPrice) * 100 
     : 0;
+
+  const { language } = useLanguage();
+
+  // Algorithmic Signal Analysis Context Extraction
+  let triggerReasons: string[] = asset.triggerReasons || [];
+  let failedChecks: string[] = asset.failedChecks || [];
+  let invalidationRule: string | undefined = asset.invalidation;
+  let marketCtx = asset.marketContext;
+  let riskData = asset.risk;
+  let displayNarrative: string | undefined = asset.notes;
+  let directionStr: string = asset.direction || 'LONG';
+  let entryModeStr: string = asset.entryMode || 'next_open';
+
+  // Fallback JSON parsing if notes contains raw JSON rationale from DB
+  if ((!triggerReasons || triggerReasons.length === 0) && asset.notes && asset.notes.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(asset.notes);
+      if (Array.isArray(parsed.trigger_reasons)) triggerReasons = parsed.trigger_reasons;
+      if (Array.isArray(parsed.failed_checks)) failedChecks = parsed.failed_checks;
+      if (parsed.invalidation) invalidationRule = parsed.invalidation;
+      if (parsed.market_context) marketCtx = parsed.market_context;
+      if (parsed.risk) riskData = parsed.risk;
+      if (parsed.rationale) displayNarrative = parsed.rationale;
+      if (parsed.entry_mode) entryModeStr = parsed.entry_mode;
+      if (parsed.direction) directionStr = parsed.direction;
+    } catch (e) {}
+  }
+
+  const stopDist = riskData?.stop_distance_pct ?? (
+    entry > 0 && stop > 0
+      ? Number((((entry - stop) / entry) * 100).toFixed(2))
+      : null
+  );
 
   // Dynamic Company-Specific Macro & Fundamentals Engine
   const getMacroTailwind = (sym: string) => {
@@ -409,7 +468,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              📋 Executive Brief
+              {language === 'tr' ? '📋 Portföy Özeti' : '📋 Executive Brief'}
             </button>
           )}
           <button
@@ -420,7 +479,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            🎯 Tactical Blueprint
+            {language === 'tr' ? '🎯 YZ Kurulumu & Planı' : '🎯 AI Setup & Blueprint'}
           </button>
           <button
             onClick={() => setActiveTab('premortem')}
@@ -430,7 +489,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            ⚠️ Pre-Mortem (Failure Risks)
+            {language === 'tr' ? '⚠️ Risk Senaryoları' : '⚠️ Pre-Mortem Risks'}
           </button>
           <button
             onClick={() => setActiveTab('qa')}
@@ -440,7 +499,7 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            💬 Interactive Q&A
+            {language === 'tr' ? '💬 Danışmana Sor' : '💬 Interactive Q&A'}
           </button>
         </div>
 
@@ -585,13 +644,159 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
 
           {activeTab === 'blueprint' && (
             <div className="space-y-4">
+              {/* SECTION 1: ALGORITHMIC SETUP & TRIGGER CONDITIONS */}
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-700 space-y-3.5">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-1.5 text-gray-900 dark:text-white font-bold text-xs sm:text-sm">
+                    <span>🎯</span>
+                    <span>
+                      {language === 'tr' 
+                        ? 'Algoritmik Kurulum & Onaylanan Kriterler' 
+                        : 'Algorithmic Setup & Confirmed Criteria'}
+                    </span>
+                  </div>
+                  {typeof asset.confidence === 'number' && asset.confidence > 0 && (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                      ⭐ {Math.round(Math.min(10, Math.max(0, asset.confidence <= 10 ? asset.confidence : asset.confidence / 10)))}/10
+                    </span>
+                  )}
+                </div>
+
+                {/* Context Badges Bar */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                    {directionStr}
+                  </span>
+                  <span className="font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                    <span>⏱️</span>
+                    <span>
+                      {language === 'tr'
+                        ? (entryModeStr === 'next_open' ? 'Giriş: Açılış Seansı (MOO)' : entryModeStr)
+                        : (entryModeStr === 'next_open' ? 'Entry: Next Open (MOO)' : entryModeStr)}
+                    </span>
+                  </span>
+                  {marketCtx?.benchmark && (
+                    <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700 font-mono text-[10px]">
+                      📍 {marketCtx.benchmark} ({marketCtx.regime || 'BULLISH'})
+                    </span>
+                  )}
+                  {marketCtx?.relative_strength_20d && (
+                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono text-[10px]">
+                      ⚡ RS: {marketCtx.relative_strength_20d}x
+                    </span>
+                  )}
+                </div>
+
+                {/* Reconfirmation Status if in Buy Zone across multiple sessions */}
+                {asset.isReconfirmed && (
+                  <div className="p-2.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 flex items-center justify-between text-[11px] flex-wrap gap-1">
+                    <div className="flex items-center gap-1.5 text-purple-900 dark:text-purple-200 font-bold">
+                      <span>🔄</span>
+                      <span>{language === 'tr' ? 'Alım Bölgesinde Kalış:' : 'Days in Buy Zone:'}</span>
+                      <span className="font-mono text-purple-700 dark:text-purple-300 font-black">
+                        {asset.triggerHistory?.length || asset.daysInZone || 2} {language === 'tr' ? 'Seans' : 'Sessions'}
+                      </span>
+                    </div>
+                    {asset.lastConfirmedDate && (
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                        {language === 'tr' ? 'Son Teyit:' : 'Confirmed:'} {asset.lastConfirmedDate}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Trigger Reasons Checklist */}
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 flex items-center gap-1">
+                    <span className="text-emerald-500 font-bold">✓</span>
+                    <span>{language === 'tr' ? 'Neden Tetiklendi? (Onaylanan Koşullar)' : 'Why It Fired (Passed Conditions)'}</span>
+                  </div>
+                  {triggerReasons && triggerReasons.length > 0 ? (
+                    <ul className="space-y-1.5 pl-0.5">
+                      {triggerReasons.map((reason, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-300 leading-snug">
+                          <span className="shrink-0 text-emerald-500 dark:text-emerald-400 font-bold">✓</span>
+                          <span>{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-[11px] text-gray-600 dark:text-gray-400 italic">
+                      {language === 'tr' 
+                        ? 'Tüm teknik filtre ve momentum eşik onayları eksiksiz sağlandı.' 
+                        : 'All technical momentum and risk filter conditions passed.'}
+                    </div>
+                  )}
+                </div>
+
+                {/* Near-miss / Failed Checks */}
+                {failedChecks && failedChecks.length > 0 && (
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{language === 'tr' ? 'Yakın Reddedilen / Başarısız Kontroller' : 'Near-Miss / Failed Checks'}</span>
+                    </div>
+                    <ul className="space-y-1 pl-0.5">
+                      {failedChecks.map((fCheck, fIdx) => (
+                        <li key={fIdx} className="flex items-start gap-1.5 text-[10px] text-amber-800 dark:text-amber-300">
+                          <span className="shrink-0 font-bold">✕</span>
+                          <span>{fCheck}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Invalidation Rule */}
+                <div className="p-2.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black text-rose-700 dark:text-rose-300">
+                    <span>🛑</span>
+                    <span>{language === 'tr' ? 'Geçersizlik Kuralı (Stop Invalidation):' : 'Invalidation Rule:'}</span>
+                  </div>
+                  <p className="text-[11px] text-rose-900 dark:text-rose-200 font-mono mt-0.5">
+                    {invalidationRule || (language === 'tr' 
+                      ? `${curr}${stop.toFixed(2)} altı günlük kapanış kurulumu geçersiz kılar.` 
+                      : `Daily close below ${curr}${stop.toFixed(2)} invalidates this setup.`)}
+                  </p>
+                </div>
+
+                {/* Risk & Sizing Specs */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono text-gray-600 dark:text-gray-400 pt-1 border-t border-gray-200 dark:border-gray-700">
+                  {stopDist !== null && (
+                    <span>
+                      {language === 'tr' ? 'Stop Mesafesi:' : 'Stop Dist:'} <strong className="text-gray-900 dark:text-gray-200">-%{stopDist}%</strong>
+                    </span>
+                  )}
+                  {riskData?.atr_14 && (
+                    <span>
+                      ATR(14): <strong className="text-gray-900 dark:text-gray-200">{curr}{Number(riskData.atr_14).toFixed(2)}</strong>
+                    </span>
+                  )}
+                  <span>
+                    {language === 'tr' ? 'Maks Risk Payı:' : 'Max Risk Sizing:'} <strong className="text-blue-600 dark:text-blue-400">%{riskData?.max_position_pct || 1.5}</strong>
+                  </span>
+                </div>
+
+                {/* Narrative / AI Strategic Summary */}
+                {displayNarrative && (
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                      {language === 'tr' ? 'Yapay Zeka Mantıksal Özeti' : 'AI Strategic Narrative'}
+                    </div>
+                    <div className="text-[11px] text-gray-700 dark:text-gray-300 leading-relaxed italic bg-white/70 dark:bg-gray-800/70 p-2.5 rounded-xl border border-gray-200/80 dark:border-gray-700">
+                      "{displayNarrative}"
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Macro & Fundamental Catalyst */}
               <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60">
                 <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-300 font-bold mb-1.5">
                   <span>🌐</span>
-                  <span>Macro & Sector Catalyst</span>
+                  <span>{language === 'tr' ? 'Makro & Sektörel Katalizör' : 'Macro & Sector Catalyst'}</span>
                 </div>
-                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-xs">
                   {getMacroTailwind(cleanSym)}
                 </p>
               </div>

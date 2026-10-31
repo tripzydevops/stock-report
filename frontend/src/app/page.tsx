@@ -2891,7 +2891,21 @@ export default function Home() {
       strategy: s.strategy,
       pnlPercent: s.changePercent,
       isDividend: false,
-      notes: s.rationale
+      notes: s.rationale,
+      target1: s.target1,
+      target2: s.target2,
+      triggerReasons: s.triggerReasons,
+      failedChecks: s.failedChecks,
+      invalidation: s.invalidation,
+      marketContext: s.marketContext,
+      risk: s.risk || (s as any).riskMetrics,
+      direction: s.direction,
+      entryMode: s.entryMode,
+      isReconfirmed: s.isReconfirmed,
+      lastConfirmedDate: s.lastConfirmedDate,
+      daysInZone: s.daysInZone,
+      triggerHistory: s.triggerHistory,
+      confidence: s.confidence
     });
   };
 
