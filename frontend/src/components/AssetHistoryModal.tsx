@@ -239,22 +239,22 @@ export default function AssetHistoryModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
-          <div>
+        <div className="p-3 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
+          <div className="min-w-0 pr-2">
             <div className="flex items-center space-x-2">
-              <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{asset.symbol}</h2>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate">{asset.symbol}</h2>
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shrink-0">
                 {asset.market}
               </span>
-              <span className="text-[11px] font-mono text-gray-400">Database Live Feed</span>
+              <span className="hidden sm:inline text-[11px] font-mono text-gray-400">Database Live Feed</span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-1">{asset.name}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{asset.name}</p>
           </div>
 
           {/* Current Price & Close Button */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
             <div className="text-right">
-              <div className="text-2xl font-black text-gray-900 dark:text-white font-mono">
+              <div className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white font-mono">
                 {formatMoney(effectivePrice)}
               </div>
               <div className={`text-xs font-bold ${effectiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -264,7 +264,7 @@ export default function AssetHistoryModal({
 
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
               title="Close Modal (Esc)"
             >
               ✕
@@ -274,14 +274,14 @@ export default function AssetHistoryModal({
 
         {/* Strategy Trigger Ribbon (if trade signal exists) */}
         {activeSignal && (
-          <div className="px-5 py-2.5 bg-gradient-to-r from-blue-900/40 via-purple-900/30 to-blue-900/40 border-b border-blue-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="px-3 sm:px-5 py-2.5 bg-gradient-to-r from-blue-900/40 via-purple-900/30 to-blue-900/40 border-b border-blue-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center space-x-2">
               <span className="text-sm">🎯</span>
               <span className="font-bold text-white uppercase tracking-wider">
                 Scanner Setup: {activeSignal.strategy?.replace('_', ' ')}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-3 font-mono">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 font-mono text-[11px] sm:text-xs">
               <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-bold">
                 Entry: {formatMoney(activeSignal.entryPrice)}
               </span>
@@ -301,34 +301,36 @@ export default function AssetHistoryModal({
         )}
 
         {/* View Switcher Tabs & External Links */}
-        <div className="px-5 pt-3 pb-2 bg-gray-50/40 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <div className="flex space-x-2">
+        <div className="px-3 sm:px-5 pt-2 sm:pt-3 pb-2 bg-gray-50/40 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2 overflow-x-auto touch-pan-x">
+          <div className="flex space-x-1.5 sm:space-x-2 shrink-0">
             <button
               onClick={() => setActiveTab('chart')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'chart'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
               <span>📈</span>
-              <span>Interactive Candlestick Chart</span>
+              <span className="hidden sm:inline">Interactive Candlestick Chart</span>
+              <span className="sm:hidden">Grafik</span>
             </button>
             <button
               onClick={() => setActiveTab('data')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'data'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
               <span>📊</span>
-              <span>OHLCV History Table & Indicators</span>
+              <span className="hidden sm:inline">OHLCV History Table & Indicators</span>
+              <span className="sm:hidden">Geçmiş & İndikatörler</span>
             </button>
           </div>
 
           {/* Outbound Live Chart Links */}
-          <div className="hidden sm:flex items-center space-x-3 text-xs">
+          <div className="hidden sm:flex items-center space-x-3 text-xs shrink-0">
             <a 
               href={tradingViewUrl} 
               target="_blank" 
@@ -350,6 +352,7 @@ export default function AssetHistoryModal({
           </div>
         </div>
 
+
         {/* Content Body */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-grow">
           {activeTab === 'chart' ? (
@@ -368,7 +371,7 @@ export default function AssetHistoryModal({
                   entryPrice={activeSignal?.entryPrice}
                   stopLoss={activeSignal?.stopLoss}
                   targetPrice={activeSignal?.targetPrice}
-                  height={460}
+                  height={typeof window !== 'undefined' && window.innerWidth < 640 ? 340 : 460}
                 />
               )}
 

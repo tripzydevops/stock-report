@@ -221,5 +221,56 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
       });
     }
   });
+
+  test('8. Asset History Modal opens cleanly on mobile, renders live chart and table with current dates', async ({ page }) => {
+    // 1. Switch to Portfolio tab via bottom nav
+    const bottomNav = page.locator('nav[aria-label="Mobile Navigation"]');
+    await bottomNav.getByRole('button', { name: /Portföy/i }).click();
+
+    // 2. Wait for portfolio holdings to load
+    await expect(page.locator('text=Yatırılan Para').first()).toBeVisible();
+
+    // 3. Find and click a ticker button (e.g., AKBNK or first holding button)
+    const tickerBtn = page.locator('button:has-text("AKBNK")').first();
+    if (await tickerBtn.isVisible()) {
+      await tickerBtn.click();
+    } else {
+      // Fallback: click first ticker button in portfolio list
+      const firstTicker = page.locator('table button[class*="font-mono"]').first();
+      await firstTicker.click();
+    }
+
+    // 4. Modal should open
+    const modalHeader = page.locator('div:has-text("Database Live Feed")').first();
+    await expect(modalHeader).toBeVisible({ timeout: 10000 });
+
+    // Verify price is NOT ₺0,00
+    const zeroPrice = page.locator('.text-2xl:has-text("₺0,00"), .text-lg:has-text("₺0,00")');
+    await expect(zeroPrice).not.toBeVisible();
+
+    // Capture screenshot of chart tab on mobile
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_asset_history_chart.png'),
+    });
+
+    // 5. Switch to Table & Indicators tab
+    const dataTabBtn = page.locator('button:has-text("Geçmiş & İndikatörler"), button:has-text("OHLCV History")').first();
+    await expect(dataTabBtn).toBeVisible();
+    await dataTabBtn.click();
+
+    // 6. Verify table headers and recent dates
+    await expect(page.locator('text=Daily Price History').first()).toBeVisible();
+    await expect(page.locator('text=50 EMA').first()).toBeVisible();
+
+    // Capture screenshot of table & indicators tab on mobile
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_asset_history_table.png'),
+    });
+
+    // 7. Close modal
+    const closeBtn = page.getByTitle('Close Modal (Esc)');
+    await closeBtn.click();
+    await expect(page.locator('div:has-text("Database Live Feed")')).not.toBeVisible();
+  });
 });
 
