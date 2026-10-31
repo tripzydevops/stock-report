@@ -32,7 +32,7 @@ from app.models.data_contracts import (
     validate_trade_signals_dataframe,
 )
 
-from app.services.signal_persistence import validate_and_normalize_confidence
+from app.services.signal_persistence import validate_and_normalize_confidence, validate_trade_geometry
 
 def _normalize_confidence(raw: float) -> float:
     """Canonicalize confidence to a 0-100 scale at the write boundary."""
@@ -489,11 +489,11 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             raw_conf = float(sig.get("confidence_score", 0)) if sig.get("confidence_score") else 0.0
             conf = _normalize_confidence(raw_conf)
 
-            # Spot equities sanity: target > entry and stop < entry
-            if target_1 is not None and stop_l is not None and entry_p > 0:
-                if target_1 <= entry_p or stop_l >= entry_p:
-                    print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_1})")
-                    continue
+            # Spot equities trade geometry validation
+            is_valid_geom, geom_err = validate_trade_geometry(sig)
+            if not is_valid_geom:
+                print(f"⚠️ Rejecting invalid trade geometry for {sym}: {geom_err}")
+                continue
 
             # Full structured explainer package
             explanation_payload = {
@@ -542,10 +542,17 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             target_2 = float(row["Target 2"]) if "Target 2" in row and pd.notna(row["Target 2"]) else None
             conf = _normalize_confidence(float(row["Confidence %"]) if "Confidence %" in row and pd.notna(row["Confidence %"]) else 0.0)
 
-            if target_p is not None and stop_l is not None and entry_p > 0:
-                if target_p <= entry_p or stop_l >= entry_p:
-                    print(f"⚠️ Rejecting inverted setup for {sym} (Entry: {entry_p}, Stop: {stop_l}, Target: {target_p})")
-                    continue
+            candidate_sig = {
+                "direction": "LONG",
+                "entry_price": entry_p,
+                "stop_loss": stop_l,
+                "target_1": target_p,
+                "target_2": target_2,
+            }
+            is_valid_geom, geom_err = validate_trade_geometry(candidate_sig)
+            if not is_valid_geom:
+                print(f"⚠️ Rejecting invalid trade geometry for {sym}: {geom_err}")
+                continue
 
             # Check if Full Explainer JSON column exists in Excel
             if "Full Explainer JSON" in row and pd.notna(row["Full Explainer JSON"]):

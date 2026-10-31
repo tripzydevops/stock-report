@@ -31,6 +31,7 @@ if backend_dir not in sys.path:
 
 from app.services.signal_persistence import (
     validate_and_normalize_confidence,
+    validate_trade_geometry,
     build_structured_explainer_payload,
     merge_reconfirmation,
     persist_trade_signals,
@@ -58,10 +59,12 @@ class TestConfidenceValidationStorageBoundary:
         assert validate_and_normalize_confidence(-0.01) == 0.0
 
     def test_migrates_legacy_scale(self):
-        # 0 < x <= 10 scale should scale to 0-100
-        assert validate_and_normalize_confidence(8.5) == 85.0
-        assert validate_and_normalize_confidence(10.0) == 100.0
-        assert validate_and_normalize_confidence(1.0) == 10.0
+        # By default, scale guessing is disabled: 8.5 is strictly bounded to 8.5 without multiplying
+        assert validate_and_normalize_confidence(8.5) == 8.5
+        # When allow_legacy_10_scale=True is explicitly passed, 0 < x <= 10 scales to 0-100
+        assert validate_and_normalize_confidence(8.5, allow_legacy_10_scale=True) == 85.0
+        assert validate_and_normalize_confidence(10.0, allow_legacy_10_scale=True) == 100.0
+        assert validate_and_normalize_confidence(1.0, allow_legacy_10_scale=True) == 10.0
 
     def test_bounds_valid_percentages(self):
         assert validate_and_normalize_confidence(82.4) == 82.4
@@ -262,8 +265,8 @@ class TestPersistenceRoundTripMock:
 
         assert inserted_row["asset_id"] == "nvda-uuid-1234"
         assert inserted_row["target_1"] == 154.00
-        assert inserted_row["target_2"] == 165.00
-        assert inserted_row["confidence_score"] == 92.0  # AI conviction
+        # Architectural Contract: Top-level DB column represents algorithmic Setup Quality ONLY
+        assert inserted_row["confidence_score"] == 88.0
 
         # Explainer JSON verification
         saved_payload = json.loads(inserted_row["ai_rationale"])
@@ -386,3 +389,160 @@ class TestScreenerToFrontendContract:
         assert len(frontend_props["triggerReasons"]) >= 2
         assert isinstance(frontend_props["invalidation"], str)
         assert frontend_props["confidence"] > 0 and frontend_props["confidence"] <= 100
+
+
+class TestHoldingPeriodLifecycleExpiry:
+    """
+    CRITICAL REGRESSION TEST (Bug 1 Fix):
+    Asserts that chronological lifecycle evaluation is strictly bounded to future_indices[:max_days].
+    Bars beyond max_days CANNOT trigger targets retroactively after trade expiry.
+    """
+
+    def test_holding_period_expiry_prevents_retroactive_target_hit(self):
+        mock_client = MagicMock()
+
+        # Mean Reversion holding horizon = 7 days
+        signal_date = "2026-10-01"
+        dates = pd.date_range(start="2026-10-01", periods=16, freq="B").strftime("%Y-%m-%d").tolist()
+
+        # Days 1 to 7: Price hovers between 96 and 103 (Entry=100, Stop=95, Target=106).
+        # Neither stop nor target is touched within the 7-day window.
+        # Day 12: Price reaches 108.00 (would touch target if evaluation didn't slice to max_days!).
+        bars = []
+        for idx, d in enumerate(dates):
+            if idx == 0:
+                bars.append({"open": 100.0, "high": 102.0, "low": 98.0, "close": 100.0})
+            elif 1 <= idx <= 7:
+                # Safe consolidation without hitting stop (95) or target (106)
+                bars.append({"open": 100.0, "high": 103.0, "low": 96.0, "close": 99.0 + (idx * 0.2)})
+            elif idx == 12:
+                # Spike to target well past the 7-day holding horizon
+                bars.append({"open": 104.0, "high": 108.0, "low": 103.0, "close": 107.0})
+            else:
+                bars.append({"open": 101.0, "high": 102.0, "low": 99.0, "close": 100.5})
+
+        df_price = pd.DataFrame(bars, index=dates)
+
+        # Mock database returning 1 open Mean Reversion signal
+        mock_signal = {
+            "id": "sig-mr-001",
+            "asset_id": "asset-uuid-akbnk",
+            "signal_date": signal_date,
+            "strategy": "mean_reversion",
+            "entry_price": 100.0,
+            "stop_loss": 95.0,
+            "target_1": 106.0,
+            "status": "open",
+        }
+
+        mock_client.table("trade_signals").select().eq().execute.return_value.data = [mock_signal]
+
+        asset_id_map = {"AKBNK": "asset-uuid-akbnk"}
+        asset_data = {"AKBNK": df_price}
+
+        # Run lifecycle reconciliation
+        result = reconcile_open_signals_lifecycle(
+            client=mock_client,
+            asset_id_map=asset_id_map,
+            asset_data=asset_data,
+            today_str=dates[-1]
+        )
+
+        # It MUST be recorded as expired, NOT target_hit!
+        assert result["target_hit"] == 0
+        assert result["stopped_out"] == 0
+        assert result["expired"] == 1
+
+        # Verify update call parameters
+        update_call = mock_client.table("trade_signals").update.call_args[0][0]
+        assert update_call["status"] == "expired"
+        assert update_call["closed_at"] == f"{dates[7]}T18:00:00Z"  # Session 7 close
+        expected_pnl = round(((df_price.iloc[7]["close"] - 100.0) / 100.0) * 100, 2)
+        assert update_call["outcome_pnl_pct"] == expected_pnl
+
+
+class TestTradeGeometryValidation:
+    """Verifies pre-insert geometry validation safeguards."""
+
+    def test_valid_long_geometry_passes(self):
+        valid_sig = {
+            "direction": "LONG",
+            "entry_price": 100.0,
+            "stop_loss": 95.0,
+            "target_1": 110.0,
+            "target_2": 115.0,
+        }
+        is_valid, err = validate_trade_geometry(valid_sig)
+        assert is_valid is True
+        assert err is None
+
+    def test_rejects_stop_loss_above_or_equal_to_entry(self):
+        sig = {"direction": "LONG", "entry_price": 100.0, "stop_loss": 100.0, "target_1": 110.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Inverted long stop_loss" in err
+
+        sig["stop_loss"] = 105.0
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Inverted long stop_loss" in err
+
+    def test_rejects_target_below_or_equal_to_entry(self):
+        sig = {"direction": "LONG", "entry_price": 100.0, "stop_loss": 95.0, "target_1": 100.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Inverted long target_1" in err
+
+        sig["target_1"] = 90.0
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Inverted long target_1" in err
+
+    def test_rejects_target_2_below_target_1(self):
+        sig = {"direction": "LONG", "entry_price": 100.0, "stop_loss": 95.0, "target_1": 110.0, "target_2": 108.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Inverted long target_2" in err
+
+    def test_rejects_non_finite_or_negative_prices(self):
+        sig = {"direction": "LONG", "entry_price": float("inf"), "stop_loss": 95.0, "target_1": 110.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+
+        sig = {"direction": "LONG", "entry_price": -10.0, "stop_loss": -15.0, "target_1": 10.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+
+
+class TestFailFastPersistence:
+    """Verifies that database failures raise RuntimeError instead of silently continuing."""
+
+    def test_persist_raises_on_query_failure(self):
+        mock_client = MagicMock()
+        mock_client.table("trade_signals").select.side_effect = Exception("DB connection timeout")
+
+        with pytest.raises(RuntimeError, match="Database query failed"):
+            persist_trade_signals(mock_client, [{"symbol": "THYAO"}], {"THYAO": "uuid-1"})
+
+    def test_persist_raises_on_insert_failure(self):
+        mock_client = MagicMock()
+        mock_client.table("trade_signals").select().execute.return_value.data = []
+        mock_client.table("trade_signals").insert.side_effect = Exception("Violates unique constraint")
+
+        sig = {
+            "symbol": "THYAO",
+            "strategy": "Pullback Reclaim",
+            "entry_price": 300.0,
+            "stop_loss": 290.0,
+            "target_1": 320.0,
+        }
+        with pytest.raises(RuntimeError, match="Database insertion failed"):
+            persist_trade_signals(mock_client, [sig], {"THYAO": "uuid-1"})
+
+    def test_reconcile_raises_on_query_failure(self):
+        mock_client = MagicMock()
+        mock_client.table("trade_signals").select.side_effect = Exception("Connection closed")
+
+        with pytest.raises(RuntimeError, match="Database query failed"):
+            reconcile_open_signals_lifecycle(mock_client, {}, {})
+

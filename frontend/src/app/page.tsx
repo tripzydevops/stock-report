@@ -61,7 +61,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'THYAO', name: 'Türk Hava Yolları', strategy: 'Volatility Breakout',
     entryPrice: 310.50, stopLoss: 295.00, targetPrice: 350.00,
-    confidence: 8, rationale: 'Price broke above 20-day high with 2x average volume. RSI showing strong momentum without being overbought.',
+    confidence: 80, rationale: 'Price broke above 20-day high with 2x average volume. RSI showing strong momentum without being overbought.',
     market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
     direction: 'LONG', entryMode: 'next_open', target1: 330.00, target2: 350.00,
     triggerReasons: [
@@ -78,7 +78,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'NVDA', name: 'NVIDIA Corp', strategy: 'EMA Pullback',
     entryPrice: 125.40, stopLoss: 118.00, targetPrice: 145.00,
-    confidence: 7, rationale: 'Retracement to 50-day EMA in confirmed uptrend. Bullish divergence on MACD with volume stabilization.',
+    confidence: 75, rationale: 'Retracement to 50-day EMA in confirmed uptrend. Bullish divergence on MACD with volume stabilization.',
     market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
     direction: 'LONG', entryMode: 'next_open', target1: 135.00, target2: 145.00,
     triggerReasons: [
@@ -95,7 +95,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'TUPRS', name: 'Tüpraş', strategy: 'Pullback Reclaim',
     entryPrice: 165.20, stopLoss: 158.00, targetPrice: 182.00,
-    confidence: 8, rationale: 'Trend Pullback Reclaim (BIST): Pulled back 3.8% from 20-day high over 3 sessions, reclaimed prior-day high (₺164.50) and EMA20 with upper range close.',
+    confidence: 82, rationale: 'Trend Pullback Reclaim (BIST): Pulled back 3.8% from 20-day high over 3 sessions, reclaimed prior-day high (₺164.50) and EMA20 with upper range close.',
     market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
     direction: 'LONG', entryMode: 'next_open', target1: 174.20, target2: 182.00,
     triggerReasons: [
@@ -113,7 +113,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'SCHD', name: 'Schwab US Dividend Equity', strategy: 'Mean Reversion',
     entryPrice: 82.10, stopLoss: 79.50, targetPrice: 88.00,
-    confidence: 9, rationale: 'RSI rebounded from oversold territory (RSI 32). Lower Bollinger Band tested and defended with hammer bounce.',
+    confidence: 88, rationale: 'RSI rebounded from oversold territory (RSI 32). Lower Bollinger Band tested and defended with hammer bounce.',
     market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
     direction: 'LONG', entryMode: 'next_open', target1: 85.50, target2: 88.00,
     triggerReasons: [
@@ -130,7 +130,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'BIMAS', name: 'BİM Birleşik Mağazalar', strategy: 'Anchored VWAP Bounce',
     entryPrice: 472.50, stopLoss: 458.00, targetPrice: 510.00,
-    confidence: 9, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (468.20). Low breached and quickly reclaimed with strong institutional buying wick.',
+    confidence: 90, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (468.20). Low breached and quickly reclaimed with strong institutional buying wick.',
     market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
     direction: 'LONG', entryMode: 'next_open', target1: 494.00, target2: 510.00,
     triggerReasons: [
@@ -147,7 +147,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'AAPL', name: 'Apple Inc.', strategy: 'Liquidity Sweep Reclaim',
     entryPrice: 228.40, stopLoss: 222.50, targetPrice: 242.00,
-    confidence: 8, rationale: 'Flushed retail stop loss pool below 20-day swing low ($224.80) with a 45% absorption wick and reclaimed previous support on high volume.',
+    confidence: 84, rationale: 'Flushed retail stop loss pool below 20-day swing low ($224.80) with a 45% absorption wick and reclaimed previous support on high volume.',
     market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
     direction: 'LONG', entryMode: 'next_open', target1: 237.50, target2: 242.00,
     triggerReasons: [
@@ -164,7 +164,7 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   {
     symbol: 'ASELS', name: 'Aselsan', strategy: 'Relative Strength Leader',
     entryPrice: 64.80, stopLoss: 61.50, targetPrice: 72.00,
-    confidence: 9, rationale: 'Demonstrating significant Relative Strength (+6.2% vs XU100 -2.4% over 15 days). Holding firmly above 20 and 50 EMAs with institutional volume accumulation.',
+    confidence: 89, rationale: 'Demonstrating significant Relative Strength (+6.2% vs XU100 -2.4% over 15 days). Holding firmly above 20 and 50 EMAs with institutional volume accumulation.',
     market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
     direction: 'LONG', entryMode: 'next_open', target1: 69.50, target2: 72.00,
     triggerReasons: [
@@ -1208,6 +1208,8 @@ export default function Home() {
             let isReconfirmed = false;
             let lastConfirmedDate: string | undefined = undefined;
 
+            let aiConvictionVal: number | undefined = undefined;
+
             if (s.ai_rationale && s.ai_rationale.trim().startsWith('{')) {
               try {
                 const parsed = JSON.parse(s.ai_rationale);
@@ -1223,10 +1225,17 @@ export default function Home() {
                   isReconfirmed = true;
                   lastConfirmedDate = parsed.last_reconfirmed_date;
                 }
+                if (parsed.ai_conviction_score !== undefined && parsed.ai_conviction_score !== null) {
+                  const num = Number(parsed.ai_conviction_score);
+                  if (Number.isFinite(num) && num > 0) {
+                    aiConvictionVal = Math.min(100, Math.max(0, Math.round(num)));
+                  }
+                }
               } catch (e) {}
             }
 
             // Confidence score is standardized to 0-100 in database storage
+            // Represents algorithmic Setup Quality ONLY.
             // Strict range validation with Number.isFinite(): reject NaN/Infinity/negative and clamp to [0, 100]
             const rawConf = s.confidence_score !== null && s.confidence_score !== undefined ? Number(s.confidence_score) : 0;
             const standardizedConf = typeof rawConf === 'number' && Number.isFinite(rawConf)
@@ -1245,6 +1254,7 @@ export default function Home() {
               targetPrice: safeTarget,
               riskReward: Number(s.risk_reward_ratio) || 2.0,
               confidence: standardizedConf,
+              aiConvictionScore: aiConvictionVal,
               status: s.status,
               outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
               closedAt: s.closed_at,

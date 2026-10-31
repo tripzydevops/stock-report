@@ -4,21 +4,31 @@ Unified Signal Persistence & Lifecycle Service
 Centralized, single source of truth for persisting, reconfirming,
 and reconciling trade signals in Supabase.
 
-Ensures:
-1. Strict storage-boundary confidence validation:
-   - Rejects NaN, +/-inf, and negative numbers.
-   - Migrates legacy 0-10 scale (e.g. 8.5 -> 85.0).
-   - Strictly bounds confidence to [0.0, 100.0].
-   - Distinguishes screener algorithmic setup quality from LLM conviction.
-2. Full preservation of structured explainer fields:
-   - trigger_reasons, invalidation, market_context, risk, rationale,
-     direction, entry_mode, target_1, target_2, risk_reward_ratio.
-3. Safe reconfirmations:
-   - Never overwrites existing signals with plain-text strings.
-   - Appends dated reconfirmation entries without modifying initial entry proof.
-   - Safely upgrades legacy unformatted text rows to valid JSON payloads.
-4. User portfolio preservation:
-   - Protects open positions held by the user from auto-expiration.
+Architectural Contracts & Safeguards:
+1. Strict Storage-Boundary Confidence Validation (No Guessing):
+   - Rejects None, NaN, +/-inf, and negative numbers (returns 0.0).
+   - Preserves exact 0-100 percentage values without heuristic scale guessing.
+   - Legacy 0-10 scaling is strictly opt-in via `allow_legacy_10_scale=True`.
+   - Bounds strictly to [0.0, 100.0].
+2. Decoupled Setup Quality vs AI Conviction:
+   - Database column `confidence_score` stores algorithmic setup quality ONLY.
+   - `ai_conviction_score` is stored distinctly in the structured JSON payload.
+   - Neither is presented as a calibrated win probability.
+3. Chronological Expiry Window Enforcement:
+   - Evaluates price bars strictly within `future_indices[:max_days]`.
+   - Bars beyond the strategy holding horizon CANNOT retroactively trigger targets.
+   - Unresolved setups expire exactly at the close of session `max_days`.
+4. Fail-Fast Persistence Error Handling:
+   - Raises explicit `RuntimeError` on database query or insertion failures.
+   - Never proceeds with empty deduplication maps on failed queries.
+5. Trade Geometry & Finite Price Validation:
+   - For LONG setups: requires finite positive 0 < stop_loss < entry_price < target_1.
+   - If target_2 is provided: requires finite positive target_2 > target_1.
+   - Rejects non-finite or inverted geometry before storage.
+6. Execution Modeling Specification:
+   - `entry_mode: "next_open"` specifies intended market entry on the opening tick of T+1.
+   - `entry_price` specifies the benchmark trigger price (Day T close).
+   - `outcome_pnl_pct` in lifecycle reconciliation evaluates performance against `entry_price` as the reference benchmark.
 """
 
 import json
@@ -31,11 +41,12 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def validate_and_normalize_confidence(raw: Any) -> float:
+def validate_and_normalize_confidence(raw: Any, allow_legacy_10_scale: bool = False) -> float:
     """
-    Validates and normalizes confidence scores at the storage boundary.
+    Validates confidence scores at the storage boundary.
     - Rejects None, NaN, +/-inf, non-numeric, or <= 0 (returns 0.0).
-    - Migrates legacy 0-10 scale to 0-100 (e.g., 8.2 -> 82.0).
+    - If allow_legacy_10_scale is explicitly True, scales (0, 10] -> [0, 100].
+    - Otherwise, preserves the exact 0-100 percentage without scale guessing.
     - Strictly bounds output to [0.0, 100.0].
     """
     if raw is None:
@@ -48,11 +59,45 @@ def validate_and_normalize_confidence(raw: Any) -> float:
     if math.isnan(val) or math.isinf(val) or val <= 0.0:
         return 0.0
 
-    # Legacy 0-10 scale migration
-    if val <= 10.0:
+    if allow_legacy_10_scale and val <= 10.0:
         return min(100.0, max(0.0, round(val * 10.0, 1)))
 
     return min(100.0, max(0.0, round(val, 1)))
+
+
+def validate_trade_geometry(sig: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Validates trade geometry and finite price levels before storage.
+    For LONG setups, requires:
+    - Finite positive entry_price > 0
+    - Finite positive stop_loss with 0 < stop_loss < entry_price
+    - Finite positive target_1 with target_1 > entry_price
+    - If target_2 provided: finite positive target_2 > target_1
+    """
+    direction = str(sig.get("direction", "LONG")).upper()
+    try:
+        entry = float(sig.get("entry_price") or 0)
+        stop = float(sig.get("stop_loss")) if sig.get("stop_loss") is not None else None
+        t1 = float(sig.get("target_1")) if sig.get("target_1") is not None else None
+        t2 = float(sig.get("target_2")) if sig.get("target_2") is not None else None
+    except (ValueError, TypeError) as err:
+        return False, f"Non-numeric price values: {err}"
+
+    if not math.isfinite(entry) or entry <= 0:
+        return False, f"Invalid entry_price: {entry}"
+
+    if direction == "LONG":
+        if stop is not None:
+            if not math.isfinite(stop) or stop <= 0 or stop >= entry:
+                return False, f"Inverted long stop_loss: {stop} (must satisfy 0 < stop < entry={entry})"
+        if t1 is not None:
+            if not math.isfinite(t1) or t1 <= entry:
+                return False, f"Inverted long target_1: {t1} (must satisfy target_1 > entry={entry})"
+        if t2 is not None:
+            if not math.isfinite(t2) or (t1 is not None and t2 <= t1):
+                return False, f"Inverted long target_2: {t2} (must satisfy target_2 > target_1={t1})"
+
+    return True, None
 
 
 def build_structured_explainer_payload(
@@ -273,13 +318,11 @@ def merge_reconfirmation(
         }
         update_fields["ai_rationale"] = json.dumps(upgraded_payload, ensure_ascii=False)
 
-    # Standardize confidence score
+    # Standardize confidence score (algorithmic setup quality only)
     orig_conf = float(orig_row.get("confidence_score") or 0)
     new_conf = validate_and_normalize_confidence(new_signal.get("confidence_score"))
-    if new_conf > 0 and (orig_conf == 0 or validate_and_normalize_confidence(orig_conf) != orig_conf):
+    if new_conf > 0 and orig_conf == 0:
         update_fields["confidence_score"] = new_conf
-    elif orig_conf > 0:
-        update_fields["confidence_score"] = validate_and_normalize_confidence(orig_conf)
 
     return update_fields
 
@@ -294,6 +337,9 @@ def persist_trade_signals(
     Unified entry point for persisting trade signals.
     Used by cron_daily_job.py, export_to_spreadsheet.py, and sync scripts.
     
+    Fail-Fast Contract:
+    Raises RuntimeError on any critical query or insertion failure.
+    
     Returns:
         Dict with count of inserted and reconfirmed signals.
     """
@@ -302,9 +348,11 @@ def persist_trade_signals(
 
     today = today_str or datetime.date.today().isoformat()
 
-    # Load existing open signals and keys for deduplication
+    # Load existing open signals and keys for deduplication (Fail-Fast)
     try:
-        res = client.table("trade_signals").select("id, asset_id, signal_date, strategy, status, ai_rationale, confidence_score, entry_price, stop_loss, target_1, target_2, risk_reward_ratio").execute()
+        res = client.table("trade_signals").select(
+            "id, asset_id, signal_date, strategy, status, ai_rationale, confidence_score, entry_price, stop_loss, target_1, target_2, risk_reward_ratio"
+        ).execute()
         existing_rows = res.data or []
         existing_keys = {
             (
@@ -323,9 +371,8 @@ def persist_trade_signals(
             if r.get("status") == "open"
         }
     except Exception as e:
-        logger.error(f"Error querying existing signals in persist_trade_signals: {e}")
-        existing_keys = set()
-        open_signals_map = {}
+        logger.error(f"FATAL: Database query failed in persist_trade_signals: {e}")
+        raise RuntimeError(f"Database query failed in persist_trade_signals: {e}") from e
 
     rows_to_insert = []
     reconfirmed_count = 0
@@ -335,6 +382,12 @@ def persist_trade_signals(
         asset_id = asset_id_map.get(sym) or asset_id_map.get(f"{sym}.IS")
         if not asset_id:
             logger.warning(f"No asset_id found for symbol {sym}; skipping signal.")
+            continue
+
+        # Safeguard 1: Validate trade geometry & finite prices before insertion
+        is_valid_geom, geom_err = validate_trade_geometry(sig)
+        if not is_valid_geom:
+            logger.warning(f"Rejecting invalid trade geometry for {sym}: {geom_err}")
             continue
 
         raw_date = sig.get("signal_date")
@@ -376,12 +429,14 @@ def persist_trade_signals(
                     logger.info(f"Re-confirmed existing open signal {open_sig['id']} for {sym} on {date_str} (structured JSON preserved)")
                 except Exception as upd_err:
                     logger.error(f"Failed to update reconfirmation for {open_sig['id']}: {upd_err}")
+                    raise RuntimeError(f"Database update failed for reconfirmed signal {open_sig['id']}: {upd_err}") from upd_err
             continue
 
         # 4. Prepare new signal row for insertion
+        # ARCHITECTURAL CONTRACT:
+        # Top-level 'confidence_score' column represents algorithmic Setup Quality ONLY.
+        # AI Conviction is stored distinctly in the structured payload as 'ai_conviction_score'.
         setup_conf = validate_and_normalize_confidence(sig.get("confidence_score"))
-        ai_conf = validate_and_normalize_confidence(ai_analysis.get("conviction_score")) if ai_analysis else 0.0
-        final_conf = ai_conf if ai_conf > 0 else setup_conf
 
         entry_val = float(sig.get("entry_price") or 0)
         stop_val = float(sig.get("stop_loss") or 0) if sig.get("stop_loss") else None
@@ -398,7 +453,7 @@ def persist_trade_signals(
             "target_1": t1_val,
             "target_2": t2_val,
             "risk_reward_ratio": rr_val,
-            "confidence_score": final_conf,
+            "confidence_score": setup_conf,
             "ai_rationale": json.dumps(structured_payload, ensure_ascii=False),
             "status": "open",
         })
@@ -413,7 +468,8 @@ def persist_trade_signals(
                 inserted_count += len(chunk)
             logger.info(f"Successfully inserted {inserted_count} new trade signals with full structured explainers.")
         except Exception as insert_err:
-            logger.error(f"Error inserting trade_signals: {insert_err}")
+            logger.error(f"FATAL: Database insertion failed in persist_trade_signals: {insert_err}")
+            raise RuntimeError(f"Database insertion failed in persist_trade_signals: {insert_err}") from insert_err
 
     return {"inserted": inserted_count, "reconfirmed": reconfirmed_count}
 
@@ -428,8 +484,14 @@ def reconcile_open_signals_lifecycle(
     """
     Evaluates open prospective signals against daily price progression.
     Protects user-held portfolio assets from auto-archival or expiration.
-    Evaluates subsequent bars (bar_date > signal_date) strictly to avoid
-    same-day morning dip false stop-outs.
+    
+    Holding-Period Enforcement (Bug 1 Fix):
+    Restricts chronological evaluation strictly to the allowed holding horizon (future_indices[:max_days]).
+    Bars beyond max_days CANNOT trigger targets retroactively after expiry.
+    If unresolved within max_days, expires at the close of session max_days.
+    
+    Fail-Fast Contract:
+    Raises RuntimeError if database querying fails.
     """
     today = today_str or datetime.date.today().isoformat()
     held_ids = held_asset_ids or set()
@@ -449,8 +511,8 @@ def reconcile_open_signals_lifecycle(
         res = client.table("trade_signals").select("*").eq("status", "open").execute()
         open_signals = res.data or []
     except Exception as e:
-        logger.error(f"Error fetching open signals for lifecycle evaluation: {e}")
-        return {"stopped_out": 0, "target_hit": 0, "expired": 0}
+        logger.error(f"FATAL: Error fetching open signals for lifecycle evaluation: {e}")
+        raise RuntimeError(f"Database query failed in reconcile_open_signals_lifecycle: {e}") from e
 
     id_to_symbol = {v: k for k, v in asset_id_map.items()}
     stopped_count = 0
@@ -516,8 +578,12 @@ def reconcile_open_signals_lifecycle(
         elif "reversion" in strat_lower:
             max_days = 7
 
+        # CRITICAL FIX (Bug 1): Restrict chronological evaluation strictly to the allowed holding horizon!
+        # Do not allow future bars beyond max_days to retroactively trigger a target after expiry!
+        eval_indices = future_indices[:max_days]
         resolved = False
-        for i in future_indices:
+
+        for i in eval_indices:
             bar = df.iloc[i]
             bar_date = dates[i]
             high = float(bar.get("high", bar["close"]))
@@ -557,10 +623,11 @@ def reconcile_open_signals_lifecycle(
                 resolved = True
                 break
 
+        # If unresolved within the allowed horizon and total sessions have reached or exceeded max_days:
         if not resolved and len(future_indices) >= max_days:
-            # Expiration
-            bar_exp = df.iloc[future_indices[max_days - 1]]
-            bar_date_exp = dates[future_indices[max_days - 1]]
+            # Expiration exactly at the close of the final permitted session (max_days)
+            bar_exp = df.iloc[eval_indices[-1]]
+            bar_date_exp = dates[eval_indices[-1]]
             exit_price = float(bar_exp["close"])
             pnl = ((exit_price - entry) / entry) * 100
             client.table("trade_signals").update({

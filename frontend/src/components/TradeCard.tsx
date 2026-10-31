@@ -23,6 +23,7 @@ export interface TradeSignal {
   stopLoss: number;
   targetPrice: number;
   confidence: number;
+  aiConvictionScore?: number;
   rationale: string;
   market: string;
   date: string;
@@ -405,45 +406,57 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           );
         })()}
 
-        <div className="mb-2 flex items-center flex-wrap gap-y-1">
-          {(() => {
-            const rawConf = signal.confidence;
-            const isFiniteNumber = typeof rawConf === 'number' && Number.isFinite(rawConf);
-            // Strict range validation: clamp to [0, 100] and reject non-finite/NaN/Infinity
-            const conf100 = isFiniteNumber ? Math.min(100, Math.max(0, Math.round(rawConf))) : 0;
-            const isEvaluated = isFiniteNumber && conf100 > 0;
-            // Zero confidence produces 0 stars (no Math.max(1, ...))
-            const starCount = isEvaluated ? Math.min(10, Math.max(0, Math.round(conf100 / 10))) : 0;
+        <div className="mb-2 flex items-center justify-between flex-wrap gap-y-1">
+          <div className="flex items-center flex-wrap gap-y-1">
+            {(() => {
+              const rawConf = signal.confidence;
+              const isFiniteNumber = typeof rawConf === 'number' && Number.isFinite(rawConf);
+              // Strict range validation: clamp to [0, 100] and reject non-finite/NaN/Infinity
+              const conf100 = isFiniteNumber ? Math.min(100, Math.max(0, Math.round(rawConf))) : 0;
+              const isEvaluated = isFiniteNumber && conf100 > 0;
+              // Zero confidence produces 0 stars (no Math.max(1, ...))
+              const starCount = isEvaluated ? Math.min(10, Math.max(0, Math.round(conf100 / 10))) : 0;
 
-            return (
-              <>
-                <span 
-                  className="text-xs text-gray-500 dark:text-gray-400 mr-1.5" 
-                  title={language === 'tr' ? 'Algoritmik kural doğrulanma kalitesi (Kazanma olasılığı değildir)' : 'Algorithmic setup quality score (Not calibrated win probability)'}
-                >
-                  {language === 'tr' ? 'Güven Skoru:' : 'Setup Quality:'}
-                </span>
-                {isEvaluated ? (
-                  <>
-                    <div className="flex" title={`${starCount}/10 (%${conf100})`}>
-                      {[...Array(10)].map((_, i) => (
-                        <svg key={i} className={`w-3 h-3 ${i < starCount ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      ))}
-                    </div>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 ml-1.5 font-mono">
-                      {starCount}/10 (%{conf100})
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
-                    {language === 'tr' ? 'Değerlendirilmedi' : 'Not Evaluated'}
+              return (
+                <>
+                  <span 
+                    className="text-xs text-gray-500 dark:text-gray-400 mr-1.5" 
+                    title={language === 'tr' ? 'Algoritmik kural doğrulanma kalitesi (Kazanma olasılığı değildir)' : 'Algorithmic setup quality score (Not calibrated win probability)'}
+                  >
+                    {language === 'tr' ? 'Kurulum Kalitesi:' : 'Setup Quality:'}
                   </span>
-                )}
-              </>
-            );
-          })()}
+                  {isEvaluated ? (
+                    <>
+                      <div className="flex" title={`${starCount}/10 (%${conf100})`}>
+                        {[...Array(10)].map((_, i) => (
+                          <svg key={i} className={`w-3 h-3 ${i < starCount ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`} fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300 ml-1.5 font-mono">
+                        {starCount}/10 (%{conf100})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                      {language === 'tr' ? 'Değerlendirilmedi' : 'Not Evaluated'}
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+          {typeof signal.aiConvictionScore === 'number' && Number.isFinite(signal.aiConvictionScore) && signal.aiConvictionScore > 0 && (
+            <div 
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-[11px] font-semibold text-purple-700 dark:text-purple-300 shadow-2xs"
+              title={language === 'tr' ? 'Yapay zekâ (LLM) hipotez ve risk değerlendirme kanaat skoru' : 'AI (LLM) thesis conviction score'}
+            >
+              <span>🤖</span>
+              <span>{language === 'tr' ? 'AI Kanaat:' : 'AI Conviction:'}</span>
+              <span className="font-bold font-mono">%{Math.min(100, Math.max(0, Math.round(signal.aiConvictionScore)))}</span>
+            </div>
+          )}
         </div>
 
         {/* SCALE-OUT TARGET EXIT PLAN */}
