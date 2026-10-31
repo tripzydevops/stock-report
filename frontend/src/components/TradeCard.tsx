@@ -1080,10 +1080,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             </button>
           )}
           <button 
+            type="button"
             onClick={() => onCalcSize?.(signal)}
-            className="text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium hover:underline cursor-pointer"
+            className="px-2 py-1 rounded text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation"
           >
-            {t.tradeCard.positionSize} →
+            <span>🎯</span>
+            <span>{t.tradeCard.positionSize}</span>
           </button>
         </div>
       </div>

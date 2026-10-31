@@ -8,6 +8,7 @@ import MarketCorrectionBanner from '../components/MarketCorrectionBanner';
 import TradeCard, { TradeSignal } from '../components/TradeCard';
 import AssetTable, { AssetData } from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
+import PositionCalculatorModal from '../components/PositionCalculatorModal';
 import AddAssetModal from '../components/AddAssetModal';
 import AddHoldingModal from '../components/AddHoldingModal';
 import TradeHoldingModal from '../components/TradeHoldingModal';
@@ -1013,6 +1014,7 @@ export default function Home() {
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
   const [catalysts, setCatalysts] = useState<MarketCatalyst[]>([]);
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
+  const [isCalcModalOpen, setIsCalcModalOpen] = useState<boolean>(false);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -3668,13 +3670,16 @@ export default function Home() {
                           signal={sig} 
                           userHolding={matchedHolding}
                           onSelectTicker={handleSelectTicker}
-                          onCalcSize={(s) => setCalcTrade({
-                            entryPrice: s.entryPrice,
-                            stopLoss: s.stopLoss,
-                            targetPrice: s.targetPrice,
-                            currency: s.currency as 'USD' | 'TRY',
-                            symbol: s.symbol
-                          })}
+                          onCalcSize={(s) => {
+                            setCalcTrade({
+                              entryPrice: s.entryPrice,
+                              stopLoss: s.stopLoss,
+                              targetPrice: s.targetPrice,
+                              currency: s.currency as 'USD' | 'TRY',
+                              symbol: s.symbol
+                            });
+                            setIsCalcModalOpen(true);
+                          }}
                           onOpenCoPilot={handleOpenCoPilotForSignal}
                           onTradeHolding={(h) => {
                             setSelectedHolding(h);
@@ -3938,6 +3943,13 @@ export default function Home() {
         isOpen={!!selectedAssetForHistory}
         onClose={() => setSelectedAssetForHistory(null)}
         asset={selectedAssetForHistory}
+      />
+
+      <PositionCalculatorModal
+        isOpen={isCalcModalOpen}
+        onClose={() => setIsCalcModalOpen(false)}
+        selectedTrade={calcTrade}
+        onSelectTicker={handleSelectTicker}
       />
 
       <AiTradeCoPilotModal

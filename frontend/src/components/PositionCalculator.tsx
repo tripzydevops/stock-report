@@ -11,9 +11,10 @@ interface PositionCalculatorProps {
     currency: 'USD' | 'TRY';
     symbol?: string;
   } | null;
+  isModal?: boolean;
 }
 
-export default function PositionCalculator({ selectedTrade }: PositionCalculatorProps = {}) {
+export default function PositionCalculator({ selectedTrade, isModal = false }: PositionCalculatorProps = {}) {
   const { t, language } = useLanguage();
   const [currency, setCurrency] = useState<'USD' | 'TRY'>('USD');
   const [accountSize, setAccountSize] = useState<number>(10000);
@@ -58,13 +59,19 @@ export default function PositionCalculator({ selectedTrade }: PositionCalculator
   const currencySymbol = currency === 'USD' ? '$' : '₺';
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-          <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-          {t.calculator.title}
-        </h2>
-        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+    <div className={isModal ? 'space-y-4' : 'bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6'}>
+      <div className="flex justify-between items-center mb-4">
+        {!isModal ? (
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+            <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            {t.calculator.title}
+          </h2>
+        ) : (
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            {language === 'tr' ? 'Para Birimi & Parametreler' : 'Currency & Sizing Parameters'}
+          </span>
+        )}
+        <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 ml-auto">
           <button 
             className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${currency === 'USD' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
             onClick={() => setCurrency('USD')}

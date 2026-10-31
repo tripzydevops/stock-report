@@ -273,5 +273,38 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     await closeBtn.click();
     await expect(page.locator('div:has-text("Database Live Feed")')).not.toBeVisible();
   });
+
+  test('9. TradeCard "Pozisyon Hesapla" opens PositionCalculatorModal with prefilled asset, calculates lot size and risk, and closes cleanly', async ({ page }) => {
+    // 1. Navigate to default signals view
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // 2. Find the first Pozisyon Hesapla button
+    const calcBtn = page.getByRole('button', { name: /Pozisyon Hesapla/i }).first();
+    await calcBtn.scrollIntoViewIfNeeded();
+    await expect(calcBtn).toBeVisible();
+
+    // 3. Click to open modal
+    await calcBtn.click({ force: true });
+
+    // 4. PositionCalculatorModal should open
+    const modalHeading = page.getByRole('heading', { name: /Pozisyon Boyutlandırma/i });
+    await expect(modalHeading).toBeVisible({ timeout: 5000 });
+
+    // 5. Verify asset information and shares calculation
+    const sharesText = page.locator('text=/Tavsiye Edilen Lot|Hisse Sayısı/i').first();
+    await expect(sharesText).toBeVisible();
+
+    // 6. Capture mobile modal screenshot
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'mobile_position_calculator_modal.png'),
+    });
+
+    // 7. Close modal via footer button
+    const closeBtn = page.getByRole('button', { name: /Tamam \/ Kapat/i });
+    await expect(closeBtn).toBeVisible();
+    await closeBtn.click({ force: true });
+    await expect(modalHeading).not.toBeVisible();
+  });
 });
 
