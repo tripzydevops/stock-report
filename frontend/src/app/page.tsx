@@ -993,7 +993,7 @@ export default function Home() {
     status: 'Bearish', close: 11682.95, trend: 'down'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
-  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'BIST' | 'US'>('ALL');
+  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
   const [selectedStrategyFilter, setSelectedStrategyFilter] = useState<string>('ALL');
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
@@ -1183,11 +1183,46 @@ export default function Home() {
 
         let allSignalsRegistry: ScannedTradeSignal[] = [...INITIAL_SCANNED_SIGNALS];
 
-        // 3. Fetch All Trade Signals (Open + Resolved Audit Ledger)
-        const { data: allSigData } = await supabase
-          .from('trade_signals')
-          .select('*, assets(symbol, name, market)')
-          .order('signal_date', { ascending: false });
+        // 3. Fetch All Trade Signals (Open + Resolved Audit Ledger) & Recovery Tracking Data
+        const [
+          { data: allSigData },
+          { data: recoveryTrackingData },
+          { data: recoveryEventsData }
+        ] = await Promise.all([
+          supabase.from('trade_signals').select('*, assets(symbol, name, market)').order('signal_date', { ascending: false }),
+          supabase.from('signal_recovery_tracking').select('*'),
+          supabase.from('signal_recovery_events').select('*'),
+        ]);
+
+        const eventsBySignal: Record<string, any[]> = (recoveryEventsData || []).reduce((acc: any, ev: any) => {
+          if (!acc[ev.signal_id]) acc[ev.signal_id] = [];
+          acc[ev.signal_id].push({
+            eventType: ev.event_type,
+            eventDate: ev.event_date,
+            referenceLevel: Number(ev.reference_level),
+            observedPrice: Number(ev.observed_price),
+            sessionsSinceSignal: Number(ev.sessions_since_signal),
+            sessionsSinceExit: Number(ev.sessions_since_exit),
+          });
+          return acc;
+        }, {});
+
+        const trackingBySignal: Record<string, any> = (recoveryTrackingData || []).reduce((acc: any, tr: any) => {
+          acc[tr.signal_id] = {
+            originalExitDate: tr.original_exit_date,
+            originalExitStatus: tr.original_exit_status,
+            entryReference: Number(tr.entry_reference),
+            prePullbackLevel: tr.pre_pullback_level ? Number(tr.pre_pullback_level) : null,
+            originalTarget1: tr.original_target_1 ? Number(tr.original_target_1) : null,
+            originalTarget2: tr.original_target_2 ? Number(tr.original_target_2) : null,
+            trackingStatus: tr.tracking_status,
+            hasRecoveredEntry: Boolean(tr.has_recovered_entry),
+            hasRecoveredPrePullback: Boolean(tr.has_recovered_pre_pullback),
+            hasReachedTargetAfterExit: Boolean(tr.has_reached_target_after_exit),
+            events: eventsBySignal[tr.signal_id] || [],
+          };
+          return acc;
+        }, {});
 
         if (allSigData && allSigData.length > 0) {
           const mappedAll: ScannedTradeSignal[] = allSigData.map((s: any) => {
@@ -1258,6 +1293,7 @@ export default function Home() {
               status: s.status,
               outcomePnlPct: s.outcome_pnl_pct !== null && s.outcome_pnl_pct !== undefined ? Number(s.outcome_pnl_pct) : null,
               closedAt: s.closed_at,
+              recoveryTracking: trackingBySignal[s.id] || undefined,
               aiRationale: displayRationale,
               currency: s.assets?.market === 'US' ? 'USD' : 'TRY',
               direction: directionStr,
@@ -1329,6 +1365,7 @@ export default function Home() {
             }));
 
             return {
+              id: latest.id,
               symbol: earliest.symbol,
               name: earliest.name,
               strategy: earliest.strategy.replace('_', ' ').toUpperCase(),
@@ -1336,6 +1373,7 @@ export default function Home() {
               stopLoss: effStop,
               targetPrice: effTarget,
               confidence: typeof latest.confidence === 'number' && Number.isFinite(latest.confidence) ? Math.min(100, Math.max(0, Math.round(latest.confidence))) : 0,
+              aiConvictionScore: latest.aiConvictionScore,
               rationale: latest.aiRationale,
               market: earliest.market,
               date: originalDate,
@@ -1354,11 +1392,66 @@ export default function Home() {
               failedChecks: latest.failedChecks,
               invalidation: latest.invalidation,
               marketContext: latest.marketContext,
-              risk: latest.risk
+              risk: latest.risk,
+              status: latest.status,
+              outcomePnlPct: latest.outcomePnlPct,
+              closedAt: latest.closedAt,
+              recoveryTracking: latest.recoveryTracking
             };
           });
-          if (openSignals.length > 0) {
-            setSignals(openSignals);
+
+          // Map recovered closed signals
+          const recoveredSignals = combinedSignals
+            .filter(s => s.status !== 'open' && s.recoveryTracking && (
+              s.recoveryTracking.hasRecoveredEntry || 
+              s.recoveryTracking.hasRecoveredPrePullback || 
+              s.recoveryTracking.hasReachedTargetAfterExit
+            ))
+            .map(s => {
+              const cleanSym = s.symbol.replace('.IS', '').toUpperCase();
+              const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
+              const effEntry = s.entryPrice > 0 ? s.entryPrice : (matchedAsset ? matchedAsset.price : 81.15);
+              const effStop = s.stopLoss > 0 ? s.stopLoss : Number((effEntry * 0.95).toFixed(2));
+              const effTarget = s.targetPrice > 0 ? s.targetPrice : Number((effEntry + 2 * Math.abs(effEntry - effStop)).toFixed(2));
+
+              return {
+                id: s.id,
+                symbol: s.symbol,
+                name: s.name,
+                strategy: s.strategy.replace('_', ' ').toUpperCase(),
+                entryPrice: effEntry,
+                stopLoss: effStop,
+                targetPrice: effTarget,
+                confidence: typeof s.confidence === 'number' && Number.isFinite(s.confidence) ? Math.min(100, Math.max(0, Math.round(s.confidence))) : 0,
+                aiConvictionScore: s.aiConvictionScore,
+                rationale: s.aiRationale,
+                market: s.market,
+                date: s.signalDate,
+                lastConfirmedDate: s.lastConfirmedDate || s.signalDate,
+                isReconfirmed: s.isReconfirmed || false,
+                daysInZone: 1,
+                currency: s.currency,
+                currentPrice: matchedAsset ? matchedAsset.price : effEntry,
+                changePercent: matchedAsset ? matchedAsset.changePercent : 0,
+                direction: s.direction || 'LONG',
+                entryMode: s.entryMode || 'next_open',
+                target1: s.target1 || effTarget,
+                target2: s.target2,
+                triggerReasons: s.triggerReasons,
+                failedChecks: s.failedChecks,
+                invalidation: s.invalidation,
+                marketContext: s.marketContext,
+                risk: s.risk,
+                status: s.status,
+                outcomePnlPct: s.outcomePnlPct,
+                closedAt: s.closedAt,
+                recoveryTracking: s.recoveryTracking
+              };
+            });
+
+          const allMappedSignals = [...openSignals, ...recoveredSignals];
+          if (allMappedSignals.length > 0) {
+            setSignals(allMappedSignals);
           }
         }
 
@@ -3116,6 +3209,26 @@ export default function Home() {
                     const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
                     const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
 
+                    // If user is currently viewing the RECOVERED tab:
+                    if (signalFilter === 'RECOVERED') {
+                      const isRecovered = Boolean(
+                        sig.recoveryTracking && (
+                          sig.recoveryTracking.hasRecoveredEntry ||
+                          sig.recoveryTracking.hasRecoveredPrePullback ||
+                          sig.recoveryTracking.hasReachedTargetAfterExit
+                        )
+                      );
+                      if (!isRecovered) return false;
+                      if (dateFilter && dateFilter.preset !== 'ALL') {
+                        const matchesDate = isDateInRange(sig.date, dateFilter) || isDateInRange(sig.lastConfirmedDate, dateFilter);
+                        if (!matchesDate) return false;
+                      }
+                      return true;
+                    }
+
+                    // For regular live trade tabs, suppress closed signals
+                    if (sig.status && sig.status !== 'open') return false;
+
                     // USER CRITICAL RULE: If user is holding the stock, NEVER remove it!
                     if (userHasShares) {
                       if (turmoilGuard && selectedStrategyFilter !== 'MEAN_REVERSION' && sig.strategy.toLowerCase().includes('reversion')) {
@@ -3183,6 +3296,13 @@ export default function Home() {
                   const usCount = activeDisplaySignals.filter(s => s.market === 'US').length;
                   const runnerCount = activeDisplaySignals.filter(s => Boolean(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice)).length;
                   const buyZoneCount = activeDisplaySignals.filter(s => !(s.currentPrice && s.targetPrice && s.currentPrice >= s.targetPrice) && !(s.currentPrice && s.stopLoss && s.currentPrice <= s.stopLoss)).length;
+                  const recoveredCount = signals.filter(s => Boolean(
+                    s.recoveryTracking && (
+                      s.recoveryTracking.hasRecoveredEntry ||
+                      s.recoveryTracking.hasRecoveredPrePullback ||
+                      s.recoveryTracking.hasReachedTargetAfterExit
+                    )
+                  )).length;
 
                   return (
                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -3254,6 +3374,19 @@ export default function Home() {
                         >
                           <span>🚀</span>
                           <span>{t.signals.filterRunners} ({runnerCount})</span>
+                        </button>
+                      )}
+                      {recoveredCount > 0 && (
+                        <button
+                          onClick={() => setSignalFilter('RECOVERED')}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap ${
+                            signalFilter === 'RECOVERED'
+                              ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400'
+                              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                          }`}
+                        >
+                          <span>✨</span>
+                          <span>{language === 'tr' ? 'Toparlananlar' : 'Recovered'} ({recoveredCount})</span>
                         </button>
                       )}
                       <button
@@ -3335,11 +3468,35 @@ export default function Home() {
                       const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
                       const userHasShares = Boolean(matchedHolding && matchedHolding.shares > 0);
 
+                      // If viewing RECOVERED tab:
+                      if (signalFilter === 'RECOVERED') {
+                        const isRecovered = Boolean(
+                          sig.recoveryTracking && (
+                            sig.recoveryTracking.hasRecoveredEntry ||
+                            sig.recoveryTracking.hasRecoveredPrePullback ||
+                            sig.recoveryTracking.hasReachedTargetAfterExit
+                          )
+                        );
+                        if (!isRecovered) return false;
+                        if (dateFilter && dateFilter.preset !== 'ALL') {
+                          const matchesDate = isDateInRange(sig.date, dateFilter) || isDateInRange(sig.lastConfirmedDate, dateFilter);
+                          if (!matchesDate) return false;
+                        }
+                        return true;
+                      }
+
+                      // Suppress closed signals from live tabs
+                      if (sig.status && sig.status !== 'open') return false;
+
                       const isTargetHit = Boolean(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice);
                       const isStoppedOut = Boolean(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
 
                       if (isTargetHit && !userHasShares) return false;
                       if (isStoppedOut && !userHasShares) return false;
+
+                      // Exclude unowned setups whose time-stop horizon has expired
+                      const timing = calculateExitDate(sig.date, sig.strategy, false);
+                      if (timing.isExpired && !userHasShares) return false;
 
                       // Turmoil Guard: When active, suppress dangerous Mean Reversion falling-knife trades
                       // BUT if the user explicitly selected 'MEAN_REVERSION' in the Trade Type dropdown, allow viewing them!
@@ -3357,6 +3514,16 @@ export default function Home() {
                     });
 
                     const filtered = activeDisplaySignals.filter(sig => {
+                      if (signalFilter === 'RECOVERED') {
+                        const isRecovered = Boolean(
+                          sig.recoveryTracking && (
+                            sig.recoveryTracking.hasRecoveredEntry ||
+                            sig.recoveryTracking.hasRecoveredPrePullback ||
+                            sig.recoveryTracking.hasReachedTargetAfterExit
+                          )
+                        );
+                        if (!isRecovered) return false;
+                      }
                       if (signalFilter === 'BUY_ZONE') {
                         const inBuyZone = !(sig.currentPrice && sig.targetPrice && sig.currentPrice >= sig.targetPrice) && !(sig.currentPrice && sig.stopLoss && sig.currentPrice <= sig.stopLoss);
                         if (!inBuyZone) return false;

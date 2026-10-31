@@ -34,6 +34,29 @@ export interface LiveSignal {
   riskReward?: number;
 }
 
+export interface RecoveryEvent {
+  eventType: string;
+  eventDate: string;
+  referenceLevel: number;
+  observedPrice: number;
+  sessionsSinceSignal: number;
+  sessionsSinceExit: number;
+}
+
+export interface RecoveryTracking {
+  originalExitDate: string;
+  originalExitStatus: 'expired' | 'stopped_out' | string;
+  entryReference: number;
+  prePullbackLevel?: number | null;
+  originalTarget1?: number | null;
+  originalTarget2?: number | null;
+  trackingStatus: 'ACTIVE' | 'COMPLETED' | string;
+  hasRecoveredEntry?: boolean;
+  hasRecoveredPrePullback?: boolean;
+  hasReachedTargetAfterExit?: boolean;
+  events?: RecoveryEvent[];
+}
+
 export interface ScannedTradeSignal {
   id: string;
   symbol: string;
@@ -46,9 +69,13 @@ export interface ScannedTradeSignal {
   targetPrice: number;
   riskReward: number;
   confidence: number;
+  aiConvictionScore?: number;
   status: 'open' | 'target_hit' | 'stopped_out' | 'expired' | 'invalidated';
   outcomePnlPct?: number | null;
   closedAt?: string | null;
+  recoveryTracking?: RecoveryTracking;
+  isReconfirmed?: boolean;
+  lastConfirmedDate?: string;
   aiRationale: string;
   currency: 'TRY' | 'USD';
   direction?: 'LONG' | 'SHORT' | string;

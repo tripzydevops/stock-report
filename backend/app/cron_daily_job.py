@@ -120,6 +120,21 @@ def db_update_open_signals(asset_id_map: Dict[str, str], asset_data: Dict[str, p
     return reconcile_open_signals_lifecycle(client, asset_id_map, asset_data)
 
 
+def db_reconcile_post_exit_recoveries(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.DataFrame]):
+    """
+    Job 2: Post-Exit Recovery Tracker.
+    Evaluates closed signals (expired, stopped_out) for subsequent price recoveries
+    without altering or inflating original immutable trade outcomes.
+    """
+    from app.services.recovery_tracker import (
+        reconcile_post_exit_recoveries,
+        sync_existing_closed_signals_to_recovery_tracker
+    )
+    client = get_supabase_client()
+    sync_existing_closed_signals_to_recovery_tracker(client)
+    return reconcile_post_exit_recoveries(client, asset_id_map, asset_data)
+
+
 def db_upsert_regimes(regimes: Dict[str, Dict]):
     """Upsert market regime evaluations."""
     today = datetime.date.today().isoformat()
@@ -204,9 +219,13 @@ def run_daily_pipeline():
     db_insert_signals(asset_id_map, analyzed_signals)
     logger.info("Step 8/9: Signals saved to database.")
 
-    # 9. Update existing open signals
+    # 9. Update existing open signals (Job 1: Original Lifecycle)
     db_update_open_signals(asset_id_map, enriched_prices)
-    logger.info("Step 9/9: Open signal statuses updated.")
+    logger.info("Step 9/10: Open signal statuses updated within strategy holding horizons.")
+
+    # 10. Reconcile post-exit recoveries (Job 2: Post-Exit Recovery Tracker)
+    recovery_stats = db_reconcile_post_exit_recoveries(asset_id_map, enriched_prices)
+    logger.info(f"Step 10/10: Post-exit recovery tracking reconciled (Stats: {recovery_stats}).")
 
     logger.info("=" * 60)
     logger.info(f"PIPELINE COMPLETE: {len(prices)} assets, {len(signals)} signals found")

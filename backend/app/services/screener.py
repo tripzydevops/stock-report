@@ -365,6 +365,7 @@ def screen_pullback_reclaim(
         'target_2': target_2,
         'risk_reward_ratio': rr,
         'confidence_score': 85.0,
+        'pre_pullback_high': round(peak_val, 2),
         'trigger_reasons': exp["trigger_reasons"],
         'failed_checks': exp["failed_checks"],
         'invalidation': exp["invalidation"],

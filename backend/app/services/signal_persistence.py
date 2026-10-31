@@ -38,6 +38,8 @@ import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 import pandas as pd
 
+from app.services.recovery_tracker import initialize_recovery_tracking
+
 logger = logging.getLogger(__name__)
 
 
@@ -216,6 +218,7 @@ def build_structured_explainer_payload(
         "rationale": full_rationale,
         "target_1": t1,
         "target_2": t2,
+        "pre_pullback_level": float(signal.get("pre_pullback_high") or signal.get("pre_pullback_level") or existing_payload.get("pre_pullback_level") or 0) if (signal.get("pre_pullback_high") or signal.get("pre_pullback_level") or existing_payload.get("pre_pullback_level")) else None,
         "setup_quality_score": setup_score,
         "ai_conviction_score": ai_conviction if ai_conviction > 0 else None,
         "ai_thesis": ai_thesis or None,
@@ -594,11 +597,22 @@ def reconcile_open_signals_lifecycle(
 
             if hit_stop and hit_target:
                 pnl = ((stop - entry) / entry) * 100
+                closed_ts = f"{bar_date}T18:00:00Z"
                 client.table("trade_signals").update({
                     "status": "stopped_out",
                     "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date}T18:00:00Z",
+                    "closed_at": closed_ts,
                 }).eq("id", sig["id"]).execute()
+                initialize_recovery_tracking(client, {
+                    "id": sig["id"],
+                    "asset_id": sig.get("asset_id"),
+                    "status": "stopped_out",
+                    "closed_at": closed_ts,
+                    "entry_price": entry,
+                    "target_1": sig.get("target_1"),
+                    "target_2": sig.get("target_2"),
+                    "ai_rationale": sig.get("ai_rationale"),
+                })
                 stopped_count += 1
                 resolved = True
                 break
@@ -614,11 +628,22 @@ def reconcile_open_signals_lifecycle(
                 break
             elif hit_stop:
                 pnl = ((stop - entry) / entry) * 100
+                closed_ts = f"{bar_date}T18:00:00Z"
                 client.table("trade_signals").update({
                     "status": "stopped_out",
                     "outcome_pnl_pct": round(pnl, 2),
-                    "closed_at": f"{bar_date}T18:00:00Z",
+                    "closed_at": closed_ts,
                 }).eq("id", sig["id"]).execute()
+                initialize_recovery_tracking(client, {
+                    "id": sig["id"],
+                    "asset_id": sig.get("asset_id"),
+                    "status": "stopped_out",
+                    "closed_at": closed_ts,
+                    "entry_price": entry,
+                    "target_1": sig.get("target_1"),
+                    "target_2": sig.get("target_2"),
+                    "ai_rationale": sig.get("ai_rationale"),
+                })
                 stopped_count += 1
                 resolved = True
                 break
@@ -630,11 +655,22 @@ def reconcile_open_signals_lifecycle(
             bar_date_exp = dates[eval_indices[-1]]
             exit_price = float(bar_exp["close"])
             pnl = ((exit_price - entry) / entry) * 100
+            closed_ts = f"{bar_date_exp}T18:00:00Z"
             client.table("trade_signals").update({
                 "status": "expired",
                 "outcome_pnl_pct": round(pnl, 2),
-                "closed_at": f"{bar_date_exp}T18:00:00Z",
+                "closed_at": closed_ts,
             }).eq("id", sig["id"]).execute()
+            initialize_recovery_tracking(client, {
+                "id": sig["id"],
+                "asset_id": sig.get("asset_id"),
+                "status": "expired",
+                "closed_at": closed_ts,
+                "entry_price": entry,
+                "target_1": sig.get("target_1"),
+                "target_2": sig.get("target_2"),
+                "ai_rationale": sig.get("ai_rationale"),
+            })
             expired_count += 1
 
     return {"stopped_out": stopped_count, "target_hit": target_count, "expired": expired_count}

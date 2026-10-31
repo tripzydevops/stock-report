@@ -15,7 +15,31 @@ export interface TriggerHistoryItem {
   rationale?: string;
 }
 
+export interface RecoveryEvent {
+  eventType: string;
+  eventDate: string;
+  referenceLevel: number;
+  observedPrice: number;
+  sessionsSinceSignal: number;
+  sessionsSinceExit: number;
+}
+
+export interface RecoveryTracking {
+  originalExitDate: string;
+  originalExitStatus: 'expired' | 'stopped_out' | string;
+  entryReference: number;
+  prePullbackLevel?: number | null;
+  originalTarget1?: number | null;
+  originalTarget2?: number | null;
+  trackingStatus: 'ACTIVE' | 'COMPLETED' | string;
+  hasRecoveredEntry?: boolean;
+  hasRecoveredPrePullback?: boolean;
+  hasReachedTargetAfterExit?: boolean;
+  events?: RecoveryEvent[];
+}
+
 export interface TradeSignal {
+  id?: string;
   symbol: string;
   name: string;
   strategy: string;
@@ -28,6 +52,10 @@ export interface TradeSignal {
   market: string;
   date: string;
   currency: string;
+  status?: string;
+  outcomePnlPct?: number | null;
+  closedAt?: string | null;
+  recoveryTracking?: RecoveryTracking;
   currentPrice?: number;
   changePercent?: number;
   isReconfirmed?: boolean;
@@ -181,11 +209,23 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   </span>
                 );
               }
-              if (isStoppedOut) {
+              if (signal.status === 'expired') {
+                const pnl = signal.outcomePnlPct !== null && signal.outcomePnlPct !== undefined ? signal.outcomePnlPct : null;
+                const pnlStr = pnl !== null ? ` (${pnl > 0 ? '+' : ''}${pnl}%)` : '';
+                return (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gray-600 text-white shadow-xs flex items-center gap-1">
+                    <span>⏱️</span>
+                    <span>{language === 'tr' ? `VADESİ DOLDU${pnlStr}` : `EXPIRED${pnlStr}`}</span>
+                  </span>
+                );
+              }
+              if (signal.status === 'stopped_out' || isStoppedOut) {
+                const pnl = signal.outcomePnlPct !== null && signal.outcomePnlPct !== undefined ? signal.outcomePnlPct : null;
+                const pnlStr = pnl !== null ? ` (${pnl > 0 ? '+' : ''}${pnl}%)` : '';
                 return (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white shadow-xs flex items-center gap-1">
                     <span>🛑</span>
-                    <span>{language === 'tr' ? 'ZARAR KES OLDU' : 'STOPPED OUT'}</span>
+                    <span>{language === 'tr' ? `ZARAR KES OLDU${pnlStr}` : `STOPPED OUT${pnlStr}`}</span>
                   </span>
                 );
               }
@@ -219,6 +259,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                 </span>
               );
             })()}
+            {signal.recoveryTracking && (signal.recoveryTracking.hasRecoveredEntry || signal.recoveryTracking.hasRecoveredPrePullback || signal.recoveryTracking.hasReachedTargetAfterExit) && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs flex items-center gap-1 animate-pulse" title={language === 'tr' ? "Çıkış sonrası seviye geri alındı" : "Reclaimed key level after exit"}>
+                <span>✨</span>
+                <span>{language === 'tr' ? 'TOPARLANDI' : 'RECOVERED'}</span>
+              </span>
+            )}
             <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${getStrategyColor(signal.strategy)}`}>
               {signal.strategy}
             </span>
@@ -602,6 +648,108 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             </div>
           );
         })()}
+
+        {/* POST-EXIT RECOVERY TRACKER CARD SECTION */}
+        {signal.recoveryTracking && (signal.status === 'expired' || signal.status === 'stopped_out' || signal.recoveryTracking.hasRecoveredEntry || signal.recoveryTracking.hasRecoveredPrePullback || signal.recoveryTracking.hasReachedTargetAfterExit) && (
+          <div className="my-3 p-3 rounded-xl bg-gradient-to-r from-emerald-50/80 via-teal-50/80 to-indigo-50/80 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-indigo-950/40 border border-emerald-300 dark:border-emerald-800 text-[11px] space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="font-black text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 text-xs">
+                <span>🔄</span>
+                <span>{language === 'tr' ? 'Çıkış Sonrası Toparlanma Takibi (Recovery Tracker)' : 'Post-Exit Recovery Tracker'}</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                signal.recoveryTracking.hasReachedTargetAfterExit 
+                  ? 'bg-emerald-600 text-white'
+                  : signal.recoveryTracking.hasRecoveredPrePullback
+                  ? 'bg-teal-600 text-white'
+                  : signal.recoveryTracking.hasRecoveredEntry
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              }`}>
+                {signal.recoveryTracking.hasReachedTargetAfterExit 
+                  ? (language === 'tr' ? '🏆 Hedef 1 Alındı' : '🏆 Target Reached')
+                  : signal.recoveryTracking.hasRecoveredPrePullback
+                  ? (language === 'tr' ? '✓ Düşüş Öncesi Zirve Alındı' : '✓ Pre-Dip High Reclaimed')
+                  : signal.recoveryTracking.hasRecoveredEntry
+                  ? (language === 'tr' ? '✓ Giriş Geri Alındı' : '✓ Entry Reclaimed')
+                  : (language === 'tr' ? '⏳ İzleniyor' : '⏳ Monitoring')}
+              </span>
+            </div>
+
+            <div className="space-y-1.5 font-mono text-[10px] pt-1">
+              {/* Entry Reclaim */}
+              <div className="flex items-center justify-between p-1.5 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-emerald-100 dark:border-emerald-900/60">
+                <span className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                  <span className={signal.recoveryTracking.hasRecoveredEntry ? "text-emerald-600 font-bold" : "text-gray-400"}>
+                    {signal.recoveryTracking.hasRecoveredEntry ? "✓" : "○"}
+                  </span>
+                  <span>{language === 'tr' ? 'Orijinal Giriş Seviyesi:' : 'Original Entry Reference:'}</span>
+                  <strong>{formatPrice(signal.recoveryTracking.entryReference)}</strong>
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                  {(() => {
+                    const closeEv = signal.recoveryTracking?.events?.find(e => e.eventType === 'ENTRY_RECLAIMED_CLOSE');
+                    const touchEv = signal.recoveryTracking?.events?.find(e => e.eventType === 'ENTRY_TOUCHED');
+                    if (closeEv) return `${language === 'tr' ? 'Kapanış' : 'Closed'}: ${closeEv.eventDate} (+${closeEv.sessionsSinceExit} gün)`;
+                    if (touchEv) return `${language === 'tr' ? 'Temas' : 'Touched'}: ${touchEv.eventDate} (+${touchEv.sessionsSinceExit} gün)`;
+                    return language === 'tr' ? 'Henüz alınmadı' : 'Not yet reclaimed';
+                  })()}
+                </span>
+              </div>
+
+              {/* Pre-Pullback High */}
+              {signal.recoveryTracking.prePullbackLevel && (
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-emerald-100 dark:border-emerald-900/60">
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                    <span className={signal.recoveryTracking.hasRecoveredPrePullback ? "text-emerald-600 font-bold" : "text-gray-400"}>
+                      {signal.recoveryTracking.hasRecoveredPrePullback ? "✓" : "○"}
+                    </span>
+                    <span>{language === 'tr' ? 'Düşüş Öncesi Zirve:' : 'Pre-Dip High:'}</span>
+                    <strong>{formatPrice(signal.recoveryTracking.prePullbackLevel)}</strong>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    {(() => {
+                      const closeEv = signal.recoveryTracking?.events?.find(e => e.eventType === 'PRE_PULLBACK_HIGH_RECLAIMED_CLOSE');
+                      const touchEv = signal.recoveryTracking?.events?.find(e => e.eventType === 'PRE_PULLBACK_HIGH_TOUCHED');
+                      if (closeEv) return `${language === 'tr' ? 'Kapanış' : 'Closed'}: ${closeEv.eventDate} (+${closeEv.sessionsSinceExit} gün)`;
+                      if (touchEv) return `${language === 'tr' ? 'Temas' : 'Touched'}: ${touchEv.eventDate} (+${touchEv.sessionsSinceExit} gün)`;
+                      return language === 'tr' ? 'Henüz alınmadı' : 'Not yet reclaimed';
+                    })()}
+                  </span>
+                </div>
+              )}
+
+              {/* Target 1 Post-Exit */}
+              {signal.recoveryTracking.originalTarget1 && (
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-emerald-100 dark:border-emerald-900/60">
+                  <span className="flex items-center gap-1 text-gray-700 dark:text-gray-300">
+                    <span className={signal.recoveryTracking.hasReachedTargetAfterExit ? "text-emerald-600 font-bold" : "text-gray-400"}>
+                      {signal.recoveryTracking.hasReachedTargetAfterExit ? "🏆" : "○"}
+                    </span>
+                    <span>{language === 'tr' ? 'Orijinal Hedef 1:' : 'Original Target 1:'}</span>
+                    <strong>{formatPrice(signal.recoveryTracking.originalTarget1)}</strong>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    {(() => {
+                      const t1Ev = signal.recoveryTracking?.events?.find(e => e.eventType === 'TARGET_1_TOUCHED_AFTER_EXIT');
+                      if (t1Ev) return `${language === 'tr' ? 'Ulaşıldı' : 'Hit'}: ${t1Ev.eventDate} (+${t1Ev.sessionsSinceExit} gün)`;
+                      return language === 'tr' ? 'Henüz ulaşılmadı' : 'Not yet hit';
+                    })()}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="text-[9px] text-gray-500 dark:text-gray-400 pt-0.5 flex items-center gap-1">
+              <span>ℹ️</span>
+              <span>
+                {language === 'tr' 
+                  ? 'Orijinal işlem sonucu değişmez (Performans ve kazanma oranı istatistikleri korunur).' 
+                  : 'Original trade outcome remains immutable (Backtest & win-rate metrics preserved).'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <button 
