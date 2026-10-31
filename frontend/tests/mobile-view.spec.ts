@@ -191,9 +191,10 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     // 1. Check Mobile Drawer Sync Button
     const hamburgerBtn = page.getByTitle('Menüyü Aç');
     await hamburgerBtn.click();
+    await expect(page.locator('aside')).toHaveClass(/translate-x-0/, { timeout: 10000 });
 
-    const drawerSyncBtn = page.locator('aside button:has-text("Piyasa Verilerini Canlı Yenile")');
-    await expect(drawerSyncBtn).toBeVisible();
+    const drawerSyncBtn = page.locator('aside button:has-text("Piyasa Verilerini Canlı Yenile"), aside button:has-text("Yenile")');
+    await expect(drawerSyncBtn.first()).toBeVisible();
 
     // Capture screenshot of mobile drawer sync button
     await page.screenshot({

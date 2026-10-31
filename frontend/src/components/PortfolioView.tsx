@@ -806,18 +806,39 @@ export default function PortfolioView({
               <div key={`m-${item.symbol || idx}`} className="p-4 space-y-3 bg-white dark:bg-gray-800">
                 {/* Header: Symbol, Market, Date & Total Value */}
                 <div className="flex justify-between items-start gap-2">
-                  <div>
+                  <div 
+                    onClick={() => onSelectTicker?.(item.symbol)}
+                    className="cursor-pointer group/holding select-none touch-manipulation flex-1 min-w-0"
+                    title={language === 'tr' ? `${item.symbol} grafik ve indikatörleri görüntüle` : `View ${item.symbol} chart & indicators`}
+                  >
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
-                        onClick={() => onSelectTicker?.(item.symbol)}
-                        className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTicker?.(item.symbol);
+                        }}
+                        className="font-black text-base text-gray-900 dark:text-white group-hover/holding:text-blue-600 dark:group-hover/holding:text-blue-400 flex items-center gap-1 py-0.5 cursor-pointer"
                       >
-                        <span>{item.symbol}</span>
+                        <span className="group-hover/holding:underline underline-offset-2">{item.symbol}</span>
                         <span className="text-xs text-blue-500">📈</span>
                       </button>
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                         {item.market}
                       </span>
+                      {/* Prominent Mobile Chart Quick-Tap Pill */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTicker?.(item.symbol);
+                        }}
+                        className="text-[10px] font-black px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/70 dark:hover:bg-blue-900/80 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-2xs"
+                        title={language === 'tr' ? `${item.symbol} grafiğini aç` : `Open ${item.symbol} chart`}
+                      >
+                        <span>📊</span>
+                        <span>{language === 'tr' ? 'Grafik' : 'Chart'}</span>
+                      </button>
                       {/* Interactive Strategy Mode Toggle: Dividend (DCA) ⟷ Swing Trade */}
                       <button
                         type="button"
@@ -841,7 +862,7 @@ export default function PortfolioView({
                       </button>
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
-                      <span className="truncate max-w-[150px]">{item.name}</span>
+                      <span className="truncate max-w-[150px] group-hover/holding:underline">{item.name}</span>
                       <span>·</span>
                       <span className="text-gray-400 font-mono text-[11px]">{formattedBoughtDate} {daysHeld ? `(${daysHeld}g)` : ''}</span>
                     </div>
@@ -859,9 +880,16 @@ export default function PortfolioView({
 
                 {/* Metrics Grid: Fiyat/Maliyet & Net K/Z */}
                 <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-750/70 p-2.5 rounded-xl border border-gray-100 dark:border-gray-700 text-xs">
-                  <div>
-                    <div className="text-[10px] uppercase font-bold text-gray-400">Güncel / Maliyet</div>
-                    <div className="font-bold text-gray-900 dark:text-white mt-0.5">
+                  <div 
+                    onClick={() => onSelectTicker?.(item.symbol)}
+                    className="cursor-pointer group/price select-none touch-manipulation"
+                    title={language === 'tr' ? `${item.symbol} grafiği ve indikatörleri aç` : `Open ${item.symbol} chart & indicators`}
+                  >
+                    <div className="text-[10px] uppercase font-bold text-gray-400 flex items-center justify-between">
+                      <span>Güncel / Maliyet</span>
+                      <span className="text-[9px] text-blue-500 font-mono group-hover/price:underline">Grafik ↗</span>
+                    </div>
+                    <div className="font-bold text-gray-900 dark:text-white mt-0.5 group-hover/price:text-blue-600 dark:group-hover/price:text-blue-400 transition-colors">
                       {formatCurr(item.currentPrice, item.currency)}
                     </div>
                     <div className="text-[11px] text-gray-500 flex items-center gap-1 flex-wrap">

@@ -248,9 +248,12 @@ export default function AssetHistoryModal({
     : `https://www.google.com/finance/quote/${cleanSym}:IST`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 touch-manipulation select-none"
+    >
       <div 
-        className="bg-white dark:bg-gray-900 rounded-3xl max-w-5xl w-full border border-gray-200 dark:border-gray-750 shadow-2xl overflow-hidden flex flex-col max-h-[95vh]"
+        className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl max-w-5xl w-full border border-gray-200 dark:border-gray-750 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -278,9 +281,11 @@ export default function AssetHistoryModal({
             </div>
 
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
+              className="min-w-[38px] min-h-[38px] p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer flex items-center justify-center font-bold text-lg active:scale-90 touch-manipulation"
               title="Close Modal (Esc)"
+              aria-label="Kapat"
             >
               ✕
             </button>
@@ -319,8 +324,9 @@ export default function AssetHistoryModal({
         <div className="px-3 sm:px-5 pt-2 sm:pt-3 pb-2 bg-gray-50/40 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2 overflow-x-auto touch-pan-x">
           <div className="flex space-x-1.5 sm:space-x-2 shrink-0">
             <button
+              type="button"
               onClick={() => setActiveTab('chart')}
-              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
                 activeTab === 'chart'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -331,8 +337,9 @@ export default function AssetHistoryModal({
               <span className="sm:hidden">Grafik</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('data')}
-              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
                 activeTab === 'data'
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'

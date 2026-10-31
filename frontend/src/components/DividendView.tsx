@@ -385,8 +385,9 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
                     <td className="px-5 py-4">
                       <div className="flex items-center space-x-2">
                         <button
+                          type="button"
                           onClick={() => onSelectTicker?.(asset.symbol)}
-                          className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                          className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group py-1 touch-manipulation"
                           title={language === 'tr' ? `${asset.symbol} grafik ve indikatörleri` : `Click to view ${asset.symbol} chart & indicators`}
                         >
                           <span className="group-hover:underline">{asset.symbol}</span>

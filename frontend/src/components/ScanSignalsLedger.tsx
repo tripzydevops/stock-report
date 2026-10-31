@@ -278,11 +278,12 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onSelectTicker?.(sig.symbol);
                             }}
-                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors"
+                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors py-1 touch-manipulation"
                             title={`Click to view ${sig.symbol} chart & indicators`}
                           >
                             <span>{sig.symbol}</span>
