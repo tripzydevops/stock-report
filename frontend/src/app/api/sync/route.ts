@@ -6,19 +6,8 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PU
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const HIGH_PRIORITY_SYMBOLS = [
-  'ISMEN.IS', 'TURSG.IS', 'HALKB.IS', 'AKBNK.IS', 'SOKM.IS',
-  'BRSAN.IS', 'CCOLA.IS', 'KCHOL.IS', 'KRDMD.IS', 'MPARK.IS', 'TKFEN.IS', 'TRMET.IS', 'VAKBN.IS',
-  'THYAO.IS', 'TUPRS.IS', 'ASELS.IS', 'BIMAS.IS', 'EREGL.IS', 'FROTO.IS', 'SISE.IS',
-  // BIST Dividend Champions & REITs
-  'TRGYO.IS', 'EKGYO.IS', 'ISGYO.IS', 'ALGYO.IS', 'OZKGY.IS', 'RYGYO.IS', 'TTRAK.IS', 'TOASO.IS',
-  'AEFES.IS', 'AGHOL.IS', 'PETKM.IS', 'TCELL.IS', 'YKBNK.IS',
-  // US Equities, Midas REITs & High-Yield ETFs
-  'SPY', 'QQQ', 'VOO', 'NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'AMD', 'AVGO', 'COST',
-  'O', 'VICI', 'PLD', 'AMT', 'EQIX', 'STAG', 'SPG',
-  'SCHD', 'JEPI', 'JEPQ', 'VNQ', 'VYM', 'SMH', 'TLT', 'GLD',
-  'KO', 'PEP', 'JNJ', 'PG', 'MCD', 'BRK-B',
-  'XU100.IS', 'TRY=X'
+const HIGH_PRIORITY_MACRO = [
+  'SPY', 'QQQ', 'VOO', 'GLD', 'TLT', 'TRY=X', 'XU100.IS'
 ];
 
 interface QuoteResult {
@@ -35,9 +24,10 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*'
       },
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 0 }
     });
 
@@ -64,32 +54,99 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
   }
 }
 
+/**
+ * Executes async tasks with bounded concurrency to prevent throttling.
+ */
+async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>, limit: number = 15): Promise<R[]> {
+  const results: Promise<R>[] = [];
+  const executing = new Set<Promise<R>>();
+
+  for (const item of items) {
+    const p = fn(item).then(res => {
+      executing.delete(p);
+      return res;
+    });
+    results.push(p);
+    executing.add(p);
+
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.all(results);
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({ action: 'refresh' }));
     const today = new Date().toISOString().slice(0, 10);
 
-    // 0. Fetch open portfolio position symbols to guarantee live sync for every owned stock
+    // 1. Fetch all assets from database catalog
+    const { data: dbAssets } = await supabase
+      .from('assets')
+      .select('id, symbol, market, is_active');
+
+    // 2. Fetch open portfolio positions
     const { data: openPos } = await supabase
       .from('portfolio_positions')
       .select('assets(symbol)')
       .eq('is_open', true);
 
-    const activeSymbols: string[] = [];
-    if (openPos) {
-      for (const pos of openPos) {
-        const rawSym = (pos as any).assets?.symbol;
-        if (rawSym) {
-          activeSymbols.push(rawSym);
+    // 3. Fetch active trade signals
+    const { data: openSignals } = await supabase
+      .from('trade_signals')
+      .select('assets(symbol)')
+      .eq('status', 'open');
+
+    // 4. Build comprehensive symbol set
+    const symbolSet = new Set<string>(HIGH_PRIORITY_MACRO);
+
+    if (dbAssets) {
+      for (const a of dbAssets) {
+        if (a.symbol) {
+          symbolSet.add(a.symbol.trim());
         }
       }
     }
 
-    const symbolsToSync = Array.from(new Set([...HIGH_PRIORITY_SYMBOLS, ...activeSymbols]));
+    if (openPos) {
+      for (const p of openPos) {
+        const sym = (p as any).assets?.symbol;
+        if (sym) symbolSet.add(sym.trim());
+      }
+    }
 
-    // 1. Fetch live quotes in parallel for key portfolio & market symbols
-    const quotePromises = symbolsToSync.map(sym => fetchLiveQuote(sym));
-    const quotes = (await Promise.all(quotePromises)).filter((q): q is QuoteResult => q !== null);
+    if (openSignals) {
+      for (const s of openSignals) {
+        const sym = (s as any).assets?.symbol;
+        if (sym) symbolSet.add(sym.trim());
+      }
+    }
+
+    // Normalize symbols for Yahoo Finance
+    const rawSymbols = Array.from(symbolSet);
+    const symbolsToSync: string[] = [];
+
+    for (const sym of rawSymbols) {
+      if (sym === 'TRY=X' || sym === 'XU100.IS' || sym.endsWith('.IS')) {
+        symbolsToSync.push(sym);
+      } else {
+        // Check if known BIST or US in dbAssets
+        const matched = dbAssets?.find(a => a.symbol.toUpperCase() === sym.toUpperCase() || a.symbol.replace('.IS', '').toUpperCase() === sym.toUpperCase());
+        if (matched && matched.market === 'BIST' && !sym.endsWith('.IS')) {
+          symbolsToSync.push(`${sym}.IS`);
+        } else {
+          symbolsToSync.push(sym);
+        }
+      }
+    }
+
+    const uniqueSymbolsToSync = Array.from(new Set(symbolsToSync));
+
+    // 5. Fetch live quotes with 15-worker concurrency pool
+    const quoteResults = await fetchWithConcurrency(uniqueSymbolsToSync, fetchLiveQuote, 15);
+    const quotes = quoteResults.filter((q): q is QuoteResult => q !== null);
 
     if (quotes.length === 0) {
       return NextResponse.json({
@@ -100,21 +157,21 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2. Fetch asset id mappings from Supabase
-    const { data: dbAssets } = await supabase
-      .from('assets')
-      .select('id, symbol');
-
+    // 6. Map asset IDs
     const assetMap = new Map<string, string>();
     if (dbAssets) {
       for (const a of dbAssets) {
-        assetMap.set(a.symbol.toUpperCase(), a.id);
-        assetMap.set(a.symbol.replace('.IS', '').toUpperCase(), a.id);
+        const upper = a.symbol.toUpperCase();
+        const clean = upper.replace('.IS', '');
+        assetMap.set(upper, a.id);
+        assetMap.set(clean, a.id);
+        assetMap.set(`${clean}.IS`, a.id);
       }
     }
 
-    // 3. Prepare price_history rows to upsert
+    // 7. Prepare price_history & opening_direction rows
     const priceRows: any[] = [];
+    const orbRows: any[] = [];
     let updatedFxRate: number | null = null;
     let updatedBistClose: number | null = null;
     let updatedUsClose: number | null = null;
@@ -132,7 +189,9 @@ export async function POST(request: Request) {
         updatedUsClose = q.price;
       }
 
-      const assetId = assetMap.get(q.symbol.toUpperCase()) || assetMap.get(q.symbol.replace('.IS', '').toUpperCase());
+      const cleanSym = q.symbol.replace('.IS', '').toUpperCase();
+      const assetId = assetMap.get(q.symbol.toUpperCase()) || assetMap.get(cleanSym);
+
       if (assetId) {
         priceRows.push({
           asset_id: assetId,
@@ -145,21 +204,8 @@ export async function POST(request: Request) {
           adj_close: q.price
         });
       }
-    }
 
-    // 4. Batch upsert into price_history
-    if (priceRows.length > 0) {
-      await supabase
-        .from('price_history')
-        .upsert(priceRows, { onConflict: 'asset_id,date' });
-    }
-
-    // 4b. Batch upsert into opening_direction (15m ORB)
-    const orbRows: any[] = [];
-    for (const q of quotes) {
-      if (q.symbol === 'TRY=X' || q.symbol === 'XU100.IS') continue;
-      const cleanSym = q.symbol.replace('.IS', '').toUpperCase();
-      const aid = assetMap.get(cleanSym);
+      // ORB calculation
       const prevClose = q.prevClose || q.price;
       const currPrice = q.price;
       const gapPct = prevClose > 0 ? ((currPrice - prevClose) / prevClose) * 100 : 0;
@@ -183,7 +229,7 @@ export async function POST(request: Request) {
       }
 
       orbRows.push({
-        asset_id: aid,
+        asset_id: assetId || null,
         symbol: cleanSym,
         market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
         date: today,
@@ -199,20 +245,30 @@ export async function POST(request: Request) {
       });
     }
 
-    if (orbRows.length > 0) {
+    // 8. Batch upsert price_history in chunks of 80
+    for (let i = 0; i < priceRows.length; i += 80) {
+      const chunk = priceRows.slice(i, i + 80);
       await supabase
-        .from('opening_direction')
-        .upsert(orbRows, { onConflict: 'symbol,date' });
+        .from('price_history')
+        .upsert(chunk, { onConflict: 'asset_id,date' });
     }
 
-    // 5. Update FX Rates
+    // 9. Batch upsert opening_direction in chunks of 80
+    for (let i = 0; i < orbRows.length; i += 80) {
+      const chunk = orbRows.slice(i, i + 80);
+      await supabase
+        .from('opening_direction')
+        .upsert(chunk, { onConflict: 'symbol,date' });
+    }
+
+    // 10. Update FX Rates
     if (updatedFxRate) {
       await supabase
         .from('fx_rates')
         .upsert([{ pair: 'USDTRY', rate: updatedFxRate, date: today }], { onConflict: 'pair,date' });
     }
 
-    // 6. Update Market Regimes
+    // 11. Update Market Regimes
     if (updatedBistClose) {
       await supabase
         .from('market_regime')
@@ -225,8 +281,8 @@ export async function POST(request: Request) {
         }], { onConflict: 'market,date' });
     }
 
-    // 7. Background Corporate Dividend Calendar Sync (Non-blocking)
-    if (body?.syncDividends || body?.action === 'crawler') {
+    // 12. Background Corporate Dividend Calendar Sync (Non-blocking)
+    if (body?.syncDividends || body?.action === 'crawler' || body?.action === 'cloud_crawl') {
       try {
         const { spawn } = await import('child_process');
         const path = await import('path');
@@ -242,7 +298,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       dispatched: true,
-      message: `Live Market Data Synced! Updated ${priceRows.length} assets + FX (₺${updatedFxRate?.toFixed(2) || '49.03'}) & BIST 100 (${updatedBistClose?.toFixed(0) || '12249'}).`,
+      message: `Live Market Data Synced! Updated ${priceRows.length} assets + FX (₺${updatedFxRate?.toFixed(2) || '49.96'}) & BIST 100 (${updatedBistClose?.toFixed(0) || '10710'}).`,
       updatedCount: priceRows.length,
       timestamp: new Date().toISOString()
     });

@@ -1174,12 +1174,12 @@ export default function Home() {
             .from('price_history')
             .select('asset_id, close, date')
             .order('date', { ascending: false })
-            .limit(600),
+            .limit(1200),
           supabase
             .from('opening_direction')
             .select('symbol, current_price, prev_close, gap_percent, date')
             .order('date', { ascending: false })
-            .limit(300)
+            .limit(600)
         ]);
 
         // Build fast lookup maps for newest prices
@@ -1226,12 +1226,18 @@ export default function Home() {
             let latestPrice = 100;
             let changePct = 0;
 
-            if (orb && orb.currentPrice > 0) {
+            const orbDate = orb?.date || '';
+            const barDate = barInfo?.date || '';
+
+            if (orb && orb.currentPrice > 0 && orbDate >= barDate) {
               latestPrice = orb.currentPrice;
               changePct = orb.changePercent;
             } else if (barInfo && barInfo.latest > 0) {
               latestPrice = barInfo.latest;
               changePct = barInfo.prev > 0 ? ((barInfo.latest - barInfo.prev) / barInfo.prev) * 100 : 0;
+            } else if (orb && orb.currentPrice > 0) {
+              latestPrice = orb.currentPrice;
+              changePct = orb.changePercent;
             }
 
             const ema200 = ind.ema_200 || latestPrice;
