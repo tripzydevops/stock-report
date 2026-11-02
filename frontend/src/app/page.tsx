@@ -3020,7 +3020,7 @@ export default function Home() {
       />
 
       {/* Right Main Content Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full min-h-screen overflow-x-hidden">
         {/* Sleek Top Header Bar */}
         <header className="h-14 sm:h-16 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30">
           {/* Left: Mobile Hamburger Trigger + Current Active Page Title & Subtitle */}
@@ -3144,7 +3144,7 @@ export default function Home() {
         />
 
         {/* Dedicated Full Page Content Canvas with Ample Bottom Clearance for Mobile Nav */}
-        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-28 md:pb-8 space-y-5">
+        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-28 md:pb-8 space-y-5 min-w-0 overflow-x-hidden">
           {/* Universal Date Filter Bar (Expandable on click or auto-shown if active) */}
           {(isDateFilterExpanded || dateFilter.preset !== 'ALL') && (
             <DateFilterBar
@@ -3230,11 +3230,11 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={handleToggleRightPanel}
-                      className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors hidden sm:inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
                       title={isRightPanelOpen ? (language === 'tr' ? 'Rehber / Hesaplayıcı Yan Panelini Gizle' : 'Hide Guide & Calculator Panel') : (language === 'tr' ? 'Rehber / Hesaplayıcı Yan Panelini Göster' : 'Show Guide & Calculator Panel')}
                     >
                       <span className="text-xs">{isRightPanelOpen ? '⇥' : '⇤'}</span>
-                      <span className="hidden sm:inline">
+                      <span>
                         {isRightPanelOpen 
                           ? (language === 'tr' ? 'Yan Paneli Gizle' : 'Hide Panel') 
                           : (language === 'tr' ? 'Yan Paneli Aç' : 'Show Panel')}
@@ -3402,7 +3402,8 @@ export default function Home() {
                   )).length;
 
                   return (
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0">
+                    <div className="w-full max-w-full overflow-hidden">
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1.5 touch-pan-x no-scrollbar w-full">
                       {/* TRADE TYPE DROPDOWN FILTER */}
                       <div className="relative shrink-0">
                         <div className={`flex items-center rounded-xl px-2.5 py-1 border shadow-xs transition-all ${
@@ -3534,6 +3535,7 @@ export default function Home() {
                         <span>{turmoilGuard ? (language === 'tr' ? 'Güvenli Mod: AÇIK' : 'Turmoil Guard: ON') : (language === 'tr' ? 'Güvenli Mod: KAPALI' : 'Turmoil Guard: OFF')}</span>
                       </button>
                     </div>
+                  </div>
                   );
                 })()}
                 
@@ -3913,13 +3915,13 @@ export default function Home() {
         )}
       </main>
 
-      {/* Floating Add Asset Modal */}
+      {/* Floating Add Asset Button (Desktop only; on mobile, access via top header) */}
       <button 
         onClick={() => setIsModalOpen(true)}
-        className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 w-13 h-13 sm:w-14 sm:h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 z-30 focus:outline-none focus:ring-4 focus:ring-blue-500/50 cursor-pointer"
+        className="hidden sm:flex fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-2xl items-center justify-center transition-transform hover:scale-110 z-30 focus:outline-none focus:ring-4 focus:ring-blue-500/50 cursor-pointer"
         title="Add Asset to Track"
       >
-        <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
       </button>
 
       {/* Mobile Sticky Bottom Navigation (< 768px) */}

@@ -105,7 +105,7 @@ export default function CatalystFeedView({
   const macroCatalystsCount = catalysts.filter(c => c.category.startsWith('MACRO')).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full min-w-0 overflow-x-hidden">
       {/* Top Banner */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-5 sm:p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -139,7 +139,8 @@ export default function CatalystFeedView({
       </div>
 
       {/* Touch-Friendly Horizontal Filter Pills */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+      <div className="w-full max-w-full overflow-hidden">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 touch-pan-x no-scrollbar w-full">
         <button
           onClick={() => setFilter('ALL')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
@@ -198,6 +199,7 @@ export default function CatalystFeedView({
           <span>🏛️</span>
           <span>{t.catalysts.filterMacro} ({macroCatalystsCount})</span>
         </button>
+        </div>
       </div>
 
       {/* Feed List */}
@@ -220,9 +222,9 @@ export default function CatalystFeedView({
             return (
               <div
                 key={item.id}
-                className="bg-white dark:bg-gray-800 rounded-3xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                className="bg-white dark:bg-gray-800 rounded-3xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all flex flex-col justify-between max-w-full min-w-0 overflow-hidden"
               >
-                <div>
+                <div className="min-w-0 max-w-full">
                   {/* Top Bar: Stock Tag, Category, Time */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-gray-750">
                     <div className="flex items-center space-x-2">
@@ -248,7 +250,7 @@ export default function CatalystFeedView({
                       )}
                     </div>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border flex items-center space-x-1 ${cat.color}`}>
                         <span>{cat.icon}</span>
                         <span>{cat.label}</span>
@@ -261,12 +263,12 @@ export default function CatalystFeedView({
                   </div>
 
                   {/* Disclosure Title & Official Text */}
-                  <div className="py-3">
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-snug">
+                  <div className="py-3 min-w-0 max-w-full">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-snug break-words">
                       {item.title}
                     </h3>
                     {item.details && (
-                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 line-clamp-2 leading-relaxed">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 line-clamp-2 leading-relaxed break-all">
                         {item.details}
                       </p>
                     )}
@@ -274,10 +276,10 @@ export default function CatalystFeedView({
                 </div>
 
                 {/* AI 1-Line Synthesis Box */}
-                <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-750">
-                  <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-850/80 border border-gray-200/80 dark:border-gray-700/80 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
+                <div className="mt-2 pt-3 border-t border-gray-100 dark:border-gray-750 min-w-0 max-w-full">
+                  <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-850/80 border border-gray-200/80 dark:border-gray-700/80 space-y-2 min-w-0 max-w-full">
+                    <div className="flex flex-wrap justify-between items-center gap-2">
+                      <div className="flex items-center space-x-2 flex-wrap">
                         <span className="text-xs font-black text-gray-700 dark:text-gray-300 flex items-center space-x-1">
                           <span>🤖</span>
                           <span>{language === 'tr' ? 'Yapay Zeka Özeti:' : 'AI Synthesis:'}</span>
@@ -293,13 +295,13 @@ export default function CatalystFeedView({
                       </div>
                     </div>
 
-                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-normal">
+                    <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-normal break-words">
                       {item.aiTakeaway}
                     </p>
                   </div>
 
                   {/* Card Bottom Links */}
-                  <div className="flex justify-between items-center pt-3 text-[11px]">
+                  <div className="flex flex-wrap justify-between items-center gap-2 pt-3 text-[11px]">
                     {item.sourceUrl ? (
                       <a
                         href={item.sourceUrl}

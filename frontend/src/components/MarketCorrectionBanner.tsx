@@ -92,8 +92,22 @@ export default function MarketCorrectionBanner({
           </button>
         </div>
 
-        {/* 3 Clear Beginner Action Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3.5 mt-3.5 pt-3.5 border-t border-amber-500/20">
+        {/* Mobile Expand / Collapse Toggle Button */}
+        <div className="sm:hidden mt-2 pt-2 border-t border-amber-500/20 flex justify-between items-center">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(prev => !prev)}
+            className="text-[11px] font-bold text-amber-800 dark:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 flex items-center gap-1 active:scale-95 cursor-pointer"
+          >
+            <span>{isExpanded ? (language === 'tr' ? '▲ Taktik Rehberini Gizle' : '▲ Hide Tactics') : (language === 'tr' ? '▼ 3 Adımlı Strateji Rehberi' : '▼ 3-Step Strategy Guide')}</span>
+          </button>
+          <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80 font-semibold">
+            {language === 'tr' ? 'DCA & Sabır' : 'DCA & Patience'}
+          </span>
+        </div>
+
+        {/* 3 Clear Beginner Action Cards (Always visible on Desktop, Expandable on Mobile) */}
+        <div className={`${isExpanded ? 'grid' : 'hidden sm:grid'} grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3.5 mt-3.5 pt-3.5 border-t border-amber-500/20`}>
           <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-base">🛡️</span>
@@ -137,8 +151,8 @@ export default function MarketCorrectionBanner({
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-2 text-[11px]">
+        {/* Footer Actions (Always visible on Desktop, Expandable on Mobile) */}
+        <div className={`${isExpanded ? 'flex' : 'hidden sm:flex'} items-center justify-between flex-wrap gap-2 mt-3 pt-2 text-[11px]`}>
           <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-medium">
             <span>💡</span>
             <span>

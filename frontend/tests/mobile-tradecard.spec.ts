@@ -8,41 +8,51 @@ test.describe('Mobile TradeCard Expanded View', () => {
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
 
-    // Find first TradeCard rationale toggle button
-    const toggleBtn = page.locator('button:has-text("Yapay Zeka Analizini Göster"), button:has-text("Show AI Rationale")').first();
-    await expect(toggleBtn).toBeVisible({ timeout: 10000 });
+    // Find first TradeCard AI analysis button (unified Co-Pilot modal)
+    const aiBtn = page.getByRole('button', { name: /YZ Analiz & Planı|AI Analysis & Plan/i }).first();
+    await expect(aiBtn).toBeVisible({ timeout: 10000 });
 
-    // Click to expand using DOM click to avoid sticky footer overlap in test
-    await toggleBtn.evaluate((el: HTMLElement) => el.click());
+    // Click to open AI Co-Pilot modal
+    await aiBtn.click({ force: true });
 
-    // Wait for the Why section and Plan section to be visible
+    // Verify AI Co-Pilot modal badge is visible
+    const modalBadge = page.locator('text=/AI Trade Co-Pilot/i').first();
+    await expect(modalBadge).toBeVisible({ timeout: 6000 });
+
+    // Switch to Tactical Blueprint tab if present
+    const blueprintTab = page.locator('button:has-text("YZ Kurulumu & Planı"), button:has-text("Tactical Blueprint"), button:has-text("AI Setup & Blueprint")').first();
+    if (await blueprintTab.isVisible()) {
+      await blueprintTab.click({ force: true });
+    }
+
+    // Wait for the Why section and Plan section inside the modal
     const whyHeader = page.locator('text=/Neden Tetiklendi|Why It Fired/i').first();
     await expect(whyHeader).toBeVisible();
 
-    const planHeader = page.locator('text=/İşlem Planı|Execution Plan/i').first();
+    const planHeader = page.locator('text=/Algoritmik Kurulum|İşlem Planı|Execution Plan/i').first();
     await expect(planHeader).toBeVisible();
 
-    // Verify dynamic R:R indicator exists
-    const rrIndicator = page.locator('text=/1R :/i').first();
+    // Verify dynamic R:R indicator or ratio exists
+    const rrIndicator = page.locator('text=/1R :|Risk\/Ödül|Risk : Ödül/i').first();
     await expect(rrIndicator).toBeVisible();
 
     // Verify aligned T0 target (+%3 Bölgesi) exists
-    const t0Badge = page.locator('text=/T0.*%3/i').first();
+    const t0Badge = page.locator('text=/T0.*%3|T0 Kâr/i').first();
     await expect(t0Badge).toBeVisible();
 
-    // Verify Güven Skoru / Setup Quality label exists
-    const qualityLabel = page.locator('text=/Güven Skoru|Setup Quality/i').first();
+    // Verify Setup / Confidence star indicator exists
+    const qualityLabel = page.locator('text=/⭐|Algoritmik Kurulum|Onaylanan Kriterler/i').first();
     await expect(qualityLabel).toBeVisible();
 
-    // Scroll to the expanded card
-    await whyHeader.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(400);
-
-    // Save screenshot focused on the expanded TradeCard container
-    const cardContainer = page.locator('div:has(> button:has-text("THYAO"))').first();
+    // Save screenshot focused on the unified AI Co-Pilot modal
     await page.screenshot({
       path: path.join(ARTIFACTS_DIR, 'mobile_tradecard_expanded.png'),
       fullPage: false,
     });
+
+    // Close modal
+    const closeBtn = page.locator('div.p-6 button:has-text("✕")').first();
+    await closeBtn.click();
+    await expect(modalBadge).not.toBeVisible();
   });
 });
