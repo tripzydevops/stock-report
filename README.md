@@ -156,6 +156,7 @@ Detailed mathematical specifications, backtest data, and execution blueprints ar
 
 | Document | Purpose | Key Findings |
 | :--- | :--- | :--- |
+| [**Master System Architecture & User Guide**](./docs/SYSTEM_ARCHITECTURE_AND_USER_GUIDE.md) | Exhaustive 3-Layer architecture, 9 views, 12 active strategies, risk math, and user guide | Complete blueprint: 3-layer architecture, 9 modules, 12 screening strategies, position sizing formula, ex-date dividend tax arbitrage, and post-exit recovery tracking. |
 | [**Strategy Backtest Whitepaper**](./docs/STRATEGY_BACKTEST_WHITEPAPER.md) | 5-year continuous backtest across 158,500 daily bars (BIST 101 & US 32) | **+455.4% BIST return** (1.64 Sharpe), **+77.0% US Tech return** (0.78 Sharpe vs SPY 0.69). Validates stop-loss necessity (averts -15.75% post-stop plunge). |
 | [**Structured Signals & Trading Blueprint**](./docs/STRUCTURED_SIGNALS_AND_TRADING_BLUEPRINT.md) | Non-black-box architecture, 9 strategy explainers, and execution plans | Structured schema (`trigger_reasons`, `invalidation`, `market_context`), Next Open entry, Target 1 (+1.25R / 50% scale-out), Target 2 (+2.25R runner), BIST vs US adaptive dynamics. |
 | [**Portfolio Holdings Backtest Report**](./docs/PORTFOLIO_HOLDINGS_BACKTEST_REPORT.md) | Empirical backtest of user's personal core holdings (`TURSG`, `ISMEN`, `AKBNK`, `NVDA`, `SCHD`, etc.) | High win rates on dividend compounders (`TURSG` 66.7%, `ISMEN` 63.6%, `NVDA` 61.9% with +24.6% avg win). Establishes dual-engine trend vs. DRIP allocation. |
