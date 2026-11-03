@@ -12,6 +12,7 @@ interface CatalystFeedViewProps {
   signals: TradeSignal[];
   dateFilter?: DateRangeFilter;
   onSelectTicker?: (symbol: string) => void;
+  onNavigateToTab?: (tab: any) => void;
 }
 
 export default function CatalystFeedView({
@@ -20,13 +21,20 @@ export default function CatalystFeedView({
   signals,
   dateFilter,
   onSelectTicker,
+  onNavigateToTab,
 }: CatalystFeedViewProps) {
   const { t, language } = useLanguage();
-  const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'MACRO'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'DIVIDEND' | 'MACRO'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   const portfolioSymbols = new Set(portfolio.map(p => p.symbol.toUpperCase().replace('.IS', '')));
   const signalSymbols = new Set(signals.map(s => s.symbol.toUpperCase().replace('.IS', '')));
+
+  const isDividendCatalyst = (item: MarketCatalyst) => {
+    if (item.category === 'KAP_DIVIDEND') return true;
+    const text = `${item.title} ${item.details || ''} ${item.aiTakeaway || ''}`.toLowerCase();
+    return /(?:temettü|kar payı|kâr payı|dividend|avans kar)/i.test(text);
+  };
 
   // Category Helpers
   const getCategoryMeta = (cat: string) => {
@@ -93,6 +101,9 @@ export default function CatalystFeedView({
     if (filter === 'BUYBACK') {
       return item.category === 'KAP_BUYBACK';
     }
+    if (filter === 'DIVIDEND') {
+      return isDividendCatalyst(item);
+    }
     if (filter === 'MACRO') {
       return item.category.startsWith('MACRO');
     }
@@ -102,6 +113,8 @@ export default function CatalystFeedView({
   const portfolioCatalystsCount = catalysts.filter(c => portfolioSymbols.has(c.symbol.toUpperCase().replace('.IS', ''))).length;
   const signalCatalystsCount = catalysts.filter(c => signalSymbols.has(c.symbol.toUpperCase().replace('.IS', ''))).length;
   const buybackCatalystsCount = catalysts.filter(c => c.category === 'KAP_BUYBACK').length;
+  const dividendCatalysts = catalysts.filter(isDividendCatalyst);
+  const dividendCatalystsCount = dividendCatalysts.length;
   const macroCatalystsCount = catalysts.filter(c => c.category.startsWith('MACRO')).length;
 
   return (
@@ -136,6 +149,89 @@ export default function CatalystFeedView({
             <span className="absolute left-2.5 top-2 text-gray-400 text-xs">🔍</span>
           </div>
         </div>
+      </div>
+
+      {/* Dedicated Temettü Bildirimleri & Dağıtım Takvimi Spotlight Header */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent dark:from-amber-950/40 dark:via-amber-900/10 dark:to-transparent rounded-3xl p-5 border border-amber-200 dark:border-amber-800/80 shadow-xs">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl shrink-0 shadow-sm">
+              💰
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
+                  {language === 'tr' ? 'Temettü & Kâr Payı Bildirimleri' : 'Dividend & Payout Announcements'}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                  {dividendCatalystsCount} {language === 'tr' ? 'Bildirim' : 'Disclosures'}
+                </span>
+                {filter === 'DIVIDEND' && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-600 text-white animate-pulse">
+                    {language === 'tr' ? '● FİLTRELENDİ' : '● FILTERED'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                {language === 'tr' 
+                  ? 'Borsa İstanbul ve ABD piyasalarında kâr payı dağıtım kararları, hak kullanım tarihleri ve nakit ödeme takvimleri.'
+                  : 'Borsa Istanbul and US cash dividend distributions, ex-dividend dates, and payout schedules.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
+            <button
+              onClick={() => setFilter(filter === 'DIVIDEND' ? 'ALL' : 'DIVIDEND')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                filter === 'DIVIDEND'
+                  ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-500/30'
+                  : 'bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+              }`}
+            >
+              <span>{filter === 'DIVIDEND' ? '✕' : '💰'}</span>
+              <span>{filter === 'DIVIDEND' ? (language === 'tr' ? 'Filtreyi Temizle' : 'Clear Filter') : (language === 'tr' ? 'Temettüleri Filtrele' : 'Filter Dividends')}</span>
+            </button>
+
+            {onNavigateToTab && (
+              <button
+                onClick={() => onNavigateToTab('dividend')}
+                className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                title={language === 'tr' ? 'Temettü Nakit Akışı Takvimine Git' : 'Go to Dividend Cashflow Calendar'}
+              >
+                <span>📅</span>
+                <span>{language === 'tr' ? 'Nakit Akış Takvimi' : 'Cashflow View'}</span>
+                <span className="text-[10px]">➔</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Dividend Highlights Ticker Strip (if any available) */}
+        {dividendCatalysts.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-amber-200/60 dark:border-amber-800/40 w-full max-w-full overflow-hidden">
+            <div className="flex items-center gap-2 overflow-x-auto touch-pan-x no-scrollbar py-0.5 w-full min-w-0">
+              <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                <span>🔔</span>
+                <span>{language === 'tr' ? 'Son Kararlar:' : 'Latest:'}</span>
+              </span>
+              <div className="flex items-center gap-2 min-w-0 shrink-0">
+                {dividendCatalysts.slice(0, 4).map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => onSelectTicker?.(d.symbol)}
+                    className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-gray-800/80 border border-amber-200 dark:border-amber-700/60 text-xs font-bold text-gray-900 dark:text-white hover:border-amber-400 hover:text-amber-600 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="text-amber-600 dark:text-amber-400 font-black">{d.symbol}</span>
+                    <span className="text-[10px] text-gray-500 font-normal truncate max-w-[120px] sm:max-w-[200px]">
+                      {d.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Touch-Friendly Horizontal Filter Pills */}
@@ -186,6 +282,18 @@ export default function CatalystFeedView({
         >
           <span>💎</span>
           <span>{t.catalysts.filterBuyback} ({buybackCatalystsCount})</span>
+        </button>
+
+        <button
+          onClick={() => setFilter('DIVIDEND')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center space-x-1.5 ${
+            filter === 'DIVIDEND'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+          }`}
+        >
+          <span>💰</span>
+          <span>{t.catalysts.filterDividend} ({dividendCatalystsCount})</span>
         </button>
 
         <button

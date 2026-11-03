@@ -179,6 +179,7 @@ export interface Translations {
     filterPortfolio: string;
     filterSignals: string;
     filterBuyback: string;
+    filterDividend: string;
     filterMacro: string;
     impactHigh: string;
     impactMedium: string;
@@ -457,6 +458,7 @@ export const translations: Record<Language, Translations> = {
       filterPortfolio: 'My Portfolio Only',
       filterSignals: 'Active Signals Only',
       filterBuyback: 'Share Buybacks',
+      filterDividend: 'Dividends & Payouts',
       filterMacro: 'Macro & Central Bank',
       impactHigh: 'HIGH IMPACT',
       impactMedium: 'MEDIUM IMPACT',
@@ -733,6 +735,7 @@ export const translations: Record<Language, Translations> = {
       filterPortfolio: 'Sadece Portföyüm',
       filterSignals: 'Sadece Sinyaller',
       filterBuyback: 'Hisse Geri Alımları',
+      filterDividend: 'Temettü & Ödemeler',
       filterMacro: 'Makro & TCMB / Fed',
       impactHigh: 'YÜKSEK ETKİ',
       impactMedium: 'ORTA ETKİ',

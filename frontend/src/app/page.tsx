@@ -1569,9 +1569,17 @@ export default function Home() {
             .order('date', { ascending: false });
 
           if (orbData && orbData.length > 0) {
-            const sortedOrb = [...orbData].sort((a: any, b: any) => Math.abs(Number(b.gap_percent)) - Math.abs(Number(a.gap_percent)));
+            // Deduplicate by symbol keeping the latest record (ordered by date desc)
+            const seenSymbols = new Set<string>();
+            const uniqueOrbData = orbData.filter((item: any) => {
+              const cleanSym = (item.symbol || '').replace('.IS', '').toUpperCase();
+              if (seenSymbols.has(cleanSym)) return false;
+              seenSymbols.add(cleanSym);
+              return true;
+            });
+            const sortedOrb = [...uniqueOrbData].sort((a: any, b: any) => Math.abs(Number(b.gap_percent)) - Math.abs(Number(a.gap_percent)));
             const mappedOrb: OpeningDirectionItem[] = sortedOrb.map((item: any) => ({
-              symbol: item.symbol,
+              symbol: (item.symbol || '').replace('.IS', ''),
               market: item.market || 'BIST',
               gapPercent: Number(item.gap_percent) || 0,
               gapType: item.gap_type || 'Flat Open',
@@ -3812,6 +3820,7 @@ export default function Home() {
             signals={signals}
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
+            onNavigateToTab={handleTabChange}
           />
         )}
 

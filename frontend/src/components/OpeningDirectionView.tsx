@@ -11,19 +11,77 @@ interface OpeningDirectionViewProps {
   dateFilter?: DateRangeFilter;
 }
 
+export type OrbSortColumn = 'symbol' | 'gapPercent' | 'gapType' | 'orbStatus' | 'bias' | 'volumeSpike';
+export type SortDirection = 'asc' | 'desc';
+
+const gapTypeRanks: Record<string, number> = {
+  'Gap Up & Go': 4,
+  'Gap & Fade': 3,
+  'Flat Open': 2,
+  'Gap Down': 1,
+};
+
+const orbStatusRanks: Record<string, number> = {
+  'Broke High': 3,
+  'Inside Range': 2,
+  'Broke Low': 1,
+};
+
+const biasRanks: Record<string, number> = {
+  'Strong Bullish': 4,
+  'Bullish': 3,
+  'Neutral': 2,
+  'Bearish': 1,
+};
+
 export default function OpeningDirectionView({ items, onSelectTicker, dateFilter }: OpeningDirectionViewProps) {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US'>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH' | 'BREAKOUT' | 'SPIKE'>('ALL');
+  const [sortColumn, setSortColumn] = useState<OrbSortColumn>('gapPercent');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const bullishCount = items.filter(i => i.bias.includes('Bullish')).length;
   const bearishCount = items.filter(i => i.bias.includes('Bearish')).length;
   const brokenHighCount = items.filter(i => i.orbStatus === 'Broke High').length;
   const volumeSpikesCount = items.filter(i => i.volumeSpike).length;
 
+  const handleSort = (col: OrbSortColumn) => {
+    if (sortColumn === col) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(col);
+      setSortDirection(col === 'symbol' ? 'asc' : 'desc');
+    }
+  };
+
+  const renderSortHeader = (col: OrbSortColumn, label: string, align: 'left' | 'right' | 'center' = 'center') => {
+    const isActive = sortColumn === col;
+    const alignClass = align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center';
+    const justifyClass = align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center';
+
+    return (
+      <th
+        scope="col"
+        onClick={() => handleSort(col)}
+        className={`px-5 py-3 cursor-pointer select-none transition-colors hover:text-blue-600 dark:hover:text-blue-400 group ${alignClass} ${
+          isActive ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50/60 dark:bg-blue-950/30' : ''
+        }`}
+        title={language === 'tr' ? `${label} sütununa göre sıralamak için tıklayın` : `Click to sort by ${label}`}
+      >
+        <div className={`inline-flex items-center gap-1.5 ${justifyClass}`}>
+          <span>{label}</span>
+          <span className={`text-[11px] transition-all ${isActive ? 'text-blue-600 dark:text-blue-400 font-bold scale-110' : 'text-gray-300 dark:text-gray-600 group-hover:text-gray-400'}`}>
+            {isActive ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
+    const filtered = items.filter(item => {
       // Market filter
       if (marketFilter !== 'ALL' && item.market !== marketFilter) return false;
 
@@ -41,7 +99,34 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
 
       return true;
     });
-  }, [items, marketFilter, typeFilter, searchQuery]);
+
+    return filtered.sort((a, b) => {
+      let diff = 0;
+      switch (sortColumn) {
+        case 'symbol':
+          diff = a.symbol.localeCompare(b.symbol);
+          break;
+        case 'gapPercent':
+          diff = a.gapPercent - b.gapPercent;
+          break;
+        case 'gapType':
+          diff = (gapTypeRanks[a.gapType] || 0) - (gapTypeRanks[b.gapType] || 0);
+          break;
+        case 'orbStatus':
+          diff = (orbStatusRanks[a.orbStatus] || 0) - (orbStatusRanks[b.orbStatus] || 0);
+          break;
+        case 'bias':
+          diff = (biasRanks[a.bias] || 0) - (biasRanks[b.bias] || 0);
+          break;
+        case 'volumeSpike':
+          diff = (a.volumeSpike ? 1 : 0) - (b.volumeSpike ? 1 : 0);
+          break;
+        default:
+          diff = 0;
+      }
+      return sortDirection === 'asc' ? diff : -diff;
+    });
+  }, [items, marketFilter, typeFilter, searchQuery, sortColumn, sortDirection]);
 
   return (
     <div className="space-y-6">
@@ -199,12 +284,12 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-xs">
               <tr>
-                <th className="px-5 py-3">{language === 'tr' ? 'Varlık' : 'Asset'}</th>
-                <th className="px-5 py-3 text-right">{t.orb.gapPercent}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Gap Sınıfı' : 'Gap Classification'}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? '15dk ORB Durumu' : '15m ORB Status'}</th>
-                <th className="px-5 py-3 text-center">{t.orb.bias}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Hacim Dalgası' : 'Volume Surge'}</th>
+                {renderSortHeader('symbol', language === 'tr' ? 'Varlık' : 'Asset', 'left')}
+                {renderSortHeader('gapPercent', t.orb.gapPercent, 'right')}
+                {renderSortHeader('gapType', language === 'tr' ? 'Gap Sınıfı' : 'Gap Classification', 'center')}
+                {renderSortHeader('orbStatus', language === 'tr' ? '15dk ORB Durumu' : '15m ORB Status', 'center')}
+                {renderSortHeader('bias', t.orb.bias, 'center')}
+                {renderSortHeader('volumeSpike', language === 'tr' ? 'Hacim Dalgası' : 'Volume Surge', 'center')}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
