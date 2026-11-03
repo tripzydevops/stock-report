@@ -30,7 +30,7 @@ export default function MarketCorrectionBanner({
 
   if (isDismissed) {
     return (
-      <div className="w-full max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
+      <div className="w-full max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 pt-3 overflow-hidden">
         <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
           <div className="flex items-center gap-2">
             <span className="text-sm">⚠️</span>
@@ -52,7 +52,7 @@ export default function MarketCorrectionBanner({
   }
 
   return (
-    <div className="w-full max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 pt-3">
+    <div className="w-full max-w-[1680px] 2xl:max-w-[1720px] mx-auto px-3 sm:px-6 lg:px-8 pt-3 overflow-hidden">
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 shadow-sm p-4 sm:p-5 backdrop-blur-md">
         {/* Glow accent */}
         <div className="absolute -right-8 -top-8 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />

@@ -188,17 +188,17 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             }
             if (signal.isReconfirmed) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 max-w-full leading-snug">
+                <div suppressHydrationWarning className="flex items-center gap-1.5 text-[11px] text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/60 mt-1.5 max-w-full leading-snug">
                   <span className="shrink-0">🔄</span>
-                  <span className="truncate">{t.tradeCard.activeSetup} <strong>{signal.date}</strong> · {t.tradeCard.holdingInBuyZone}</span>
+                  <span className="break-words line-clamp-1">{t.tradeCard.activeSetup} <strong>{signal.date}</strong> · {t.tradeCard.holdingInBuyZone}</span>
                 </div>
               );
             }
             if (signal.date < new Date().toISOString().slice(0, 10)) {
               return (
-                <div className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 max-w-full leading-snug">
+                <div suppressHydrationWarning className="flex items-center gap-1.5 text-[11px] text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/60 mt-1.5 max-w-full leading-snug">
                   <span className="shrink-0">🗓️</span>
-                  <span className="truncate">{t.tradeCard.activeSwing} <strong>{signal.date}</strong></span>
+                  <span className="break-words line-clamp-1">{t.tradeCard.activeSwing} <strong>{signal.date}</strong></span>
                 </div>
               );
             }
@@ -260,12 +260,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               const todayStr = new Date().toISOString().slice(0, 10);
               const isToday = signal.date === todayStr;
               return isToday ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
+                <span suppressHydrationWarning className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs animate-pulse flex items-center gap-0.5">
                   <span>🔥</span>
                   <span>{language === 'tr' ? 'BUGÜN YENİ' : 'NEW TODAY'}</span>
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                <span suppressHydrationWarning className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                   🗓️ {language === 'tr' ? `${signal.date} TARİHİNDEN BERİ` : `SINCE ${signal.date}`}
                 </span>
               );
@@ -634,7 +634,12 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
         {(() => {
           const riskPerShare = Math.max(0.01, Math.abs(signal.entryPrice - signal.stopLoss));
           const fixedCapitalShares = signal.entryPrice > 0 ? Math.floor(1000 / signal.entryPrice) : 0;
-          const instRiskShares = Math.floor(150 / riskPerShare);
+          const isBist = signal.market !== 'US';
+          const retailCapitalText = isBist ? (language === 'tr' ? 'Bireysel (₺1.000 Sabit):' : 'Retail (₺1,000 Fixed):') : (language === 'tr' ? 'Bireysel ($1,000 Sabit):' : 'Retail ($1,000 Fixed):');
+          const quantRiskText = isBist ? (language === 'tr' ? '🏛️ Kurumsal (₺150 Risk):' : '🏛️ Quant (₺150 Risk):') : (language === 'tr' ? '🏛️ Kurumsal ($50 Risk):' : '🏛️ Quant ($50 Risk):');
+          const instRiskDollar = isBist ? 150 : 50;
+          const instRiskSharesAdjusted = Math.max(1, Math.floor(instRiskDollar / riskPerShare));
+          const maxLossText = isBist ? '₺150.00' : '$50.00';
 
           return (
             <div className="my-2.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
@@ -646,14 +651,14 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
                 <div className="p-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <span className="text-gray-500 block">{language === 'tr' ? 'Bireysel (₺1.000 Sabit):' : 'Retail (₺1,000 Fixed):'}</span>
+                  <span className="text-gray-500 block truncate">{retailCapitalText}</span>
                   <strong className="text-gray-900 dark:text-white">{fixedCapitalShares} Lot</strong>
-                  <span className="text-gray-500 block text-[9px]">Stop Zararı: {formatPrice(fixedCapitalShares * riskPerShare)}</span>
+                  <span className="text-gray-500 block text-[9px] truncate">Stop Zararı: {formatPrice(fixedCapitalShares * riskPerShare)}</span>
                 </div>
                 <div className="p-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800">
-                  <span className="text-blue-700 dark:text-blue-300 font-bold block">{language === 'tr' ? '🏛️ Kurumsal (₺150 Risk):' : '🏛️ Quant (₺150 Risk):'}</span>
-                  <strong className="text-blue-900 dark:text-blue-200">{instRiskShares} Lot</strong>
-                  <span className="text-blue-600 dark:text-blue-400 block text-[9px] font-bold">Kesin Zarar: ₺150.00</span>
+                  <span className="text-blue-700 dark:text-blue-300 font-bold block truncate">{quantRiskText}</span>
+                  <strong className="text-blue-900 dark:text-blue-200">{instRiskSharesAdjusted} Lot</strong>
+                  <span className="text-blue-600 dark:text-blue-400 block text-[9px] font-bold truncate">{language === 'tr' ? 'Kesin Zarar: ' : 'Max Loss: '}{maxLossText}</span>
                 </div>
               </div>
             </div>
@@ -773,56 +778,49 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                   : `Session ${signal.triggerHistory?.length || signal.daysInZone || 2} in Buy Zone`}
               </span>
             </span>
-            {onOpenCoPilot && (
-              <button
-                type="button"
-                onClick={() => onOpenCoPilot(signal)}
-                className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
-              >
-                <span>{language === 'tr' ? 'YZ Planı' : 'AI Plan'}</span>
-                <span>→</span>
-              </button>
-            )}
           </div>
         )}
       </div>
       
-      <div className="bg-gray-50 dark:bg-gray-900 p-3 flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
-        <span className="px-2 py-0.5 border border-gray-200 dark:border-gray-600 rounded text-[10px] uppercase font-bold">{signal.market}</span>
-        {(() => {
-          const timing = calculateExitDate(signal.date, signal.strategy);
-          return (
-            <div className="flex flex-col text-right font-mono">
-              <span className="text-[10px] text-gray-400">📅 {language === 'tr' ? 'Giriş' : 'In'}: {signal.date}</span>
-              <span className={`text-[10px] font-bold ${
-                timing.statusColor === 'green' ? 'text-blue-600 dark:text-blue-400' :
-                timing.statusColor === 'amber' ? 'text-amber-600 dark:text-amber-400' :
-                'text-rose-600 dark:text-rose-400'
-              }`}>
-                {language === 'tr' ? 'Çıkış' : 'Exit'}: {timing.maxExitDate} ({timing.label})
-              </span>
-            </div>
-          );
-        })()}
-        <div className="flex items-center gap-2">
+      <div className="bg-gray-50 dark:bg-gray-900 p-3 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-center gap-2.5 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
+          <span className="px-2 py-0.5 border border-gray-200 dark:border-gray-600 rounded text-[10px] uppercase font-bold shrink-0">{signal.market}</span>
+          {(() => {
+            const timing = calculateExitDate(signal.date, signal.strategy);
+            return (
+              <div className="flex items-center gap-2 text-right font-mono text-[10px]">
+                <span className="text-gray-400">📅 {language === 'tr' ? 'Giriş' : 'In'}: {signal.date}</span>
+                <span className="text-gray-300 dark:text-gray-600">·</span>
+                <span className={`font-bold ${
+                  timing.statusColor === 'green' ? 'text-blue-600 dark:text-blue-400' :
+                  timing.statusColor === 'amber' ? 'text-amber-600 dark:text-amber-400' :
+                  'text-rose-600 dark:text-rose-400'
+                }`}>
+                  {language === 'tr' ? 'Çıkış' : 'Exit'}: {timing.maxExitDate} ({timing.label})
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
           {onOpenCoPilot && (
             <button
               type="button"
               onClick={() => onOpenCoPilot(signal)}
-              className="px-2 py-1 rounded text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation"
+              className="w-full sm:w-auto justify-center px-3 py-2 sm:py-1 rounded-xl text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation min-h-[38px] sm:min-h-0"
               title={language === 'tr' ? "Yapay Zeka Analizini ve İşlem Yol Haritasını Aç" : "Open AI Analysis & Trade Blueprint"}
             >
               <span>💡</span>
-              <span>{t.tradeCard.coPilot}</span>
+              <span className="truncate">{t.tradeCard.coPilot}</span>
             </button>
           )}
           <button 
             type="button"
             onClick={() => onCalcSize?.(signal)}
-            className="px-2 py-1 rounded text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation"
+            className="w-full sm:w-auto justify-center px-3 py-2 sm:py-1 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 transition-all cursor-pointer flex items-center gap-1 active:scale-95 touch-manipulation min-h-[38px] sm:min-h-0"
           >
             <span>🎯</span>
-            <span>{t.tradeCard.positionSize}</span>
+            <span className="truncate">{t.tradeCard.positionSize}</span>
           </button>
         </div>
       </div>

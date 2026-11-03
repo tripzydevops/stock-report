@@ -73,7 +73,7 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 sm:pb-8">
       {/* Top Dividend KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">

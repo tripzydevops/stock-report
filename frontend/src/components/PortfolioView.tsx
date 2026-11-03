@@ -440,7 +440,7 @@ export default function PortfolioView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 sm:pb-8">
       {/* Top Portfolio Summary KPI Cards (5 Pillars of Wealth) - Compact 2-Col Grid on Mobile */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* Card 1: Total Account Value (Full Width on Mobile) */}
@@ -716,16 +716,16 @@ export default function PortfolioView({
 
       {/* Holdings & DCA Accumulation Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-row justify-between items-center gap-2">
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h3 className="text-sm sm:text-lg font-bold text-gray-900 dark:text-white">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
               {t.portfolio.title}
             </h3>
             <p className="text-[11px] sm:text-xs text-gray-500 hidden sm:block">
               {t.portfolio.subtitle}
             </p>
           </div>
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex items-center flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto justify-between sm:justify-end">
             {/* View Mode Toggle: Compact vs Detailed */}
             <div className="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600">
               <button
