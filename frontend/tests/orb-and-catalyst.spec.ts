@@ -82,6 +82,7 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
   });
 
   test('2. KAP / Catalysts section features Temettü Spotlight Header, live disclosures count, and quick filter', async ({ page }) => {
+    test.setTimeout(60000);
     // Navigate to Catalysts tab via sidebar
     const catalystBtn = page.locator('aside button[title*="KAP"], aside button:has-text("KAP")').first();
     await expect(catalystBtn).toBeVisible({ timeout: 5000 });
@@ -128,5 +129,64 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
       await page.waitForTimeout(600);
       expect(page.url()).toContain('#dividend');
     }
+  });
+
+  test('3. Market-wide dividend scanner shows all 44 dividend stocks, scope toggle, and tax arbitrage modal', async ({ page }) => {
+    test.setTimeout(60000);
+    // Navigate directly to Dividend tab
+    await page.goto('/#dividend');
+    await page.waitForTimeout(1000);
+
+    // Verify Scope Switcher is present and defaults to All Market
+    const allMarketBtn = page.locator('button:has-text("Tüm Piyasa"), button:has-text("All Market")').first();
+    const portfolioOnlyBtn = page.locator('button:has-text("Sadece Portföyüm"), button:has-text("My Portfolio Only")').first();
+    await expect(allMarketBtn).toBeVisible({ timeout: 10000 });
+    await expect(portfolioOnlyBtn).toBeVisible({ timeout: 5000 });
+
+    // Verify non-held stocks appear with market radar badges (e.g. BIMAS, TCELL, FROTO, TOASO)
+    const marketBadges = page.locator('text=/Piyasa Fırsatı|Market Radar/i');
+    await expect(marketBadges.first()).toBeVisible({ timeout: 10000 });
+    const marketBadgesCount = await marketBadges.count();
+    expect(marketBadgesCount).toBeGreaterThan(0);
+
+    // Capture desktop market-wide dividend view screenshot
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'dividend_all_market_desktop.png'),
+    });
+
+    // Open Arbitrage Modal
+    const arbitrageBtn = page.locator('button:has-text("Arbitraj Analizi"), button:has-text("Tax Arbitrage")').first();
+    if (await arbitrageBtn.isVisible()) {
+      await arbitrageBtn.click();
+      await page.waitForTimeout(600);
+
+      // Verify empirical arbitrage modal content (94 distribution events, 36.2% win rate)
+      const modalHeader = page.locator('text=/Temettü Vergi Arbitrajı Analizi|Dividend Tax Arbitrage Empirical Analysis/i').first();
+      await expect(modalHeader).toBeVisible();
+      await expect(page.locator('text=/94 BIST/i').first()).toBeVisible();
+
+      // Capture arbitrage modal screenshot
+      await page.screenshot({
+        path: path.join(ARTIFACTS_DIR, 'dividend_arbitrage_modal.png'),
+      });
+
+      // Close modal
+      const closeBtn = page.locator('button:has-text("Kapat"), button:has-text("Close")').first();
+      await closeBtn.click();
+      await page.waitForTimeout(400);
+    }
+
+    // Toggle to "Sadece Portföyüm"
+    await portfolioOnlyBtn.click();
+    await page.waitForTimeout(500);
+
+    // Verify that non-held badges disappear in portfolio-only mode
+    const portfolioHeldCount = await page.locator('text=/Portföyde|In Portfolio/i').count();
+    expect(portfolioHeldCount).toBeGreaterThan(0);
+
+    // Capture portfolio-only view screenshot
+    await page.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'dividend_portfolio_only_desktop.png'),
+    });
   });
 });

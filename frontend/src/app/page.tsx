@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import NavigationTabs, { TabId } from '../components/NavigationTabs';
 import SidebarNav from '../components/SidebarNav';
 import MarketRegimeBanner, { RegimeStatus } from '../components/MarketRegimeBanner';
@@ -42,7 +42,13 @@ import {
   ScannedTradeSignal,
   MarketCatalyst,
 } from '../lib/supabaseClient';
-import { deriveDividendsFromPortfolio, MASTER_GROWTH_PROFILES, KNOWN_DIVIDEND_LIST } from '../lib/dividendForecastMath';
+import {
+  deriveDividendsFromPortfolio,
+  deriveAllMarketDividends,
+  generateMarketDividendCatalysts,
+  MASTER_GROWTH_PROFILES,
+  KNOWN_DIVIDEND_LIST
+} from '../lib/dividendForecastMath';
 import { calculateLedgerCash } from '../lib/cashLedger';
 import { calculateExitDate } from '../lib/tradeTiming';
 
@@ -1012,7 +1018,7 @@ export default function Home() {
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
   const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
-  const [catalysts, setCatalysts] = useState<MarketCatalyst[]>([]);
+  const [catalysts, setCatalysts] = useState<MarketCatalyst[]>(() => generateMarketDividendCatalysts());
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [isCalcModalOpen, setIsCalcModalOpen] = useState<boolean>(false);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
@@ -1082,6 +1088,18 @@ export default function Home() {
   useEffect(() => {
     setDividends(prev => deriveDividendsFromPortfolio(portfolio, prev));
   }, [portfolio]);
+
+  // Derive market-wide dividend universe (all 44 assets) cross-referenced with live portfolio holdings
+  const allMarketDividends = useMemo(() => {
+    const livePrices: Record<string, number> = {};
+    assets.forEach(a => {
+      if (a.price && a.price > 0) livePrices[a.symbol.replace('.IS', '').toUpperCase()] = a.price;
+    });
+    portfolio.forEach(p => {
+      if (p.currentPrice && p.currentPrice > 0) livePrices[p.symbol.replace('.IS', '').toUpperCase()] = p.currentPrice;
+    });
+    return deriveAllMarketDividends(portfolio, livePrices);
+  }, [portfolio, assets]);
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -1544,6 +1562,7 @@ export default function Home() {
           .select('*')
           .order('published_at', { ascending: false });
 
+        const marketDividendCats = generateMarketDividendCatalysts();
         if (catData && catData.length > 0) {
           const mappedCat: MarketCatalyst[] = catData.map((c: any) => ({
             id: c.id,
@@ -1558,7 +1577,15 @@ export default function Home() {
             sourceUrl: c.source_url,
             publishedAt: c.published_at
           }));
-          setCatalysts(mappedCat);
+          const mergedCat = [...mappedCat];
+          marketDividendCats.forEach(mdc => {
+            if (!mergedCat.some(c => c.id === mdc.id || (c.symbol === mdc.symbol && c.category === 'DIVIDEND' && c.publishedAt.slice(0, 10) === mdc.publishedAt.slice(0, 10)))) {
+              mergedCat.push(mdc);
+            }
+          });
+          setCatalysts(mergedCat);
+        } else {
+          setCatalysts(marketDividendCats);
         }
 
         // 3.6 Fetch Opening Range Breakout (15m ORB) & Gaps from Supabase
@@ -3860,6 +3887,7 @@ export default function Home() {
         {activeTab === 'dividend' && (
           <DividendView
             dividendAssets={dividends}
+            allMarketDividends={allMarketDividends}
             usdTryRate={usdTryRate}
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}

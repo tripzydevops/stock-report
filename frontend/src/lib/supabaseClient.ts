@@ -142,6 +142,8 @@ export interface DividendAsset {
   estimatedNextPayout?: number;
   payoutMonth?: string;
   paymentStatus?: 'Estimated' | 'Confirmed';
+  isHeld?: boolean;
+  market?: 'BIST' | 'US';
 }
 
 export interface StrategyStat {
