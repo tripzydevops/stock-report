@@ -180,10 +180,10 @@ export default function CatalystFeedView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
             <button
               onClick={() => setFilter(filter === 'DIVIDEND' ? 'ALL' : 'DIVIDEND')}
-              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 filter === 'DIVIDEND'
                   ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-500/30'
                   : 'bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40'
@@ -196,7 +196,7 @@ export default function CatalystFeedView({
             {onNavigateToTab && (
               <button
                 onClick={() => onNavigateToTab('dividend')}
-                className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                className="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 title={language === 'tr' ? 'Temettü Nakit Akışı Takvimine Git' : 'Go to Dividend Cashflow Calendar'}
               >
                 <span>📅</span>
@@ -376,8 +376,8 @@ export default function CatalystFeedView({
                       {item.title}
                     </h3>
                     {item.details && (
-                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 line-clamp-2 leading-relaxed break-all">
-                        {item.details}
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 line-clamp-2 leading-relaxed break-words">
+                        {item.details.replace(/<[^>]*>?/gm, '').trim()}
                       </p>
                     )}
                   </div>

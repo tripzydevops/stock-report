@@ -2617,19 +2617,110 @@ export default function PortfolioView({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Executed Orders Cards (md:hidden) */}
+        <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2.5">
+          {effectiveOrders
+            .filter(ord => {
+              const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
+              const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
+              return matchesSide && matchesAsset;
+            }).length === 0 ? (
+              <div className="py-8 text-center text-gray-500 text-xs">
+                Filtreye uygun işlem bulunamadı.
+              </div>
+            ) : (
+              effectiveOrders
+                .filter(ord => {
+                  const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
+                  const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
+                  return matchesSide && matchesAsset;
+                })
+                .map((ord) => {
+                  const isBuy = ord.side === 'BUY';
+                  return (
+                    <div
+                      key={ord.id}
+                      className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-2"
+                    >
+                      {/* Top row: Symbol, Market, Side Badge, Status */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onSelectTicker?.(ord.symbol)}
+                            className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 flex items-center gap-1"
+                          >
+                            <span>{ord.symbol}</span>
+                            <span className="text-[10px] text-blue-500">📈</span>
+                          </button>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200/70 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            {ord.market}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-black ${
+                            isBuy 
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' 
+                              : 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-300 dark:border-purple-800'
+                          }`}>
+                            {isBuy ? 'BUY' : 'SELL'} {ord.orderType}
+                          </span>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                            ✓ {ord.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Asset name */}
+                      <div className="text-xs text-gray-500 truncate">{ord.name}</div>
+
+                      {/* 3-box key metric pills */}
+                      <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
+                        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                          <div className="text-[10px] text-gray-400 font-semibold uppercase">Miktar</div>
+                          <div className="font-bold text-gray-900 dark:text-white mt-0.5">{ord.quantity.toLocaleString()} lot</div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                          <div className="text-[10px] text-gray-400 font-semibold uppercase">Fiyat</div>
+                          <div className="font-bold text-gray-900 dark:text-white mt-0.5">₺{ord.price.toFixed(2)}</div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                          <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">Tutar</div>
+                          <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                        </div>
+                      </div>
+
+                      {/* Footer: Date & DCA Note / Ref */}
+                      <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
+                        <span className="font-mono">🗓️ {ord.dateTime}</span>
+                        {ord.dcaNote && (
+                          <span className="text-[10px] bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded truncate max-w-[150px]">
+                            {ord.dcaNote}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono text-gray-400">{ord.ref}</span>
+                      </div>
+                    </div>
+                  );
+                })
+            )}
+        </div>
+
+        {/* Desktop View: Full Table (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto touch-pan-x">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">Asset</th>
-                <th className="px-5 py-3 text-center">Side / Order</th>
-                <th className="px-5 py-3 text-center">Status</th>
-                <th className="px-5 py-3 text-right">Quantity</th>
-                <th className="px-5 py-3 text-right">Realzd. Price</th>
-                <th className="px-5 py-3 text-right">Total Amount</th>
-                <th className="px-5 py-3">DCA Note / Purpose</th>
-                <th className="px-5 py-3 text-right">Date & Time</th>
-                <th className="px-5 py-3 text-right">Ref ID</th>
+                <th className="px-5 py-3 whitespace-nowrap">Asset</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">Side / Order</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">Status</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Quantity</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Realzd. Price</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Total Amount</th>
+                <th className="px-5 py-3 whitespace-nowrap">DCA Note / Purpose</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Date & Time</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Ref ID</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -2721,14 +2812,45 @@ export default function PortfolioView({
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Transfers List (md:hidden) */}
+          <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2">
+            {effectiveTransfers.length === 0 ? (
+              <div className="py-6 text-center text-gray-500 text-xs">
+                No transfers recorded yet.
+              </div>
+            ) : (
+              effectiveTransfers.map((t) => (
+                <div key={t.id} className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${
+                      t.transferType === 'DEPOSIT'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
+                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
+                    }`}>
+                      {t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
+                    </span>
+                    <span className="font-black text-sm text-gray-900 dark:text-white">
+                      {t.transferType === 'DEPOSIT' ? '+' : '-'}₺{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{t.notes || 'Brokerage funding'}</span>
+                    <span className="font-mono text-[11px]">{t.transferDate}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Transfers Table (hidden md:block) */}
+          <div className="hidden md:block overflow-x-auto touch-pan-x">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-5 py-3">Transfer Type</th>
-                  <th className="px-5 py-3 text-right">Amount</th>
-                  <th className="px-5 py-3">Notes / Purpose</th>
-                  <th className="px-5 py-3 text-right">Date</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Transfer Type</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap">Amount</th>
+                  <th className="px-5 py-3 whitespace-nowrap">Notes / Purpose</th>
+                  <th className="px-5 py-3 text-right whitespace-nowrap">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -2741,7 +2863,7 @@ export default function PortfolioView({
                 ) : (
                   effectiveTransfers.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${
                           t.transferType === 'DEPOSIT'
                             ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
@@ -2750,7 +2872,7 @@ export default function PortfolioView({
                           {t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white">
+                      <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white whitespace-nowrap">
                         {t.transferType === 'DEPOSIT' ? '+' : '-'}₺{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">

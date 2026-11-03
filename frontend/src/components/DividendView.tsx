@@ -357,20 +357,20 @@ export default function DividendView({ dividendAssets, usdTryRate, dateFilter, o
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto touch-pan-x">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">{language === 'tr' ? 'Varlık' : 'Asset'}</th>
-                <th className="px-5 py-3 text-right">{t.common.shares}</th>
-                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Piyasa Fiyatı' : 'Market Price'}</th>
-                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Güncel Verim' : 'Current Yield'}</th>
-                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Maliyete Göre Verim (YoC)' : 'Yield on Cost (YoC)'}</th>
-                <th className="px-5 py-3 text-center">{t.dividend.nextExDate}</th>
-                <th className="px-5 py-3 text-right">{t.dividend.estTotal}</th>
-                <th className="px-5 py-3 text-right">{language === 'tr' ? 'Yıllık Toplam' : 'Annual Total'}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Dağıtma Oranı' : 'Payout Ratio'}</th>
-                <th className="px-5 py-3 text-center">{language === 'tr' ? 'Güvenilirlik' : 'Safety'}</th>
+                <th className="px-5 py-3 whitespace-nowrap">{language === 'tr' ? 'Varlık' : 'Asset'}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{t.common.shares}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Piyasa Fiyatı' : 'Market Price'}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Güncel Verim' : 'Current Yield'}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Maliyete Göre Verim (YoC)' : 'Yield on Cost (YoC)'}</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">{t.dividend.nextExDate}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{t.dividend.estTotal}</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Yıllık Toplam' : 'Annual Total'}</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">{language === 'tr' ? 'Dağıtma Oranı' : 'Payout Ratio'}</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">{language === 'tr' ? 'Güvenilirlik' : 'Safety'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">

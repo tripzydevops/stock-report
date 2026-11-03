@@ -148,48 +148,50 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
 
       {/* 2. Interactive Filter Toolbar */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
-        {/* Status Buttons */}
-        <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700 p-1 text-xs">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
-              statusFilter === 'ALL'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-            }`}
-          >
-            All ({totalSignals})
-          </button>
-          <button
-            onClick={() => setStatusFilter('target_hit')}
-            className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
-              statusFilter === 'target_hit'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-            }`}
-          >
-            🎯 Hit Target ({targetHitCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('stopped_out')}
-            className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
-              statusFilter === 'stopped_out'
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-            }`}
-          >
-            🛑 Stopped Out ({stoppedOutCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('open')}
-            className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
-              statusFilter === 'open'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-            }`}
-          >
-            ⏳ Active ({openCount})
-          </button>
+        {/* Status Buttons with touch scroll on mobile */}
+        <div className="overflow-x-auto touch-pan-x no-scrollbar pb-1 -mx-1 px-1">
+          <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700 p-1 text-xs shrink-0 whitespace-nowrap">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+              }`}
+            >
+              All ({totalSignals})
+            </button>
+            <button
+              onClick={() => setStatusFilter('target_hit')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                statusFilter === 'target_hit'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+              }`}
+            >
+              🎯 Hit Target ({targetHitCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('stopped_out')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                statusFilter === 'stopped_out'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+              }`}
+            >
+              🛑 Stopped Out ({stoppedOutCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('open')}
+              className={`px-3 py-1.5 font-bold rounded-lg transition-all ${
+                statusFilter === 'open'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+              }`}
+            >
+              ⏳ Active ({openCount})
+            </button>
+          </div>
         </div>
 
         {/* Dropdowns & Search */}
@@ -235,23 +237,127 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
         </div>
       </div>
 
-      {/* 3. Detailed Trade Audit Table */}
+      {/* 3. Detailed Trade Audit: Mobile Cards + Desktop Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View: Compact Signal Cards (md:hidden) */}
+        <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2.5">
+          {filteredSignals.length === 0 ? (
+            <div className="py-8 text-center text-gray-500 dark:text-gray-400 text-xs">
+              No trade signals match the selected filter criteria.
+            </div>
+          ) : (
+            filteredSignals.map((sig) => {
+              const currSym = sig.currency === 'USD' ? '$' : '₺';
+              const isWin = sig.status === 'target_hit';
+              const isLoss = sig.status === 'stopped_out';
+              const isOpen = sig.status === 'open';
+              const timing = calculateExitDate(sig.signalDate, sig.strategy);
+
+              return (
+                <div
+                  key={sig.id}
+                  onClick={() => setActiveModalSignal(sig)}
+                  className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer space-y-2"
+                >
+                  {/* Top row: Symbol, Market, Status Badge, Return % */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTicker?.(sig.symbol);
+                        }}
+                        className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 flex items-center gap-1"
+                      >
+                        <span>{sig.symbol}</span>
+                        <span className="text-[10px] text-blue-500">📈</span>
+                      </button>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200/70 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {sig.market}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isWin && sig.outcomePnlPct !== null && (
+                        <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">
+                          ▲ +{sig.outcomePnlPct?.toFixed(1)}%
+                        </span>
+                      )}
+                      {isLoss && sig.outcomePnlPct !== null && (
+                        <span className="text-xs font-black text-rose-600 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-200/50">
+                          ▼ {sig.outcomePnlPct?.toFixed(1)}%
+                        </span>
+                      )}
+                      {isOpen && (
+                        <span className="text-xs font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg border border-blue-200/50">
+                          ⏳ Open
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Subtitle / Strategy */}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500 truncate max-w-[180px]">{sig.name}</span>
+                    <span className="font-semibold text-[11px] px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200/60">
+                      {getStrategyName(sig.strategy)}
+                    </span>
+                  </div>
+
+                  {/* 3-box key metric pills */}
+                  <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                      <div className="text-[10px] text-gray-400 font-semibold uppercase">Giriş</div>
+                      <div className="font-bold text-gray-900 dark:text-white mt-0.5">{currSym}{sig.entryPrice.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Hedef</div>
+                      <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{currSym}{sig.targetPrice.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                      <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">Stop</div>
+                      <div className="font-bold text-rose-600 dark:text-rose-400 mt-0.5">{currSym}{sig.stopLoss.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {/* Footer: Date & Details action */}
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
+                    <span className="font-mono">📅 {sig.signalDate} {sig.closedAt ? `➔ ${sig.closedAt.slice(0, 10)}` : `(max: ${timing.maxExitDate})`}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveModalSignal(sig);
+                      }}
+                      className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>AI Tezi</span>
+                      <span>➔</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Full Table (hidden md:block) */}
+        <div className="hidden md:block overflow-x-auto touch-pan-x">
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-5 py-3">Asset</th>
-                <th className="px-5 py-3">Strategy</th>
-                <th className="px-5 py-3 text-center">Outcome Status</th>
-                <th className="px-5 py-3 text-right">Entry Price</th>
-                <th className="px-5 py-3 text-right">Stop Loss</th>
-                <th className="px-5 py-3 text-right">Target 1</th>
-                <th className="px-5 py-3 text-right">R:R Ratio</th>
-                <th className="px-5 py-3 text-right">Return %</th>
-                <th className="px-5 py-3 text-right">Trigger Date</th>
-                <th className="px-5 py-3 text-right">Closed / Est. Exit</th>
-                <th className="px-5 py-3 text-center">AI Thesis</th>
+                <th className="px-5 py-3 whitespace-nowrap">Asset</th>
+                <th className="px-5 py-3 whitespace-nowrap">Strategy</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">Outcome Status</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Entry Price</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Stop Loss</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Target 1</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">R:R Ratio</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Return %</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Trigger Date</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Closed / Est. Exit</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">AI Thesis</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
