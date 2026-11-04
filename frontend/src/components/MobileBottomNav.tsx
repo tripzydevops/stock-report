@@ -35,6 +35,15 @@ export default function MobileBottomNav({
 
   const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string }[] = [
     {
+      id: 'assistant',
+      labelTr: 'AI Piyasa & Portföy Asistanı',
+      labelEn: 'AI Market & Portfolio Copilot',
+      icon: '🤖',
+      descTr: 'Tüm hisseler, sabah seansı, Ocak temettüleri ve 6 aylık analizler için serbest sohbet',
+      descEn: 'Open conversational AI for stock research, morning session ORB & 6-month outlook',
+      badge: 'YENİ AI',
+    },
+    {
       id: 'forecast',
       labelTr: 'Temettü Projeksiyonu & Kıyaslama',
       labelEn: 'Dividend Forecast & Comparator',

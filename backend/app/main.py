@@ -11,6 +11,7 @@ from app.api.regime import router as regime_router
 from app.api.quant import router as quant_router
 from app.api.reports import router as reports_router
 from app.api.movements import router as movements_router
+from app.api.assistant import router as assistant_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ app.include_router(reports_router, prefix="/api")
 app.include_router(reports_router)
 app.include_router(movements_router, prefix="/api")
 app.include_router(movements_router)
+app.include_router(assistant_router, prefix="/api")
+app.include_router(assistant_router)
 
 @app.on_event("startup")
 async def startup_event():

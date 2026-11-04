@@ -4,7 +4,7 @@ import React, { useRef, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { RegimeStatus } from './MarketRegimeBanner';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help' | 'assistant';
 
 interface NavigationTabsProps {
   activeTab: TabId;
@@ -35,6 +35,7 @@ export default function NavigationTabs({
 
   const allTabs: { id: TabId; label: string; icon: string; count?: string; mobileShort: string }[] = [
     { id: 'signals', label: isSimpleMode ? (language === 'tr' ? 'Tavsiyeler' : 'Picks') : t.tabs.signals, icon: '🎯', mobileShort: language === 'tr' ? 'Tavsiye' : 'Picks' },
+    { id: 'assistant', label: language === 'tr' ? 'AI Asistan' : 'AI Copilot', icon: '🤖', count: 'AI', mobileShort: 'AI' },
     { id: 'portfolio', label: t.tabs.portfolio, icon: '💼', mobileShort: language === 'tr' ? 'Portföy' : 'Portfolio' },
     { id: 'dividend', label: t.tabs.dividend, icon: '💰', mobileShort: language === 'tr' ? 'Temettü' : 'Dividend' },
     { id: 'forecast', label: isSimpleMode ? (language === 'tr' ? 'Kartopu Hedefi' : 'Growth Target') : t.tabs.forecast, icon: '🔮', count: isSimpleMode ? undefined : 'DRIP Lab', mobileShort: language === 'tr' ? 'Hedef' : 'Target' },
@@ -44,7 +45,7 @@ export default function NavigationTabs({
     { id: 'orb', label: t.tabs.orb, icon: '🔔', mobileShort: language === 'tr' ? 'Açılış' : 'Opening' },
   ];
 
-  const simpleTabIds: TabId[] = ['signals', 'portfolio', 'dividend', 'forecast'];
+  const simpleTabIds: TabId[] = ['signals', 'assistant', 'portfolio', 'dividend', 'forecast'];
   const tabs = isSimpleMode ? allTabs.filter(t => simpleTabIds.includes(t.id)) : allTabs;
 
   // Auto-scroll active tab into view when activeTab changes

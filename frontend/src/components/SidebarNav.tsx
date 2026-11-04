@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { RegimeStatus } from './MarketRegimeBanner';
 import { useAuth } from '../context/AuthContext';
 
-export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help';
+export type TabId = 'signals' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help' | 'assistant';
 
 interface NavItem {
   id: TabId;
@@ -19,6 +19,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   // Core Portfolio & Trading
   { id: 'signals', labelTr: 'Sinyaller & Fırsatlar', labelEn: 'Signals & Picks', icon: '🎯', category: 'core' },
+  { id: 'assistant', labelTr: 'AI Piyasa Asistanı', labelEn: 'AI Market Copilot', icon: '🤖', category: 'core', badge: 'AI' },
   { id: 'portfolio', labelTr: 'Portföyüm', labelEn: 'My Portfolio', icon: '💼', category: 'core' },
   { id: 'dividend', labelTr: 'Temettü Gelirleri', labelEn: 'Dividend Tracker', icon: '💰', category: 'core' },
   { id: 'forecast', labelTr: 'Kartopu & Projeksiyon', labelEn: 'Snowball Forecast', icon: '🔮', category: 'core' },

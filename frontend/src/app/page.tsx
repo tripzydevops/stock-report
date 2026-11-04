@@ -20,6 +20,7 @@ import OpeningDirectionView from '../components/OpeningDirectionView';
 import CatalystFeedView from '../components/CatalystFeedView';
 import QuantHubView from '../components/QuantHubView';
 import HelpCenterView from '../components/HelpCenterView';
+import AiAssistantView from '../components/AiAssistantView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import { AuthModal } from '../components/AuthModal';
@@ -54,6 +55,7 @@ import { calculateExitDate } from '../lib/tradeTiming';
 
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
   signals: { icon: '🎯', tr: 'Sinyaller', en: 'Signals' },
+  assistant: { icon: '🤖', tr: 'AI Asistan', en: 'AI Copilot' },
   catalysts: { icon: '⚡', tr: 'KAP', en: 'KAP' },
   quant: { icon: '🏛️', tr: 'Quant', en: 'Quant' },
   portfolio: { icon: '💼', tr: 'Portföy', en: 'Portfolio' },
@@ -966,7 +968,7 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
   }
 ];
 
-const VALID_TABS: TabId[] = ['signals', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
+const VALID_TABS: TabId[] = ['signals', 'assistant', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
@@ -3095,6 +3097,7 @@ export default function Home() {
                 </h1>
                 <p className="text-[10px] text-slate-400 hidden sm:block truncate">
                   {activeTab === 'signals' && (language === 'tr' ? 'Algoritmik Alım Fırsatları & Kademeli Alım Bölgeleri' : 'Algorithmic Buy Opportunities & DCA Zones')}
+                  {activeTab === 'assistant' && (language === 'tr' ? 'Otonom Piyasa & Portföy Danışmanı, Canlı Haber & 6 Aylık Senaryo Motoru' : 'Autonomous Market & Portfolio Copilot, Live News & 6-Month Scenario Engine')}
                   {activeTab === 'portfolio' && (language === 'tr' ? 'Canlı Portföy, Maliyetler ve Risk Kontrolü' : 'Live Portfolio, Cost Basis & Risk Controls')}
                   {activeTab === 'dividend' && (language === 'tr' ? 'Pasif Nakit Akışı, Temettü Takvimi ve AI Danışmanı' : 'Passive Cashflow, Dividend Calendar & AI Advisor')}
                   {activeTab === 'forecast' && (language === 'tr' ? 'Kartopu Büyüme Simülatörü ve DRIP Lab' : 'Snowball Growth Simulator & DRIP Lab')}
@@ -3959,6 +3962,11 @@ export default function Home() {
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
           />
+        )}
+
+        {/* TAB: AI ASSISTANT & MARKET COPILOT */}
+        {activeTab === 'assistant' && (
+          <AiAssistantView />
         )}
 
         {/* TAB 6: HELP CENTER & USER GUIDE */}
