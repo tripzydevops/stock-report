@@ -978,6 +978,24 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setGeminiApiKey(localStorage.getItem('gemini_api_key') || '');
+      const hash = window.location.hash.replace('#', '') as TabId;
+      if (VALID_TABS.includes(hash)) {
+        setActiveTab(hash);
+      } else {
+        const savedTab = localStorage.getItem('market_pulse_active_tab') as TabId;
+        if (VALID_TABS.includes(savedTab)) {
+          setActiveTab(savedTab);
+        }
+      }
+
+      const handleHashChange = () => {
+        const newHash = window.location.hash.replace('#', '') as TabId;
+        if (VALID_TABS.includes(newHash)) {
+          setActiveTab(newHash);
+        }
+      };
+      window.addEventListener('hashchange', handleHashChange);
+      return () => window.removeEventListener('hashchange', handleHashChange);
     }
   }, []);
 

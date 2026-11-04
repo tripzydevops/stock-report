@@ -11,8 +11,10 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
   });
 
   test('1. Opening Direction (ORB) table headers are clickable, sortable, and tickers are deduplicated', async ({ page }) => {
-    // Navigate to #orb
-    await page.goto('/#orb');
+    // Navigate to ORB tab via sidebar
+    const orbBtn = page.locator('aside button:has-text("Açılış Seansı"), aside button:has-text("ORB")').first();
+    await expect(orbBtn).toBeVisible({ timeout: 5000 });
+    await orbBtn.click();
     await page.waitForTimeout(1000);
 
     // Verify ORB table exists
@@ -133,8 +135,10 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
 
   test('3. Market-wide dividend scanner shows all 44 dividend stocks, scope toggle, and tax arbitrage modal', async ({ page }) => {
     test.setTimeout(60000);
-    // Navigate directly to Dividend tab
-    await page.goto('/#dividend');
+    // Navigate to Dividend tab via sidebar
+    const dividendBtn = page.locator('aside button:has-text("Temettü Gelirleri"), aside button:has-text("Dividend")').first();
+    await expect(dividendBtn).toBeVisible({ timeout: 5000 });
+    await dividendBtn.click();
     await page.waitForTimeout(1000);
 
     // Verify Scope Switcher is present and defaults to All Market
@@ -143,15 +147,30 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
     await expect(allMarketBtn).toBeVisible({ timeout: 10000 });
     await expect(portfolioOnlyBtn).toBeVisible({ timeout: 5000 });
 
+    // Verify Investing.com Timeframe Quick Filter Pills exist
+    const imminentPill = page.locator('button:has-text("Yaklaşan 30 Gün"), button:has-text("Next 30 Days")').first();
+    await expect(imminentPill).toBeVisible({ timeout: 5000 });
+
+    // Verify Investing.com Month Group Banners exist
+    const monthBanners = page.locator('text=/🗓️/');
+    await expect(monthBanners.first()).toBeVisible({ timeout: 5000 });
+
+    // Verify Country Flags and Countdown Badges exist
+    const bistFlag = page.locator('text=/🇹🇷 BIST/').first();
+    await expect(bistFlag).toBeVisible({ timeout: 5000 });
+
+    const countdownBadge = page.locator('text=/Gün Kaldı|Tarih Bekleniyor|Tamamlandı/i').first();
+    await expect(countdownBadge).toBeVisible({ timeout: 5000 });
+
     // Verify non-held stocks appear with market radar badges (e.g. BIMAS, TCELL, FROTO, TOASO)
-    const marketBadges = page.locator('text=/Piyasa Fırsatı|Market Radar/i');
+    const marketBadges = page.locator('text=/Piyasa Fırsatı|Market Asset/i');
     await expect(marketBadges.first()).toBeVisible({ timeout: 10000 });
     const marketBadgesCount = await marketBadges.count();
     expect(marketBadgesCount).toBeGreaterThan(0);
 
     // Capture desktop market-wide dividend view screenshot
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'dividend_all_market_desktop.png'),
+      path: path.join(ARTIFACTS_DIR, 'dividend_investing_com_layout_desktop.png'),
     });
 
     // Open Arbitrage Modal
@@ -161,9 +180,9 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
       await page.waitForTimeout(600);
 
       // Verify empirical arbitrage modal content (94 distribution events, 36.2% win rate)
-      const modalHeader = page.locator('text=/Temettü Vergi Arbitrajı Analizi|Dividend Tax Arbitrage Empirical Analysis/i').first();
+      const modalHeader = page.locator('text=/Temettü Arbitraj & Vergi Analizi|Temettü Vergi Arbitrajı Analizi|Dividend Tax Arbitrage/i').first();
       await expect(modalHeader).toBeVisible();
-      await expect(page.locator('text=/94 BIST/i').first()).toBeVisible();
+      await expect(page.locator('text=/Borsa İstanbul 94|Arbitraj Başarı Oranı/i').first()).toBeVisible();
 
       // Capture arbitrage modal screenshot
       await page.screenshot({
@@ -171,13 +190,17 @@ test.describe('ORB Sorting & KAP Dividend Announcements Verification', () => {
       });
 
       // Close modal
-      const closeBtn = page.locator('button:has-text("Kapat"), button:has-text("Close")').first();
-      await closeBtn.click();
-      await page.waitForTimeout(400);
+      const closeBtn = page.locator('button:has-text("Anladım, Kapat")').first();
+      if (await closeBtn.isVisible()) {
+        await closeBtn.click();
+      } else {
+        await page.locator('button:has-text("✕")').first().click();
+      }
+      await page.waitForTimeout(500);
     }
 
     // Toggle to "Sadece Portföyüm"
-    await portfolioOnlyBtn.click();
+    await portfolioOnlyBtn.click({ force: true });
     await page.waitForTimeout(500);
 
     // Verify that non-held badges disappear in portfolio-only mode
