@@ -234,7 +234,7 @@ def run_market_assistant(request: AssistantChatRequest) -> AssistantChatResponse
 """)
 
     # --- Call Gemini LLM Generative Engine ---
-    api_key = os.environ.get("GEMINI_API_KEY", "AIzaSyD6JMN94PU5OJaJPHeSHYrWg8DvLeMsmfE")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
 
     system_instruction = (
         "You are the Lead Financial Analyst and Senior Market Copilot for MarketPulse (specializing in Borsa Istanbul and US Equities).\n"
@@ -255,32 +255,35 @@ def run_market_assistant(request: AssistantChatRequest) -> AssistantChatResponse
     combined_context = "\n\n".join(dynamic_context_slices)
     user_prompt_content = f"{combined_context}\n\nKullanıcı Sorusu: \"{last_user_msg}\"\n\nLütfen bu soruya doğrudan odaklanarak zeki, doğal ve profesyonel analitik yanıtını ver."
 
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-        payload = {
-            "systemInstruction": {"parts": [{"text": system_instruction}]},
-            "contents": [
-                {"role": "user", "parts": [{"text": user_prompt_content}]}
-            ],
-            "generationConfig": {
-                "temperature": 0.4,
-                "maxOutputTokens": 1500
-            }
+    models_to_try = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    payload = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": [
+            {"role": "user", "parts": [{"text": user_prompt_content}]}
+        ],
+        "generationConfig": {
+            "temperature": 0.4,
+            "maxOutputTokens": 1500
         }
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.post(url, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                reply_text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                if reply_text:
-                    return AssistantChatResponse(
-                        reply=reply_text,
-                        tools_executed=tools_executed,
-                        sources_used=sources_used,
-                        structured_data=structured_data
-                    )
-    except Exception as e:
-        logger.error(f"Error calling Gemini in backend: {e}")
+    }
+
+    for model_name in models_to_try:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    reply_text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    if reply_text:
+                        return AssistantChatResponse(
+                            reply=reply_text,
+                            tools_executed=tools_executed,
+                            sources_used=sources_used,
+                            structured_data=structured_data
+                        )
+        except Exception as e:
+            logger.error(f"Error calling Gemini model {model_name} in backend: {e}")
 
     # Fallback only if Gemini network is down
     fallback_reply = (

@@ -64,20 +64,35 @@ export default function AiAssistantView() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/assistant/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          language,
-        }),
-      });
+      let response: Response | null = null;
+      let lastError: any = null;
 
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+      // Retry up to 2 times to handle transient mobile carrier network handovers (WiFi to 4G/LTE)
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await fetch('/api/assistant/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [...messages, userMessage].map((m) => ({
+                role: m.role,
+                content: m.content,
+              })),
+              language,
+            }),
+          });
+          if (response && response.ok) break;
+        } catch (fetchErr: any) {
+          lastError = fetchErr;
+          if (attempt === 0) {
+            // Wait 800ms for carrier socket handover and retry once
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw lastError || new Error(`API returned ${response?.status || 'network error'}`);
       }
 
       const data = await response.json();
@@ -144,6 +159,35 @@ export default function AiAssistantView() {
     }
   };
 
+  // Helper to format inline markdown (**bold**, *italic*, `code`)
+  const formatInlineMarkdown = (text: string): React.ReactNode => {
+    const parts = text.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+        return (
+          <strong key={i} className="font-extrabold text-blue-600 dark:text-blue-400">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
+        return (
+          <em key={i} className="italic text-gray-700 dark:text-gray-300">
+            {part.slice(1, -1)}
+          </em>
+        );
+      }
+      if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+        return (
+          <code key={i} className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-mono text-amber-600 dark:text-amber-400 font-semibold border border-slate-200 dark:border-slate-700">
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      return part;
+    });
+  };
+
   // Helper to format markdown text gracefully
   const renderFormattedMarkdown = (text: string) => {
     const lines = text.split('\n');
@@ -153,15 +197,15 @@ export default function AiAssistantView() {
     const elements: React.ReactNode[] = [];
 
     const flushTable = (keyPrefix: string) => {
-      if (tableHeaders.length > 0 || tableRows.length > 0) {
+      if (tableHeaders.length > 0 && tableRows.length > 0) {
         elements.push(
-          <div key={`table-${keyPrefix}`} className="my-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40">
-            <table className="w-full text-left text-xs border-collapse">
+          <div key={`table-${keyPrefix}`} className="my-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 shadow-xs max-w-full">
+            <table className="w-full text-left text-xs border-collapse min-w-[320px]">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-100/70 dark:bg-gray-800/80">
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-100/80 dark:bg-gray-800/90">
                   {tableHeaders.map((th, idx) => (
-                    <th key={idx} className="px-3 py-2 font-bold text-gray-700 dark:text-gray-300">
-                      {th.replace(/\*\*/g, '').trim()}
+                    <th key={idx} className="px-3 py-2 font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                      {formatInlineMarkdown(th.trim())}
                     </th>
                   ))}
                 </tr>
@@ -170,8 +214,8 @@ export default function AiAssistantView() {
                 {tableRows.map((row, rIdx) => (
                   <tr key={rIdx} className="border-b border-gray-100 dark:border-gray-800/60 hover:bg-blue-50/30 dark:hover:bg-blue-900/10">
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} className="px-3 py-2 text-gray-800 dark:text-gray-200">
-                        {cell.trim()}
+                      <td key={cIdx} className="px-3 py-2 text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                        {formatInlineMarkdown(cell.trim())}
                       </td>
                     ))}
                   </tr>
@@ -180,10 +224,16 @@ export default function AiAssistantView() {
             </table>
           </div>
         );
-        tableHeaders = [];
-        tableRows = [];
-        inTable = false;
+      } else if (tableHeaders.length > 0) {
+        elements.push(
+          <p key={`single-header-${keyPrefix}`} className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 my-1">
+            {formatInlineMarkdown(tableHeaders.join(' · '))}
+          </p>
+        );
       }
+      tableHeaders = [];
+      tableRows = [];
+      inTable = false;
     };
 
     lines.forEach((line, index) => {
@@ -220,31 +270,31 @@ export default function AiAssistantView() {
       if (trimmed.startsWith('### ')) {
         elements.push(
           <h3 key={index} className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mt-4 mb-2 flex items-center gap-2">
-            {trimmed.replace('### ', '')}
+            {formatInlineMarkdown(trimmed.replace('### ', ''))}
           </h3>
         );
       } else if (trimmed.startsWith('#### ')) {
         elements.push(
           <h4 key={index} className="text-sm sm:text-base font-semibold text-blue-600 dark:text-blue-400 mt-3 mb-1.5">
-            {trimmed.replace('#### ', '')}
+            {formatInlineMarkdown(trimmed.replace('#### ', ''))}
           </h4>
         );
       } else if (trimmed.startsWith('> ')) {
         elements.push(
           <div key={index} className="p-3 my-2.5 rounded-xl border-l-4 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
-            {trimmed.replace('> ', '')}
+            {formatInlineMarkdown(trimmed.replace('> ', ''))}
           </div>
         );
       } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         elements.push(
           <li key={index} className="ml-4 list-disc text-xs sm:text-sm text-gray-700 dark:text-gray-300 my-0.5">
-            {trimmed.replace(/^[-*]\s+/, '')}
+            {formatInlineMarkdown(trimmed.replace(/^[-*]\s+/, ''))}
           </li>
         );
       } else if (/^\d+\.\s+/.test(trimmed)) {
         elements.push(
           <li key={index} className="ml-4 list-decimal text-xs sm:text-sm text-gray-700 dark:text-gray-300 my-0.5">
-            {trimmed.replace(/^\d+\.\s+/, '')}
+            {formatInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ''))}
           </li>
         );
       } else if (trimmed === '---') {
@@ -252,7 +302,7 @@ export default function AiAssistantView() {
       } else if (trimmed.length > 0) {
         elements.push(
           <p key={index} className="text-xs sm:text-sm text-gray-800 dark:text-gray-200 my-1 leading-relaxed">
-            {trimmed}
+            {formatInlineMarkdown(trimmed)}
           </p>
         );
       }
@@ -266,13 +316,14 @@ export default function AiAssistantView() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] min-h-[550px] max-w-5xl mx-auto w-full px-2 sm:px-4 py-2">
+    <div className="flex flex-col h-[calc(100dvh-130px)] md:h-[calc(100vh-140px)] max-w-5xl mx-auto w-full px-2 sm:px-4">
       {/* Top Banner / System Status */}
-      <div className="flex items-center justify-between p-3 sm:p-4 mb-2 rounded-2xl bg-gradient-to-r from-blue-900/30 via-purple-900/20 to-gray-900/40 border border-gray-200 dark:border-gray-800 shadow-sm backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-xl shadow-md shadow-blue-500/20">
+      <div className="flex items-center justify-between p-2.5 sm:p-4 mb-2 rounded-2xl bg-gradient-to-r from-blue-900/30 via-purple-900/20 to-gray-900/40 border border-gray-200 dark:border-gray-800 shadow-sm backdrop-blur-sm shrink-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-lg sm:text-xl shadow-md shadow-blue-500/20 shrink-0">
             🤖
           </div>
+
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-white">
@@ -406,9 +457,9 @@ export default function AiAssistantView() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Clean Unconstrained Input Bar (No Canned Pills) */}
-      <div className="pt-2">
-        <form onSubmit={handleSendMessage} className="relative flex items-end gap-2 p-2 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md">
+      {/* Clean Unconstrained Input Bar - Sticky on Mobile above bottom navigation */}
+      <div className="sticky bottom-[58px] md:static bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-md pt-2 pb-1 z-20">
+        <form onSubmit={handleSendMessage} className="relative flex items-end gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg">
           <textarea
             ref={textareaRef}
             rows={1}
@@ -420,13 +471,13 @@ export default function AiAssistantView() {
                 ? 'Ask freely about any stock (e.g. TURSG, THYAO), January dividends, morning session ORB...'
                 : 'Serbestçe sorun (Örn: Ocak temettüleri, TURSG 6 aylık analiz, sabah seansı neden pozitif...)'
             }
-            className="flex-1 max-h-32 min-h-[42px] py-2.5 px-3 rounded-xl resize-none text-xs sm:text-sm bg-transparent text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
+            className="flex-1 max-h-32 min-h-[40px] py-2 px-2.5 sm:px-3 rounded-xl resize-none text-xs sm:text-sm bg-transparent text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
           />
 
           <button
             type="submit"
             disabled={!inputQuery.trim() || isLoading}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-all flex items-center gap-1.5 shrink-0"
+            className="px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-95 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
             <span>{isEn ? 'Send' : 'Gönder'}</span>
             <span>🚀</span>

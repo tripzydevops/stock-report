@@ -3089,10 +3089,10 @@ export default function Home() {
             >
               ☰
             </button>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xl sm:text-2xl shrink-0">{TAB_TITLES[activeTab]?.icon}</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="text-lg sm:text-2xl shrink-0">{TAB_TITLES[activeTab]?.icon}</span>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+                <h1 className="text-xs sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
                   {language === 'tr' ? TAB_TITLES[activeTab]?.tr : TAB_TITLES[activeTab]?.en}
                 </h1>
                 <p className="text-[10px] text-slate-400 hidden sm:block truncate">
@@ -3112,14 +3112,14 @@ export default function Home() {
           </div>
 
           {/* Right: Sync Action + Date Filter Trigger & Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Highly Visible Live Sync Button (Mobile & Desktop) */}
             <button
               type="button"
               onClick={() => handleTriggerSync(false)}
               disabled={isRefreshing}
               data-testid="mobile-sync-btn"
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 select-none ${
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 select-none shrink-0 ${
                 isRefreshing
                   ? 'bg-blue-500/15 dark:bg-blue-500/25 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-600 ring-2 ring-blue-400/30'
                   : 'bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-300/80 dark:border-emerald-700/80 hover:bg-emerald-500/20 active:bg-emerald-500/25'
@@ -3135,7 +3135,7 @@ export default function Home() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span className="text-[11px] font-black tracking-tight">
+              <span className="text-[10px] sm:text-[11px] font-black tracking-tight hidden xs:inline sm:inline">
                 {isRefreshing
                   ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...')
                   : (language === 'tr' ? 'Yenile' : 'Sync')}
@@ -3151,7 +3151,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsDateFilterExpanded(prev => !prev)}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+              className={`flex items-center gap-1 px-1.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 ${
                 dateFilter.preset !== 'ALL'
                   ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border-blue-400 dark:border-blue-700 ring-2 ring-blue-400/20'
                   : isDateFilterExpanded
@@ -3162,19 +3162,16 @@ export default function Home() {
             >
               <span className="text-xs">📅</span>
               <span className="text-[11px] hidden sm:inline">{formatFilterDisplay(dateFilter, language)}</span>
-              <span className="text-[10px] sm:hidden font-black">
-                {dateFilter.preset === 'ALL' ? (language === 'tr' ? 'Tarih' : 'Date') : dateFilter.preset}
-              </span>
               <span className="text-[9px] opacity-70 ml-0.5">{isDateFilterExpanded ? '▲' : '▼'}</span>
             </button>
 
             <button
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
+              className="flex items-center justify-center w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
               title="Yeni Takip Edilen Varlık Ekle"
             >
               <span className="font-black text-sm leading-none">+</span>
-              <span className="hidden sm:inline">{language === 'tr' ? 'Varlık Ekle' : 'Add Asset'}</span>
+              <span className="hidden sm:inline sm:ml-1">{language === 'tr' ? 'Varlık Ekle' : 'Add Asset'}</span>
             </button>
           </div>
         </header>
@@ -3200,7 +3197,8 @@ export default function Home() {
         />
 
         {/* Dedicated Full Page Content Canvas with Ample Bottom Clearance for Mobile Nav */}
-        <main className="flex-1 max-w-[1720px] w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-28 md:pb-8 space-y-5 min-w-0 overflow-x-hidden">
+        <main className={`flex-1 max-w-[1720px] w-full mx-auto px-2 sm:px-6 lg:px-8 pt-2 sm:pt-3 ${activeTab === 'assistant' ? 'pb-2 md:pb-8 space-y-2' : 'pb-28 md:pb-8 space-y-5'} min-w-0 overflow-x-hidden`}>
+
           {/* Universal Date Filter Bar (Expandable on click or auto-shown if active) */}
           {(isDateFilterExpanded || dateFilter.preset !== 'ALL') && (
             <DateFilterBar

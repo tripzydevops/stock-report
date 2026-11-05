@@ -26,31 +26,32 @@ export default function MobileBottomNav({
   const { language } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const mainTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; count?: string }[] = [
-    { id: 'signals', labelTr: 'Sinyaller', labelEn: 'Signals', icon: '🎯' },
-    { id: 'portfolio', labelTr: 'Portföy', labelEn: 'Portfolio', icon: '💼' },
-    { id: 'dividend', labelTr: 'Temettü', labelEn: 'Dividend', icon: '💰' },
-    { id: 'catalysts', labelTr: 'KAP', labelEn: 'KAP', icon: '⚡', count: `${catalystsCount}` },
-  ];
-
-  const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string }[] = [
-    {
-      id: 'assistant',
-      labelTr: 'AI Piyasa & Portföy Asistanı',
-      labelEn: 'AI Market & Portfolio Copilot',
-      icon: '🤖',
-      descTr: 'Tüm hisseler, sabah seansı, Ocak temettüleri ve 6 aylık analizler için serbest sohbet',
-      descEn: 'Open conversational AI for stock research, morning session ORB & 6-month outlook',
-      badge: 'YENİ AI',
-    },
+  const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string; count?: string }[] = [
     {
       id: 'forecast',
-      labelTr: 'Temettü Projeksiyonu & Kıyaslama',
-      labelEn: 'Dividend Forecast & Comparator',
+      labelTr: 'Kartopu & Projeksiyon',
+      labelEn: 'Snowball & Forecast',
       icon: '🔮',
       descTr: 'DRIP simülatörü, kartopu hedefleri ve BIST/Midas ABD hisseleri kıyaslaması',
       descEn: 'DRIP compounding simulator, snowball milestones & BIST/US stock comparator',
       badge: 'YENİ',
+    },
+    {
+      id: 'catalysts',
+      labelTr: 'KAP Bildirimleri & Haberler',
+      labelEn: 'KAP Catalysts & News',
+      icon: '⚡',
+      descTr: 'Canlı KAP akışı, şirket haberleri ve anlık katalizörler',
+      descEn: 'Real-time corporate filings, news announcements & catalysts',
+      count: catalystsCount > 0 ? `${catalystsCount}` : undefined,
+    },
+    {
+      id: 'orb',
+      labelTr: 'Açılış Seansı (15dk ORB)',
+      labelEn: 'Opening Direction (ORB)',
+      icon: '🔔',
+      descTr: '15-dk Açılış kırılım yönleri, hacim anormallikleri ve seans yönü',
+      descEn: '15-min Opening Range Breakouts & volume anomalies',
     },
     {
       id: 'quant',
@@ -70,14 +71,6 @@ export default function MobileBottomNav({
       descEn: '1,173 trade backtest history, profit factors & expectancy metrics',
     },
     {
-      id: 'orb',
-      labelTr: 'Açılış Yönü & ORB',
-      labelEn: 'Opening Direction (ORB)',
-      icon: '🔔',
-      descTr: '15-dk Açılış kırılım yönleri, hacim anormallikleri ve seans yönü',
-      descEn: '15-min Opening Range Breakouts & volume anomalies',
-    },
-    {
       id: 'help',
       labelTr: 'Kullanım Rehberi & SSS',
       labelEn: 'User Guide & FAQ',
@@ -93,11 +86,35 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['quant', 'scorecard', 'orb', 'forecast', 'help'].includes(activeTab);
+  const isMoreActive = ['forecast', 'catalysts', 'quant', 'scorecard', 'orb', 'help'].includes(activeTab);
+
+  const getActiveMoreLabel = () => {
+    switch (activeTab) {
+      case 'forecast': return language === 'tr' ? 'Kartopu' : 'Forecast';
+      case 'catalysts': return 'KAP';
+      case 'orb': return language === 'tr' ? 'Açılış' : 'Opening';
+      case 'quant': return 'Quant';
+      case 'scorecard': return language === 'tr' ? 'Karne' : 'Scorecard';
+      case 'help': return language === 'tr' ? 'Rehber' : 'Guide';
+      default: return language === 'tr' ? 'Menü' : 'More';
+    }
+  };
+
+  const getActiveMoreIcon = () => {
+    switch (activeTab) {
+      case 'forecast': return '🔮';
+      case 'catalysts': return '⚡';
+      case 'orb': return '🔔';
+      case 'quant': return '🏛️';
+      case 'scorecard': return '📈';
+      case 'help': return '📖';
+      default: return '☰';
+    }
+  };
 
   return (
     <>
-      {/* Slide-up Bottom Drawer / Action Sheet for "Diğer" (Quant, Dividend, ORB) */}
+      {/* Slide-up Bottom Drawer / Action Sheet for "Menü / Diğer" */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden animate-in fade-in duration-200">
           {/* Backdrop */}
@@ -107,7 +124,7 @@ export default function MobileBottomNav({
           />
 
           {/* Drawer Content */}
-          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-xl rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250">
+          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-xl rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250 pb-8 safe-bottom">
             {/* Grab Handle */}
             <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
 
@@ -130,36 +147,33 @@ export default function MobileBottomNav({
               </button>
             </div>
 
-            {/* Quick Live Sync Card in Drawer */}
-            {onTriggerSync && (
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-blue-500/10 to-transparent border border-emerald-500/25 dark:border-emerald-500/30">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <div>
-                    <p className="text-xs font-black text-slate-800 dark:text-slate-100">
-                      {language === 'tr' ? 'Canlı Veri Senkronizasyonu' : 'Live Data Synchronization'}
-                    </p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                      {language === 'tr' ? 'BIST & US anlık fiyatları ve sinyalleri güncelle' : 'Fetch latest quotes, signals & portfolio values'}
-                    </p>
-                  </div>
-                </div>
+            {/* Quick Live Sync Card & Pro Mode Switcher in Drawer */}
+            <div className="grid grid-cols-2 gap-2">
+              {onTriggerSync && (
                 <button
                   type="button"
                   onClick={() => onTriggerSync(false)}
                   disabled={isRefreshing}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm shadow-emerald-600/30 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shrink-0"
+                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs active:scale-95 transition-all cursor-pointer"
                 >
-                  <svg className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <span>{isRefreshing ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...') : (language === 'tr' ? 'Şimdi Yenile' : 'Sync Now')}</span>
+                  <span>{isRefreshing ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...') : (language === 'tr' ? 'Canlı Yenile' : 'Sync Now')}</span>
                 </button>
-              </div>
-            )}
+              )}
+
+              {onToggleSimpleMode && (
+                <button
+                  type="button"
+                  onClick={onToggleSimpleMode}
+                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs active:scale-95 transition-all cursor-pointer"
+                >
+                  <span>{isSimpleMode ? '🌱' : '⚡'}</span>
+                  <span>{isSimpleMode ? (language === 'tr' ? 'Pro Moda Geç' : 'Switch to Pro') : (language === 'tr' ? 'Basit Moda Geç' : 'Switch to Simple')}</span>
+                </button>
+              )}
+            </div>
 
             {/* Special Section: Secondary & Institutional Features */}
             <div className="space-y-2">
@@ -188,6 +202,11 @@ export default function MobileBottomNav({
                           <span className={`text-sm font-bold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
                             {language === 'tr' ? t.labelTr : t.labelEn}
                           </span>
+                          {t.count && (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
+                              {t.count}
+                            </span>
+                          )}
                           {t.badge && (
                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-500 text-white">
                               {t.badge}
@@ -207,35 +226,52 @@ export default function MobileBottomNav({
               </div>
             </div>
 
-            {/* Quick shortcuts to main pages */}
+            {/* Quick shortcuts to 4 main pages */}
             <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
               <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-2">
                 {language === 'tr' ? 'Ana Sayfalar' : 'Main Pages'}
               </span>
               <div className="grid grid-cols-2 gap-2">
-                {mainTabs.map((t) => {
-                  const isSelected = activeTab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handleSelectTab(t.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                          : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      <span>{t.icon}</span>
-                      <span className="truncate">{language === 'tr' ? t.labelTr : t.labelEn}</span>
-                      {t.count && (
-                        <span className="ml-auto text-[10px] px-1.5 py-0.2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                          {t.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('signals')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    activeTab === 'signals' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <span>🎯</span>
+                  <span>{language === 'tr' ? 'Sinyaller' : 'Signals'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('assistant')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    activeTab === 'assistant' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <span>🤖</span>
+                  <span>{language === 'tr' ? 'AI Asistan' : 'AI Copilot'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('portfolio')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    activeTab === 'portfolio' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <span>💼</span>
+                  <span>{language === 'tr' ? 'Portföy' : 'Portfolio'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('dividend')}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    activeTab === 'dividend' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  <span>💰</span>
+                  <span>{language === 'tr' ? 'Temettü' : 'Dividend'}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -262,7 +298,27 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{isSimpleMode ? (language === 'tr' ? 'Tavsiye' : 'Picks') : (language === 'tr' ? 'Sinyaller' : 'Signals')}</span>
           </button>
 
-          {/* Tab 2: Portfolio */}
+          {/* Tab 2: AI Asistan (Prominently Placed in Bottom Nav!) */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('assistant')}
+            className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'assistant'
+                ? 'text-purple-600 dark:text-purple-400 font-black'
+                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+            }`}
+          >
+            <div className="relative">
+              <span className="text-lg leading-none mb-0.5">🤖</span>
+              <span className="absolute -top-1 -right-2 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+              </span>
+            </div>
+            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'AI Asistan' : 'AI Copilot'}</span>
+          </button>
+
+          {/* Tab 3: Portfolio */}
           <button
             type="button"
             onClick={() => handleSelectTab('portfolio')}
@@ -276,7 +332,7 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Portföy' : 'Portfolio'}</span>
           </button>
 
-          {/* Tab 3: Dividend / Temettü */}
+          {/* Tab 4: Dividend / Temettü */}
           <button
             type="button"
             onClick={() => handleSelectTab('dividend')}
@@ -290,75 +346,19 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Temettü' : 'Dividends'}</span>
           </button>
 
-          {/* Tab 4: In Simple Mode: Forecast / Growth Target. In Pro Mode: KAP */}
-          {isSimpleMode ? (
-            <button
-              type="button"
-              onClick={() => handleSelectTab('forecast')}
-              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-                activeTab === 'forecast'
-                  ? 'text-blue-600 dark:text-blue-400 font-black'
-                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-              }`}
-            >
-              <span className="text-lg leading-none mb-0.5">🔮</span>
-              <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Hedef' : 'Target'}</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleSelectTab('catalysts')}
-              className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-                activeTab === 'catalysts'
-                  ? 'text-blue-600 dark:text-blue-400 font-black'
-                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-              }`}
-            >
-              <div className="relative">
-                <span className="text-lg leading-none mb-0.5">⚡</span>
-                {catalystsCount > 0 && (
-                  <span className="absolute -top-1 -right-2 text-[9px] font-black px-1 rounded-full bg-rose-500 text-white min-w-3.5 text-center leading-tight">
-                    {catalystsCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] tracking-tight">KAP</span>
-            </button>
-          )}
-
-          {/* Tab 5: In Simple Mode: Mode Switcher Button (Go to Pro). In Pro Mode: More Drawer Trigger */}
-          {isSimpleMode ? (
-            <button
-              type="button"
-              onClick={onToggleSimpleMode}
-              className="flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer text-emerald-600 dark:text-emerald-400 font-bold active:scale-95"
-              title="Gelişmiş Pro Görünüme Geç"
-            >
-              <span className="text-lg leading-none mb-0.5">🌱</span>
-              <span className="text-[9px] tracking-tight">Basit (Pro)</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-                isMoreActive || isMenuOpen
-                  ? 'text-blue-600 dark:text-blue-400 font-black'
-                  : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-              }`}
-            >
-              <span className="text-lg leading-none mb-0.5">
-                {isMoreActive
-                  ? (activeTab === 'forecast' ? '🔮' : activeTab === 'quant' ? '🏛️' : activeTab === 'scorecard' ? '📈' : '🔔')
-                  : '☰'}
-              </span>
-              <span className="text-[10px] tracking-tight">
-                {isMoreActive
-                  ? (activeTab === 'forecast' ? (language === 'tr' ? 'Projeksiyon' : 'Forecast') : activeTab === 'quant' ? 'Quant' : activeTab === 'scorecard' ? (language === 'tr' ? 'Karne' : 'Scorecard') : (language === 'tr' ? 'Açılış' : 'Opening'))
-                  : (language === 'tr' ? 'Diğer' : 'More')}
-              </span>
-            </button>
-          )}
+          {/* Tab 5: Menu / Diğer Drawer Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              isMoreActive || isMenuOpen
+                ? 'text-blue-600 dark:text-blue-400 font-black'
+                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+            }`}
+          >
+            <span className="text-lg leading-none mb-0.5">{getActiveMoreIcon()}</span>
+            <span className="text-[10px] tracking-tight">{getActiveMoreLabel()}</span>
+          </button>
         </div>
       </nav>
     </>
