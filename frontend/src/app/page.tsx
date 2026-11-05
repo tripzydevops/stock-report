@@ -4032,10 +4032,10 @@ export default function Home() {
           />
         )}
 
-        {/* TAB: AI ASSISTANT & MARKET COPILOT */}
-        {activeTab === 'assistant' && (
+        {/* TAB: AI ASSISTANT & MARKET COPILOT (Kept mounted to preserve ongoing generation & instant tab switching) */}
+        <div className={activeTab === 'assistant' ? 'block' : 'hidden'}>
           <AiAssistantView />
-        )}
+        </div>
 
         {/* TAB 6: HELP CENTER & USER GUIDE */}
         {activeTab === 'help' && (

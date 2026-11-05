@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 interface SourceCitation {
   title: string;
@@ -21,20 +22,93 @@ interface Message {
 
 export default function AiAssistantView() {
   const { language } = useLanguage();
+  const { user } = useAuth();
   const isEn = language === 'en';
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: isEn
-        ? "Hello! I am your **Autonomous Market & Portfolio Copilot**. You can ask me anything freely—querying our **internal Supabase database** (44+ dividend schedules, 146+ ORB session setups, holdings), retrieving **live external financial news**, or conducting **6-month forward-looking scenario modeling** on any stock."
-        : "Merhaba! Ben **Piyasa & Portföy AI Asistanınızım**. Doğal dille dilediğiniz soruyu sorabilirsiniz—**Supabase veritabanımıza** (44+ temettü takvimi, 146+ ORB açılış seansı, portföy), **canlı harici finans haberlerine** ve hisselerin **6 aylık ileriye dönük senaryo modellerine** anında erişip analiz edebilirim.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  // Multi-user identification: logged in user ID or device-persistent guest ID
+  const activeUserId = useMemo(() => {
+    if (user?.id) return user.id;
+    if (typeof window !== 'undefined') {
+      let guestId = localStorage.getItem('marketpulse_guest_user_id');
+      if (!guestId) {
+        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('marketpulse_guest_user_id', guestId);
+      }
+      return guestId;
+    }
+    return 'default_user';
+  }, [user?.id]);
 
+  const storageKey = `marketpulse_ai_chat_messages_${activeUserId}`;
+  const draftKey = `marketpulse_ai_chat_draft_${activeUserId}`;
+
+  const defaultWelcomeMessage: Message = useMemo(() => ({
+    id: 'welcome',
+    role: 'assistant',
+    content: isEn
+      ? "Hello! I am your **Autonomous Market & Portfolio Copilot**. You can ask me anything freely—querying our **internal Supabase database** (44+ dividend schedules, 146+ ORB session setups, holdings), retrieving **live external financial news**, or conducting **6-month forward-looking scenario modeling** on any stock."
+      : "Merhaba! Ben **Piyasa & Portföy AI Asistanınızım**. Doğal dille dilediğiniz soruyu sorabilirsiniz—**Supabase veritabanımıza** (44+ temettü takvimi, 146+ ORB açılış seansı, portföy), **canlı harici finans haberlerine** ve hisselerin **6 aylık ileriye dönük senaryo modellerine** anında erişip analiz edebilirim.",
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  }), [isEn]);
+
+  // Load persisted chat messages from localStorage
+  const [messages, setMessages] = useState<Message[]>([defaultWelcomeMessage]);
   const [inputQuery, setInputQuery] = useState('');
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Restore saved messages and draft query on mount or when activeUserId changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          } else {
+            setMessages([defaultWelcomeMessage]);
+          }
+        } else {
+          setMessages([defaultWelcomeMessage]);
+        }
+
+        const savedDraft = localStorage.getItem(draftKey);
+        if (savedDraft) {
+          setInputQuery(savedDraft);
+        }
+      } catch (err) {
+        console.warn('Failed to restore chat from localStorage:', err);
+      } finally {
+        setIsHydrated(true);
+      }
+    }
+  }, [storageKey, draftKey, defaultWelcomeMessage]);
+
+  // Persist messages whenever they update
+  useEffect(() => {
+    if (isHydrated && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(messages));
+      } catch (err) {
+        console.warn('Failed to save chat to localStorage:', err);
+      }
+    }
+  }, [messages, storageKey, isHydrated]);
+
+  // Persist draft query
+  useEffect(() => {
+    if (isHydrated && typeof window !== 'undefined') {
+      try {
+        if (inputQuery) {
+          localStorage.setItem(draftKey, inputQuery);
+        } else {
+          localStorage.removeItem(draftKey);
+        }
+      } catch (err) {
+        console.warn('Failed to save draft query:', err);
+      }
+    }
+  }, [inputQuery, draftKey, isHydrated]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -130,16 +204,31 @@ export default function AiAssistantView() {
   };
 
   const handleClearHistory = () => {
+    const confirmText = isEn
+      ? 'Are you sure you want to clear your conversation history and start a new chat?'
+      : 'Sohbet geçmişinizi temizleyip yeni bir sohbet başlatmak istediğinize emin misiniz?';
+    if (!window.confirm(confirmText)) return;
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(storageKey);
+        localStorage.removeItem(draftKey);
+      } catch (err) {
+        console.warn('Failed to clear storage:', err);
+      }
+    }
+
     setMessages([
       {
         id: 'welcome_reset',
         role: 'assistant',
         content: isEn
-          ? "Sohbet sıfırlandı. How can I assist your market analysis today?"
+          ? "Conversation reset. How can I assist your market analysis today?"
           : "Sohbet geçmişi temizlendi. Bugün hangi hisse, temettü takvimi veya seans verisini analiz etmek istersiniz?",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
+    setInputQuery('');
   };
 
   const getToolDisplayName = (toolKey: string) => {
@@ -339,14 +428,26 @@ export default function AiAssistantView() {
                 ? 'Open queries across all stocks, morning sessions, dividend calendars, and 6-month outlooks'
                 : 'Tüm hisseler, sabah seansı, temettü takvimleri ve 6 aylık projeksiyonlar için serbest sorgu alanı'}
             </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                <span>💾</span>
+                <span>{isEn ? 'Auto-Saved to Device' : 'Sohbet Otomatik Kaydediliyor'}</span>
+              </span>
+              <span className="text-[10px] text-gray-400">·</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+                {user ? user.email : (isEn ? 'Local Device' : 'Cihazınıza Özel')}
+              </span>
+            </div>
           </div>
         </div>
 
         <button
           onClick={handleClearHistory}
-          className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium transition-colors"
+          className="text-xs px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+          title={isEn ? 'Clear history and start fresh' : 'Geçmişi temizle ve yeni sohbet başlat'}
         >
-          {isEn ? 'Clear Chat' : 'Sohbeti Temizle'}
+          <span>🗑️</span>
+          <span>{isEn ? 'New Chat' : 'Yeni Sohbet'}</span>
         </button>
       </div>
 
