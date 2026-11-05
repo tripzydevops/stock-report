@@ -1014,10 +1014,10 @@ export default function Home() {
   };
 
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bullish', close: 771.35, trend: 'up'
+    status: 'Bearish', close: 588.40, trend: 'down'
   });
   const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bearish', close: 11682.95, trend: 'down'
+    status: 'Neutral', close: 9420.50, trend: 'up'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
@@ -3260,11 +3260,13 @@ export default function Home() {
                   </span>
                   <div className="flex items-baseline gap-2 mt-0.5">
                     <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                      SPY: {usRegime?.status || 'Bullish'} · BIST: {bistRegime?.status || 'Bearish'}
+                      🇺🇸 SPY: {usRegime?.status === 'Bearish' ? (language === 'tr' ? 'Düzeltme' : 'Correction') : usRegime?.status} · 🇹🇷 BIST: {bistRegime?.status === 'Neutral' ? (language === 'tr' ? 'Tepki & Denge' : 'Rebound') : bistRegime?.status}
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400">
-                    {language === 'tr' ? 'BIST 11.682 destek testi; disiplinli kademe' : 'BIST 11,682 support retest; disciplined DCA'}
+                    {language === 'tr'
+                      ? 'ABD teknoloji kâr satışları; BIST 9.400 üzerinde taban arayışı'
+                      : 'US tech profit-taking; BIST consolidating above 9,400'}
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-lg font-black shrink-0">

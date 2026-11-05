@@ -16,13 +16,51 @@ export default function MarketCorrectionBanner({
   onNavigateToTab,
 }: MarketCorrectionBannerProps) {
   const { language } = useLanguage();
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isDismissed, setIsDismissed] = useState<boolean>(true); // start closed until mounted to avoid flicker
   const [isExpanded, setIsExpanded] = useState(false);
+  const [activeMarketTab, setActiveMarketTab] = useState<'US' | 'BIST'>('US');
+
+  // Load persistence from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('marketpulse_correction_dismissed');
+      setIsDismissed(saved === 'true');
+    } catch {
+      setIsDismissed(false);
+    }
+  }, []);
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    try {
+      localStorage.setItem('marketpulse_correction_dismissed', 'true');
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
+  const handleRestore = () => {
+    setIsDismissed(false);
+    try {
+      localStorage.removeItem('marketpulse_correction_dismissed');
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   // Check if BIST or US is currently in Bearish/Correction
   const isBistCorrection = bistRegime?.status === 'Bearish' || bistRegime?.trend === 'down';
   const isUsCorrection = usRegime?.status === 'Bearish' || usRegime?.trend === 'down';
   const isCorrectionActive = isBistCorrection || isUsCorrection;
+
+  // Auto-select market tab based on which market is actively correcting
+  useEffect(() => {
+    if (isUsCorrection && !isBistCorrection) {
+      setActiveMarketTab('US');
+    } else if (isBistCorrection && !isUsCorrection) {
+      setActiveMarketTab('BIST');
+    }
+  }, [isUsCorrection, isBistCorrection]);
 
   if (!isCorrectionActive) {
     return null;
@@ -35,13 +73,17 @@ export default function MarketCorrectionBanner({
           <div className="flex items-center gap-2">
             <span className="text-sm">⚠️</span>
             <span className="font-bold">
-              {language === 'tr'
-                ? 'Piyasa Düzeltme Modunda (BIST 100 Satış Baskısı Altında)'
-                : 'Market in Correction Mode (BIST 100 Pullback)'}
+              {isUsCorrection
+                ? (language === 'tr'
+                    ? 'ABD Borsası (S&P 500 / NASDAQ) Son 1 Haftadır Düzeltme Modunda'
+                    : 'US Markets (S&P 500 / NASDAQ) 1-Week Pullback Active')
+                : (language === 'tr'
+                    ? 'Piyasa Düzeltme Modunda'
+                    : 'Market in Correction Mode')}
             </span>
           </div>
           <button
-            onClick={() => setIsDismissed(false)}
+            onClick={handleRestore}
             className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
           >
             {language === 'tr' ? 'Rehberi Göster ▼' : 'Show Advice ▼'}
@@ -66,27 +108,65 @@ export default function MarketCorrectionBanner({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm sm:text-base font-black text-amber-900 dark:text-amber-200">
-                  {language === 'tr'
-                    ? 'Piyasa Düzeltme Modunda: Panik Yapmayın, Stratejiye Sadık Kalın'
-                    : 'Market in Correction: Stay Calm & Follow the Strategy'}
+                  {activeMarketTab === 'US'
+                    ? (language === 'tr'
+                        ? '🇺🇸 ABD Borsası (S&P 500 / NASDAQ) Düzeltme Dalgasında'
+                        : '🇺🇸 US Markets (S&P 500 / NASDAQ) in Correction Wave')
+                    : (language === 'tr'
+                        ? '🇹🇷 BIST 100 Dengeleme & Taban Arayışı Sürecinde'
+                        : '🇹🇷 BIST 100 Consolidation & Floor Search')}
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40">
-                  {language === 'tr' ? 'DÜZELTME DÖNEMİ' : 'CORRECTION REGIME'}
+                  {activeMarketTab === 'US'
+                    ? (language === 'tr' ? '1 HAFTALIK DÜZELTME' : '1-WEEK CORRECTION')
+                    : (language === 'tr' ? 'TEPKİ & DENGE' : 'REBOUND & FLOOR')}
                 </span>
               </div>
+
+              {/* Dynamic Market Explanation */}
               <p className="text-xs text-amber-800/90 dark:text-amber-300/80 mt-1 leading-relaxed max-w-4xl">
-                {language === 'tr'
-                  ? 'Borsa genelinde (BIST 100) kâr satışları ve düzeltme yaşanıyor. Hisselerinizdeki son düşüşler şirketlerin kötüleşmesinden değil, genel piyasa dalgasından kaynaklanmaktadır. Bu dönemde duygusal panik satışları en büyük kayıp sebebidir.'
-                  : 'The broader market (BIST 100) is experiencing an index-wide pullback. Price drops in your holdings reflect broader market sentiment, not broken fundamentals. Emotional panic selling during corrections is the primary cause of retail losses.'}
+                {activeMarketTab === 'US'
+                  ? (language === 'tr'
+                      ? 'ABD borsalarında (S&P 500 & Nasdaq) son 1 haftadır tahvil faizlerindeki tırmanış (%4.45 üzeri) ve Mag-7/yarıiletken teknoloji hisselerindeki kâr realizasyonları nedeniyle sert bir düzeltme dalgası yaşanıyor. BIST 100 ise 9.000-9.200 destek bandından başlattığı tepki alımlarıyla dengelenme sürecindedir.'
+                      : 'US equities (S&P 500 & Nasdaq) are experiencing a sharp 1-week pullback driven by rising 10Y Treasury yields (>4.45%) and valuation de-risking in mega-cap tech. Meanwhile, BIST 100 is finding equilibrium above its 9,000–9,200 floor.')
+                  : (language === 'tr'
+                      ? 'BIST 100 endeksi önceki aylarda yaşadığı derin düzeltmenin ardından 9.000-9.200 ana desteği üzerinde taban oluşturmaktadır. Panik satışları geride kalmış olup, kurumsal yabancı ve sigorta/bankacılık alımlarıyla tepki yükselişleri görülmektedir.'
+                      : 'BIST 100 is establishing a structural floor above the 9,000–9,200 support zone following previous pullbacks. Panic selling has subsided, transitioning into an institutional relief rebound.')}
               </p>
+
+              {/* Market Tab Selector */}
+              <div className="flex items-center gap-2 mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveMarketTab('US')}
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                    activeMarketTab === 'US'
+                      ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                      : 'bg-white/50 dark:bg-slate-800/50 text-amber-900 dark:text-amber-200 border-amber-500/30 hover:bg-amber-500/10'
+                  }`}
+                >
+                  🇺🇸 ABD (SPY / QQQ) {isUsCorrection && '⚠️ Düzeltmede'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMarketTab('BIST')}
+                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                    activeMarketTab === 'BIST'
+                      ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                      : 'bg-white/50 dark:bg-slate-800/50 text-amber-900 dark:text-amber-200 border-amber-500/30 hover:bg-amber-500/10'
+                  }`}
+                >
+                  🇹🇷 BIST 100 {!isBistCorrection ? '✅ Tepki / Denge' : '⚠️ Düzeltmede'}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Dismiss Button */}
           <button
-            onClick={() => setIsDismissed(true)}
+            onClick={handleDismiss}
             className="text-amber-700/60 dark:text-amber-400/60 hover:text-amber-900 dark:hover:text-amber-200 text-sm font-bold p-1 rounded-lg hover:bg-amber-500/10 transition-colors shrink-0 cursor-pointer"
-            title={language === 'tr' ? 'Gizle' : 'Dismiss'}
+            title={language === 'tr' ? 'Kapat (Tekrar Gösterme)' : 'Dismiss'}
           >
             ✕
           </button>
@@ -106,59 +186,107 @@ export default function MarketCorrectionBanner({
           </span>
         </div>
 
-        {/* 3 Clear Beginner Action Cards (Always visible on Desktop, Expandable on Mobile) */}
+        {/* 3 Clear Action Cards */}
         <div className={`${isExpanded ? 'grid' : 'hidden sm:grid'} grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3.5 mt-3.5 pt-3.5 border-t border-amber-500/20`}>
-          <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base">🛡️</span>
-              <span className="text-xs font-black text-slate-900 dark:text-white">
-                {language === 'tr' ? '1. Panikle Satış Yapmayın' : '1. Do Not Panic Sell'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {language === 'tr'
-                ? 'TURSG ve ISMEN gibi kârlı, güçlü temettü şirketleri fiyat düşüşlerinde daha yüksek verim sunar. Borsa toparlandığında ilk yükselenler bu şirketlerdir.'
-                : 'Dividend compounders like TURSG and ISMEN offer higher dividend yields on dips. These cash generators are the fastest to recover once market stabilizes.'}
-            </p>
-          </div>
+          {activeMarketTab === 'US' ? (
+            <>
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">🛡️</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '1. Teknoloji Panik Satışı Yapmayın' : '1. Avoid Tech Panic Selling'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'NVDA, MSFT ve Apple gibi nakit zengini devlerdeki %4-6 haftalık düşüşler trend bitişi değil, zirve sonrası sağlıklı bir kâr realizasyonudur.'
+                    : 'Weekly 4–6% pullbacks in cash-rich giants like NVDA, MSFT, and AAPL represent healthy profit-taking rather than secular trend exhaustion.'}
+                </p>
+              </div>
 
-          <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base">💧</span>
-              <span className="text-xs font-black text-slate-900 dark:text-white">
-                {language === 'tr' ? '2. Kademeli Alım (DCA)' : '2. Disciplined DCA'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {language === 'tr'
-                ? 'Elinizdeki tüm nakdi tek seferde yatırmayın. Fiyat düştükçe küçük parçalarla alarak maliyetinizi kademeli olarak aşağı çekin.'
-                : 'Never deploy all capital at once. Accumulate in small tranches on deep dips to systematically average down your cost basis.'}
-            </p>
-          </div>
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">💧</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '2. 50 Günlük EMA Kademeli Alım (DCA)' : '2. 50-EMA Dollar Cost Averaging'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'S&P 500 ve Nasdaq destek bölgelerine yaklaştıkça tüm sermayeyi tek fiyattan bağlamadan, 3 parçalı kademeli alım emirleriyle maliyet düşürün.'
+                    : 'Deploy capital in 3 distinct tranches as major indices test 50-day moving averages rather than lump-sum guessing the exact low.'}
+                </p>
+              </div>
 
-          <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-base">✂️</span>
-              <span className="text-xs font-black text-slate-900 dark:text-white">
-                {language === 'tr' ? '3. Stop-Loss Seviyeleri' : '3. Respect Stop Losses'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {language === 'tr'
-                ? 'Kısa vadeli (Swing) hisselerde stop seviyesi aşıldıysa ısrarcı olmayın; piyasa tepki verdiğinde nakite geçip temettü liderlerine geçiş yapın.'
-                : 'For short-term swing trades whose stop losses were hit, avoid bagholding. Rebalance capital into durable high-yield compounders on rebounds.'}
-            </p>
-          </div>
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">🥤</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '3. Temettü Kralları Kalkanı' : '3. Dividend Kings Defense'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'KO (Coca-Cola), PEP ve MO gibi düzenli döviz temettüsü ödeyen defansif şirketler, teknoloji düzeltmelerinde portföy dalgalanmasını nötrler.'
+                    : 'Dividend Aristocrats and Kings like KO, PEP, and MO offer safe-harbor cash flows, softening overall portfolio drawdown during growth rotations.'}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">📈</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '1. 9.000 Desteği Korunuyor' : '1. 9,000 Structural Floor Intact'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'BIST 100 kritik dip seviyelerinden tepki vermektedir. Panik satışı yerine hacimli açılış yapan sektör öncülerine odaklanın.'
+                    : 'BIST 100 is defending key structural support. Focus on volume-confirmed opening leaders rather than capitulation selling.'}
+                </p>
+              </div>
+
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">🏛️</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '2. Yüksek Nakit Akışlı Şirketler' : '2. Strong Cash Flow Leaders'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'TURSG, FROTO ve CCOLA gibi yüksek temettü ve kârlılık büyümesi olan şirketler toparlanma sürecinde ilk primlenen varlıklardır.'
+                    : 'Companies with robust cash flow and predictable dividends (TURSG, FROTO, CCOLA) lead market recoveries.'}
+                </p>
+              </div>
+
+              <div className="bg-white/60 dark:bg-slate-900/60 rounded-xl p-3 border border-amber-500/20 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-base">✂️</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-white">
+                    {language === 'tr' ? '3. Swing Stop Seviyelerine Sadakat' : '3. Discipline on Swing Stops'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                  {language === 'tr'
+                    ? 'Kısa vadeli momentum işlemlerinde belirlenen stop noktalarına sadık kalarak kârınızı koruyun ve sermayeyi temettüye yönlendirin.'
+                    : 'Honor stop losses on short-term tactical trades to lock in liquidity for long-term compounders.'}
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Footer Actions (Always visible on Desktop, Expandable on Mobile) */}
+        {/* Footer Actions */}
         <div className={`${isExpanded ? 'flex' : 'hidden sm:flex'} items-center justify-between flex-wrap gap-2 mt-3 pt-2 text-[11px]`}>
           <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-medium">
             <span>💡</span>
             <span>
               {language === 'tr'
-                ? 'Basit Mod aktifken teknik karmaşa gizlenir, sadece anlaşılır tavsiyeler ve portföy durumu gösterilir.'
-                : 'In Simple Mode, complex technical formulas are hidden, focusing only on clear guidance and your portfolio.'}
+                ? 'Piyasa dalgalanmaları sırasında kural tabanlı sistemler duygusal kararların önüne geçer.'
+                : 'Rule-based systems protect portfolios against emotional panic during market drawdowns.'}
             </span>
           </div>
 

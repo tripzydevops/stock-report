@@ -301,25 +301,33 @@ export default function SidebarNav({
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">🇹🇷 BIST 100</span>
-                <span className={`font-bold px-1.5 py-0.2 rounded text-[10px] ${
+                <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
                   bistRegime?.status === 'Bearish'
                     ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                    : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : bistRegime?.status === 'Bullish'
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
                 }`}>
-                  {bistRegime?.status === 'Bearish' ? 'Düzeltme' : 'Boğa'}
+                  {bistRegime?.status === 'Bearish' ? 'Düzeltme' : bistRegime?.status === 'Bullish' ? 'Boğa' : 'Dengeleme'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">🇺🇸 SPY</span>
-                <span className="font-bold px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                  {usRegime?.status || 'Boğa'}
+                <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                  usRegime?.status === 'Bearish'
+                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                    : usRegime?.status === 'Bullish'
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                }`}>
+                  {usRegime?.status === 'Bearish' ? 'Düzeltme' : usRegime?.status === 'Bullish' ? 'Boğa' : 'Nötr'}
                 </span>
               </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-1.5 py-1 text-center">
               <span className="text-sm" title={`USD/TRY: ₺${usdTryRate.toFixed(2)}`}>💵</span>
-              <span className={`w-2.5 h-2.5 rounded-full ${bistRegime?.status === 'Bearish' ? 'bg-rose-500' : 'bg-emerald-500'}`} title="BIST 100 Rejimi" />
+              <span className={`w-2.5 h-2.5 rounded-full ${usRegime?.status === 'Bearish' ? 'bg-rose-500' : 'bg-emerald-500'}`} title="Piyasa Rejimi" />
             </div>
           )}
 

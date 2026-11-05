@@ -110,7 +110,9 @@ export default function NavigationTabs({
                 usRegime.status === 'Bullish' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
                 usRegime.status === 'Bearish' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
               }`}>
-                {usRegime.status === 'Bullish' ? '▲ Bull' : usRegime.status === 'Bearish' ? '▼ Bear' : '▶ Neutral'}
+                {language === 'tr'
+                  ? (usRegime.status === 'Bullish' ? '▲ Boğa' : usRegime.status === 'Bearish' ? '▼ Düzeltme' : '▶ Nötr')
+                  : (usRegime.status === 'Bullish' ? '▲ Bull' : usRegime.status === 'Bearish' ? '▼ Bear' : '▶ Neutral')}
               </span>
             </div>
           )}
@@ -124,7 +126,9 @@ export default function NavigationTabs({
                 bistRegime.status === 'Bullish' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
                 bistRegime.status === 'Bearish' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
               }`}>
-                {bistRegime.status === 'Bullish' ? '▲ Bull' : bistRegime.status === 'Bearish' ? '▼ Bear' : '▶ Neutral'}
+                {language === 'tr'
+                  ? (bistRegime.status === 'Bullish' ? '▲ Boğa' : bistRegime.status === 'Bearish' ? '▼ Düzeltme' : '▶ Denge')
+                  : (bistRegime.status === 'Bullish' ? '▲ Bull' : bistRegime.status === 'Bearish' ? '▼ Bear' : '▶ Neutral')}
               </span>
             </div>
           )}

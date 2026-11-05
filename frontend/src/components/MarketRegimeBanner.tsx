@@ -21,8 +21,8 @@ export default function MarketRegimeBanner({ usRegime, bistRegime, usdTryRate }:
   const getStatusLabel = (status: 'Bullish' | 'Neutral' | 'Bearish') => {
     switch (status) {
       case 'Bullish': return t.regime.bullish;
-      case 'Bearish': return t.regime.bearish;
-      default: return t.regime.neutral;
+      case 'Bearish': return language === 'tr' ? 'Düzeltme' : 'Correction';
+      default: return language === 'tr' ? 'Tepki & Denge' : 'Neutral';
     }
   };
 

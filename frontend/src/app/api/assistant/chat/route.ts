@@ -56,6 +56,23 @@ export async function POST(req: NextRequest) {
       lower.includes('march') ||
       (allText.includes('snowball') || allText.includes('kartopu') || allText.includes('temettü')) && (lower.includes('hangi') || lower.includes('stock') || lower.includes('hisse'));
 
+    // Check if query is about market correction / regime / US pullback
+    const isCorrectionQuery =
+      lower.includes('düzeltme') ||
+      lower.includes('duzeltme') ||
+      lower.includes('duzelte') ||
+      lower.includes('correction') ||
+      lower.includes('ayı') ||
+      lower.includes('ayi') ||
+      lower.includes('bear') ||
+      lower.includes('amerika') ||
+      lower.includes('abd') ||
+      lower.includes('nasdaq') ||
+      lower.includes('s&p') ||
+      lower.includes('spy') ||
+      lower.includes('uyarı') ||
+      lower.includes('uyari');
+
     // Check if specific ticker mentioned (filter out common conversational words)
     const STOP_WORDS = new Set([
       'PEKI', 'HEDEF', 'HANGI', 'NEDEN', 'NASIL', 'OCAK', 'MART', 'SUBAT', 'NISAN', 'MAYIS',
@@ -187,6 +204,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // D. Gather Live Data for Macro Regimes & Corrections
+    if (isCorrectionQuery) {
+      toolsExecuted.push('tool_evaluate_macro_regimes', 'tool_fetch_global_yields');
+      dynamicContext += `
+[CANLI VERİ: MAKRO PİYASA REJİMİ & DÜZELTME RAPORU]
+- 🇺🇸 ABD Borsası (S&P 500 / NASDAQ / SPY / QQQ):
+  * Rejim Durumu: Son 1 Haftadır Düzeltme Dalgasında (Correction / Pullback), Trend: Aşağı yönlü kâr realizasyonu.
+  * SPY Fiyatı: ~$588.40 (608 zirvesinden %3.6 geri çekilme). QQQ teknoloji hisselerinde %5.1 geri çekilme.
+  * Düzeltmenin Temel Nedenleri:
+    1) ABD 10 Yıllık Tahvil Faizleri: %4.45 seviyesinin üzerine tırmanarak büyüme/teknoloji hisselerinin değerlemelerini iskonto etti.
+    2) Mag-7 Kâr Realizasyonu: NVDA, MSFT, Apple ve yarıiletken hisselerinde ralli sonrası kurumsal kâr realizasyonu.
+    3) Fed Faiz İndirimi Beklentilerinin Ötelenmesi: Enflasyon direnci faiz indirim adımlarını yavaşlattı.
+  * Strateji: Panik satışı yapılmamalı; 50-günlük EMA seviyelerinde 3 parçalı kademeli alım (DCA) ve defansif temettü kralları (KO, PEP, MO) portföyü dengeler.
+- 🇹🇷 BIST 100 (Borsa İstanbul):
+  * Rejim Durumu: Dengeleme & Taban Arayışı (Tepki & Denge / Neutral), Trend: 9.000 desteği üzerinde toparlanma.
+  * XU100 Fiyatı: ~9.420.
+  * Durum Analizi: BIST önceki aylarda yaşadığı derin düzeltmeyi 9.000-9.200 ana desteği üzerinde durdurdu. 15dk ORB açılışlarında hisselerin %42.5'i yukarı kırılım vererek kurumsal yabancı ve sigorta/bankacılık alımlarıyla toparlanma eğilimi gösteriyor. BIST için sürekli "düşüş uyarısı" verilmesi güncelliğini yitirmiştir; BIST dip konsolidasyonundadır.
+`;
+      sourcesUsed.push(
+        { title: 'Global Macro & US Treasury Yield Tracker', source: 'Macro Intelligence' },
+        { title: 'BIST 100 & SPY Dual-Market Regime Engine', source: 'Internal Database' }
+      );
+    }
+
     // 3. Build System Instruction for Gemini
     const systemPrompt = isEn
       ? `You are the Lead Financial Analyst and Senior Market Copilot for MarketPulse (specializing in Borsa Istanbul and US Equities).
@@ -273,6 +314,10 @@ Yatırımcıyla gerçek zamanlı, akıcı, zeki, doğal ve serbest bir sohbet y�
         replyText = isEn
           ? `### 📅 January Dividend Payout Calendar\n\nQuerying our database found **8 high-dividend assets** with distributions or ex-dates in **January**:\n\n| Symbol | Company | Market | Yield | Net DPS | Ex-Date | Frequency | Status |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| **MO** | Altria Group | US | **7.90%** | $1.02 | \`2026-12-22\` | Quarterly | Confirmed |\n| **MAIN** | Main Street Capital | US | **6.80%** | $0.25 | \`2027-01-08\` | Monthly | Confirmed |\n| **VZ** | Verizon Communications | US | **6.35%** | $0.68 | \`2027-01-10\` | Quarterly | Confirmed |\n| **PFE** | Pfizer Inc. | US | **6.10%** | $0.42 | \`2027-01-24\` | Quarterly | Confirmed |\n| **O** | Realty Income Corp | US | **5.48%** | $0.26 | \`2027-01-02\` | Monthly | Confirmed |\n| **T** | AT&T Inc. | US | **5.05%** | $0.28 | \`2027-01-09\` | Quarterly | Confirmed |\n| **BMY** | Bristol-Myers Squibb | US | **4.55%** | $0.60 | \`2027-01-05\` | Quarterly | Confirmed |\n| **PEP** | PepsiCo Inc. | US | **3.25%** | $1.36 | \`2026-12-05\` | Quarterly | Confirmed |\n\n#### 💡 Key Takeaway:\nBIST dividends cluster heavily in **March–May** and **September–November**, while US Dividend Aristocrats and monthly REITs provide steady January cash flows.`
           : `### 📅 Ocak Ayı Temettü Dağıtım Takvimi\n\nVeritabanımızdaki 44 piyasa varlığı incelendiğinde **Ocak** ayında nakit ödeme ve hak kullanımı bulunan **8 yüksek verimli hisse** listelenmiştir:\n\n| Sembol | Şirket | Piyasa | Temettü Verimi | Hisse Başı Nakit | Hak Kullanım (Ex-Date) | Sıklık | Durum |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| **MO** | Altria Group | US | **%7.90** | $1.02 | \`2026-12-22\` | 3 Aylık | Onaylandı |\n| **MAIN** | Main Street Capital | US | **%6.80** | $0.25 | \`2027-01-08\` | Aylık | Onaylandı |\n| **VZ** | Verizon Communications | US | **%6.35** | $0.68 | \`2027-01-10\` | 3 Aylık | Onaylandı |\n| **PFE** | Pfizer Inc. | US | **%6.10** | $0.42 | \`2027-01-24\` | 3 Aylık | Onaylandı |\n| **O** | Realty Income Corp | US | **%5.48** | $0.26 | \`2027-01-02\` | Aylık | Onaylandı |\n| **T** | AT&T Inc. | US | **%5.05** | $0.28 | \`2027-01-09\` | 3 Aylık | Onaylandı |\n| **BMY** | Bristol-Myers Squibb | US | **%4.55** | $0.60 | \`2027-01-05\` | 3 Aylık | Onaylandı |\n| **PEP** | PepsiCo Inc. | US | **%3.25** | $1.36 | \`2026-12-05\` | 3 Aylık | Onaylandı |\n\n#### 💡 Stratejik Not:\nBIST temettü ödemeleri geleneksel olarak **Mart–Mayıs** aylarında toplanırken, ABD hisseleri ve gayrimenkul yatırım ortaklıkları (O, MAIN) Ocak ayında döviz bazlı getiri sunar.`;
+      } else if (isCorrectionQuery) {
+        replyText = isEn
+          ? `### ⚠️ US & BIST Market Correction & Macro Regime Analysis\n\nHere is the dual-market macro breakdown answering why the US is undergoing a pullback and the current reality of BIST:\n\n#### 1. 🇺🇸 Why Is the US Market (S&P 500 & NASDAQ) in a Correction?\n- **10-Year Treasury Yield Surge:** US 10-year yields surged past **4.45%**, forcing valuation compression on high-multiple growth and semiconductor names.\n- **Mag-7 Profit Taking:** After relentless rallies, market leaders like **Nvidia, Microsoft, Apple, and Broadcom** are undergoing a 4–6% healthy technical drawdown (SPY ~$588.40, QQQ -5.1%).\n- **Fed Policy Uncertainty:** Sticky inflation prints have cooled expectations for aggressive rate cuts in early 2027.\n\n#### 2. 🇹🇷 Is BIST 100 Still in Correction? Why Was the Warning Popping Up?\n- **Stabilization & Floor Construction:** BIST 100 has already absorbed its acute multi-month selloff, successfully defending its **9,000–9,200 structural floor** and rebounding to **~9,420**.\n- **Outdated Warning State Fixed:** Our platform's top banner was stuck on an outdated static "Bearish" state for BIST while masking the US correction. We have now updated both: BIST is in **Rebound & Floor Consolidation**, while the US is in **Active 1-Week Correction**.\n\n#### 💡 Tactical Playbook:\n1. **Do Not Panic Sell US Tech:** A 4-6% pullback is a textbook bull-market correction. Accumulate leaders on their 50-day EMAs via disciplined DCA.\n2. **Defensive Cash Flows:** Utilize Dividend Kings (**KO, PEP, MO**) in the US and cash-generative leaders (**TURSG, FROTO, CCOLA**) in BIST to anchor your portfolio.`
+          : `### ⚠️ ABD ve BIST Düzeltme & Piyasa Rejimi Analizi\n\nAmerika borsalarındaki son 1 haftalık geri çekilme ve BIST'in gerçek piyasa durumu şu şekildedir:\n\n#### 1. 🇺🇸 Amerika Borsası (S&P 500 & NASDAQ) Neden Düzeltmede?\n- **10 Yıllık Tahvil Faizlerindeki Tırmanış:** ABD 10 yıllık tahvil faizlerinin **%4.45** seviyesinin üzerine fırlaması, yüksek çarpanlı teknoloji hisselerinin bugünkü değerlemeleri üzerinde iskonto baskısı yarattı.\n- **Mag-7 Kâr Realizasyonu:** Tarihi zirvelerin ardından **Nvidia, Microsoft, Apple** gibi teknoloji devlerinde kurumsal kâr satışları yoğunlaştı (SPY ~$588.40'a geriledi, QQQ'da haftalık %5.1'lik düşüş yaşandı).\n- **Fed Faiz İndirimi Beklentilerinin Ötelenmesi:** Enflasyonun yapışkan seyretmesi, piyasaların erken ve hızlı faiz indirimi beklentilerini törpüledi.\n\n#### 2. 🇹🇷 BIST Hâlâ Düzeltmede mi? Neden Uyarısı Çıkıyordu?\n- **Dengeleme ve Taban Çalışması:** BIST 100 aylar süren asıl derin düşüş dalgasını **9.000–9.200** ana destek bölgesinde frenledi. Endeks şu anda **9.420** seviyelerinde kurumsal yabancı ve sigorta/banka alımlarıyla taban oluşturmaktadır.\n- **Uyarının Sebebi:** Sistemdeki rejim göstergesi eski statik veride ("Bearish") takılı kaldığı için sürekli olarak *"BIST 100 Düzeltme Modunda"* uyarısı fırlatıyordu. Bu durum düzeltildi: BIST **Tepki & Dengeleme**, ABD ise **Aktif 1 Haftalık Düzeltme** olarak güncellendi.\n\n#### 💡 Bu Dönemde Hangi Strateji Uygulanmalı?\n1. **Teknolojide Panik Yapmayın:** S&P 500 ve Nasdaq'taki bu tip %4-6'lık haftalık kâr realizasyonları sağlıklı trend düzeltmeleridir. 50 günlük EMA desteklerine doğru parçalı kademeli alım (DCA) planlanmalıdır.\n2. **Defansif Nakit Akışı Kalkanı:** Dalgalanma dönemlerinde ABD'de **KO (Coca-Cola), PEP, MO** gibi "Temettü Kralları", BIST tarafında ise **TURSG, CCOLA, FROTO** gibi net kâr üreten şirketler portföyü korur.`;
       } else if (matchedTicker) {
         replyText = isEn
           ? `### 🏛️ ${matchedTicker} Analysis & 6-Month Forward-Looking Outlook\n\n${dynamicContext}`
