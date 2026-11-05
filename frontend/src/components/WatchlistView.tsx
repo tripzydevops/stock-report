@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 export interface WatchlistItemData {
   id: string;
+  userId?: string;
   assetId: string;
   symbol: string;
   name: string;
@@ -38,14 +40,35 @@ export interface CatalogAsset {
 
 interface WatchlistViewProps {
   onAddToPortfolio?: (asset: { symbol: string; name: string; market: string; currentPrice: number; currency: string }) => void;
+  onOpenAuthModal?: () => void;
 }
 
-export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) {
+export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: WatchlistViewProps) {
   const { language } = useLanguage();
+  const { user, isDemoMode } = useAuth();
+
+  // Multi-user identification: logged in user ID or device-persistent guest ID
+  const activeUserId = useMemo(() => {
+    if (user?.id) return user.id;
+    if (typeof window !== 'undefined') {
+      let guestId = localStorage.getItem('marketpulse_guest_user_id');
+      if (!guestId) {
+        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('marketpulse_guest_user_id', guestId);
+      }
+      return guestId;
+    }
+    return 'default_user';
+  }, [user?.id]);
+
   const [items, setItems] = useState<WatchlistItemData[]>([]);
   const [catalog, setCatalog] = useState<CatalogAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Quick 1-Click Add Input
+  const [quickAddSymbol, setQuickAddSymbol] = useState('');
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
 
   // Filters & Controls
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US' | 'TEFAS' | 'ALERTS'>('ALL');
@@ -54,7 +77,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
   const [sortField, setSortField] = useState<'symbol' | 'change' | 'price' | 'date'>('date');
   const [sortAsc, setSortAsc] = useState(false);
 
-  // Modals & Forms
+  // Detailed Add Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalSearch, setModalSearch] = useState('');
   const [selectedAssetForAdd, setSelectedAssetForAdd] = useState<CatalogAsset | null>(null);
@@ -69,12 +92,12 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
   const [editAlertAbove, setEditAlertAbove] = useState('');
   const [editAlertBelow, setEditAlertBelow] = useState('');
 
-  // Fetch watchlist data
-  const fetchData = async () => {
+  // Fetch watchlist data for this specific user
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/watchlist');
+      const res = await fetch(`/api/watchlist?userId=${encodeURIComponent(activeUserId)}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
@@ -87,29 +110,64 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeUserId]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // Remove item
-  const handleRemove = async (id: string, symbol: string) => {
-    if (!confirm(`${symbol} takip listenizden çıkarılsın mı?`)) return;
+  // 1-Click Quick Add by Symbol
+  const handleQuickAdd = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const sym = quickAddSymbol.trim().toUpperCase();
+    if (!sym) return;
+
     try {
-      const res = await fetch(`/api/watchlist?id=${id}`, { method: 'DELETE' });
+      setIsQuickAdding(true);
+      const res = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: sym, userId: activeUserId }),
+      });
+
       if (res.ok) {
-        setItems(prev => prev.filter(i => i.id !== id));
+        setQuickAddSymbol('');
+        await fetchData();
       } else {
+        const data = await res.json();
+        alert(data.error || 'Varlık bulunamadı');
+      }
+    } catch (err) {
+      console.error('Quick add error:', err);
+      alert('Bağlantı hatası');
+    } finally {
+      setIsQuickAdding(false);
+    }
+  };
+
+  // Instant Remove Item (Optimistic UI)
+  const handleRemove = async (id: string, symbol: string) => {
+    // Optimistic local update
+    const previousItems = [...items];
+    setItems(prev => prev.filter(i => i.id !== id));
+
+    try {
+      const res = await fetch(`/api/watchlist?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(activeUserId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        // Rollback if failed
+        setItems(previousItems);
         alert('Kaldırılamadı');
       }
     } catch (err) {
       console.error('Remove error:', err);
+      setItems(previousItems);
       alert('İşlem başarısız');
     }
   };
 
-  // Add Item
+  // Detailed Add Submit
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAssetForAdd) return;
@@ -120,6 +178,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: activeUserId,
           assetId: selectedAssetForAdd.id,
           symbol: selectedAssetForAdd.symbol,
           notes: addNotes.trim() || undefined,
@@ -148,7 +207,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
     }
   };
 
-  // Edit / Update Alert & Note
+  // Save Edit Alerts & Notes
   const handleSaveEdit = async () => {
     if (!editingItem) return;
     try {
@@ -158,6 +217,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingItem.id,
+          userId: activeUserId,
           notes: editNotes.trim(),
           alertAbove: editAlertAbove ? parseFloat(editAlertAbove) : null,
           alertBelow: editAlertBelow ? parseFloat(editAlertBelow) : null,
@@ -178,7 +238,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
     }
   };
 
-  // Quick Starter Packs (Cold-Start Resolution)
+  // Quick Starter Packs (Zero-History Cold-Start)
   const handleAddStarterPack = async (packType: 'BIST' | 'TEFAS' | 'US') => {
     let symbolsToFind: string[] = [];
     if (packType === 'BIST') symbolsToFind = ['THYAO', 'TURSG', 'FROTO', 'ASELS', 'AKBNK'];
@@ -191,7 +251,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         await fetch('/api/watchlist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: sym }),
+          body: JSON.stringify({ symbol: sym, userId: activeUserId }),
         });
       }
       await fetchData();
@@ -206,13 +266,11 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
   const filteredItems = useMemo(() => {
     return items
       .filter(item => {
-        // Market filter
         if (marketFilter === 'BIST' && item.market !== 'BIST') return false;
         if (marketFilter === 'US' && item.market !== 'US') return false;
         if (marketFilter === 'TEFAS' && item.market !== 'TEFAS') return false;
         if (marketFilter === 'ALERTS' && !item.alertAbove && !item.alertBelow) return false;
 
-        // Search text
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchSym = item.symbol.toLowerCase().includes(q);
@@ -269,7 +327,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
   const renderSparkline = (changePct: number) => {
     const isPositive = changePct >= 0;
     const color = isPositive ? '#10b981' : '#ef4444';
-    // Simplified 5-point realistic mini spline
     const points = isPositive
       ? '0,18 12,16 24,12 36,8 48,2'
       : '0,4 12,6 24,14 36,12 48,18';
@@ -318,11 +375,11 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
 
   return (
     <div className="space-y-4 pb-12">
-      {/* 1. Header & Summary Stats Bar */}
+      {/* 1. Header & User Profile Context Banner */}
       <div className="bg-gradient-to-r from-blue-900/10 via-indigo-900/10 to-purple-900/10 dark:from-blue-950/40 dark:via-indigo-950/40 dark:to-purple-950/40 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl p-4 sm:p-5 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-2xl">⭐</span>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {language === 'tr' ? 'Takip Ettiklerim & Radar' : 'Watchlist & Favorites'}
@@ -330,27 +387,47 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
               <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">
                 {items.length} {language === 'tr' ? 'Varlık' : 'Assets'}
               </span>
+
+              {/* Multi-User Identity Badge */}
+              <div className="flex items-center gap-1.5 bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                <span>{user ? '👤' : '📱'}</span>
+                <span>
+                  {user
+                    ? user.email || 'Kayıtlı Kullanıcı'
+                    : language === 'tr'
+                    ? `Cihazınıza Özel Liste (${activeUserId.slice(0, 10)})`
+                    : `Device List (${activeUserId.slice(0, 10)})`}
+                </span>
+                {!user && onOpenAuthModal && (
+                  <button
+                    onClick={onOpenAuthModal}
+                    className="ml-1 text-blue-600 hover:underline text-[10px]"
+                  >
+                    {language === 'tr' ? 'Giriş Yap' : 'Sign In'}
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
               {language === 'tr'
-                ? 'Portföyünüzden bağımsız BIST hisseleri, ABD hisse ve ETF’leri ile TEFAS yatırım fonlarını tek ekranda takip edin, hedef fiyat alarmları kurun.'
-                : 'Monitor BIST equities, US stocks/ETFs, and TEFAS mutual funds independently from your portfolio holdings.'}
+                ? 'Her kullanıcının takip listesi tamamen izoledir. BIST, ABD ve TEFAS fonlarını portföyünüzden bağımsız izleyin.'
+                : 'Each user has an isolated watchlist. Track BIST, US equities, and TEFAS funds independently.'}
             </p>
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-auto">
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-sm shadow-blue-500/25 transition-all cursor-pointer active:scale-95"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-sm shadow-blue-500/25 transition-all cursor-pointer active:scale-95"
             >
               <span>+</span>
-              <span>{language === 'tr' ? 'Varlık Ekle' : 'Add Symbol'}</span>
+              <span>{language === 'tr' ? 'Detaylı Ekle' : 'Add Symbol'}</span>
             </button>
             <button
               onClick={fetchData}
               disabled={loading}
               title="Yenile"
-              className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
             >
               <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -359,10 +436,31 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
           </div>
         </div>
 
+        {/* 1-Click Quick Add Bar */}
+        <form onSubmit={handleQuickAdd} className="mt-3 flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={quickAddSymbol}
+              onChange={e => setQuickAddSymbol(e.target.value)}
+              placeholder={language === 'tr' ? 'Hızlı Varlık Ekle (Örn: FROTO, AAPL, TI2, TTE yazıp Enter’a basın)...' : 'Quick add by symbol (e.g. FROTO, AAPL, TI2)...'}
+              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl py-2 px-3 pl-9 text-xs sm:text-sm text-slate-900 dark:text-white uppercase font-bold placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">⚡</span>
+          </div>
+          <button
+            type="submit"
+            disabled={!quickAddSymbol.trim() || isQuickAdding}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
+          >
+            {isQuickAdding ? (language === 'tr' ? 'Ekleniyor...' : 'Adding...') : (language === 'tr' ? '+ Hızlı Ekle' : '+ Add')}
+          </button>
+        </form>
+
         {/* Aggregate Metrics Ribbon */}
         {items.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
-            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
+            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
                 {language === 'tr' ? 'Toplam Takip' : 'Total Tracked'}
               </span>
@@ -371,7 +469,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
               </span>
             </div>
 
-            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
                 {language === 'tr' ? 'Ortalama Günlük Fark' : 'Average 1D Change'}
               </span>
@@ -380,7 +478,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
               </span>
             </div>
 
-            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
                 {language === 'tr' ? 'Günün Lideri' : 'Top Gainer'}
               </span>
@@ -396,7 +494,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
               </div>
             </div>
 
-            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
+            <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
                 {language === 'tr' ? 'Fiyat Alarmları' : 'Price Alerts'}
               </span>
@@ -440,7 +538,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
 
           {/* View Mode & Sort */}
           <div className="flex items-center gap-2 self-end sm:self-auto">
-            {/* View Mode Switcher */}
             <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setViewMode('cards')}
@@ -466,7 +563,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
               </button>
             </div>
 
-            {/* Sort Dropdown */}
             <select
               value={`${sortField}-${sortAsc}`}
               onChange={e => {
@@ -519,11 +615,11 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               {searchQuery
                 ? (language === 'tr' ? 'Arama teriminizi değiştirin veya yeni bir varlık ekleyin.' : 'Try a different search query or add a new asset.')
-                : (language === 'tr' ? 'Portföyünüzden bağımsız olarak izlemek istediğiniz hisse ve fonları ekleyebilir veya aşağıdaki hazır popüler koleksiyonları tek tıkla yükleyebilirsiniz.' : 'Add assets you wish to monitor independently or seed from starter packs below.')}
+                : (language === 'tr' ? 'Bu kullanıcı hesabınıza henüz varlık eklenmedi. Yukarıdaki hızlı arama çubuğundan sembol ekleyebilir veya aşağıdaki hazır paketleri tek tıkla yükleyebilirsiniz.' : 'No assets found for your account. Use the quick add bar or starter packs below.')}
             </p>
           </div>
 
-          {/* Quick Starter Packs (Zero-History Cold-Start Feature) */}
+          {/* Quick Starter Packs */}
           <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 max-w-xl mx-auto">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-3">
               {language === 'tr' ? '⚡ Hızlı Başlangıç Koleksiyonları (Tek Tıkla Ekle)' : '⚡ Starter Packs (1-Click Add)'}
@@ -569,7 +665,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         </div>
       )}
 
-      {/* 4. Card View (Mobile-First Thumb Friendly) */}
+      {/* 4. Card View (Mobile-First Cards) */}
       {viewMode === 'cards' && filteredItems.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filteredItems.map(item => {
@@ -578,7 +674,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
             const flag = item.market === 'BIST' ? '🇹🇷' : item.market === 'US' ? '🇺🇸' : '🏦';
             const badgeType = item.assetClass === 'fund' ? 'TEFAS Fon' : item.assetClass === 'etf' ? 'ETF' : 'Hisse';
 
-            // Distance to alert calculations
             let alertBelowDistance: number | null = null;
             if (item.alertBelow && item.latestPrice > 0) {
               alertBelowDistance = ((item.latestPrice - item.alertBelow) / item.latestPrice) * 100;
@@ -592,7 +687,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
             return (
               <div
                 key={item.id}
-                className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700/60 transition-all flex flex-col justify-between space-y-3 group"
+                className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700/60 transition-all flex flex-col justify-between space-y-3 group relative"
               >
                 {/* Card Top: Asset Identity & Price Badge */}
                 <div className="flex items-start justify-between gap-3">
@@ -713,9 +808,9 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                   </button>
                 )}
 
-                {/* Card Actions Bottom Strip */}
+                {/* Card Actions Bottom Strip: Prominent Add/Remove controls */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => {
                         setEditingItem(item);
@@ -750,12 +845,14 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                     )}
                   </div>
 
+                  {/* Prominent Instant Removal Button */}
                   <button
                     onClick={() => handleRemove(item.id, cleanSym)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs transition-colors cursor-pointer"
-                    title="Takip Listesinden Kaldır"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 dark:bg-rose-950/30 dark:hover:bg-rose-600 text-xs font-bold transition-all cursor-pointer active:scale-95"
+                    title="Takip Listesinden Çıkar"
                   >
-                    ✕
+                    <span>🗑️</span>
+                    <span className="text-[10px]">{language === 'tr' ? 'Çıkar' : 'Remove'}</span>
                   </button>
                 </div>
               </div>
@@ -764,7 +861,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         </div>
       )}
 
-      {/* 5. Dense Table View (Desktop High-Density Grid) */}
+      {/* 5. Dense Table View */}
       {viewMode === 'table' && filteredItems.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
@@ -858,7 +955,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                       </td>
 
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => {
                               setEditingItem(item);
@@ -891,9 +988,9 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                           <button
                             onClick={() => handleRemove(item.id, cleanSym)}
                             className="p-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/50 text-rose-500 transition-colors cursor-pointer"
-                            title="Kaldır"
+                            title="Listeden Çıkar"
                           >
-                            ✕
+                            🗑️
                           </button>
                         </div>
                       </td>
@@ -906,7 +1003,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         </div>
       )}
 
-      {/* 6. Modal: Add New Symbol to Watchlist */}
+      {/* 6. Detailed Add Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
@@ -924,7 +1021,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
-              {/* Asset Selector */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   {language === 'tr' ? 'Varlık / Şirket / Fon Ara:' : 'Search Asset / Symbol / TEFAS:'}
@@ -937,7 +1033,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
 
-                {/* Autocomplete Dropdown */}
                 {modalSearch.trim().length > 0 && !selectedAssetForAdd && (
                   <div className="mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700 shadow-lg">
                     {catalog
@@ -1014,9 +1109,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                     placeholder="Örn: 280.00"
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-400">
-                    {language === 'tr' ? 'Fiyat bu seviyeye veya altına inerse uyar' : 'Alert when price touches or drops below'}
-                  </span>
                 </div>
 
                 <div>
@@ -1031,9 +1123,6 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
                     placeholder="Örn: 320.00"
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl py-2 px-3 text-xs sm:text-sm text-slate-900 dark:text-white focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-slate-400">
-                    {language === 'tr' ? 'Fiyat bu seviyeyi aşarsa uyar' : 'Alert when price exceeds'}
-                  </span>
                 </div>
               </div>
 
@@ -1072,7 +1161,7 @@ export default function WatchlistView({ onAddToPortfolio }: WatchlistViewProps) 
         </div>
       )}
 
-      {/* 7. Modal: Edit Alerts & Notes */}
+      {/* 7. Edit Alerts & Notes Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">

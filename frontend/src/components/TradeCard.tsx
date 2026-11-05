@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { PortfolioItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 export interface TriggerHistoryItem {
   id?: string;
@@ -97,21 +98,38 @@ interface TradeCardProps {
 
 export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
   const { t, language } = useLanguage();
+  const { user } = useAuth();
   const [isStarred, setIsStarred] = useState(false);
+
+  const getEffectiveUserId = () => {
+    if (user?.id) return user.id;
+    if (typeof window !== 'undefined') {
+      let guestId = localStorage.getItem('marketpulse_guest_user_id');
+      if (!guestId) {
+        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('marketpulse_guest_user_id', guestId);
+      }
+      return guestId;
+    }
+    return 'default_user';
+  };
 
   const handleToggleStar = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       const nextState = !isStarred;
       setIsStarred(nextState);
+      const activeUid = getEffectiveUserId();
       if (nextState) {
         await fetch('/api/watchlist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: signal.symbol }),
+          body: JSON.stringify({ symbol: signal.symbol, userId: activeUid }),
         });
       } else {
-        await fetch(`/api/watchlist?symbol=${signal.symbol}`, { method: 'DELETE' });
+        await fetch(`/api/watchlist?symbol=${encodeURIComponent(signal.symbol)}&userId=${encodeURIComponent(activeUid)}`, {
+          method: 'DELETE',
+        });
       }
     } catch (err) {
       console.error('Star toggle error:', err);

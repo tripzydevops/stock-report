@@ -3941,6 +3941,7 @@ export default function Home() {
               handleAddHolding(item);
               setActiveTab('portfolio');
             }}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
 
