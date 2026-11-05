@@ -28,6 +28,15 @@ export default function MobileBottomNav({
 
   const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string; count?: string }[] = [
     {
+      id: 'watchlist',
+      labelTr: 'Takip Listem & Radar',
+      labelEn: 'Watchlist & Radar',
+      icon: '⭐',
+      descTr: 'Portföyden bağımsız BIST, ABD ve TEFAS fonları takip listesi ve fiyat alarmları',
+      descEn: 'Independent watchlist for BIST, US, and TEFAS funds with price alerts',
+      badge: 'YENİ',
+    },
+    {
       id: 'forecast',
       labelTr: 'Kartopu & Projeksiyon',
       labelEn: 'Snowball & Forecast',
@@ -86,10 +95,11 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['forecast', 'catalysts', 'quant', 'scorecard', 'orb', 'help'].includes(activeTab);
+  const isMoreActive = ['watchlist', 'forecast', 'catalysts', 'quant', 'scorecard', 'orb', 'help'].includes(activeTab);
 
   const getActiveMoreLabel = () => {
     switch (activeTab) {
+      case 'watchlist': return language === 'tr' ? 'Takip' : 'Watchlist';
       case 'forecast': return language === 'tr' ? 'Kartopu' : 'Forecast';
       case 'catalysts': return 'KAP';
       case 'orb': return language === 'tr' ? 'Açılış' : 'Opening';
@@ -102,6 +112,7 @@ export default function MobileBottomNav({
 
   const getActiveMoreIcon = () => {
     switch (activeTab) {
+      case 'watchlist': return '⭐';
       case 'forecast': return '🔮';
       case 'catalysts': return '⚡';
       case 'orb': return '🔔';

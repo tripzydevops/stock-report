@@ -21,6 +21,7 @@ import CatalystFeedView from '../components/CatalystFeedView';
 import QuantHubView from '../components/QuantHubView';
 import HelpCenterView from '../components/HelpCenterView';
 import AiAssistantView from '../components/AiAssistantView';
+import WatchlistView from '../components/WatchlistView';
 import AssetHistoryModal from '../components/AssetHistoryModal';
 import AiTradeCoPilotModal, { CoPilotAssetContext } from '../components/AiTradeCoPilotModal';
 import { AuthModal } from '../components/AuthModal';
@@ -56,6 +57,7 @@ import { calculateExitDate } from '../lib/tradeTiming';
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
   signals: { icon: '🎯', tr: 'Sinyaller', en: 'Signals' },
   assistant: { icon: '🤖', tr: 'AI Asistan', en: 'AI Copilot' },
+  watchlist: { icon: '⭐', tr: 'Takip Listem & Radar', en: 'Watchlist & Favorites' },
   catalysts: { icon: '⚡', tr: 'KAP', en: 'KAP' },
   quant: { icon: '🏛️', tr: 'Quant', en: 'Quant' },
   portfolio: { icon: '💼', tr: 'Portföy', en: 'Portfolio' },
@@ -968,7 +970,7 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
   }
 ];
 
-const VALID_TABS: TabId[] = ['signals', 'assistant', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
+const VALID_TABS: TabId[] = ['signals', 'assistant', 'watchlist', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
@@ -3129,6 +3131,7 @@ export default function Home() {
                 <p className="text-[10px] text-slate-400 hidden sm:block truncate">
                   {activeTab === 'signals' && (language === 'tr' ? 'Algoritmik Alım Fırsatları & Kademeli Alım Bölgeleri' : 'Algorithmic Buy Opportunities & DCA Zones')}
                   {activeTab === 'assistant' && (language === 'tr' ? 'Otonom Piyasa & Portföy Danışmanı, Canlı Haber & 6 Aylık Senaryo Motoru' : 'Autonomous Market & Portfolio Copilot, Live News & 6-Month Scenario Engine')}
+                  {activeTab === 'watchlist' && (language === 'tr' ? 'Portföyden Bağımsız BIST, ABD ve TEFAS Takip Listesi & Fiyat Alarmları' : 'Independent BIST, US & TEFAS Watchlist with Price Alerts')}
                   {activeTab === 'portfolio' && (language === 'tr' ? 'Canlı Portföy, Maliyetler ve Risk Kontrolü' : 'Live Portfolio, Cost Basis & Risk Controls')}
                   {activeTab === 'dividend' && (language === 'tr' ? 'Pasif Nakit Akışı, Temettü Takvimi ve AI Danışmanı' : 'Passive Cashflow, Dividend Calendar & AI Advisor')}
                   {activeTab === 'forecast' && (language === 'tr' ? 'Kartopu Büyüme Simülatörü ve DRIP Lab' : 'Snowball Growth Simulator & DRIP Lab')}
@@ -3906,6 +3909,39 @@ export default function Home() {
         {/* TAB 1.8: INSTITUTIONAL QUANT & PAIRS STAT-ARB */}
         {activeTab === 'quant' && (
           <QuantHubView dateFilter={dateFilter} />
+        )}
+
+        {/* TAB: WATCHLIST & RADAR (FAVORİLER) */}
+        {activeTab === 'watchlist' && (
+          <WatchlistView
+            onAddToPortfolio={(asset) => {
+              const isTry = asset.currency === 'TRY' || asset.market === 'BIST' || asset.market === 'TEFAS';
+              const currentP = asset.currentPrice || 100;
+              const defaultShares = isTry ? 10 : 2;
+              const item: PortfolioItem = {
+                symbol: asset.symbol,
+                name: asset.name,
+                market: asset.market,
+                shares: defaultShares,
+                entryPrice: currentP,
+                currentPrice: currentP,
+                currency: asset.currency || (isTry ? 'TRY' : 'USD'),
+                totalCost: currentP * defaultShares,
+                currentValue: currentP * defaultShares,
+                pnlAmount: 0,
+                pnlPercent: 0,
+                stopLoss: Number((currentP * 0.95).toFixed(2)),
+                targetPrice: Number((currentP * 1.15).toFixed(2)),
+                distanceToStop: -5.0,
+                isDividend: false,
+                dcaZone: 'BUY',
+                dcaRationale: 'Takip listesinden portföye eklendi.',
+                entryDate: new Date().toISOString().slice(0, 10),
+              };
+              handleAddHolding(item);
+              setActiveTab('portfolio');
+            }}
+          />
         )}
 
         {/* TAB 2: MY PORTFOLIO & DCA */}

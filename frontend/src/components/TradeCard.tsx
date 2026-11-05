@@ -97,6 +97,26 @@ interface TradeCardProps {
 
 export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
   const { t, language } = useLanguage();
+  const [isStarred, setIsStarred] = useState(false);
+
+  const handleToggleStar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const nextState = !isStarred;
+      setIsStarred(nextState);
+      if (nextState) {
+        await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: signal.symbol }),
+        });
+      } else {
+        await fetch(`/api/watchlist?symbol=${signal.symbol}`, { method: 'DELETE' });
+      }
+    } catch (err) {
+      console.error('Star toggle error:', err);
+    }
+  };
   
   const risk = Math.abs(signal.entryPrice - signal.stopLoss);
   const reward = Math.abs(signal.targetPrice - signal.entryPrice);
@@ -144,6 +164,14 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
               >
                 <span className="group-hover/header:underline underline-offset-2">{signal.symbol}</span>
                 <span className="text-xs text-blue-500 opacity-60 group-hover/header:opacity-100 group-hover/header:scale-110 transition-all">📈</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleStar}
+                className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-sm transition-transform active:scale-125 cursor-pointer"
+                title={isStarred ? (language === 'tr' ? 'Takip listesinden çıkar' : 'Remove from watchlist') : (language === 'tr' ? 'Takip listesine ekle' : 'Add to watchlist')}
+              >
+                {isStarred ? '⭐' : '☆'}
               </button>
               {signal.currentPrice !== undefined && signal.currentPrice !== null && (
                 <button
