@@ -153,6 +153,7 @@ export default function AiAssistantView() {
                 content: m.content,
               })),
               language,
+              apiKey: typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') || '' : '',
             }),
           });
           if (response && response.ok) break;
