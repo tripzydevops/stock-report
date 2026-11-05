@@ -1014,10 +1014,10 @@ export default function Home() {
   };
 
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bearish', close: 588.40, trend: 'down'
+    status: 'Bearish', close: 766.81, trend: 'down'
   });
   const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Neutral', close: 9420.50, trend: 'up'
+    status: 'Neutral', close: 11591.54, trend: 'up'
   });
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
@@ -1168,32 +1168,63 @@ export default function Home() {
         setIsLoading(true);
       }
 
-      // 1. Fetch Market Regimes specifically by market
-      const [usRes, bistRes, fxRes] = await Promise.all([
-        supabase.from('market_regime').select('*').eq('market', 'US').order('date', { ascending: false }).limit(1),
-        supabase.from('market_regime').select('*').eq('market', 'BIST').order('date', { ascending: false }).limit(1),
-        supabase.from('fx_rates').select('rate').eq('pair', 'USDTRY').order('date', { ascending: false }).limit(1)
-      ]);
-
+      // 1. Fetch Dynamic Real-Time Market Regimes via dedicated /api/market/regime with Supabase fallback
+      try {
+        const regimeApiRes = await fetch('/api/market/regime', {
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (regimeApiRes.ok) {
+          const regData = await regimeApiRes.json();
+          if (regData.us) {
+            setUsRegime({
+              status: regData.us.status,
+              close: Number(regData.us.close),
+              trend: regData.us.trend,
+            });
+          }
+          if (regData.bist) {
+            setBistRegime({
+              status: regData.bist.status,
+              close: Number(regData.bist.close),
+              trend: regData.bist.trend,
+            });
+          }
+        } else {
+          throw new Error('API returned non-200');
+        }
+      } catch (err) {
+        // Fallback: Read from Supabase market_regime table
+        const [usRes, bistRes] = await Promise.all([
+          supabase.from('market_regime').select('*').eq('market', 'US').order('date', { ascending: false }).limit(1),
+          supabase.from('market_regime').select('*').eq('market', 'BIST').order('date', { ascending: false }).limit(1),
+        ]);
         if (usRes.data && usRes.data.length > 0) {
           const us = usRes.data[0];
           setUsRegime({
             status: us.regime === 'bullish' ? 'Bullish' : us.regime === 'bearish' ? 'Bearish' : 'Neutral',
-            close: Number(us.index_close) || 771.35,
-            trend: us.regime === 'bullish' ? 'up' : us.regime === 'bearish' ? 'down' : 'flat'
+            close: Number(us.index_close) || 766.81,
+            trend: us.regime === 'bullish' ? 'up' : us.regime === 'bearish' ? 'down' : 'flat',
           });
         }
         if (bistRes.data && bistRes.data.length > 0) {
           const bist = bistRes.data[0];
           setBistRegime({
             status: bist.regime === 'bullish' ? 'Bullish' : bist.regime === 'bearish' ? 'Bearish' : 'Neutral',
-            close: Number(bist.index_close) || 12550.94,
-            trend: bist.regime === 'bullish' ? 'up' : bist.regime === 'bearish' ? 'down' : 'flat'
+            close: Number(bist.index_close) || 11591.54,
+            trend: bist.regime === 'bullish' ? 'up' : bist.regime === 'bearish' ? 'down' : 'flat',
           });
         }
+      }
+
+      // 1.1 Fetch FX rate
+      try {
+        const fxRes = await supabase.from('fx_rates').select('rate').eq('pair', 'USDTRY').order('date', { ascending: false }).limit(1);
         if (fxRes.data && fxRes.data.length > 0 && fxRes.data[0].rate) {
           setUsdTryRate(Number(fxRes.data[0].rate));
         }
+      } catch {
+        // Ignore FX error
+      }
 
         // 2. Fetch Assets & Indicators & Live Price Feeds
         const [
