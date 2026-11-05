@@ -1048,6 +1048,12 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [isOffline, setIsOffline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !navigator.onLine;
+    }
+    return false;
+  });
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
   const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
@@ -1330,6 +1336,11 @@ export default function Home() {
           });
           loadedAssets = mapped;
           setAssets(mapped);
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('market_pulse_cached_assets', JSON.stringify(mapped));
+            }
+          } catch (e) {}
         } else {
           // Generate default 117 sample dataset from constituent lists
           generateFallbackAssets();
@@ -1606,6 +1617,11 @@ export default function Home() {
           const allMappedSignals = [...openSignals, ...recoveredSignals];
           if (allMappedSignals.length > 0) {
             setSignals(allMappedSignals);
+            try {
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('market_pulse_cached_signals', JSON.stringify(allMappedSignals));
+              }
+            } catch (e) {}
           }
         }
 
@@ -2008,14 +2024,21 @@ export default function Home() {
 
           setPortfolio(mappedPortfolio);
           setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev));
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
+            }
+          } catch (e) {}
         }
 
         const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
         setLastRefreshedAt(nowStr);
 
       } catch (err) {
-        console.warn('Using enriched fallback offline data:', err);
-        generateFallbackAssets();
+        console.warn('Network or Supabase query exception, using enriched fallback offline data:', err);
+        if (assets.length === 0) {
+          generateFallbackAssets();
+        }
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -2065,6 +2088,43 @@ export default function Home() {
     }
 
   useEffect(() => {
+    // 0. Immediate offline cache hydration for instant loading on mobile networks
+    if (typeof window !== 'undefined') {
+      setIsOffline(!navigator.onLine);
+
+      try {
+        const cachedAssets = localStorage.getItem('market_pulse_cached_assets');
+        if (cachedAssets) {
+          const parsed = JSON.parse(cachedAssets);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAssets(parsed);
+            setIsLoading(false);
+          }
+        }
+
+        const cachedSignals = localStorage.getItem('market_pulse_cached_signals');
+        if (cachedSignals) {
+          const parsed = JSON.parse(cachedSignals);
+          if (Array.isArray(parsed) && parsed.length > 0) setSignals(parsed);
+        }
+
+        const cachedPortfolio = localStorage.getItem('market_pulse_cached_portfolio');
+        if (cachedPortfolio) {
+          const parsed = JSON.parse(cachedPortfolio);
+          if (Array.isArray(parsed) && parsed.length > 0) setPortfolio(parsed);
+        }
+
+        const cachedRegimes = localStorage.getItem('market_pulse_cached_regimes');
+        if (cachedRegimes) {
+          const parsed = JSON.parse(cachedRegimes);
+          if (parsed.us) setUsRegime(parsed.us);
+          if (parsed.bist) setBistRegime(parsed.bist);
+        }
+      } catch (e) {
+        console.warn('Failed to hydrate offline cache:', e);
+      }
+    }
+
     // 1. Restore persistent active tab from URL hash, query param, or localStorage
     if (typeof window !== 'undefined') {
       const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
@@ -2103,6 +2163,24 @@ export default function Home() {
       }
     };
 
+    // Auto-reconnect when switching from Wi-Fi to cellular or recovering signal
+    const handleOnline = () => {
+      setIsOffline(false);
+      setSyncFeedback({
+        message: language === 'tr' ? '🌐 İnternet bağlantısı sağlandı. Canlı veriler güncelleniyor...' : '🌐 Network reconnected. Updating live market data...',
+        type: 'info'
+      });
+      loadData(true);
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      setSyncFeedback({
+        message: language === 'tr' ? '⚠️ Mobil internet kesildi. Çevrimdışı veriler gösteriliyor.' : '⚠️ Mobile network disconnected. Displaying cached data.',
+        type: 'error'
+      });
+    };
+
     // Listen to browser Back/Forward or manual hash changes
     const handleHashChange = () => {
       if (typeof window !== 'undefined') {
@@ -2127,11 +2205,15 @@ export default function Home() {
 
     window.addEventListener('visibilitychange', handleVisibilityOrFocus);
     window.addEventListener('focus', handleVisibilityOrFocus);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     window.addEventListener('hashchange', handleHashChange);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       window.removeEventListener('hashchange', handleHashChange);
       clearInterval(interval);
     };
@@ -3220,6 +3302,27 @@ export default function Home() {
             }`}>
               <span>{syncFeedback.message}</span>
             </div>
+          </div>
+        )}
+
+        {/* Offline / Cellular Network Transition Notice */}
+        {isOffline && (
+          <div className="mx-2 sm:mx-6 lg:mx-8 mb-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-medium flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base shrink-0">📡</span>
+              <span className="truncate">
+                {language === 'tr'
+                  ? 'Hücresel Veri / Çevrimdışı Mod: Cihaz önbelleğindeki son veriler gösteriliyor.'
+                  : 'Cellular / Offline Mode: Displaying device-cached market data.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleTriggerSync(false)}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 font-bold text-amber-700 dark:text-amber-300 transition-colors cursor-pointer text-[11px]"
+            >
+              {language === 'tr' ? 'Tekrar Dene' : 'Retry'}
+            </button>
           </div>
         )}
 
