@@ -4071,6 +4071,7 @@ export default function Home() {
         onClose={() => setIsModalOpen(false)} 
         onSuccess={() => {
           console.log('Asset added successfully.');
+          handleTriggerSync();
         }}
       />
 

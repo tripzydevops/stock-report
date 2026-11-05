@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     // Resolve assetId if only symbol provided
     if (!assetId && symbol) {
-      const cleanSym = String(symbol).trim().toUpperCase();
+      const cleanSym = String(symbol).trim().toUpperCase().replace('.IS', '');
       const { data: assetData } = await supabase
         .from('assets')
         .select('id')
@@ -161,6 +161,54 @@ export async function POST(request: NextRequest) {
 
       if (assetData) {
         assetId = assetData.id;
+      } else {
+        // Auto-create new asset in catalog so any symbol can be watched immediately
+        const isBistLikely = cleanSym.length >= 4 && !['SPY','QQQ','VOO','AAPL','MSFT','NVDA','AMZN','GOOG','TSLA','SCHD','JEPI','PLD','VICI'].includes(cleanSym);
+        const market = isBistLikely ? 'BIST' : 'US';
+        const currency = isBistLikely ? 'TRY' : 'USD';
+
+        const { data: newAsset, error: insertError } = await supabase
+          .from('assets')
+          .insert({
+            symbol: cleanSym,
+            name: cleanSym,
+            market,
+            asset_class: 'stock',
+            currency,
+            is_active: true,
+          })
+          .select('id')
+          .single();
+
+        if (newAsset && !insertError) {
+          assetId = newAsset.id;
+
+          // Attempt to seed live price from Yahoo Finance
+          try {
+            const yfSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
+            const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1d&range=2d`, {
+              headers: { 'User-Agent': 'Mozilla/5.0' },
+              signal: AbortSignal.timeout(4000),
+            });
+            if (res.ok) {
+              const j = await res.json();
+              const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
+              if (typeof p === 'number') {
+                await supabase.from('price_history').insert({
+                  asset_id: assetId,
+                  date: new Date().toISOString().slice(0, 10),
+                  close: p,
+                  open: p,
+                  high: p,
+                  low: p,
+                  volume: 100000,
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Initial price fetch error:', e);
+          }
+        }
       }
     }
 

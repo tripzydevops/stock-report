@@ -114,6 +114,22 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
   useEffect(() => {
     fetchData();
+
+    const handleUpdate = () => {
+      fetchData();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('marketpulse:asset-added', handleUpdate);
+      window.addEventListener('marketpulse:watchlist-updated', handleUpdate);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('marketpulse:asset-added', handleUpdate);
+        window.removeEventListener('marketpulse:watchlist-updated', handleUpdate);
+      }
+    };
   }, [fetchData]);
 
   // 1-Click Quick Add by Symbol

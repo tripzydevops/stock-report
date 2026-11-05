@@ -5,6 +5,11 @@ export interface AssetCreate {
   name: string;
   asset_class: string;
   market: string;
+  currency?: string;
+  sector?: string;
+  userId?: string;
+  addToWatchlist?: boolean;
+  notes?: string;
 }
 
 export interface RiskCalc {

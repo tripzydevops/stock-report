@@ -23,7 +23,25 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
     setError('');
 
     try {
-      await addAsset({ symbol, name, asset_class: assetClass, market });
+      let activeUserId = 'default_user';
+      if (typeof window !== 'undefined') {
+        activeUserId = localStorage.getItem('marketpulse_guest_user_id') || 'default_user';
+      }
+
+      await addAsset({ 
+        symbol, 
+        name, 
+        asset_class: assetClass, 
+        market,
+        userId: activeUserId,
+        addToWatchlist: true,
+      });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('marketpulse:asset-added', { detail: { symbol, name, market } }));
+        window.dispatchEvent(new CustomEvent('marketpulse:watchlist-updated', { detail: { symbol } }));
+      }
+
       onSuccess();
       onClose();
       // Reset form
