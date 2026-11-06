@@ -94,7 +94,10 @@ export async function GET(request: NextRequest) {
       query = query.or(`symbol.ilike.%${term}%,name.ilike.%${term}%`);
     }
 
-    query = query.order('symbol', { ascending: true });
+    const limitParam = url.searchParams.get('limit');
+    const maxLimit = limitParam ? Math.min(parseInt(limitParam, 10), 2000) : (q ? 50 : 2000);
+
+    query = query.order('symbol', { ascending: true }).limit(maxLimit);
 
     const { data, error } = await query;
     if (error) {
