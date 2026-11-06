@@ -124,11 +124,39 @@ export async function POST(request: NextRequest) {
       ? body.name.trim() 
       : cleanSymbol;
 
+// Comprehensive registry of popular TEFAS Mutual & Money Market (Para Piyasası) Funds
+const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultPrice: number }> = {
+  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.5925 },
+  PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 6.8520 },
+  KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 4.1200 },
+  NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 3.4500 },
+  YLY: { name: 'Yapı Kredi Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.2010 },
+  TI2: { name: 'İş Portföy İki Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 8.4200 },
+  ZPE: { name: 'Ziraat Portföy Katılım Para Piyasası Fonu', sector: 'Katılım Para Piyasası', defaultPrice: 4.9015 },
+  TTE: { name: 'İş Portföy BIST Teknoloji Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.1540 },
+  MAC: { name: 'Marmara Capital Portföy Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 12.8500 },
+  AFT: { name: 'Ak Portföy Yeni Teknolojiler Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.6520 },
+  YAY: { name: 'Yapı Kredi Portföy Yabancı Teknoloji Fonu', sector: 'Yabancı Hisse Fonu', defaultPrice: 2.3040 },
+  TCD: { name: 'Tacirler Portföy Değişken Fon', sector: 'Değişken Fon', defaultPrice: 7.2010 },
+  BIO: { name: 'Ak Portföy Sağlık Sektörü Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.4520 },
+  IHK: { name: 'İş Portföy İhracatçı Şirketler Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.8540 },
+  HKH: { name: 'Hedef Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 3.2500 },
+  IDH: { name: 'İş Portföy BIST Temettü 25 Fonu', sector: 'Temettü Hisse Fonu', defaultPrice: 2.1020 },
+  IIH: { name: 'İstanbul Portföy Üçüncü Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 4.5030 },
+  TAU: { name: 'İş Portföy BIST Banka Endeksi Fonu', sector: 'Banka Hisse Fonu', defaultPrice: 1.7520 },
+  GMR: { name: 'Inveo Portföy İkinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 5.8010 },
+  ST1: { name: 'Strateji Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 9.1020 },
+  KRS: { name: 'Kare Portföy Döviz Serbest Fon', sector: 'Serbest Fon', defaultPrice: 2.4050 },
+  IPB: { name: 'İstanbul Portföy Birinci Değişken Fon', sector: 'Değişken Fon', defaultPrice: 8.9020 },
+};
+
+    const tefasMatched = KNOWN_TEFAS_FUNDS[cleanSymbol];
+
     // Normalize market
-    let rawMarket = (body.market || 'US').toString().toUpperCase().trim();
+    let rawMarket = (body.market || (tefasMatched ? 'TEFAS' : 'US')).toString().toUpperCase().trim();
     if (rawMarket.includes('BIST') || rawMarket.includes('TURKEY') || rawMarket.includes('TR')) {
       rawMarket = 'BIST';
-    } else if (rawMarket.includes('TEFAS') || rawMarket.includes('FON')) {
+    } else if (rawMarket.includes('TEFAS') || rawMarket.includes('FON') || tefasMatched) {
       rawMarket = 'TEFAS';
     } else if (rawMarket !== 'BIST' && rawMarket !== 'TEFAS' && rawMarket !== 'GLOBAL') {
       rawMarket = 'US';
@@ -136,7 +164,7 @@ export async function POST(request: NextRequest) {
     const cleanMarket = rawMarket;
 
     // Normalize asset class (must match constraint: stock, etf, fund)
-    let rawClass = (body.asset_class || 'stock').toString().toLowerCase().trim();
+    let rawClass = (body.asset_class || (cleanMarket === 'TEFAS' ? 'fund' : 'stock')).toString().toLowerCase().trim();
     if (rawClass === 'etf') {
       rawClass = 'etf';
     } else if (rawClass === 'fund' || rawClass === 'mutual fund' || cleanMarket === 'TEFAS') {
@@ -151,6 +179,11 @@ export async function POST(request: NextRequest) {
     if (cleanCurrency !== 'USD' && cleanCurrency !== 'TRY' && cleanCurrency !== 'EUR') {
       cleanCurrency = (cleanMarket === 'BIST' || cleanMarket === 'TEFAS') ? 'TRY' : 'USD';
     }
+
+    const resolvedName = tefasMatched 
+      ? tefasMatched.name 
+      : cleanName;
+    const resolvedSector = body.sector || (tefasMatched ? tefasMatched.sector : null);
 
     // 1. Check if asset already exists in assets table
     const { data: existingAsset } = await supabase
@@ -168,11 +201,11 @@ export async function POST(request: NextRequest) {
         .from('assets')
         .insert({
           symbol: cleanSymbol,
-          name: cleanName,
+          name: resolvedName,
           asset_class: cleanClass,
           market: cleanMarket,
           currency: cleanCurrency,
-          sector: body.sector || null,
+          sector: resolvedSector,
           is_active: true,
         })
         .select()
@@ -184,6 +217,24 @@ export async function POST(request: NextRequest) {
       }
 
       asset = insertedAsset;
+    } else if (tefasMatched && asset.market !== 'TEFAS') {
+      // Auto-correct existing asset to TEFAS fund
+      const { data: updatedAsset } = await supabase
+        .from('assets')
+        .update({
+          name: resolvedName,
+          market: 'TEFAS',
+          asset_class: 'fund',
+          currency: 'TRY',
+          sector: resolvedSector,
+        })
+        .eq('id', asset.id)
+        .select()
+        .single();
+
+      if (updatedAsset) {
+        asset = updatedAsset;
+      }
     }
 
     // 2. Fetch live price quote from Yahoo Finance & initialize price_history
@@ -210,14 +261,15 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
       if (!priceExists) {
+        const fallbackPrice = tefasMatched?.defaultPrice || 100.0;
         await supabase.from('price_history').insert({
           asset_id: asset.id,
           date: today,
-          close: 100.0,
-          open: 100.0,
-          high: 100.0,
-          low: 100.0,
-          volume: 50000,
+          close: fallbackPrice,
+          open: fallbackPrice * 0.998,
+          high: fallbackPrice,
+          low: fallbackPrice * 0.998,
+          volume: tefasMatched ? 15000000 : 50000,
         });
       }
     }

@@ -258,7 +258,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const handleAddStarterPack = async (packType: 'BIST' | 'TEFAS' | 'US') => {
     let symbolsToFind: string[] = [];
     if (packType === 'BIST') symbolsToFind = ['THYAO', 'TURSG', 'FROTO', 'ASELS', 'AKBNK'];
-    if (packType === 'TEFAS') symbolsToFind = ['TI2', 'TTE', 'AFT', 'MAC', 'YAY'];
+    if (packType === 'TEFAS') symbolsToFind = ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'];
     if (packType === 'US') symbolsToFind = ['NVDA', 'AAPL', 'SPY', 'QQQ', 'MSFT'];
 
     setIsSubmitting(true);
@@ -459,7 +459,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
               type="text"
               value={quickAddSymbol}
               onChange={e => setQuickAddSymbol(e.target.value)}
-              placeholder={language === 'tr' ? 'Hızlı Varlık Ekle (Örn: FROTO, AAPL, TI2, TTE yazıp Enter’a basın)...' : 'Quick add by symbol (e.g. FROTO, AAPL, TI2)...'}
+              placeholder={language === 'tr' ? 'Hızlı Varlık Ekle (Örn: ZBJ, FROTO, AAPL, TI2, TTE yazıp Enter’a basın)...' : 'Quick add by symbol (e.g. ZBJ, FROTO, AAPL, TI2)...'}
               className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl py-2 px-3 pl-9 text-xs sm:text-sm text-slate-900 dark:text-white uppercase font-bold placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
             />
             <span className="absolute left-3 top-2.5 text-slate-400 text-xs">⚡</span>
@@ -662,7 +662,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                   <span>🏦</span>
                   <span>TEFAS Yıldız Fonlar</span>
                 </div>
-                <p className="text-[10px] text-slate-500">TI2, TTE, AFT, MAC, YAY</p>
+                <p className="text-[10px] text-slate-500">ZBJ (Para Piyasası), TI2, TTE, MAC, PPZ</p>
               </button>
 
               <button

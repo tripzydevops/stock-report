@@ -147,6 +147,36 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
             </div>
           </div>
 
+          {/* Quick-add TEFAS & Para Piyasası Fonları Chips */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
+              Popüler TEFAS & Para Piyasası Fonları:
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { s: 'ZBJ', n: 'Ziraat Portföy Başak Para Piyasası Fonu', c: 'Fund' },
+                { s: 'PPZ', n: 'Azimut Portföy Para Piyasası Fonu', c: 'Fund' },
+                { s: 'TI2', n: 'İş Portföy İki Para Piyasası Fonu', c: 'Fund' },
+                { s: 'TTE', n: 'İş Portföy BIST Teknoloji Fonu', c: 'Fund' },
+                { s: 'MAC', n: 'Marmara Capital Portföy Hisse Fonu', c: 'Fund' },
+              ].map(q => (
+                <button
+                  key={q.s}
+                  type="button"
+                  onClick={() => {
+                    setSymbol(q.s);
+                    setName(q.n);
+                    setAssetClass(q.c);
+                    setMarket('TEFAS');
+                  }}
+                  className="px-2 py-1 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
+                >
+                  +{q.s}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asset Name</label>
             <input 

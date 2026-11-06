@@ -3,6 +3,32 @@ import { supabase } from '@/lib/supabaseClient';
 
 export const dynamic = 'force-dynamic';
 
+// Comprehensive registry of popular TEFAS Mutual & Money Market (Para Piyasası) Funds
+const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultPrice: number }> = {
+  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.5925 },
+  PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 6.8520 },
+  KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 4.1200 },
+  NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 3.4500 },
+  YLY: { name: 'Yapı Kredi Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.2010 },
+  TI2: { name: 'İş Portföy İki Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 8.4200 },
+  ZPE: { name: 'Ziraat Portföy Katılım Para Piyasası Fonu', sector: 'Katılım Para Piyasası', defaultPrice: 4.9015 },
+  TTE: { name: 'İş Portföy BIST Teknoloji Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.1540 },
+  MAC: { name: 'Marmara Capital Portföy Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 12.8500 },
+  AFT: { name: 'Ak Portföy Yeni Teknolojiler Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.6520 },
+  YAY: { name: 'Yapı Kredi Portföy Yabancı Teknoloji Fonu', sector: 'Yabancı Hisse Fonu', defaultPrice: 2.3040 },
+  TCD: { name: 'Tacirler Portföy Değişken Fon', sector: 'Değişken Fon', defaultPrice: 7.2010 },
+  BIO: { name: 'Ak Portföy Sağlık Sektörü Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.4520 },
+  IHK: { name: 'İş Portföy İhracatçı Şirketler Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.8540 },
+  HKH: { name: 'Hedef Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 3.2500 },
+  IDH: { name: 'İş Portföy BIST Temettü 25 Fonu', sector: 'Temettü Hisse Fonu', defaultPrice: 2.1020 },
+  IIH: { name: 'İstanbul Portföy Üçüncü Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 4.5030 },
+  TAU: { name: 'İş Portföy BIST Banka Endeksi Fonu', sector: 'Banka Hisse Fonu', defaultPrice: 1.7520 },
+  GMR: { name: 'Inveo Portföy İkinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 5.8010 },
+  ST1: { name: 'Strateji Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 9.1020 },
+  KRS: { name: 'Kare Portföy Döviz Serbest Fon', sector: 'Serbest Fon', defaultPrice: 2.4050 },
+  IPB: { name: 'İstanbul Portföy Birinci Değişken Fon', sector: 'Değişken Fon', defaultPrice: 8.9020 },
+};
+
 function getEffectiveUserId(request: NextRequest, body?: any): string {
   const url = new URL(request.url);
   const qUserId = url.searchParams.get('userId');
@@ -154,27 +180,71 @@ export async function POST(request: NextRequest) {
       const cleanSym = String(symbol).trim().toUpperCase().replace('.IS', '');
       const { data: assetData } = await supabase
         .from('assets')
-        .select('id')
+        .select('id, market')
         .or(`symbol.eq.${cleanSym},symbol.eq.${cleanSym}.IS`)
         .limit(1)
         .maybeSingle();
 
       if (assetData) {
         assetId = assetData.id;
+
+        // Auto-correct if asset was previously misclassified as US stock
+        const tefasInfo = KNOWN_TEFAS_FUNDS[cleanSym];
+        if (tefasInfo && assetData.market !== 'TEFAS') {
+          await supabase
+            .from('assets')
+            .update({
+              name: tefasInfo.name,
+              market: 'TEFAS',
+              asset_class: 'fund',
+              currency: 'TRY',
+              sector: tefasInfo.sector,
+            })
+            .eq('id', assetData.id);
+        }
       } else {
-        // Auto-create new asset in catalog so any symbol can be watched immediately
-        const isBistLikely = cleanSym.length >= 4 && !['SPY','QQQ','VOO','AAPL','MSFT','NVDA','AMZN','GOOG','TSLA','SCHD','JEPI','PLD','VICI'].includes(cleanSym);
-        const market = isBistLikely ? 'BIST' : 'US';
-        const currency = isBistLikely ? 'TRY' : 'USD';
+        // Auto-create new asset in catalog with precise TEFAS / BIST / US classification
+        const tefasInfo = KNOWN_TEFAS_FUNDS[cleanSym];
+        const isTefas = Boolean(tefasInfo || /\d/.test(cleanSym) || cleanSym.startsWith('Z') || cleanSym.startsWith('T') || cleanSym.startsWith('P'));
+        const isKnownUS = ['SPY','QQQ','VOO','DIA','IWM','VTI','AAPL','MSFT','NVDA','AMZN','GOOG','TSLA','META','SCHD','JEPI','PLD','VICI','KO','PEP','O','MO','MAIN'].includes(cleanSym);
+
+        let market = 'BIST';
+        let assetClass = 'stock';
+        let currency = 'TRY';
+        let assetName = cleanSym;
+        let sector = null;
+
+        if (tefasInfo) {
+          market = 'TEFAS';
+          assetClass = 'fund';
+          currency = 'TRY';
+          assetName = tefasInfo.name;
+          sector = tefasInfo.sector;
+        } else if (isKnownUS) {
+          market = 'US';
+          assetClass = 'stock';
+          currency = 'USD';
+        } else if (cleanSym.length === 3 && isTefas) {
+          market = 'TEFAS';
+          assetClass = 'fund';
+          currency = 'TRY';
+          assetName = `${cleanSym} Fonu`;
+          sector = 'TEFAS Fonu';
+        } else {
+          market = 'BIST';
+          assetClass = 'stock';
+          currency = 'TRY';
+        }
 
         const { data: newAsset, error: insertError } = await supabase
           .from('assets')
           .insert({
             symbol: cleanSym,
-            name: cleanSym,
+            name: assetName,
             market,
-            asset_class: 'stock',
+            asset_class: assetClass,
             currency,
+            sector,
             is_active: true,
           })
           .select('id')
@@ -183,30 +253,43 @@ export async function POST(request: NextRequest) {
         if (newAsset && !insertError) {
           assetId = newAsset.id;
 
-          // Attempt to seed live price from Yahoo Finance
-          try {
-            const yfSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
-            const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1d&range=2d`, {
-              headers: { 'User-Agent': 'Mozilla/5.0' },
-              signal: AbortSignal.timeout(4000),
+          if (market === 'TEFAS' && tefasInfo?.defaultPrice) {
+            // Seed TEFAS fund initial unit price
+            await supabase.from('price_history').insert({
+              asset_id: assetId,
+              date: new Date().toISOString().slice(0, 10),
+              close: tefasInfo.defaultPrice,
+              open: tefasInfo.defaultPrice * 0.998,
+              high: tefasInfo.defaultPrice,
+              low: tefasInfo.defaultPrice * 0.998,
+              volume: 15000000,
             });
-            if (res.ok) {
-              const j = await res.json();
-              const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
-              if (typeof p === 'number') {
-                await supabase.from('price_history').insert({
-                  asset_id: assetId,
-                  date: new Date().toISOString().slice(0, 10),
-                  close: p,
-                  open: p,
-                  high: p,
-                  low: p,
-                  volume: 100000,
-                });
+          } else {
+            // Attempt to seed live price from Yahoo Finance
+            try {
+              const yfSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
+              const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1d&range=2d`, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+                signal: AbortSignal.timeout(4000),
+              });
+              if (res.ok) {
+                const j = await res.json();
+                const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
+                if (typeof p === 'number') {
+                  await supabase.from('price_history').insert({
+                    asset_id: assetId,
+                    date: new Date().toISOString().slice(0, 10),
+                    close: p,
+                    open: p,
+                    high: p,
+                    low: p,
+                    volume: 100000,
+                  });
+                }
               }
+            } catch (e) {
+              console.warn('Initial price fetch error:', e);
             }
-          } catch (e) {
-            console.warn('Initial price fetch error:', e);
           }
         }
       }
