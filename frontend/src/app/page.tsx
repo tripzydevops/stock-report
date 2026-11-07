@@ -140,37 +140,37 @@ const INITIAL_SIGNALS: TradeSignal[] = [
   },
   {
     symbol: 'BIMAS', name: 'BİM Birleşik Mağazalar', strategy: 'Anchored VWAP Bounce',
-    entryPrice: 472.50, stopLoss: 458.00, targetPrice: 510.00,
-    confidence: 90, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (468.20). Low breached and quickly reclaimed with strong institutional buying wick.',
+    entryPrice: 368.50, stopLoss: 356.00, targetPrice: 395.00,
+    confidence: 90, rationale: 'Institutional retest and bullish absorption bounce at Quarter-to-Date Anchored VWAP (₺365.20). Low breached and quickly reclaimed with strong institutional buying wick.',
     market: 'BIST', date: new Date().toISOString().slice(0, 10), currency: 'TRY',
-    direction: 'LONG', entryMode: 'next_open', target1: 494.00, target2: 510.00,
+    direction: 'LONG', entryMode: 'next_open', target1: 382.00, target2: 395.00,
     triggerReasons: [
-      'Tested Anchored VWAP support at ₺468.20 anchored from institutional pivot low',
-      'Intraday low dipped to AVWAP and closed back above at ₺472.50 (absorption wick)',
+      'Tested Anchored VWAP support at ₺365.20 anchored from institutional pivot low',
+      'Intraday low dipped to AVWAP and closed back above at ₺368.50 (absorption wick)',
       'RSI(14) was 52.0, confirming consolidation support',
       'Price closed above key moving averages (macro Stage-2 trend)'
     ],
     failedChecks: [],
-    invalidation: 'Close below ₺458.00 or decisive loss of AVWAP support (₺468.20)',
+    invalidation: 'Close below ₺356.00 or decisive loss of AVWAP support (₺365.20)',
     marketContext: { benchmark: 'XU100', regime: 'BULLISH' },
-    risk: { atr_14: 11.50, stop_distance_pct: 3.07, max_position_pct: 1.5, invalidation_level: 458.00 }
+    risk: { atr_14: 9.50, stop_distance_pct: 3.39, max_position_pct: 1.5, invalidation_level: 356.00 }
   },
   {
     symbol: 'AAPL', name: 'Apple Inc.', strategy: 'Liquidity Sweep Reclaim',
-    entryPrice: 228.40, stopLoss: 222.50, targetPrice: 242.00,
-    confidence: 84, rationale: 'Flushed retail stop loss pool below 20-day swing low ($224.80) with a 45% absorption wick and reclaimed previous support on high volume.',
+    entryPrice: 338.50, stopLoss: 329.00, targetPrice: 358.00,
+    confidence: 84, rationale: 'Flushed retail stop loss pool below 20-day swing low ($332.80) with a 45% absorption wick and reclaimed previous support on high volume.',
     market: 'US', date: new Date().toISOString().slice(0, 10), currency: 'USD',
-    direction: 'LONG', entryMode: 'next_open', target1: 237.50, target2: 242.00,
+    direction: 'LONG', entryMode: 'next_open', target1: 350.00, target2: 358.00,
     triggerReasons: [
-      'Swept 20-day swing low at $224.80 (flushed retail stop pool)',
-      'Reclaimed support with strong close back above prior swing low at $228.40',
+      'Swept 20-day swing low at $332.80 (flushed retail stop pool)',
+      'Reclaimed support with strong close back above prior swing low at $338.50',
       'Lower absorption wick comprised 45% of total daily range',
       'Volume ratio was 1.35x average (institutional accumulation flow)'
     ],
     failedChecks: [],
-    invalidation: 'Close below $222.50 or new breakdown below sweep low ($223.50)',
+    invalidation: 'Close below $329.00 or new breakdown below sweep low ($330.50)',
     marketContext: { benchmark: 'SPY', regime: 'BULLISH' },
-    risk: { atr_14: 3.90, stop_distance_pct: 2.58, max_position_pct: 1.5, invalidation_level: 222.50 }
+    risk: { atr_14: 4.80, stop_distance_pct: 2.81, max_position_pct: 1.5, invalidation_level: 329.00 }
   },
   {
     symbol: 'ASELS', name: 'Aselsan', strategy: 'Relative Strength Leader',
@@ -1234,44 +1234,28 @@ export default function Home() {
         // Ignore FX error
       }
 
-        // 2. Fetch Assets & Indicators & Live Price Feeds
+        // 2. Fetch Assets & Indicators & Live Price Feeds directly from verified v_latest_prices
         const [
-          { data: assetsData },
-          { data: recentPriceBars },
+          { data: latestPricesData, error: pricesFetchErr },
           { data: orbRecords }
         ] = await Promise.all([
           supabase
-            .from('assets')
+            .from('v_latest_prices')
             .select(`
-              id, symbol, name, market,
-              daily_indicators ( rsi_14, volume_ratio, high_52w, low_52w, ema_200 )
+              asset_id, symbol, name, market, currency, sector,
+              latest_price, latest_date, open, high, low, volume,
+              rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
-            .limit(150),
-          supabase
-            .from('price_history')
-            .select('asset_id, close, date')
-            .order('date', { ascending: false })
-            .limit(1200),
+            .limit(2000),
           supabase
             .from('opening_direction')
-            .select('symbol, current_price, prev_close, gap_percent, date')
+            .select('symbol, current_price, prev_close, gap_percent, gap_type, orb_status, bias, volume_spike, date')
             .order('date', { ascending: false })
             .limit(600)
         ]);
 
-        // Build fast lookup maps for newest prices
-        const barsByAsset = new Map<string, { latest: number; prev: number; date: string }>();
-        if (recentPriceBars) {
-          for (const bar of recentPriceBars) {
-            if (!barsByAsset.has(bar.asset_id)) {
-              barsByAsset.set(bar.asset_id, { latest: Number(bar.close), prev: Number(bar.close), date: bar.date });
-            } else {
-              const existing = barsByAsset.get(bar.asset_id)!;
-              if (existing.prev === existing.latest && bar.date !== existing.date) {
-                existing.prev = Number(bar.close);
-              }
-            }
-          }
+        if (pricesFetchErr) {
+          console.warn('Warning: Could not fetch v_latest_prices in page.tsx:', pricesFetchErr.message);
         }
 
         const orbBySymbol = new Map<string, { currentPrice: number; prevClose: number; changePercent: number; date: string }>();
@@ -1293,45 +1277,27 @@ export default function Home() {
         }
 
         let loadedAssets: AssetData[] = [];
-        if (assetsData && assetsData.length > 0) {
-          const mapped: AssetData[] = assetsData.map((a: any) => {
-            const ind = a.daily_indicators?.[0] || {};
-            const cleanSym = a.symbol.replace('.IS', '').toUpperCase();
-            const orb = orbBySymbol.get(cleanSym);
-            const barInfo = barsByAsset.get(a.id);
-
-            let latestPrice = 100;
-            let changePct = 0;
-
-            const orbDate = orb?.date || '';
-            const barDate = barInfo?.date || '';
-
-            if (orb && orb.currentPrice > 0 && orbDate >= barDate) {
-              latestPrice = orb.currentPrice;
-              changePct = orb.changePercent;
-            } else if (barInfo && barInfo.latest > 0) {
-              latestPrice = barInfo.latest;
-              changePct = barInfo.prev > 0 ? ((barInfo.latest - barInfo.prev) / barInfo.prev) * 100 : 0;
-            } else if (orb && orb.currentPrice > 0) {
-              latestPrice = orb.currentPrice;
-              changePct = orb.changePercent;
-            }
-
-            const ema200 = ind.ema_200 || latestPrice;
+        if (latestPricesData && latestPricesData.length > 0) {
+          const mapped: AssetData[] = latestPricesData.map((p: any) => {
+            const cleanSym = (p.symbol || '').replace('.IS', '').toUpperCase();
+            const latestPrice = Number(p.latest_price) || 0;
+            const openPrice = Number(p.open) || latestPrice;
+            const changePct = openPrice > 0 ? ((latestPrice - openPrice) / openPrice) * 100 : 0;
+            const ema200 = Number(p.ema_200) || latestPrice;
             const emaStatus = latestPrice >= ema200 ? 'Above 200 EMA' : 'Below 200 EMA';
 
             return {
-              id: a.id,
-              symbol: a.symbol.replace('.IS', ''),
-              name: a.name || a.symbol,
-              market: a.market || 'BIST',
+              id: p.asset_id,
+              symbol: cleanSym,
+              name: p.name || cleanSym,
+              market: (p.market || 'BIST') as any,
               price: latestPrice,
-              changePercent: changePct,
-              rsi: ind.rsi_14 || 50,
-              emaStatus: emaStatus,
-              volumeRatio: ind.volume_ratio || 1.0,
-              high52w: ind.high_52w,
-              low52w: ind.low_52w
+              changePercent: Number(changePct.toFixed(2)),
+              rsi: Number(p.rsi_14) || 50,
+              emaStatus: emaStatus as any,
+              volumeRatio: Number(p.volume_ratio) || 1.0,
+              high52w: p.high_52w ? Number(p.high_52w) : undefined,
+              low52w: p.low_52w ? Number(p.low_52w) : undefined
             };
           });
           loadedAssets = mapped;
@@ -1342,7 +1308,6 @@ export default function Home() {
             }
           } catch (e) {}
         } else {
-          // Generate default 117 sample dataset from constituent lists
           generateFallbackAssets();
         }
 
@@ -1947,7 +1912,7 @@ export default function Home() {
           const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
             const rawSym = pos.assets?.symbol || 'UNKNOWN';
             const cleanSym = rawSym.replace('.IS', '');
-            const matchedAsset = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
+            const matchedAsset = loadedAssets.find((a: AssetData) => a.id === pos.asset_id || a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
             const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
             const shares = Number(pos.quantity);
             const entryPrice = Number(pos.avg_entry_price);
@@ -2047,31 +2012,34 @@ export default function Home() {
 
     function generateFallbackAssets() {
       const topSymbols = [
-        { s: 'SPY', n: 'SPDR S&P 500 ETF', m: 'US', p: 575.20, c: 0.82, r: 62.4, e: 'Above 200 EMA', v: 1.15 },
-        { s: 'QQQ', n: 'Invesco QQQ Trust', m: 'US', p: 495.15, c: 1.25, r: 68.5, e: 'Above 200 EMA', v: 1.30 },
-        { s: 'VOO', n: 'Vanguard S&P 500 ETF', m: 'US', p: 528.40, c: 0.28, r: 50.5, e: 'Above 200 EMA', v: 1.05 },
+        { s: 'SPY', n: 'SPDR S&P 500 ETF', m: 'US', p: 735.29, c: 0.82, r: 62.4, e: 'Above 200 EMA', v: 1.15 },
+        { s: 'QQQ', n: 'Invesco QQQ Trust', m: 'US', p: 612.40, c: 1.25, r: 68.5, e: 'Above 200 EMA', v: 1.30 },
+        { s: 'VOO', n: 'Vanguard S&P 500 ETF', m: 'US', p: 678.38, c: 0.28, r: 50.5, e: 'Above 200 EMA', v: 1.05 },
         { s: 'SCHD', n: 'Schwab US Dividend ETF', m: 'US', p: 83.10, c: 0.35, r: 55.0, e: 'Above 200 EMA', v: 1.05 },
         { s: 'JEPI', n: 'JPMorgan Equity Premium ETF', m: 'US', p: 57.16, c: 0.51, r: 67.1, e: 'Above 200 EMA', v: 1.20 },
         { s: 'O', n: 'Realty Income Corp (REIT)', m: 'US', p: 55.55, c: 0.69, r: 52.3, e: 'Above 200 EMA', v: 1.10 },
         { s: 'VICI', n: 'VICI Properties Inc (REIT)', m: 'US', p: 32.46, c: 2.27, r: 48.9, e: 'Above 200 EMA', v: 1.35 },
         { s: 'PLD', n: 'Prologis Inc (REIT)', m: 'US', p: 126.94, c: -2.70, r: 35.9, e: 'Near 50 EMA', v: 0.95 },
         { s: 'KO', n: 'The Coca-Cola Co', m: 'US', p: 68.50, c: 0.24, r: 61.1, e: 'Above 200 EMA', v: 1.00 },
-        { s: 'NVDA', n: 'NVIDIA Corp', m: 'US', p: 135.40, c: 2.10, r: 64.2, e: 'Above 200 EMA', v: 1.85 },
-        { s: 'AAPL', n: 'Apple Inc.', m: 'US', p: 231.80, c: 0.45, r: 56.1, e: 'Above 200 EMA', v: 0.95 },
-        { s: 'THYAO', n: 'Türk Hava Yolları', m: 'BIST', p: 326.50, c: 2.45, r: 58.2, e: 'Above 200 EMA', v: 2.10 },
-        { s: 'TUPRS', n: 'Tüpraş', m: 'BIST', p: 165.20, c: -1.15, r: 42.1, e: 'Near 50 EMA', v: 0.82 },
-        { s: 'ASELS', n: 'Aselsan', m: 'BIST', p: 374.50, c: 3.10, r: 66.4, e: 'Above 200 EMA', v: 2.40 },
-        { s: 'BIMAS', n: 'BİM Mağazalar', m: 'BIST', p: 485.00, c: 0.90, r: 53.0, e: 'Above 200 EMA', v: 1.10 },
-        { s: 'ISMEN', n: 'İş Yatırım Menkul', m: 'BIST', p: 35.80, c: 1.65, r: 55.4, e: 'Above 200 EMA', v: 1.25 },
-        { s: 'TURSG', n: 'Türkiye Sigorta', m: 'BIST', p: 6.72, c: 2.20, r: 61.0, e: 'Above 200 EMA', v: 1.50 },
-        { s: 'KCHOL', n: 'Koç Holding', m: 'BIST', p: 215.00, c: 0.50, r: 49.5, e: 'Near 50 EMA', v: 0.90 },
-        { s: 'EREGL', n: 'Erdemir', m: 'BIST', p: 52.40, c: -0.80, r: 38.2, e: 'Below 200 EMA', v: 0.75 },
+        { s: 'NVDA', n: 'NVIDIA Corp', m: 'US', p: 186.64, c: 2.10, r: 64.2, e: 'Above 200 EMA', v: 1.85 },
+        { s: 'AAPL', n: 'Apple Inc.', m: 'US', p: 342.37, c: 0.45, r: 56.1, e: 'Above 200 EMA', v: 0.95 },
+        { s: 'THYAO', n: 'Türk Hava Yolları', m: 'BIST', p: 299.25, c: 2.45, r: 58.2, e: 'Above 200 EMA', v: 2.10 },
+        { s: 'TUPRS', n: 'Tüpraş', m: 'BIST', p: 337.50, c: -1.15, r: 42.1, e: 'Near 50 EMA', v: 0.82 },
+        { s: 'ASELS', n: 'Aselsan', m: 'BIST', p: 64.80, c: 3.10, r: 66.4, e: 'Above 200 EMA', v: 2.40 },
+        { s: 'BIMAS', n: 'BİM Mağazalar', m: 'BIST', p: 371.75, c: 0.90, r: 53.0, e: 'Above 200 EMA', v: 1.10 },
+        { s: 'ISMEN', n: 'İş Yatırım Menkul', m: 'BIST', p: 27.36, c: 1.65, r: 55.4, e: 'Above 200 EMA', v: 1.25 },
+        { s: 'TURSG', n: 'Türkiye Sigorta', m: 'BIST', p: 3.35, c: 2.20, r: 61.0, e: 'Above 200 EMA', v: 1.50 },
+        { s: 'KCHOL', n: 'Koç Holding', m: 'BIST', p: 206.10, c: 0.50, r: 49.5, e: 'Near 50 EMA', v: 0.90 },
+        { s: 'EREGL', n: 'Erdemir', m: 'BIST', p: 31.06, c: -0.80, r: 38.2, e: 'Below 200 EMA', v: 0.75 },
         { s: 'FROTO', n: 'Ford Otosan', m: 'BIST', p: 1045.00, c: 1.80, r: 59.8, e: 'Above 200 EMA', v: 1.40 },
         { s: 'SISE', n: 'Şişecam', m: 'BIST', p: 44.30, c: 0.10, r: 41.2, e: 'Below 200 EMA', v: 0.70 },
-        { s: 'AKBNK', n: 'Akbank', m: 'BIST', p: 58.20, c: 1.15, r: 57.1, e: 'Above 200 EMA', v: 1.30 },
-        { s: 'GARAN', n: 'Garanti BBVA', m: 'BIST', p: 114.50, c: 1.40, r: 60.5, e: 'Above 200 EMA', v: 1.45 },
-        { s: 'MAC', n: 'Marmara Capital Fonu', m: 'TEFAS', p: 12.85, c: 0.65, r: 56.0, e: 'Above 200 EMA', v: 1.00 },
-        { s: 'TI2', n: 'İş Portföy Hisse Fonu', m: 'TEFAS', p: 8.42, c: 0.45, r: 54.0, e: 'Above 200 EMA', v: 1.00 }
+        { s: 'AKBNK', n: 'Akbank', m: 'BIST', p: 68.65, c: 1.15, r: 57.1, e: 'Above 200 EMA', v: 1.30 },
+        { s: 'GARAN', n: 'Garanti BBVA', m: 'BIST', p: 144.30, c: 1.40, r: 60.5, e: 'Above 200 EMA', v: 1.45 },
+        { s: 'ZBJ', n: 'Ziraat Portföy Başak Para Piyasası', m: 'TEFAS', p: 5.5905, c: 0.12, r: 60.0, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'PPZ', n: 'Azimut Portföy Para Piyasası', m: 'TEFAS', p: 7.0998, c: 0.15, r: 60.0, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'MAC', n: 'Marmara Capital Hisse Fonu', m: 'TEFAS', p: 0.6418, c: 0.65, r: 56.0, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'TTE', n: 'İş Portföy BIST Teknoloji Fonu', m: 'TEFAS', p: 1.0077, c: 0.85, r: 58.0, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'AFT', n: 'Ak Portföy Yeni Teknolojiler', m: 'TEFAS', p: 0.8799, c: 1.10, r: 62.0, e: 'Above 200 EMA', v: 1.00 }
       ];
 
       setAssets(topSymbols.map((item, idx) => ({
@@ -2096,7 +2064,13 @@ export default function Home() {
         const cachedAssets = localStorage.getItem('market_pulse_cached_assets');
         if (cachedAssets) {
           const parsed = JSON.parse(cachedAssets);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          // Invalidate legacy cached dummy values (e.g. EREGL at 52.40 or TURSG at 6.72)
+          const isStale = Array.isArray(parsed) && parsed.some(
+            p => (p.symbol === 'EREGL' && p.price > 45) || (p.symbol === 'TURSG' && p.price > 5) || (p.symbol === 'AAPL' && p.price < 300)
+          );
+          if (isStale) {
+            localStorage.removeItem('market_pulse_cached_assets');
+          } else if (Array.isArray(parsed) && parsed.length > 0) {
             setAssets(parsed);
             setIsLoading(false);
           }

@@ -90,7 +90,8 @@ export async function GET(request: NextRequest) {
     // 2. Fetch latest prices for all assets to enrich watchlist
     const { data: latestPrices, error: pricesError } = await supabase
       .from('v_latest_prices')
-      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14');
+      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
+      .limit(2000);
 
     if (pricesError) {
       console.warn('Warning: Could not fetch v_latest_prices:', pricesError.message);
@@ -140,7 +141,8 @@ export async function GET(request: NextRequest) {
       .from('assets')
       .select('id, symbol, name, market, asset_class, currency, sector')
       .eq('is_active', true)
-      .order('symbol', { ascending: true });
+      .order('symbol', { ascending: true })
+      .limit(2000);
 
     if (allAssetsError) {
       console.warn('Warning: Could not fetch all assets:', allAssetsError.message);

@@ -77,8 +77,8 @@ export async function GET(request: NextRequest) {
     const q = url.searchParams.get('q');
 
     let query = supabase
-      .from('assets')
-      .select('id, symbol, name, market, asset_class, currency, sector, is_active, created_at')
+      .from('v_latest_prices')
+      .select('id:asset_id, symbol, name, market, asset_class, currency, sector, is_active, latest_price, open, high, low, volume')
       .eq('is_active', true);
 
     if (market) {
