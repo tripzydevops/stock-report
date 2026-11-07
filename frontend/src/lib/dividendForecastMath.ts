@@ -1452,7 +1452,8 @@ export function deriveDividendsFromPortfolio(
     estimatedNextPayout?: number;
     payoutMonth?: string;
     paymentStatus?: 'Estimated' | 'Confirmed';
-  }> = []
+  }> = [],
+  divSummaryMap?: Record<string, any> | Map<string, any>
 ) {
   const existingMap = new Map<string, (typeof existingDivs)[0]>();
   for (const d of existingDivs) {
@@ -1467,6 +1468,11 @@ export function deriveDividendsFromPortfolio(
     const growthProfile = MASTER_GROWTH_PROFILES[cleanSym];
     const existing = existingMap.get(cleanSym);
 
+    // Look up in divSummaryMap (checks cleanSym or cleanSym.IS)
+    const divSummary = divSummaryMap instanceof Map 
+      ? (divSummaryMap.get(cleanSym) || divSummaryMap.get(`${cleanSym}.IS`))
+      : ((divSummaryMap as any)?.[cleanSym] || (divSummaryMap as any)?.[`${cleanSym}.IS`]);
+
     // Check if asset is a dividend holding:
     // Exclude ONLY if explicitly flagged as an intentional swing trade with no dividend preference
     const isExplicitSwing = pos.isDividend === false && pos.strategyType === 'SWING';
@@ -1474,17 +1480,31 @@ export function deriveDividendsFromPortfolio(
       continue;
     }
 
+    const hasLiveDividends = Boolean(
+      divSummary && (
+        Number(divSummary.trailing_yield_pct) > 0 ||
+        Number(divSummary.last_365d_dividend) > 0 ||
+        Number(divSummary.total_dividend_events) > 0
+      )
+    );
+
     const isDivAsset = Boolean(
       pos.isDividend === true ||
       pos.strategyType === 'CORE_DIVIDEND' ||
       existing ||
+      hasLiveDividends ||
       (growthProfile && growthProfile.currentYield > 0)
     );
 
     if (!isDivAsset) continue;
 
-    const effectivePrice = pos.currentPrice > 0 ? pos.currentPrice : (pos.entryPrice > 0 ? pos.entryPrice : (growthProfile?.currentPrice || 50));
-    const divYield = growthProfile?.currentYield || existing?.dividendYield || 5.0;
+    const liveDbPrice = Number(divSummary?.latest_price);
+    const effectivePrice = pos.currentPrice > 0 
+      ? pos.currentPrice 
+      : (pos.entryPrice > 0 ? pos.entryPrice : (liveDbPrice > 0 ? liveDbPrice : (growthProfile?.currentPrice || 50)));
+
+    const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
+    const divYield = liveYield > 0 ? liveYield : (growthProfile?.currentYield || existing?.dividendYield || 5.0);
     const yoc = pos.entryPrice > 0 ? (effectivePrice * divYield) / pos.entryPrice : divYield;
     const annualPayout = (pos.shares * effectivePrice * divYield) / 100;
     const monthlyPayout = annualPayout / 12;
@@ -1498,15 +1518,20 @@ export function deriveDividendsFromPortfolio(
     
     const sched = resolveDividendSchedule(cleanSym);
 
-    const estimatedDPS = existing?.estimatedNextDPS || (sched.confirmedDPS && sched.isConfirmed ? Number(sched.confirmedDPS.toFixed(4)) : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)));
+    const latestDpsFromDb = Number(divSummary?.latest_dps);
+    const estimatedDPS = existing?.estimatedNextDPS || (
+      sched.confirmedDPS && sched.isConfirmed 
+        ? Number(sched.confirmedDPS.toFixed(4)) 
+        : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)))
+    );
     const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
 
-    const nextExDate = sched.exDate || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15');
+    const nextExDate = sched.exDate || divSummary?.latest_ex_date || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15');
     const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20');
     const payoutMonth = sched.month || existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'April 2027');
     const paymentStatus = sched.isConfirmed ? 'Confirmed' : (existing?.paymentStatus || 'Estimated');
 
-    const displayName = growthProfile?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
+    const displayName = growthProfile?.name || divSummary?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
 
     result.push({
       symbol: cleanSym,
@@ -1514,7 +1539,7 @@ export function deriveDividendsFromPortfolio(
       shares: pos.shares,
       entryPrice: pos.entryPrice,
       currentPrice: effectivePrice,
-      currency: pos.currency || (pos.market === 'US' ? 'USD' : 'TRY'),
+      currency: pos.currency || divSummary?.currency || (pos.market === 'US' ? 'USD' : 'TRY'),
       dividendYield: divYield,
       yieldOnCost: Number(yoc.toFixed(2)),
       annualPayout: Number(annualPayout.toFixed(2)),
@@ -1537,7 +1562,7 @@ export function deriveDividendsFromPortfolio(
 /**
  * Derives comprehensive market-wide dividend assets across BIST and US markets,
  * indicating whether the user holds them in their portfolio or not.
- * Ensures ANY stock paying dividends is visible regardless of portfolio ownership.
+ * Ingests live database records from v_dividend_summary to show 100% of real market dividend payers.
  */
 export function deriveAllMarketDividends(
   portfolioList: Array<{
@@ -1549,7 +1574,8 @@ export function deriveAllMarketDividends(
     market?: string;
     name?: string;
   }> = [],
-  livePricesMap?: Record<string, number>
+  livePricesMap?: Record<string, number>,
+  divSummaryList?: any[]
 ): DividendAsset[] {
   const portfolioMap = new Map<string, (typeof portfolioList)[0]>();
   for (const pos of portfolioList) {
@@ -1558,8 +1584,19 @@ export function deriveAllMarketDividends(
     }
   }
 
-  // Combine known tickers from master profiles, live schedules, and user portfolio
+  const divSummaryMap = new Map<string, any>();
+  if (Array.isArray(divSummaryList)) {
+    for (const item of divSummaryList) {
+      const sym = (item.symbol || '').replace('.IS', '').trim().toUpperCase();
+      if (sym) {
+        divSummaryMap.set(sym, item);
+      }
+    }
+  }
+
+  // Combine tickers from live database summary, master profiles, live schedules, and user portfolio
   const allSymbols = Array.from(new Set([
+    ...Array.from(divSummaryMap.keys()),
     ...KNOWN_DIVIDEND_LIST,
     ...Object.keys(KNOWN_DIVIDEND_SCHEDULES),
     ...Object.keys(LIVE_DIVIDEND_RECORDS),
@@ -1573,14 +1610,18 @@ export function deriveAllMarketDividends(
     const sched = resolveDividendSchedule(cleanSym);
     const held = portfolioMap.get(cleanSym);
     const isHeld = Boolean(held && held.shares > 0);
+    const divSummary = divSummaryMap.get(cleanSym);
 
-    const isUS = cleanSym.length <= 4 && ['KO', 'O', 'SCHD', 'JEPI', 'JEPQ', 'VICI', 'VOO', 'VNQ', 'VYM', 'PEP', 'JNJ', 'PG', 'MCD', 'PLD'].includes(cleanSym);
-    const market: 'BIST' | 'US' = profile?.market || (isUS ? 'US' : 'BIST');
-    const currency = profile?.currency || (market === 'US' ? 'USD' : 'TRY');
+    const isUS = divSummary?.market === 'US' || (cleanSym.length <= 4 && ['KO', 'O', 'SCHD', 'JEPI', 'JEPQ', 'VICI', 'VOO', 'VNQ', 'VYM', 'PEP', 'JNJ', 'PG', 'MCD', 'PLD', 'AAPL', 'MSFT', 'META', 'NVDA', 'SPY'].includes(cleanSym));
+    const market: 'BIST' | 'US' = (divSummary?.market || profile?.market || (isUS ? 'US' : 'BIST')) as 'BIST' | 'US';
+    const currency = divSummary?.currency || profile?.currency || (market === 'US' ? 'USD' : 'TRY');
 
     const livePrice = livePricesMap?.[cleanSym] || livePricesMap?.[`${cleanSym}.IS`];
-    const effectivePrice = livePrice || held?.currentPrice || profile?.currentPrice || (market === 'US' ? 65.0 : 45.0);
-    const divYield = profile?.currentYield || (market === 'US' ? 3.5 : 6.0);
+    const liveDbPrice = Number(divSummary?.latest_price);
+    const effectivePrice = livePrice || liveDbPrice || held?.currentPrice || profile?.currentPrice || (market === 'US' ? 65.0 : 45.0);
+
+    const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
+    const divYield = liveYield > 0 ? liveYield : (profile?.currentYield || (market === 'US' ? 3.5 : 6.0));
 
     const shares = isHeld && held ? held.shares : 0;
     const entryPrice = isHeld && held ? held.entryPrice : effectivePrice;
@@ -1590,9 +1631,10 @@ export function deriveAllMarketDividends(
     const trancheInfo = KNOWN_DIVIDEND_TRANCHES[cleanSym];
     const freqDiv = trancheInfo ? trancheInfo.months.length : (frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1);
 
+    const latestDpsFromDb = Number(divSummary?.latest_dps);
     const estimatedDPS = (sched.confirmedDPS && sched.isConfirmed)
       ? Number(sched.confirmedDPS.toFixed(4))
-      : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4));
+      : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)));
 
     const annualPayout = isHeld
       ? Number(((shares * effectivePrice * divYield) / 100).toFixed(2))
@@ -1602,9 +1644,12 @@ export function deriveAllMarketDividends(
       ? Number((shares * estimatedDPS).toFixed(2))
       : Number((100 * estimatedDPS).toFixed(2));
 
-    const displayName = profile?.name || held?.name || (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym);
+    const displayName = profile?.name || divSummary?.name || held?.name || (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym);
     const safetyRating = (profile?.safetyGrade?.charAt(0) || 'A') as 'A' | 'B' | 'C';
     const payoutRatio = profile?.payoutRatio || 50;
+
+    const nextExDate = sched.exDate || divSummary?.latest_ex_date;
+    const nextPayDate = sched.payDate || nextExDate;
 
     result.push({
       symbol: cleanSym,
@@ -1620,8 +1665,8 @@ export function deriveAllMarketDividends(
       payoutRatio: payoutRatio,
       safetyRating: safetyRating,
       frequency: frequency,
-      nextExDate: sched.exDate,
-      nextPaymentDate: sched.payDate,
+      nextExDate: nextExDate,
+      nextPaymentDate: nextPayDate,
       estimatedNextDPS: estimatedDPS,
       estimatedNextPayout: estimatedNextPayout,
       payoutMonth: sched.month,

@@ -1027,6 +1027,19 @@ export default function Home() {
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
   const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
+  const [dividendSummaries, setDividendSummaries] = useState<any[]>([]);
+
+  const dividendSummaryMap = useMemo(() => {
+    const map = new Map<string, any>();
+    dividendSummaries.forEach(d => {
+      const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+      if (sym) {
+        map.set(sym, d);
+        map.set(`${sym}.IS`, d);
+      }
+    });
+    return map;
+  }, [dividendSummaries]);
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
@@ -1114,10 +1127,10 @@ export default function Home() {
 
   // Keep Dividend Cashflow automatically and 100% synchronized with live portfolio holdings
   useEffect(() => {
-    setDividends(prev => deriveDividendsFromPortfolio(portfolio, prev));
-  }, [portfolio]);
+    setDividends(prev => deriveDividendsFromPortfolio(portfolio, prev, dividendSummaryMap));
+  }, [portfolio, dividendSummaryMap]);
 
-  // Derive market-wide dividend universe (all 44 assets) cross-referenced with live portfolio holdings
+  // Derive market-wide dividend universe cross-referenced with live database records and portfolio holdings
   const allMarketDividends = useMemo(() => {
     const livePrices: Record<string, number> = {};
     assets.forEach(a => {
@@ -1126,8 +1139,8 @@ export default function Home() {
     portfolio.forEach(p => {
       if (p.currentPrice && p.currentPrice > 0) livePrices[p.symbol.replace('.IS', '').toUpperCase()] = p.currentPrice;
     });
-    return deriveAllMarketDividends(portfolio, livePrices);
-  }, [portfolio, assets]);
+    return deriveAllMarketDividends(portfolio, livePrices, dividendSummaries);
+  }, [portfolio, assets, dividendSummaries]);
 
   const handleSelectTicker = (symbol: string) => {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -1237,7 +1250,8 @@ export default function Home() {
         // 2. Fetch Assets & Indicators & Live Price Feeds directly from verified v_latest_prices
         const [
           { data: latestPricesData, error: pricesFetchErr },
-          { data: orbRecords }
+          { data: orbRecords },
+          { data: divSummaryData, error: divSummaryErr }
         ] = await Promise.all([
           supabase
             .from('v_latest_prices')
@@ -1251,8 +1265,16 @@ export default function Home() {
             .from('opening_direction')
             .select('symbol, current_price, prev_close, gap_percent, gap_type, orb_status, bias, volume_spike, date')
             .order('date', { ascending: false })
-            .limit(600)
+            .limit(600),
+          supabase
+            .from('v_dividend_summary')
+            .select('*')
+            .limit(2000)
         ]);
+
+        if (divSummaryData && divSummaryData.length > 0) {
+          setDividendSummaries(divSummaryData);
+        }
 
         if (pricesFetchErr) {
           console.warn('Warning: Could not fetch v_latest_prices in page.tsx:', pricesFetchErr.message);
@@ -1988,7 +2010,15 @@ export default function Home() {
           });
 
           setPortfolio(mappedPortfolio);
-          setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev));
+          const activeDivMap = new Map<string, any>();
+          (divSummaryData || []).forEach((d: any) => {
+            const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+            if (sym) {
+              activeDivMap.set(sym, d);
+              activeDivMap.set(`${sym}.IS`, d);
+            }
+          });
+          setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
           try {
             if (typeof window !== 'undefined') {
               localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
@@ -2312,7 +2342,7 @@ export default function Home() {
     setPortfolio(prev => {
       const filtered = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
       const updated = [enrichedHolding, ...filtered];
-      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
       return updated;
     });
 
@@ -2485,7 +2515,7 @@ export default function Home() {
       });
 
       // Synchronize dividend cashflow immediately
-      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
 
       return updated;
     });
@@ -2956,7 +2986,7 @@ export default function Home() {
         };
       });
 
-      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs));
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
       return updated;
     });
 
@@ -4046,6 +4076,7 @@ export default function Home() {
             onOpenCoPilot={handleOpenCoPilotForHolding}
             onToggleStrategyType={handleToggleStrategyType}
             onSelectTicker={handleSelectTicker}
+            portfolioDividends={dividends}
           />
         )}
 

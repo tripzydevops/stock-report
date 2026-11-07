@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer } from '../lib/supabaseClient';
+import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer, DividendAsset } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { calculateSectorRisk } from '../lib/sectorRisk';
 import { useLanguage } from '../context/LanguageContext';
@@ -32,6 +32,7 @@ interface PortfolioViewProps {
   onSelectTicker?: (symbol: string) => void;
   onUpdateTargetPrice?: (symbol: string, newTargetPrice: number) => void;
   isSimpleMode?: boolean;
+  portfolioDividends?: DividendAsset[];
 }
 
 export default function PortfolioView({
@@ -43,6 +44,7 @@ export default function PortfolioView({
   usdTryRate,
   cashBalanceTRY = 2952.26,
   dateFilter,
+  portfolioDividends,
   onRemoveHolding,
   onAddHoldingClick,
   onTradeHolding,
@@ -312,8 +314,10 @@ export default function PortfolioView({
 
   // Active Portfolio Dividend Stream & Annual Income Run-Rate
   const dividendAssets = React.useMemo(() => {
-    return deriveDividendsFromPortfolio(portfolio);
-  }, [portfolio]);
+    return portfolioDividends && portfolioDividends.length > 0
+      ? portfolioDividends
+      : deriveDividendsFromPortfolio(portfolio);
+  }, [portfolio, portfolioDividends]);
 
   // Cumulative swing gains per symbol from realized trades (used for Maliyet Düşürme / House Money tracking)
   const swingGainsBySymbol = React.useMemo(() => {

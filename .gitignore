@@ -50,3 +50,8 @@ us_backtest_*.csv
 .DS_Store
 Thumbs.db
 
+# Scratch and temp files
+scratch/
+all_midas_assets.json
+
+
