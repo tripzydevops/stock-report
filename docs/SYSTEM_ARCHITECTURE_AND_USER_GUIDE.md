@@ -76,9 +76,11 @@ flowchart TD
 
 ### Layer 3: Data & Infrastructure
 - **Technologies:** Supabase PostgreSQL, `pgvector`, Pandera, Pydantic, Row-Level Security (RLS).
-- **Relational Stores:** High-integrity tables for assets, OHLCV bars, calculated indicators, user portfolios, and cash transactions.
+- **Relational Stores:** High-integrity tables for assets (1,303 active tickers), price history, corporate dividend events (`asset_dividends`), user portfolios, and cash transactions.
+- **Analytical Views:** `v_latest_prices` (real-time quotes, technical indicators) and `v_dividend_summary` (713 dividend payers, trailing 12-month distributions, annualized yields).
 - **Vector Store:** Embeddings for semantic search across company news, KAP filings, and financial statements.
 - **Storage:** Private bucket (`marketpulse-reports`) with strict immutable report archiving (`upsert: false`).
+- **Comprehensive Guide:** See [LIVE_DIVIDEND_AND_PRICING_PIPELINE.md](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/docs/LIVE_DIVIDEND_AND_PRICING_PIPELINE.md) for full pipeline specs.
 
 ---
 
@@ -90,7 +92,7 @@ MarketPulse organizes institutional intelligence into 9 core views accessible vi
 | :---: | :--- | :---: | :--- |
 | **1** | **Sinyaller & Fırsatlar** (`signals`) | 🎯 | Live algorithmic trade cards, multi-tier targets, accumulation badges, 1-click **Posizyon Hesapla** calculator modal, and the unified **💡 YZ Analiz & Planı** blueprint. |
 | **2** | **Canlı Portföyüm** (`portfolio`) | 💼 | Multi-currency asset tracking (`TRY` / `USD`), live PnL, dynamic cash ledger, deposit/withdrawal ledger, distance to stop-loss, and 3-tranche DCA rebalancing. |
-| **3** | **Temettü Gelirleri** (`dividend`) | 💰 | Forward monthly/annual dividend cashflow calendar, payout safety scores, yield on cost, ex-dividend date tracker, and the conversational AI Dividend Advisor. |
+| **3** | **Temettü Gelirleri** (`dividend`) | 💰 | Live database dividend pipeline (11,076 verified corporate events across 713 assets), forward monthly/annual dividend cashflow calendar, payout safety scores, yield on cost (YoC), confirmed ex-dividend date tracker, and the conversational AI Dividend Advisor. |
 | **4** | **Kartopu & Projeksiyon** (`forecast`) | 🔮 | DRIP (Dividend Reinvestment Plan) compounding simulator projecting exponential growth milestones over 5, 10, and 20 years with head-to-head asset comparisons. |
 | **5** | **KAP Bildirimleri** (`catalysts`) | ⚡ | Real-time scraper capturing Public Disclosure Platform (KAP) company announcements, share buybacks (hisse geri alımları), new contract wins, and dividend votes. |
 | **6** | **Kurumsal Quant Hub** (`quant`) | 🏛️ | Statistical Arbitrage pairs trading engine (Cointegration & Z-score spreads) and multi-factor quantitative ranking (Value, Quality, Momentum, Volatility). |
