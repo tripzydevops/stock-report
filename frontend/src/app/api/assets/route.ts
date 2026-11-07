@@ -97,15 +97,28 @@ export async function GET(request: NextRequest) {
     const limitParam = url.searchParams.get('limit');
     const maxLimit = limitParam ? Math.min(parseInt(limitParam, 10), 2000) : (q ? 50 : 2000);
 
-    query = query.order('symbol', { ascending: true }).limit(maxLimit);
+    query = query.order('symbol', { ascending: true });
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Assets GET error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    let finalData: any[] = [];
+    if (maxLimit > 1000) {
+      const [r1, r2] = await Promise.all([
+        query.range(0, 999),
+        supabase
+          .from('v_latest_prices')
+          .select('id:asset_id, symbol, name, market, asset_class, currency, sector, is_active, latest_price, open, high, low, volume')
+          .eq('is_active', true)
+          .order('symbol', { ascending: true })
+          .range(1000, maxLimit - 1)
+      ]);
+      if (r1.error) throw r1.error;
+      finalData = [...(r1.data || []), ...(r2.data || [])];
+    } else {
+      const { data, error } = await query.limit(maxLimit);
+      if (error) throw error;
+      finalData = data || [];
     }
 
-    return NextResponse.json(data || []);
+    return NextResponse.json(finalData);
   } catch (err: any) {
     console.error('Assets GET route exception:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });

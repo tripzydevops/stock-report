@@ -1248,8 +1248,10 @@ export default function Home() {
       }
 
         // 2. Fetch Assets & Indicators & Live Price Feeds directly from verified v_latest_prices
+        // (Fetch in two 1,000-row ranges to bypass PostgREST max-rows cap)
         const [
-          { data: latestPricesData, error: pricesFetchErr },
+          p1Res,
+          p2Res,
           { data: orbRecords },
           { data: divSummaryData, error: divSummaryErr }
         ] = await Promise.all([
@@ -1260,7 +1262,15 @@ export default function Home() {
               latest_price, latest_date, open, high, low, volume,
               rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
-            .limit(2000),
+            .range(0, 999),
+          supabase
+            .from('v_latest_prices')
+            .select(`
+              asset_id, symbol, name, market, currency, sector,
+              latest_price, latest_date, open, high, low, volume,
+              rsi_14, volume_ratio, high_52w, low_52w, ema_200
+            `)
+            .range(1000, 1999),
           supabase
             .from('opening_direction')
             .select('symbol, current_price, prev_close, gap_percent, gap_type, orb_status, bias, volume_spike, date')
@@ -1271,6 +1281,9 @@ export default function Home() {
             .select('*')
             .limit(2000)
         ]);
+
+        const latestPricesData = [...(p1Res.data || []), ...(p2Res.data || [])];
+        const pricesFetchErr = p1Res.error || p2Res.error;
 
         if (divSummaryData && divSummaryData.length > 0) {
           setDividendSummaries(divSummaryData);
