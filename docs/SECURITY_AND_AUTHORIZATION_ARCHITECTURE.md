@@ -181,8 +181,8 @@ All automated test suites execute cleanly:
   3. `[PASS]` Viewport Tablet Portrait (`768px` [768x1024]) renders cleanly without horizontal overflow.
   4. `[PASS]` Viewport Small Laptop / Tablet Landscape (`1024px` [1024x768]) renders cleanly without horizontal overflow.
 
-### 5.2 Backend Pytest Suite (`153/153 Passed`)
-* 153 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking (concurrency-safe), assistant LLM agents, and Supabase data synchronization pass with 0 errors.
+### 5.2 Backend Pytest Suite (`155/155 Passed`)
+* 155 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking (concurrency-safe), end-to-end verified trade lifecycle journeys (`test_complete_journey.py`), assistant LLM agents, and Supabase data synchronization pass with 0 errors.
 
 ### 5.3 Database Migration Linter (`3/3 Valid`)
 * Validated using `python scripts/validate_migrations.py`:
