@@ -125,7 +125,7 @@ def validate_trade_geometry(sig: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         if not (entry < stop):
             return False, f"Inverted short stop_loss: {stop} (must satisfy stop > entry={entry})"
         if t2 is not None:
-            if not math.isfinite(t2) or t2 >= t1:
+            if not math.isfinite(t2) or not (0 < t2 < t1):
                 return False, f"Inverted short target_2: {t2} (must satisfy 0 < target_2 < target_1={t1})"
 
     return True, None

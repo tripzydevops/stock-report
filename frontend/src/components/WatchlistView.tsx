@@ -47,24 +47,34 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const { language } = useLanguage();
   const { user, isDemoMode } = useAuth();
 
-  // Multi-user identification: logged in user ID or device-persistent guest ID
-  const activeUserId = useMemo(() => {
-    if (user?.id) return user.id;
-    if (typeof window !== 'undefined') {
-      let guestId = localStorage.getItem('marketpulse_guest_user_id');
-      if (!guestId) {
-        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-        localStorage.setItem('marketpulse_guest_user_id', guestId);
-      }
-      return guestId;
-    }
-    return 'default_user';
-  }, [user?.id]);
+  const isGuest = !user || isDemoMode;
+  const activeUserId = user?.id || 'guest';
 
   const [items, setItems] = useState<WatchlistItemData[]>([]);
   const [catalog, setCatalog] = useState<CatalogAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Helper: Load guest items from localStorage
+  const loadGuestItems = useCallback((): WatchlistItemData[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('marketpulse_guest_watchlist');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Helper: Save guest items to localStorage
+  const saveGuestItems = useCallback((newItems: WatchlistItemData[]) => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('marketpulse_guest_watchlist', JSON.stringify(newItems));
+    } catch (e) {
+      console.warn('Failed to save guest watchlist to localStorage:', e);
+    }
+  }, []);
 
   // Quick 1-Click Add Input
   const [quickAddSymbol, setQuickAddSymbol] = useState('');
@@ -92,25 +102,32 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const [editAlertAbove, setEditAlertAbove] = useState('');
   const [editAlertBelow, setEditAlertBelow] = useState('');
 
-  // Fetch watchlist data for this specific user
+  // Fetch watchlist data
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/watchlist?userId=${encodeURIComponent(activeUserId)}`);
+
+      // Always fetch catalog for search & asset details
+      const res = await fetch(`/api/watchlist?userId=${encodeURIComponent(isGuest ? 'guest' : user.id)}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
       const data = await res.json();
-      setItems(data.items || []);
       setCatalog(data.catalog || []);
+
+      if (isGuest) {
+        setItems(loadGuestItems());
+      } else {
+        setItems(data.items || []);
+      }
     } catch (err: any) {
       console.error('Watchlist fetch error:', err);
       setError(err.message || 'Veriler yüklenemedi');
     } finally {
       setLoading(false);
     }
-  }, [activeUserId]);
+  }, [isGuest, user?.id, loadGuestItems]);
 
   useEffect(() => {
     fetchData();
@@ -140,18 +157,40 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
     try {
       setIsQuickAdding(true);
-      const res = await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, userId: activeUserId }),
-      });
-
-      if (res.ok) {
+      if (isGuest) {
+        const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === sym);
+        const newItem: WatchlistItemData = {
+          id: `guest_${Date.now()}_${sym}`,
+          assetId: found?.id || `asset_${sym}`,
+          symbol: sym,
+          name: found?.name || sym,
+          assetClass: found?.assetClass || 'stock',
+          market: (found?.market as any) || 'BIST',
+          currency: (found?.currency as any) || 'TRY',
+          sector: found?.sector || '',
+          addedAt: new Date().toISOString(),
+          latestPrice: 0,
+          openPrice: 0,
+          dailyChangePercent: 0,
+        };
+        const updated = [newItem, ...items.filter(i => i.symbol !== sym)];
+        setItems(updated);
+        saveGuestItems(updated);
         setQuickAddSymbol('');
-        await fetchData();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Varlık bulunamadı');
+        const res = await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: sym, userId: user.id }),
+        });
+
+        if (res.ok) {
+          setQuickAddSymbol('');
+          await fetchData();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Varlık bulunamadı');
+        }
       }
     } catch (err) {
       console.error('Quick add error:', err);
@@ -163,16 +202,20 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
   // Instant Remove Item (Optimistic UI)
   const handleRemove = async (id: string, symbol: string) => {
-    // Optimistic local update
     const previousItems = [...items];
-    setItems(prev => prev.filter(i => i.id !== id));
+    const updated = items.filter(i => i.id !== id && i.symbol !== symbol);
+    setItems(updated);
+
+    if (isGuest) {
+      saveGuestItems(updated);
+      return;
+    }
 
     try {
-      const res = await fetch(`/api/watchlist?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(activeUserId)}`, {
+      const res = await fetch(`/api/watchlist?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(user.id)}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
-        // Rollback if failed
         setItems(previousItems);
         alert('Kaldırılamadı');
       }
@@ -190,30 +233,59 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
     try {
       setIsSubmitting(true);
-      const res = await fetch('/api/watchlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: activeUserId,
+      if (isGuest) {
+        const newItem: WatchlistItemData = {
+          id: `guest_${Date.now()}_${selectedAssetForAdd.symbol}`,
           assetId: selectedAssetForAdd.id,
           symbol: selectedAssetForAdd.symbol,
+          name: selectedAssetForAdd.name,
+          assetClass: selectedAssetForAdd.assetClass,
+          market: selectedAssetForAdd.market,
+          currency: selectedAssetForAdd.currency,
+          sector: selectedAssetForAdd.sector,
           notes: addNotes.trim() || undefined,
           alertAbove: addAlertAbove ? parseFloat(addAlertAbove) : undefined,
           alertBelow: addAlertBelow ? parseFloat(addAlertBelow) : undefined,
-        }),
-      });
-
-      if (res.ok) {
+          addedAt: new Date().toISOString(),
+          latestPrice: 0,
+          openPrice: 0,
+          dailyChangePercent: 0,
+        };
+        const updated = [newItem, ...items.filter(i => i.assetId !== selectedAssetForAdd.id)];
+        setItems(updated);
+        saveGuestItems(updated);
         setIsAddModalOpen(false);
         setSelectedAssetForAdd(null);
         setAddNotes('');
         setAddAlertAbove('');
         setAddAlertBelow('');
         setModalSearch('');
-        await fetchData();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Eklenemedi');
+        const res = await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            assetId: selectedAssetForAdd.id,
+            symbol: selectedAssetForAdd.symbol,
+            notes: addNotes.trim() || undefined,
+            alertAbove: addAlertAbove ? parseFloat(addAlertAbove) : undefined,
+            alertBelow: addAlertBelow ? parseFloat(addAlertBelow) : undefined,
+          }),
+        });
+
+        if (res.ok) {
+          setIsAddModalOpen(false);
+          setSelectedAssetForAdd(null);
+          setAddNotes('');
+          setAddAlertAbove('');
+          setAddAlertBelow('');
+          setModalSearch('');
+          await fetchData();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Eklenemedi');
+        }
       }
     } catch (err) {
       console.error('Add submit error:', err);
@@ -228,12 +300,25 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     if (!editingItem) return;
     try {
       setIsSubmitting(true);
+      if (isGuest) {
+        const updated = items.map(i => i.id === editingItem.id ? {
+          ...i,
+          notes: editNotes.trim(),
+          alertAbove: editAlertAbove ? parseFloat(editAlertAbove) : null,
+          alertBelow: editAlertBelow ? parseFloat(editAlertBelow) : null,
+        } : i);
+        setItems(updated);
+        saveGuestItems(updated);
+        setEditingItem(null);
+        return;
+      }
+
       const res = await fetch('/api/watchlist', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: editingItem.id,
-          userId: activeUserId,
+          userId: user.id,
           notes: editNotes.trim(),
           alertAbove: editAlertAbove ? parseFloat(editAlertAbove) : null,
           alertBelow: editAlertBelow ? parseFloat(editAlertBelow) : null,
@@ -263,14 +348,38 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
     setIsSubmitting(true);
     try {
-      for (const sym of symbolsToFind) {
-        await fetch('/api/watchlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: sym, userId: activeUserId }),
+      if (isGuest) {
+        const newGuestItems: WatchlistItemData[] = symbolsToFind.map((sym, idx) => {
+          const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === sym);
+          return {
+            id: `guest_pack_${Date.now()}_${idx}_${sym}`,
+            assetId: found?.id || `asset_${sym}`,
+            symbol: sym,
+            name: found?.name || sym,
+            assetClass: found?.assetClass || 'stock',
+            market: (found?.market as any) || packType,
+            currency: (found?.currency as any) || (packType === 'US' ? 'USD' : 'TRY'),
+            sector: found?.sector || '',
+            addedAt: new Date().toISOString(),
+            latestPrice: 0,
+            openPrice: 0,
+            dailyChangePercent: 0,
+          };
         });
+        const existingSymbols = new Set(items.map(i => i.symbol));
+        const updated = [...newGuestItems.filter(i => !existingSymbols.has(i.symbol)), ...items];
+        setItems(updated);
+        saveGuestItems(updated);
+      } else {
+        for (const sym of symbolsToFind) {
+          await fetch('/api/watchlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: sym, userId: user.id }),
+          });
+        }
+        await fetchData();
       }
-      await fetchData();
     } catch (err) {
       console.error('Starter pack add error:', err);
     } finally {

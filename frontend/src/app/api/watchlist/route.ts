@@ -255,19 +255,42 @@ export async function POST(request: NextRequest) {
         if (newAsset && !insertError) {
           assetId = newAsset.id;
 
-          if (market === 'TEFAS' && tefasInfo?.defaultPrice) {
-            // Seed TEFAS fund initial unit price
-            await supabase.from('price_history').insert({
-              asset_id: assetId,
-              date: new Date().toISOString().slice(0, 10),
-              close: tefasInfo.defaultPrice,
-              open: tefasInfo.defaultPrice * 0.998,
-              high: tefasInfo.defaultPrice,
-              low: tefasInfo.defaultPrice * 0.998,
-              volume: 15000000,
-            });
+          if (market === 'TEFAS') {
+            // Fetch live NAV from TEFAS without inventing synthetic OHLC or volume
+            try {
+              const tRes = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json;charset=UTF-8', 'User-Agent': 'Mozilla/5.0' },
+                body: JSON.stringify({ fonKodu: cleanSym.toUpperCase(), dil: 'TR', periyod: 1 }),
+                signal: AbortSignal.timeout(4000),
+              });
+              if (tRes.ok) {
+                const tj = await tRes.json();
+                const latest = tj?.data?.[0];
+                const p = latest ? parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.')) : NaN;
+                if (!isNaN(p) && p > 0) {
+                  let sDate = new Date().toISOString().slice(0, 10);
+                  const rawT = String(latest.TARIH || latest.tarih || '').trim();
+                  const pParts = rawT.split('.');
+                  if (pParts.length === 3 && pParts[2].length === 4) {
+                    sDate = `${pParts[2]}-${pParts[1].padStart(2, '0')}-${pParts[0].padStart(2, '0')}`;
+                  }
+                  await supabase.from('price_history').upsert({
+                    asset_id: assetId,
+                    date: sDate,
+                    close: p,
+                    open: null,
+                    high: null,
+                    low: null,
+                    volume: null,
+                  }, { onConflict: 'asset_id,date' });
+                }
+              }
+            } catch (tefasErr) {
+              console.warn('Initial TEFAS price fetch error:', tefasErr);
+            }
           } else {
-            // Attempt to seed live price from Yahoo Finance
+            // Attempt to seed live price from Yahoo Finance preserving actual provider session date and fields
             try {
               const yfSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
               const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1d&range=2d`, {
@@ -276,17 +299,23 @@ export async function POST(request: NextRequest) {
               });
               if (res.ok) {
                 const j = await res.json();
-                const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
-                if (typeof p === 'number') {
-                  await supabase.from('price_history').insert({
+                const meta = j?.chart?.result?.[0]?.meta;
+                const p = meta?.regularMarketPrice;
+                if (typeof p === 'number' && Number.isFinite(p) && p > 0) {
+                  let sDate = new Date().toISOString().slice(0, 10);
+                  if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
+                    const d = new Date(meta.regularMarketTime * 1000);
+                    if (!isNaN(d.getTime())) sDate = d.toISOString().slice(0, 10);
+                  }
+                  await supabase.from('price_history').upsert({
                     asset_id: assetId,
-                    date: new Date().toISOString().slice(0, 10),
+                    date: sDate,
                     close: p,
-                    open: p,
-                    high: p,
-                    low: p,
-                    volume: 100000,
-                  });
+                    open: typeof meta?.regularMarketOpen === 'number' ? meta.regularMarketOpen : null,
+                    high: typeof meta?.regularMarketDayHigh === 'number' ? meta.regularMarketDayHigh : null,
+                    low: typeof meta?.regularMarketDayLow === 'number' ? meta.regularMarketDayLow : null,
+                    volume: typeof meta?.regularMarketVolume === 'number' ? meta.regularMarketVolume : null,
+                  }, { onConflict: 'asset_id,date' });
                 }
               }
             } catch (e) {
@@ -301,7 +330,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'assetId veya geçerli bir symbol gereklidir' }, { status: 400 });
     }
 
-    // Check if item already exists for this user
+    // Strict Multi-Tenant Isolation: Guest and unauthenticated sessions are handled in client localStorage
+    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
+      return NextResponse.json({
+        success: true,
+        message: 'Guest watchlist is maintained locally in client storage',
+        data: {
+          id: `guest_${assetId}`,
+          user_id: 'guest',
+          asset_id: assetId,
+          notes: notes || null,
+          alert_above: alertAbove ? Number(alertAbove) : null,
+          alert_below: alertBelow ? Number(alertBelow) : null,
+          added_at: new Date().toISOString(),
+        }
+      });
+    }
+
+    // Check if item already exists for this authenticated user
     const { data: existing } = await supabase
       .from('watchlist_items')
       .select('id')
@@ -385,15 +431,16 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id, assetId veya symbol parametresi gereklidir' }, { status: 400 });
     }
 
-    let query = supabase.from('watchlist_items').delete();
+    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
+      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', userId });
+    }
+
+    let query = supabase.from('watchlist_items').delete().eq('user_id', userId);
 
     if (id) {
       query = query.eq('id', id);
     } else if (assetId) {
       query = query.eq('asset_id', assetId);
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
     }
 
     const { error } = await query;
@@ -419,16 +466,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'id veya assetId gereklidir' }, { status: 400 });
     }
 
+    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
+      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', userId });
+    }
+
     const updates: Record<string, any> = {};
     if (notes !== undefined) updates.notes = notes;
     if (alertAbove !== undefined) updates.alert_above = alertAbove ? Number(alertAbove) : null;
     if (alertBelow !== undefined) updates.alert_below = alertBelow ? Number(alertBelow) : null;
 
-    let query = supabase.from('watchlist_items').update(updates);
+    let query = supabase.from('watchlist_items').update(updates).eq('user_id', userId);
     if (id) {
       query = query.eq('id', id);
     } else {
-      query = query.eq('asset_id', assetId).eq('user_id', userId);
+      query = query.eq('asset_id', assetId);
     }
 
     const { data, error } = await query.select().single();

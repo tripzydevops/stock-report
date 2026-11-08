@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { PortfolioItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
@@ -101,35 +101,40 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
   const { user } = useAuth();
   const [isStarred, setIsStarred] = useState(false);
 
-  const getEffectiveUserId = () => {
-    if (user?.id) return user.id;
-    if (typeof window !== 'undefined') {
-      let guestId = localStorage.getItem('marketpulse_guest_user_id');
-      if (!guestId) {
-        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-        localStorage.setItem('marketpulse_guest_user_id', guestId);
-      }
-      return guestId;
+  useEffect(() => {
+    if (!user?.id && typeof window !== 'undefined') {
+      try {
+        const stored = JSON.parse(localStorage.getItem('marketpulse_guest_starred_tickers') || '[]');
+        if (Array.isArray(stored) && stored.includes(signal.symbol)) {
+          setIsStarred(true);
+        }
+      } catch {}
     }
-    return 'default_user';
-  };
+  }, [user?.id, signal.symbol]);
 
   const handleToggleStar = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       const nextState = !isStarred;
       setIsStarred(nextState);
-      const activeUid = getEffectiveUserId();
-      if (nextState) {
-        await fetch('/api/watchlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symbol: signal.symbol, userId: activeUid }),
-        });
-      } else {
-        await fetch(`/api/watchlist?symbol=${encodeURIComponent(signal.symbol)}&userId=${encodeURIComponent(activeUid)}`, {
-          method: 'DELETE',
-        });
+      if (user?.id) {
+        if (nextState) {
+          await fetch('/api/watchlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: signal.symbol, userId: user.id }),
+          });
+        } else {
+          await fetch(`/api/watchlist?symbol=${encodeURIComponent(signal.symbol)}&userId=${encodeURIComponent(user.id)}`, {
+            method: 'DELETE',
+          });
+        }
+      } else if (typeof window !== 'undefined') {
+        const stored = JSON.parse(localStorage.getItem('marketpulse_guest_starred_tickers') || '[]');
+        const updated = nextState 
+          ? Array.from(new Set([...stored, signal.symbol])) 
+          : stored.filter((s: string) => s !== signal.symbol);
+        localStorage.setItem('marketpulse_guest_starred_tickers', JSON.stringify(updated));
       }
     } catch (err) {
       console.error('Star toggle error:', err);

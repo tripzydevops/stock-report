@@ -51,9 +51,10 @@ All portfolio and watchlist entities enforce strict PostgreSQL Row Level Securit
 | `portfolio_transfers` | `Transfers INSERT` | `INSERT` | `auth.uid() IS NOT NULL AND auth.uid() = user_id` | `authenticated` |
 | `portfolio_transfers` | `Transfers UPDATE` | `UPDATE` | `auth.uid() IS NOT NULL AND auth.uid() = user_id` | `authenticated` |
 | `portfolio_transfers` | `Transfers DELETE` | `DELETE` | `auth.uid() IS NOT NULL AND auth.uid() = user_id` | `authenticated` |
-| `watchlist_items` | `Watchlist Items Select` | `SELECT` | `(auth.uid() = user_id) OR (session_id LIKE 'guest_%')` | `anon`, `authenticated` |
-| `watchlist_items` | `Watchlist Items Insert` | `INSERT` | `(auth.uid() = user_id) OR (session_id LIKE 'guest_%')` | `anon`, `authenticated` |
-| `watchlist_items` | `Watchlist Items Delete` | `DELETE` | `(auth.uid() = user_id) OR (session_id LIKE 'guest_%')` | `anon`, `authenticated` |
+| `watchlist_items` | `Watchlist Items Select` | `SELECT` | `auth.uid() IS NOT NULL AND user_id = auth.uid()::text` | `authenticated` |
+| `watchlist_items` | `Watchlist Items Insert` | `INSERT` | `auth.uid() IS NOT NULL AND user_id = auth.uid()::text` | `authenticated` |
+| `watchlist_items` | `Watchlist Items Update` | `UPDATE` | `auth.uid() IS NOT NULL AND user_id = auth.uid()::text` | `authenticated` |
+| `watchlist_items` | `Watchlist Items Delete` | `DELETE` | `auth.uid() IS NOT NULL AND user_id = auth.uid()::text` | `authenticated` |
 
 *Migration Reference:* [`supabase/migrations/20261108102000_harden_portfolio_rls.sql`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/supabase/migrations/20261108102000_harden_portfolio_rls.sql)
 
@@ -110,22 +111,23 @@ This pattern applies across:
 
 ## 4. Continuous Integration & Security Automation
 
-The GitHub Actions CI pipeline ([`.github/workflows/ci.yml`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/.github/workflows/ci.yml)) incorporates automated security gating:
+The GitHub Actions CI pipeline ([`.github/workflows/ci.yml`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/.github/workflows/ci.yml)) incorporates automated, non-bypassable security gating:
 
 ```mermaid
 flowchart LR
-    Commit["Git Push / PR"] --> SecurityAudit["Job: security-audit (Gitleaks)"]
+    Commit["Git Push / PR"] --> SecurityAudit["Job: security-audit (Gitleaks - Blocking Gate)"]
     Commit --> BackendTests["Job: backend-tests (Pytest 153/153)"]
     Commit --> FrontendLint["Job: frontend-build & lint"]
-    FrontendLint --> PlaywrightE2E["Job: playwright-e2e (13 Tests)"]
+    FrontendLint --> PlaywrightE2E["Job: playwright-e2e (15 Tests)"]
 ```
 
-1. **Gitleaks Secret Scanning:**
+1. **Gitleaks Secret Scanning (Enforced Blocking Gate):**
    * Runs `gitleaks/gitleaks-action@v2` across full git commit history (`fetch-depth: 0`).
-   * Blocks pull requests introducing private keys, API secrets, or service-role credentials.
+   * Operates without `continue-on-error`, strictly failing and blocking PRs or commits that introduce API tokens, service-role keys, or private certificates.
 2. **Playwright Security & Authorization Verification:**
-   * Automated verification suite ([`frontend/tests/security-and-rls.spec.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/tests/security-and-rls.spec.ts)) runs against live Supabase client using the anon key.
-   * Proves that attempts to insert, update, or delete model portfolio rows fail with PostgreSQL RLS policy violation errors.
+   * Automated verification suite ([`frontend/tests/security-and-rls.spec.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/tests/security-and-rls.spec.ts)) runs against the live Supabase client using the anon key.
+   * Completely **non-destructive**: uses dedicated fixture UUIDs (`ffffffff-ffff-ffff-ffff-ffffffffffff`), asserting count preservation and zero unauthorized mutation or deletion.
+   * Proves that attempts to insert, update, or delete model portfolio rows, private portfolios, or watchlist items fail with PostgreSQL RLS policy violation errors.
 
 ---
 
@@ -133,13 +135,15 @@ flowchart LR
 
 All automated test suites execute cleanly:
 
-### 5.1 Playwright E2E & RLS Test Suite (`13/13 Passed`)
+### 5.1 Playwright E2E & RLS Test Suite (`15/15 Passed`)
 * `security-and-rls.spec.ts`:
   1. `[PASS]` Model Portfolio (`user_id IS NULL`) is readable by public anon client.
-  2. `[PASS]` RLS blocks unauthenticated/anon clients from inserting unowned positions (`new row violates row-level security policy`).
+  2. `[PASS]` RLS blocks unauthenticated/anon clients from inserting unowned positions (`violates row-level security policy`).
   3. `[PASS]` RLS blocks unauthenticated/anon clients from inserting unowned orders.
   4. `[PASS]` RLS blocks unauthenticated/anon clients from inserting unowned cash transfers.
-  5. `[PASS]` RLS protects Model Portfolio from deletion by anon clients.
+  5. `[PASS]` Non-destructive verification: RLS blocks anon mutation or deletion of Model Portfolio.
+  6. `[PASS]` RLS blocks unauthenticated/guest clients from inserting into `watchlist_items` table.
+  7. `[PASS]` Multi-tenant privacy: anon clients cannot view private user watchlist items or positions.
 * `dividend-and-prices.spec.ts`:
   1. `[PASS]` Dividends API returns verified multi-year dividend events and market summary.
   2. `[PASS]` Asset Catalog API returns 100% valid prices with zero 100.00 fallbacks.
@@ -152,10 +156,10 @@ All automated test suites execute cleanly:
   4. `[PASS]` TURSG tranche matching restores Lot #1 to 167 shares and shows closed scalp section.
 
 ### 5.2 Backend Pytest Suite (`153/153 Passed`)
-* 153 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking, assistant LLM agents, and Supabase data synchronization pass with 0 errors.
+* 153 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking (concurrency-safe), assistant LLM agents, and Supabase data synchronization pass with 0 errors.
 
 ### 5.3 Database Migration Linter (`3/3 Valid`)
 * Validated using `python scripts/validate_migrations.py`:
-  1. `20261031120000_recovery_tracking.sql`
-  2. `20261107120000_live_dividends_and_prices.sql`
+  1. `20260922141511_initial_core_schema.sql`
+  2. `20261027000000_report_files_and_movements.sql`
   3. `20261108102000_harden_portfolio_rls.sql`

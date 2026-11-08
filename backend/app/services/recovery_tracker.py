@@ -145,8 +145,17 @@ def initialize_recovery_tracking(
 
     try:
         res = client.table("signal_recovery_tracking").insert(tracking_row).execute()
-        return tracking_row
+        return res.data[0] if (res.data and len(res.data) > 0) else tracking_row
     except Exception as e:
+        err_msg = str(e).lower()
+        if "duplicate" in err_msg or "unique" in err_msg or "conflict" in err_msg or "23505" in err_msg:
+            # Concurrency race: Another worker/session initialized this tracker concurrently; fetch and preserve existing row
+            try:
+                race_res = client.table("signal_recovery_tracking").select("*").eq("signal_id", sig_id).limit(1).execute()
+                if race_res.data and len(race_res.data) > 0:
+                    return race_res.data[0]
+            except Exception:
+                pass
         logger.error(f"Failed to initialize recovery tracking for signal {sig_id}: {e}")
         raise RuntimeError(f"Database insertion failed for recovery tracker {sig_id}: {e}") from e
 

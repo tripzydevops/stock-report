@@ -91,7 +91,7 @@ CREATE POLICY "Portfolio transfers delete policy" ON public.portfolio_transfers
     FOR DELETE USING (auth.uid() IS NOT NULL AND auth.uid() = user_id);
 
 
--- 4. watchlist_items RLS Hardening
+-- 4. watchlist_items RLS Hardening (Strict auth.uid() Multi-Tenant Isolation)
 ALTER TABLE public.watchlist_items ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow all" ON public.watchlist_items;
@@ -101,35 +101,19 @@ DROP POLICY IF EXISTS "Watchlist items insert policy" ON public.watchlist_items;
 DROP POLICY IF EXISTS "Watchlist items update policy" ON public.watchlist_items;
 DROP POLICY IF EXISTS "Watchlist items delete policy" ON public.watchlist_items;
 
--- Read: Read own items (user_id matching auth.uid() or client guest session)
+-- Read: Authenticated owner only (user_id matching auth.uid())
 CREATE POLICY "Watchlist items select policy" ON public.watchlist_items
-    FOR SELECT USING (
-        user_id IS NULL 
-        OR (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-        OR (user_id LIKE 'guest_%')
-    );
+    FOR SELECT USING (auth.uid() IS NOT NULL AND user_id = auth.uid()::text);
 
--- Insert: Authenticated user or guest
+-- Insert: Authenticated owner only
 CREATE POLICY "Watchlist items insert policy" ON public.watchlist_items
-    FOR INSERT WITH CHECK (
-        (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-        OR (user_id LIKE 'guest_%')
-    );
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL AND user_id = auth.uid()::text);
 
--- Update: Owner only
+-- Update: Authenticated owner only
 CREATE POLICY "Watchlist items update policy" ON public.watchlist_items
-    FOR UPDATE USING (
-        (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-        OR (user_id LIKE 'guest_%')
-    )
-    WITH CHECK (
-        (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-        OR (user_id LIKE 'guest_%')
-    );
+    FOR UPDATE USING (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
+    WITH CHECK (auth.uid() IS NOT NULL AND user_id = auth.uid()::text);
 
--- Delete: Owner only
+-- Delete: Authenticated owner only
 CREATE POLICY "Watchlist items delete policy" ON public.watchlist_items
-    FOR DELETE USING (
-        (auth.uid() IS NOT NULL AND user_id = auth.uid()::text)
-        OR (user_id LIKE 'guest_%')
-    );
+    FOR DELETE USING (auth.uid() IS NOT NULL AND user_id = auth.uid()::text);

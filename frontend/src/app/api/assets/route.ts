@@ -5,11 +5,32 @@ export const dynamic = 'force-dynamic';
 
 interface QuoteResult {
   price: number;
-  open?: number;
-  prevClose?: number;
-  high?: number;
-  low?: number;
-  volume?: number;
+  sessionDate: string;
+  observedAt: string;
+  source: 'yahoo' | 'tefas';
+  open?: number | null;
+  prevClose?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
+}
+
+function parseTefasDate(rawDate?: any): string {
+  if (!rawDate) return new Date().toISOString().slice(0, 10);
+  if (typeof rawDate === 'number') {
+    const d = new Date(rawDate > 1e11 ? rawDate : rawDate * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  const s = String(rawDate).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.slice(0, 10);
+  }
+  // DD.MM.YYYY
+  const parts = s.split('.');
+  if (parts.length === 3 && parts[2].length === 4) {
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
@@ -31,12 +52,16 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
       const latest = data[0];
       const p = parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.'));
       if (!isNaN(p) && p > 0) {
+        const sessionDate = parseTefasDate(latest.TARIH || latest.tarih);
         return {
           price: p,
-          open: p,
-          high: p,
-          low: p,
-          volume: 0,
+          sessionDate,
+          observedAt: new Date().toISOString(),
+          source: 'tefas',
+          open: null,
+          high: null,
+          low: null,
+          volume: null,
         };
       }
     }
@@ -72,13 +97,24 @@ async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResu
     const price = meta?.regularMarketPrice;
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
 
+    let sessionDate = new Date().toISOString().slice(0, 10);
+    if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
+      const d = new Date(meta.regularMarketTime * 1000);
+      if (!isNaN(d.getTime())) {
+        sessionDate = d.toISOString().slice(0, 10);
+      }
+    }
+
     return {
       price,
-      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : undefined,
-      prevClose: typeof meta?.previousClose === 'number' ? meta.previousClose : meta?.chartPreviousClose,
-      high: typeof meta?.regularMarketDayHigh === 'number' ? meta.regularMarketDayHigh : price,
-      low: typeof meta?.regularMarketDayLow === 'number' ? meta.regularMarketDayLow : price,
-      volume: typeof meta?.regularMarketVolume === 'number' ? meta.regularMarketVolume : 0,
+      sessionDate,
+      observedAt: new Date().toISOString(),
+      source: 'yahoo',
+      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null,
+      prevClose: typeof meta?.previousClose === 'number' ? meta.previousClose : (typeof meta?.chartPreviousClose === 'number' ? meta.chartPreviousClose : null),
+      high: typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null,
+      low: typeof meta?.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : null,
+      volume: typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : null,
     };
   } catch (e) {
     console.warn(`Live quote fetch failed for ${symbol}:`, e);
@@ -115,8 +151,12 @@ export async function GET(request: NextRequest) {
     const limitParam = url.searchParams.get('limit');
     let maxLimit = q ? 50 : 2000;
     if (limitParam !== null) {
-      const parsed = parseInt(limitParam, 10);
-      if (isNaN(parsed) || parsed < 1) {
+      const trimmed = limitParam.trim();
+      if (!/^\d+$/.test(trimmed)) {
+        return NextResponse.json({ error: 'Invalid limit parameter: must be a positive integer' }, { status: 400 });
+      }
+      const parsed = parseInt(trimmed, 10);
+      if (parsed < 1) {
         return NextResponse.json({ error: 'Invalid limit parameter: must be a positive integer' }, { status: 400 });
       }
       maxLimit = Math.min(parsed, 2000);
@@ -254,10 +294,12 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
       : cleanName;
     const resolvedSector = body.sector || (tefasMatched ? tefasMatched.sector : null);
 
-    // 1. Check if asset already exists in assets table
-    const { data: existingAsset } = await supabase
-      .from('assets')
-      .select('*')
+    // 1. Check if asset already exists in assets table with matching market
+    let assetQuery = supabase.from('assets').select('*');
+    if (cleanMarket) {
+      assetQuery = assetQuery.eq('market', cleanMarket);
+    }
+    const { data: existingAsset } = await assetQuery
       .or(`symbol.eq.${cleanSymbol},symbol.eq.${cleanSymbol}.IS`)
       .limit(1)
       .maybeSingle();
@@ -307,36 +349,41 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
     }
 
     // 2. Fetch live price quote from verified sources (TEFAS API for funds, Yahoo for equities/ETFs)
-    const today = new Date().toISOString().slice(0, 10);
+    // Never fall back from TEFAS to unverified Yahoo symbols
     let quote: QuoteResult | null = null;
     if (cleanMarket === 'TEFAS' || cleanClass === 'fund') {
       quote = await fetchTefasQuote(cleanSymbol);
-    }
-    if (!quote) {
+    } else {
       quote = await fetchLiveQuote(cleanSymbol, cleanMarket);
     }
 
     let priceStatus: 'live' | 'unavailable' = 'unavailable';
 
     if (quote && typeof quote.price === 'number' && Number.isFinite(quote.price) && quote.price > 0) {
-      priceStatus = 'live';
-      await supabase.from('price_history').upsert({
+      const { error: priceError } = await supabase.from('price_history').upsert({
         asset_id: asset.id,
-        date: today,
+        date: quote.sessionDate,
         close: quote.price,
-        open: quote.open !== undefined ? quote.open : quote.price,
-        high: quote.high !== undefined ? quote.high : quote.price,
-        low: quote.low !== undefined ? quote.low : quote.price,
-        volume: quote.volume !== undefined ? quote.volume : 0,
+        open: quote.open ?? null,
+        high: quote.high ?? null,
+        low: quote.low ?? null,
+        volume: quote.volume ?? null,
       }, { onConflict: 'asset_id,date' });
-    }
-    // Strict Data Integrity: If quote is unavailable, NEVER fabricate fake prices (100.0, invented OHLC) in price_history.
 
-    // 3. Automatically add to user's Watchlist so it immediately appears in their tracked items
+      if (priceError) {
+        console.error(`Failed to persist price_history for asset ${asset.symbol}:`, priceError);
+        priceStatus = 'unavailable';
+      } else {
+        priceStatus = 'live';
+      }
+    }
+    // Strict Data Integrity: If quote is unavailable, NEVER fabricate fake prices in price_history.
+
+    // 3. Automatically add to user's Watchlist only for authenticated non-guest users
     let addedToWatchlist = false;
     const shouldAddToWatchlist = body.addToWatchlist !== false;
 
-    if (shouldAddToWatchlist && userId) {
+    if (shouldAddToWatchlist && userId && userId !== 'default_user' && !userId.startsWith('guest_')) {
       const { data: existingWatchItem } = await supabase
         .from('watchlist_items')
         .select('id')
