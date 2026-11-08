@@ -80,7 +80,7 @@ flowchart TD
 - **Analytical Views:** `v_latest_prices` (real-time quotes, technical indicators) and `v_dividend_summary` (713 dividend payers, trailing 12-month distributions, annualized yields).
 - **Vector Store:** Embeddings for semantic search across company news, KAP filings, and financial statements.
 - **Storage:** Private bucket (`marketpulse-reports`) with strict immutable report archiving (`upsert: false`).
-- **Comprehensive Guide:** See [LIVE_DIVIDEND_AND_PRICING_PIPELINE.md](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/docs/LIVE_DIVIDEND_AND_PRICING_PIPELINE.md) for full pipeline specs.
+- **Comprehensive Guides:** See [LIVE_DIVIDEND_AND_PRICING_PIPELINE.md](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/docs/LIVE_DIVIDEND_AND_PRICING_PIPELINE.md) for full pipeline specs and [SECURITY_AND_AUTHORIZATION_ARCHITECTURE.md](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/docs/SECURITY_AND_AUTHORIZATION_ARCHITECTURE.md) for Supabase RLS multi-tenant security policies and secret management.
 
 ---
 

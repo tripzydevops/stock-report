@@ -285,14 +285,47 @@ def run_market_assistant(request: AssistantChatRequest) -> AssistantChatResponse
         except Exception as e:
             logger.error(f"Error calling Gemini model {model_name} in backend: {e}")
 
-    # Fallback only if Gemini network is down
-    fallback_reply = (
-        f"Sabah açılış seansı alıcılı bir seyirle başladı (ortalama gap +%1.34). "
-        f"146 hissenin %42'sinden fazlası (62 hisse) ilk 15 dakikalık açılış tavanını (ORB High) yukarı kırarak alıcıların seans başlangıcında güçlü olduğunu gösterdi. "
-        f"Başlıca katalizörler: TCMB dezenflasyon patikasının sürmesi ve küresel risk iştahının BIST'e pozitif yansımasıdır."
-    ) if is_opening_query else (
-        "Piyasa veritabanımız ve analiz motorumuz sorularınızı yanıtlamak için hazır. Dilediğiniz hisse veya seans konusunu sorabilirsiniz."
-    )
+    # Fallback only if Gemini network is down or running in offline test mode
+    if is_opening_query:
+        fallback_reply = (
+            f"Sabah açılış seansı alıcılı bir seyirle başladı (ortalama gap +%1.34). "
+            f"146 hissenin %42'sinden fazlası (62 hisse) ilk 15 dakikalık açılış tavanını (ORB High) yukarı kırarak alıcıların seans başlangıcında güçlü olduğunu gösterdi. "
+            f"Başlıca katalizörler: TCMB dezenflasyon patikasının sürmesi ve küresel risk iştahının BIST'e pozitif yansımasıdır."
+        )
+    elif ticker and "profile" in structured_data and "outlook" in structured_data:
+        p = structured_data["profile"]
+        o = structured_data["outlook"]
+        fallback_reply = (
+            f"**{ticker} ({p.get('name', ticker)}) Analitik İnceleme ve 6 Aylık Senaryo Özeti:**\n"
+            f"- **Piyasa Fiyatı & Değerleme:** {p.get('price')} {p.get('currency')} | F/K: {p.get('pe_ratio')} | PD/DD: {p.get('pb_ratio')} | Temettü Verimi: %{p.get('dividend_yield')}\n"
+            f"- **Trend Görünümü:** {p.get('trend_status')} (EMA20: ₺{p.get('ema_20')}, EMA50: ₺{p.get('ema_50')})\n"
+            f"- **6 Aylık Senaryolar ve Fiyat Hedefleri:**\n"
+            f"  * **Boğa Senaryosu (Bull):** {o.get('bull_case', {}).get('target_range')} - {o.get('bull_case', {}).get('catalyst')}\n"
+            f"  * **Baz Senaryo (Base):** {o.get('base_case', {}).get('target_range')} - {o.get('base_case', {}).get('catalyst')}\n"
+            f"  * **Ayı Senaryosu (Bear):** {o.get('bear_case', {}).get('target_range')} - {o.get('bear_case', {}).get('catalyst')}\n"
+            f"- **Kademeli Alım (DCA) Bölgeleri:** {', '.join(o.get('dca_zones', []))}"
+        )
+    elif target_month:
+        div_data = structured_data.get("dividends") or tool_query_dividends(month=target_month)
+        assets = div_data.get("assets", [])
+        avg_yield = div_data.get("average_yield", 0.0)
+        items = "\n".join([f"- **{a['symbol']}** ({a.get('name', a['symbol'])}): Yield %{a.get('yield', 0.0):.2f}, Ex-Date: {a.get('ex_date', 'TBD')}" for a in assets[:5]])
+        if is_en:
+            fallback_reply = (
+                f"**Dividend Calendar for {target_month.title()}:**\n"
+                f"A total of {len(assets)} dividend payers distribute payouts in {target_month.title()} with an average yield of %{avg_yield:.2f}:\n"
+                f"{items}\n\n"
+                f"These dividend payouts support compounding passive cashflow."
+            )
+        else:
+            fallback_reply = (
+                f"**{target_month.title()} Ayı Temettü Takvimi:**\n"
+                f"Bu ayda nakit temettü dağıtan {len(assets)} hisse bulunuyor (Ortalama verim: %{avg_yield:.2f}):\n"
+                f"{items}\n\n"
+                f"Düzenli nakit temettü ödeyen şirketler portföy büyümesini destekler."
+            )
+    else:
+        fallback_reply = "Piyasa veritabanımız ve analiz motorumuz sorularınızı yanıtlamak için hazır. Dilediğiniz hisse veya seans konusunu sorabilirsiniz."
 
     return AssistantChatResponse(
         reply=fallback_reply,
