@@ -107,6 +107,20 @@ This pattern applies across:
 
 **Outcome:** Unauthenticated visitors experimenting with portfolio features enjoy smooth, local interactive state without generating unowned database records or encountering silent RLS error drops.
 
+### 3.3 Centralized Server-Side Supabase Client (`supabaseServer.ts`)
+To eliminate duplicate client instantiations and enforce uniform key separation across all Next.js App Router route handlers, server clients are centralized in [`frontend/src/lib/supabaseServer.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/src/lib/supabaseServer.ts):
+
+* **`getServerSupabase()`**: Instantiates a standard server-side client utilizing `NEXT_PUBLIC_SUPABASE_ANON_KEY`. All queries are strictly subjected to PostgreSQL Row Level Security (RLS). Used across standard read/write APIs (`/api/assets`, `/api/dividends`, `/api/movements`, `/api/quant/*`, `/api/watchlist`).
+* **`getAdminSupabase()`**: Instantiates an administrative client using `SUPABASE_SERVICE_ROLE_KEY`. This key bypasses RLS and is restricted exclusively to authorized administrative tasks (generating signed storage URLs in `/api/reports`, and running scheduled syncs in `/api/sync`).
+* **Zero Client-Side Imports in API Layer**: Verified with static grep (`git grep "supabaseClient" frontend/src/app/api/` returns 0). Client browser singletons are never imported into server route handlers.
+
+### 3.4 Scheduled Sync & Cron Authorization Gate
+The background sync endpoint ([`/api/sync`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/src/app/api/sync/route.ts)) executes daily market data ingestion and updates asset prices. To prevent unauthorized execution or resource exhaustion attacks by public crawlers:
+
+* **`verifyCronAuthorization(request)`**: Validates either `Authorization: Bearer <CRON_SECRET>` or the custom `x-cron-secret: <CRON_SECRET>` header against the server environment variable.
+* **Fail-Closed Protection**: In production (`NODE_ENV === 'production'`), requests lacking a valid secret are immediately rejected with HTTP 401 Unauthorized.
+* **Safe Data Contracts**: Removed all synthetic fallback prices and fake volume numbers (`100000`). If a market quote is unavailable, fields remain clean `null`, preserving data integrity.
+
 ---
 
 ## 4. Continuous Integration & Security Automation
@@ -118,7 +132,7 @@ flowchart LR
     Commit["Git Push / PR"] --> SecurityAudit["Job: security-audit (Gitleaks - Blocking Gate)"]
     Commit --> BackendTests["Job: backend-tests (Pytest 153/153)"]
     Commit --> FrontendLint["Job: frontend-build & lint"]
-    FrontendLint --> PlaywrightE2E["Job: playwright-e2e (15 Tests)"]
+    FrontendLint --> PlaywrightE2E["Job: playwright-e2e (19 Tests)"]
 ```
 
 1. **Gitleaks Secret Scanning (Enforced Blocking Gate):**
@@ -128,6 +142,13 @@ flowchart LR
    * Automated verification suite ([`frontend/tests/security-and-rls.spec.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/tests/security-and-rls.spec.ts)) runs against the live Supabase client using the anon key.
    * Completely **non-destructive**: uses dedicated fixture UUIDs (`ffffffff-ffff-ffff-ffff-ffffffffffff`), asserting count preservation and zero unauthorized mutation or deletion.
    * Proves that attempts to insert, update, or delete model portfolio rows, private portfolios, or watchlist items fail with PostgreSQL RLS policy violation errors.
+3. **Multi-Viewport Responsive Matrix Verification:**
+   * Automated verification suite ([`frontend/tests/responsive-matrix.spec.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/tests/responsive-matrix.spec.ts)) verifies layout stability across 4 critical form factors:
+     * Small Mobile (`360x740`)
+     * Standard iPhone (`390x844`)
+     * Tablet Portrait (`768x1024`)
+     * Small Laptop / Tablet Landscape (`1024x768`)
+   * Asserts `document.documentElement.scrollWidth <= window.innerWidth` across core views (Signals, Dividends, Portfolio) to eliminate horizontal overflow.
 
 ---
 
@@ -135,7 +156,7 @@ flowchart LR
 
 All automated test suites execute cleanly:
 
-### 5.1 Playwright E2E & RLS Test Suite (`15/15 Passed`)
+### 5.1 Playwright E2E & RLS Test Suite (`19/19 Passed`)
 * `security-and-rls.spec.ts`:
   1. `[PASS]` Model Portfolio (`user_id IS NULL`) is readable by public anon client.
   2. `[PASS]` RLS blocks unauthenticated/anon clients from inserting unowned positions (`violates row-level security policy`).
@@ -154,6 +175,11 @@ All automated test suites execute cleanly:
   2. `[PASS]` Navigation across core tabs functions cleanly on Desktop.
   3. `[PASS]` Date filter bar toggles without layout shift on Desktop.
   4. `[PASS]` TURSG tranche matching restores Lot #1 to 167 shares and shows closed scalp section.
+* `responsive-matrix.spec.ts`:
+  1. `[PASS]` Viewport Small Mobile (`360px` [360x740]) renders cleanly without horizontal overflow.
+  2. `[PASS]` Viewport Standard iPhone (`390px` [390x844]) renders cleanly without horizontal overflow.
+  3. `[PASS]` Viewport Tablet Portrait (`768px` [768x1024]) renders cleanly without horizontal overflow.
+  4. `[PASS]` Viewport Small Laptop / Tablet Landscape (`1024px` [1024x768]) renders cleanly without horizontal overflow.
 
 ### 5.2 Backend Pytest Suite (`153/153 Passed`)
 * 153 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking (concurrency-safe), assistant LLM agents, and Supabase data synchronization pass with 0 errors.

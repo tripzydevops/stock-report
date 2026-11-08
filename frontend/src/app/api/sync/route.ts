@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getAdminSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalghadzfevfjx.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = getAdminSupabase();
 
 const HIGH_PRIORITY_MACRO = [
   'SPY', 'QQQ', 'VOO', 'GLD', 'TLT', 'TRY=X', 'XU100.IS'
@@ -13,10 +10,12 @@ const HIGH_PRIORITY_MACRO = [
 interface QuoteResult {
   symbol: string;
   price: number;
-  prevClose?: number;
-  high?: number;
-  low?: number;
-  volume?: number;
+  sessionDate: string;
+  open?: number | null;
+  prevClose?: number | null;
+  high?: number | null;
+  low?: number | null;
+  volume?: number | null;
 }
 
 async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
@@ -38,15 +37,25 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
 
     const meta = result.meta;
     const price = meta?.regularMarketPrice;
-    if (typeof price !== 'number') return null;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
+
+    let sessionDate = new Date().toISOString().slice(0, 10);
+    if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
+      const d = new Date(meta.regularMarketTime * 1000);
+      if (!isNaN(d.getTime())) {
+        sessionDate = d.toISOString().slice(0, 10);
+      }
+    }
 
     return {
       symbol,
       price,
-      prevClose: meta?.previousClose || meta?.chartPreviousClose,
-      high: meta?.regularMarketDayHigh,
-      low: meta?.regularMarketDayLow,
-      volume: meta?.regularMarketVolume,
+      sessionDate,
+      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null,
+      prevClose: typeof meta?.previousClose === 'number' ? meta.previousClose : (typeof meta?.chartPreviousClose === 'number' ? meta.chartPreviousClose : null),
+      high: typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null,
+      low: typeof meta?.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : null,
+      volume: typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : null,
     };
   } catch (e) {
     console.warn(`Failed to fetch live quote for ${symbol}:`, e);
@@ -79,6 +88,13 @@ async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R
 
 export async function POST(request: Request) {
   try {
+    if (!verifyCronAuthorization(request)) {
+      return NextResponse.json(
+        { error: 'Unauthorized: invalid or missing cron secret' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json().catch(() => ({ action: 'refresh' }));
     const today = new Date().toISOString().slice(0, 10);
 
@@ -195,12 +211,12 @@ export async function POST(request: Request) {
       if (assetId) {
         priceRows.push({
           asset_id: assetId,
-          date: today,
+          date: q.sessionDate || today,
           close: q.price,
-          open: q.prevClose || q.price,
-          high: q.high || q.price,
-          low: q.low || q.price,
-          volume: q.volume || 100000,
+          open: q.open ?? null,
+          high: q.high ?? null,
+          low: q.low ?? null,
+          volume: q.volume ?? null,
           adj_close: q.price
         });
       }
