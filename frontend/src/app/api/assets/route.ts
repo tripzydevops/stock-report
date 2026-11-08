@@ -5,10 +5,45 @@ export const dynamic = 'force-dynamic';
 
 interface QuoteResult {
   price: number;
+  open?: number;
   prevClose?: number;
   high?: number;
   low?: number;
   volume?: number;
+}
+
+async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
+  try {
+    const res = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+      },
+      body: JSON.stringify({ fonKodu: code.toUpperCase(), dil: 'TR', periyod: 1 }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const data = json?.data;
+    if (Array.isArray(data) && data.length > 0) {
+      const latest = data[0];
+      const p = parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.'));
+      if (!isNaN(p) && p > 0) {
+        return {
+          price: p,
+          open: p,
+          high: p,
+          low: p,
+          volume: 0,
+        };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResult | null> {
@@ -35,14 +70,15 @@ async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResu
 
     const meta = result.meta;
     const price = meta?.regularMarketPrice;
-    if (typeof price !== 'number') return null;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
 
     return {
       price,
-      prevClose: meta?.previousClose || meta?.chartPreviousClose || price,
-      high: meta?.regularMarketDayHigh || price,
-      low: meta?.regularMarketDayLow || price,
-      volume: meta?.regularMarketVolume || 100000,
+      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : undefined,
+      prevClose: typeof meta?.previousClose === 'number' ? meta.previousClose : meta?.chartPreviousClose,
+      high: typeof meta?.regularMarketDayHigh === 'number' ? meta.regularMarketDayHigh : price,
+      low: typeof meta?.regularMarketDayLow === 'number' ? meta.regularMarketDayLow : price,
+      volume: typeof meta?.regularMarketVolume === 'number' ? meta.regularMarketVolume : 0,
     };
   } catch (e) {
     console.warn(`Live quote fetch failed for ${symbol}:`, e);
@@ -76,45 +112,62 @@ export async function GET(request: NextRequest) {
     const assetClass = url.searchParams.get('asset_class');
     const q = url.searchParams.get('q');
 
-    let query = supabase
-      .from('v_latest_prices')
-      .select('id:asset_id, symbol, name, market, asset_class, currency, sector, is_active, latest_price, open, high, low, volume')
-      .eq('is_active', true);
-
-    if (market) {
-      query = query.eq('market', market.toUpperCase());
-    }
-
-    if (assetClass) {
-      query = query.eq('asset_class', assetClass.toLowerCase());
-    }
-
-    if (q && q.trim()) {
-      const term = q.trim();
-      query = query.or(`symbol.ilike.%${term}%,name.ilike.%${term}%`);
-    }
-
     const limitParam = url.searchParams.get('limit');
-    const maxLimit = limitParam ? Math.min(parseInt(limitParam, 10), 2000) : (q ? 50 : 2000);
+    let maxLimit = q ? 50 : 2000;
+    if (limitParam !== null) {
+      const parsed = parseInt(limitParam, 10);
+      if (isNaN(parsed) || parsed < 1) {
+        return NextResponse.json({ error: 'Invalid limit parameter: must be a positive integer' }, { status: 400 });
+      }
+      maxLimit = Math.min(parsed, 2000);
+    }
 
-    query = query.order('symbol', { ascending: true });
+    // Shared query factory preserving 100% of filters identically across every page
+    const buildFilteredQuery = () => {
+      let qb = supabase
+        .from('v_latest_prices')
+        .select('id:asset_id, symbol, name, market, asset_class, currency, sector, is_active, latest_price, open, high, low, volume')
+        .eq('is_active', true);
+
+      if (market && market.trim()) {
+        qb = qb.eq('market', market.trim().toUpperCase());
+      }
+
+      if (assetClass && assetClass.trim()) {
+        qb = qb.eq('asset_class', assetClass.trim().toLowerCase());
+      }
+
+      if (q && q.trim()) {
+        const term = q.trim();
+        qb = qb.or(`symbol.ilike.%${term}%,name.ilike.%${term}%`);
+      }
+
+      return qb.order('symbol', { ascending: true });
+    };
 
     let finalData: any[] = [];
     if (maxLimit > 1000) {
       const [r1, r2] = await Promise.all([
-        query.range(0, 999),
-        supabase
-          .from('v_latest_prices')
-          .select('id:asset_id, symbol, name, market, asset_class, currency, sector, is_active, latest_price, open, high, low, volume')
-          .eq('is_active', true)
-          .order('symbol', { ascending: true })
-          .range(1000, maxLimit - 1)
+        buildFilteredQuery().range(0, 999),
+        buildFilteredQuery().range(1000, maxLimit - 1)
       ]);
-      if (r1.error) throw r1.error;
+
+      if (r1.error) {
+        console.error('Assets GET page 1 error:', r1.error);
+        throw r1.error;
+      }
+      if (r2.error) {
+        console.error('Assets GET page 2 error:', r2.error);
+        throw r2.error;
+      }
+
       finalData = [...(r1.data || []), ...(r2.data || [])];
     } else {
-      const { data, error } = await query.limit(maxLimit);
-      if (error) throw error;
+      const { data, error } = await buildFilteredQuery().limit(maxLimit);
+      if (error) {
+        console.error('Assets GET error:', error);
+        throw error;
+      }
       finalData = data || [];
     }
 
@@ -253,42 +306,31 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
       }
     }
 
-    // 2. Fetch live price quote from Yahoo Finance & initialize price_history
+    // 2. Fetch live price quote from verified sources (TEFAS API for funds, Yahoo for equities/ETFs)
     const today = new Date().toISOString().slice(0, 10);
-    const quote = await fetchLiveQuote(cleanSymbol, cleanMarket);
+    let quote: QuoteResult | null = null;
+    if (cleanMarket === 'TEFAS' || cleanClass === 'fund') {
+      quote = await fetchTefasQuote(cleanSymbol);
+    }
+    if (!quote) {
+      quote = await fetchLiveQuote(cleanSymbol, cleanMarket);
+    }
 
-    if (quote) {
+    let priceStatus: 'live' | 'unavailable' = 'unavailable';
+
+    if (quote && typeof quote.price === 'number' && Number.isFinite(quote.price) && quote.price > 0) {
+      priceStatus = 'live';
       await supabase.from('price_history').upsert({
         asset_id: asset.id,
         date: today,
         close: quote.price,
-        open: quote.prevClose || quote.price,
-        high: quote.high || quote.price,
-        low: quote.low || quote.price,
-        volume: quote.volume || 100000,
+        open: quote.open !== undefined ? quote.open : quote.price,
+        high: quote.high !== undefined ? quote.high : quote.price,
+        low: quote.low !== undefined ? quote.low : quote.price,
+        volume: quote.volume !== undefined ? quote.volume : 0,
       }, { onConflict: 'asset_id,date' });
-    } else {
-      // Ensure at least 1 baseline price row exists so v_latest_prices doesn't return null
-      const { data: priceExists } = await supabase
-        .from('price_history')
-        .select('id')
-        .eq('asset_id', asset.id)
-        .limit(1)
-        .maybeSingle();
-
-      if (!priceExists) {
-        const fallbackPrice = tefasMatched?.defaultPrice || 100.0;
-        await supabase.from('price_history').insert({
-          asset_id: asset.id,
-          date: today,
-          close: fallbackPrice,
-          open: fallbackPrice * 0.998,
-          high: fallbackPrice,
-          low: fallbackPrice * 0.998,
-          volume: tefasMatched ? 15000000 : 50000,
-        });
-      }
     }
+    // Strict Data Integrity: If quote is unavailable, NEVER fabricate fake prices (100.0, invented OHLC) in price_history.
 
     // 3. Automatically add to user's Watchlist so it immediately appears in their tracked items
     let addedToWatchlist = false;
@@ -327,6 +369,7 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
     return NextResponse.json({
       success: true,
       asset,
+      price_status: priceStatus,
       quote: quote ? { price: quote.price, change: quote.prevClose ? ((quote.price - quote.prevClose) / quote.prevClose) * 100 : 0 } : null,
       addedToWatchlist,
       userId,

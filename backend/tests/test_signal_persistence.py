@@ -513,6 +513,62 @@ class TestTradeGeometryValidation:
         is_valid, err = validate_trade_geometry(sig)
         assert is_valid is False
 
+    def test_rejects_missing_required_geometry_fields(self):
+        # Missing stop_loss
+        sig = {"direction": "LONG", "entry_price": 100.0, "stop_loss": None, "target_1": 110.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Missing mandatory stop_loss" in err
+
+        # Missing target_1
+        sig = {"direction": "LONG", "entry_price": 100.0, "stop_loss": 95.0, "target_1": None}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Missing mandatory target_1" in err
+
+        # Missing entry_price
+        sig = {"direction": "LONG", "entry_price": None, "stop_loss": 95.0, "target_1": 110.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Missing mandatory entry_price" in err
+
+    def test_rejects_unsupported_trade_direction(self):
+        sig = {"direction": "FLAT", "entry_price": 100.0, "stop_loss": 95.0, "target_1": 110.0}
+        is_valid, err = validate_trade_geometry(sig)
+        assert is_valid is False
+        assert "Unsupported trade direction" in err
+
+    def test_short_trade_geometry_validation(self):
+        # Valid short
+        valid_short = {
+            "direction": "SHORT",
+            "entry_price": 100.0,
+            "stop_loss": 105.0,
+            "target_1": 90.0,
+            "target_2": 85.0,
+        }
+        is_valid, err = validate_trade_geometry(valid_short)
+        assert is_valid is True
+        assert err is None
+
+        # Inverted short stop loss (stop <= entry)
+        bad_stop = {"direction": "SHORT", "entry_price": 100.0, "stop_loss": 98.0, "target_1": 90.0}
+        is_valid, err = validate_trade_geometry(bad_stop)
+        assert is_valid is False
+        assert "Inverted short stop_loss" in err
+
+        # Inverted short target 1 (target >= entry)
+        bad_target = {"direction": "SHORT", "entry_price": 100.0, "stop_loss": 105.0, "target_1": 102.0}
+        is_valid, err = validate_trade_geometry(bad_target)
+        assert is_valid is False
+        assert "Inverted short target_1" in err
+
+        # Inverted short target 2 (target_2 >= target_1)
+        bad_target2 = {"direction": "SHORT", "entry_price": 100.0, "stop_loss": 105.0, "target_1": 90.0, "target_2": 92.0}
+        is_valid, err = validate_trade_geometry(bad_target2)
+        assert is_valid is False
+        assert "Inverted short target_2" in err
+
 
 class TestFailFastPersistence:
     """Verifies that database failures raise RuntimeError instead of silently continuing."""

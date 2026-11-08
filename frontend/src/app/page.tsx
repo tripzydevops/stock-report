@@ -1262,6 +1262,7 @@ export default function Home() {
               latest_price, latest_date, open, high, low, volume,
               rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
+            .order('symbol', { ascending: true })
             .range(0, 999),
           supabase
             .from('v_latest_prices')
@@ -1270,6 +1271,7 @@ export default function Home() {
               latest_price, latest_date, open, high, low, volume,
               rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
+            .order('symbol', { ascending: true })
             .range(1000, 1999),
           supabase
             .from('opening_direction')

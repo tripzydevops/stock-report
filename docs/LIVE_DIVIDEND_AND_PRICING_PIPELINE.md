@@ -265,8 +265,8 @@ All verification suites have been executed and passed without errors:
 
 | Suite | Runner | Test Count | Result |
 | :--- | :--- | :--- | :--- |
-| **Backend Quantitative Engines & Risk Models** | Pytest (`backend/tests/`) | **147 tests** | **147 Passed (100%)** |
-| **Dividend Pipeline & Pricing Accuracy** | Playwright E2E (`dividend-and-prices.spec.ts`) | **3 tests** | **3 Passed (100%)** |
+| **Backend Quantitative Engines, Risk Models & Signal Lifecycles** | Pytest (`backend/tests/`) | **153 tests** | **153 Passed (100%)** |
+| **Dividend Pipeline, Filter Integrity & Pricing Accuracy** | Playwright E2E (`dividend-and-prices.spec.ts`) | **4 tests** | **4 Passed (100%)** |
 | **Desktop Viewport & Layout Integrity** | Playwright E2E (`desktop-view.spec.ts`) | **4 tests** | **4 Passed (100%)** |
 | **Mobile Multi-Tab Layout Audit** | Playwright E2E (`mobile-all-tabs.spec.ts`) | **2 projects** (Pixel 7 & iPhone 14) | **2 Passed (100%)** |
 | **Next.js Production Build** | Next.js 16.3.5 Turbopack | **13 routes** | **Compiled Successfully (Exit 0)** |
@@ -278,4 +278,36 @@ All verification suites have been executed and passed without errors:
    - TEFAS fund `ZBJ`: `₺5.5925` (valid range ₺4.00 - ₺10.00, not 100.00 fallback).
    - Equity `EREGL`: `₺31.06` (valid range ₺25.00 - ₺50.00).
    - Equity `AAPL`: `$342.37` (valid range >$200.00).
-4. `DividendView.tsx`: Switches between `Portföyüm` (holding-derived payouts) and `Tüm Piyasa` (713 dividend payers) cleanly.
+4. `GET /api/assets?market=BIST&limit=2000`: Returns 100% BIST assets across both page 1 and page 2 (0 filter leaks, 0 US/crypto items).
+5. `DividendView.tsx`: Switches between `Portföyüm` (holding-derived payouts) and `Tüm Piyasa` (713 dividend payers) cleanly.
+
+---
+
+## 8. Correctness, Data Integrity & Recovery Tracking Remediation
+
+Following an exhaustive source-code review, 8 concrete architectural and data-integrity vulnerabilities were systematically remediated:
+
+### 8.1 Elimination of Synthetic Price Fabrication
+- **Vulnerability:** `POST /api/assets` previously fabricated synthetic prices (`close: 100.0`, `volume: 100000`, invented OHLC) and inserted them into `price_history` when live quote lookup failed.
+- **Remediation:** Removed synthetic price insertion entirely. When quote lookup fails, zero rows are inserted into `price_history` and the API responds with `price_status: 'unavailable'`.
+- **TEFAS Quote Integration:** Integrated the official TEFAS JSON endpoint (`fetchTefasQuote`) to obtain real net asset value (NAV) prices for mutual and money market funds upon creation.
+
+### 8.2 Deterministic Pagination & Multi-Page Filter Preservation
+- **Vulnerability:** In `GET /api/assets`, requests with `limit > 1000` applied `market`, `asset_class`, and `q` search filters only to Page 1 (`range(0, 999)`), dropping filters on Page 2 (`range(1000, maxLimit - 1)`). Furthermore, `r2.error` was unhandled, and `limit` was unvalidated.
+- **Remediation:** Built a centralized query constructor (`buildFilteredQuery`) that guarantees identical filter application across both pagination ranges. Added strict integer and range validation for `limit` (rejecting negative, non-integer, or non-finite inputs with HTTP 400). Handled both `r1.error` and `r2.error`.
+- **Deterministic Ordering:** Applied `.order('symbol', { ascending: true })` across both pages in `/api/assets` and frontend `page.tsx` to guarantee deterministic paging across boundary lines.
+
+### 8.3 Post-Exit Recovery Tracking Hardening
+- **Target 2 Lifecycle:** Previously, trackers completed prematurely upon hitting Target 1 even when Target 2 was defined. The tracker now requires BOTH Target 1 and Target 2 to be reached before completing on milestones, keeping tracking active up to 45 sessions.
+- **Initialization Idempotency:** Added a pre-existence check before tracker creation in `initialize_recovery_tracking`, preventing subsequent runs from overwriting active status or resetting milestone flags (`has_recovered_entry`, etc.).
+- **Session Duration Integrity:** Eliminated the fallback fabrication of 7 sessions when the signal date is missing from price history. When the signal index cannot be resolved, `sessions_since_signal` is recorded as `None`.
+- **Fail-Fast Error Handling:** Changed tracker queries in `sync_existing_closed_signals_to_recovery_tracker` to raise an explicit `RuntimeError` rather than continuing silently with incomplete tracker sets.
+
+### 8.4 Strict Trade Geometry Validation
+- **Storage Boundary Checks:** In `validate_trade_geometry`, strictly verified that `entry_price`, `stop_loss`, and `target_1` are mandatory, finite, and positive numbers.
+- **LONG Invariants:** Verified `0 < stop_loss < entry_price < target_1` (and `target_2 > target_1` if defined).
+- **SHORT Invariants:** Verified `0 < target_1 < entry_price < stop_loss` (and `0 < target_2 < target_1` if defined).
+- **Direction Rejection:** Rejected unsupported trade directions (e.g., FLAT, NEUTRAL) with descriptive errors.
+
+### 8.5 Mobile AbortSignal Combination Safety
+- **Network Timeout Preservation:** In `supabaseClient.ts`, replaced the logic that ignored the 9-second timeout when an external `options.signal` was passed. Used `AbortSignal.any` (with a backwards-compatible event listener fallback) to trigger cancellation whenever either the mobile timeout OR the caller's cancellation signal fires.

@@ -70,34 +70,63 @@ def validate_and_normalize_confidence(raw: Any, allow_legacy_10_scale: bool = Fa
 def validate_trade_geometry(sig: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
     Validates trade geometry and finite price levels before storage.
-    For LONG setups, requires:
+    For executable setups, strictly requires:
     - Finite positive entry_price > 0
-    - Finite positive stop_loss with 0 < stop_loss < entry_price
-    - Finite positive target_1 with target_1 > entry_price
-    - If target_2 provided: finite positive target_2 > target_1
+    - Finite positive stop_loss
+    - Finite positive target_1
+    - For LONG setups: 0 < stop_loss < entry_price < target_1
+    - If target_2 provided for LONG: target_2 > target_1
+    - For SHORT setups: 0 < target_1 < entry_price < stop_loss
+    - If target_2 provided for SHORT: 0 < target_2 < target_1
+    - Rejects invalid or unsupported directions
     """
-    direction = str(sig.get("direction", "LONG")).upper()
+    direction = str(sig.get("direction", "LONG")).upper().strip()
+    if direction not in ("LONG", "SHORT"):
+        return False, f"Unsupported trade direction: '{direction}'. Must be LONG or SHORT."
+
     try:
-        entry = float(sig.get("entry_price") or 0)
-        stop = float(sig.get("stop_loss")) if sig.get("stop_loss") is not None else None
-        t1 = float(sig.get("target_1")) if sig.get("target_1") is not None else None
+        raw_entry = sig.get("entry_price")
+        if raw_entry is None:
+            return False, "Missing mandatory entry_price"
+        entry = float(raw_entry)
+
+        raw_stop = sig.get("stop_loss")
+        if raw_stop is None:
+            return False, "Missing mandatory stop_loss"
+        stop = float(raw_stop)
+
+        raw_t1 = sig.get("target_1")
+        if raw_t1 is None:
+            return False, "Missing mandatory target_1"
+        t1 = float(raw_t1)
+
         t2 = float(sig.get("target_2")) if sig.get("target_2") is not None else None
     except (ValueError, TypeError) as err:
         return False, f"Non-numeric price values: {err}"
 
     if not math.isfinite(entry) or entry <= 0:
-        return False, f"Invalid entry_price: {entry}"
+        return False, f"Invalid entry_price: {entry} (must be finite positive)"
+    if not math.isfinite(stop) or stop <= 0:
+        return False, f"Invalid stop_loss: {stop} (must be finite positive)"
+    if not math.isfinite(t1) or t1 <= 0:
+        return False, f"Invalid target_1: {t1} (must be finite positive)"
 
     if direction == "LONG":
-        if stop is not None:
-            if not math.isfinite(stop) or stop <= 0 or stop >= entry:
-                return False, f"Inverted long stop_loss: {stop} (must satisfy 0 < stop < entry={entry})"
-        if t1 is not None:
-            if not math.isfinite(t1) or t1 <= entry:
-                return False, f"Inverted long target_1: {t1} (must satisfy target_1 > entry={entry})"
+        if not (0 < stop < entry):
+            return False, f"Inverted long stop_loss: {stop} (must satisfy 0 < stop < entry={entry})"
+        if not (entry < t1):
+            return False, f"Inverted long target_1: {t1} (must satisfy target_1 > entry={entry})"
         if t2 is not None:
-            if not math.isfinite(t2) or (t1 is not None and t2 <= t1):
+            if not math.isfinite(t2) or t2 <= t1:
                 return False, f"Inverted long target_2: {t2} (must satisfy target_2 > target_1={t1})"
+    elif direction == "SHORT":
+        if not (0 < t1 < entry):
+            return False, f"Inverted short target_1: {t1} (must satisfy 0 < target_1 < entry={entry})"
+        if not (entry < stop):
+            return False, f"Inverted short stop_loss: {stop} (must satisfy stop > entry={entry})"
+        if t2 is not None:
+            if not math.isfinite(t2) or t2 >= t1:
+                return False, f"Inverted short target_2: {t2} (must satisfy 0 < target_2 < target_1={t1})"
 
     return True, None
 

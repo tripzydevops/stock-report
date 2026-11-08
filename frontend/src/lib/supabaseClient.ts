@@ -13,7 +13,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       // 9-second timeout for mobile networks to prevent hanging on network switch
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 9000);
-      const signal = options.signal || controller.signal;
+      let signal: AbortSignal = controller.signal;
+      if (options.signal) {
+        if (typeof AbortSignal.any === 'function') {
+          signal = AbortSignal.any([options.signal, controller.signal]);
+        } else {
+          // Fallback: listen to caller signal and abort controller
+          if (options.signal.aborted) {
+            controller.abort();
+          } else {
+            options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+          }
+        }
+      }
 
       return fetch(url, {
         ...options,

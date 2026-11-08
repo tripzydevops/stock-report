@@ -75,4 +75,23 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // Check that dividend income or market metrics are rendered
     await expect(page.getByText(/YoC|Yıllık|Annual|TRY/).first()).toBeVisible({ timeout: 10000 });
   });
+
+  test('4. Asset Catalog API preserves market filter across page boundaries (limit=2000)', async ({ request }) => {
+    // When requesting BIST assets with limit=2000, page 1 and page 2 must BOTH filter market === 'BIST'
+    const res = await request.get('/api/assets?market=BIST&limit=2000');
+    expect(res.ok()).toBeTruthy();
+    const assets = await res.json();
+    expect(Array.isArray(assets)).toBeTruthy();
+    expect(assets.length).toBeGreaterThan(0);
+    // Every single asset returned MUST have market === 'BIST'
+    const nonBist = assets.filter((a: any) => a.market !== 'BIST');
+    expect(nonBist.length).toBe(0);
+
+    // Limit validation: negative or invalid limits return 400
+    const badLimitRes = await request.get('/api/assets?limit=-5');
+    expect(badLimitRes.status()).toBe(400);
+
+    const stringLimitRes = await request.get('/api/assets?limit=invalid');
+    expect(stringLimitRes.status()).toBe(400);
+  });
 });

@@ -116,6 +116,15 @@ def initialize_recovery_tracking(
         exit_dt = date.today()
     end_dt = exit_dt + timedelta(days=int(max_tracking_sessions * 1.5))
 
+    # Check if tracker already exists to prevent resetting active progress or milestone flags
+    try:
+        existing_res = client.table("signal_recovery_tracking").select("*").eq("signal_id", sig_id).limit(1).execute()
+        if existing_res.data and len(existing_res.data) > 0:
+            return existing_res.data[0]
+    except Exception as chk_err:
+        logger.error(f"Error checking existing recovery tracker for signal {sig_id}: {chk_err}")
+        raise RuntimeError(f"Database query failed while checking recovery tracker {sig_id}: {chk_err}") from chk_err
+
     tracking_row = {
         "signal_id": sig_id,
         "asset_id": signal_row.get("asset_id"),
@@ -135,14 +144,11 @@ def initialize_recovery_tracking(
     }
 
     try:
-        res = client.table("signal_recovery_tracking").upsert(
-            tracking_row,
-            on_conflict="signal_id"
-        ).execute()
+        res = client.table("signal_recovery_tracking").insert(tracking_row).execute()
         return tracking_row
     except Exception as e:
         logger.error(f"Failed to initialize recovery tracking for signal {sig_id}: {e}")
-        return None
+        raise RuntimeError(f"Database insertion failed for recovery tracker {sig_id}: {e}") from e
 
 
 def reconcile_post_exit_recoveries(
@@ -233,7 +239,7 @@ def reconcile_post_exit_recoveries(
         else:
             exit_idx = exit_indices[0]
 
-        signal_idx = signal_indices[0] if signal_indices else max(0, exit_idx - 7)
+        signal_idx = signal_indices[0] if signal_indices else None
 
         # Chronological bars strictly subsequent to exit_idx
         subsequent_indices = [idx for idx in range(exit_idx + 1, len(df))]
@@ -262,7 +268,7 @@ def reconcile_post_exit_recoveries(
             close = float(bar["close"])
             last_eval_date = bar_date
 
-            sessions_since_signal = i - signal_idx
+            sessions_since_signal = (i - signal_idx) if signal_idx is not None else None
             sessions_since_exit = i - exit_idx
 
             # 1. Entry Recovery
@@ -354,11 +360,26 @@ def reconcile_post_exit_recoveries(
                 raise RuntimeError(f"Database insertion failed for recovery events: {ins_err}") from ins_err
 
         # Check if tracking reached max horizon or all targets reclaimed
+        has_reached_t1 = (sig_id, "TARGET_1_TOUCHED_AFTER_EXIT") in recorded_events_set
+        has_reached_t2 = (sig_id, "TARGET_2_TOUCHED_AFTER_EXIT") in recorded_events_set
+        has_rec_target = has_reached_t1 or has_reached_t2
+
+        # All targets defined for the setup must be reclaimed before milestone completion
+        all_targets_reclaimed = False
+        if t2 is not None:
+            all_targets_reclaimed = has_reached_t1 and has_reached_t2
+        elif t1 is not None:
+            all_targets_reclaimed = has_reached_t1
+        else:
+            all_targets_reclaimed = True
+
+        all_milestones_reclaimed = has_rec_entry and (pre_pb is None or has_rec_pre_pb) and all_targets_reclaimed
+
         is_completed = False
         total_sessions_after_exit = len(subsequent_indices)
         if total_sessions_after_exit >= max_tracking_sessions:
             is_completed = True
-        elif has_rec_entry and (pre_pb is None or has_rec_pre_pb) and has_rec_target:
+        elif all_milestones_reclaimed:
             is_completed = True
 
         update_payload = {
@@ -394,7 +415,7 @@ def sync_existing_closed_signals_to_recovery_tracker(client: Any) -> int:
         closed_signals = res.data or []
     except Exception as e:
         logger.error(f"Failed to query closed signals for recovery backfill: {e}")
-        return 0
+        raise RuntimeError(f"Database query failed for closed signals backfill: {e}") from e
 
     if not closed_signals:
         return 0
@@ -404,8 +425,8 @@ def sync_existing_closed_signals_to_recovery_tracker(client: Any) -> int:
         res_existing = client.table("signal_recovery_tracking").select("signal_id").execute()
         registered_ids = {r["signal_id"] for r in (res_existing.data or [])}
     except Exception as ex_err:
-        logger.warning(f"Could not query existing recovery tracker IDs: {ex_err}")
-        registered_ids = set()
+        logger.error(f"FATAL: Could not query existing recovery tracker IDs: {ex_err}")
+        raise RuntimeError(f"Database query failed for existing recovery trackers: {ex_err}") from ex_err
 
     initialized_count = 0
     for sig in closed_signals:

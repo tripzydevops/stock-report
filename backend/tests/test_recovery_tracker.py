@@ -74,6 +74,7 @@ class TestRecoveryInitialization:
 
     def test_initializes_stopped_out_signal(self):
         mock_client = MagicMock()
+        mock_client.table("signal_recovery_tracking").select().eq().limit().execute.return_value.data = []
         stopped_sig = {
             "id": "sig-stop-01",
             "asset_id": "asset-uuid-1",
@@ -98,10 +99,37 @@ class TestRecoveryInitialization:
         assert row["has_recovered_entry"] is False
 
         mock_client.table.assert_called_with("signal_recovery_tracking")
-        mock_client.table().upsert.assert_called_once()
+        mock_client.table().insert.assert_called_once()
+
+    def test_idempotent_initialization_does_not_overwrite_existing_progress(self):
+        mock_client = MagicMock()
+        existing_row = {
+            "signal_id": "sig-stop-01",
+            "tracking_status": "ACTIVE",
+            "has_recovered_entry": True,
+            "has_recovered_pre_pullback": True,
+            "has_reached_target_after_exit": False,
+        }
+        mock_client.table("signal_recovery_tracking").select().eq().limit().execute.return_value.data = [existing_row]
+
+        stopped_sig = {
+            "id": "sig-stop-01",
+            "asset_id": "asset-uuid-1",
+            "status": "stopped_out",
+            "closed_at": "2026-10-10T18:00:00Z",
+            "entry_price": 100.0,
+            "target_1": 115.0,
+        }
+
+        row = initialize_recovery_tracking(mock_client, stopped_sig)
+        assert row is not None
+        assert row["has_recovered_entry"] is True
+        assert row["has_recovered_pre_pullback"] is True
+        mock_client.table().insert.assert_not_called()
 
     def test_initializes_expired_signal(self):
         mock_client = MagicMock()
+        mock_client.table("signal_recovery_tracking").select().eq().limit().execute.return_value.data = []
         expired_sig = {
             "id": "sig-exp-01",
             "asset_id": "asset-uuid-2",
@@ -220,12 +248,128 @@ class TestReconcilePostExitRecoveries:
         t1_touch = next(e for e in insert_calls if e["event_type"] == "TARGET_1_TOUCHED_AFTER_EXIT")
         assert t1_touch["sessions_since_exit"] == 11 # Index 15 - Index 4
 
-        # Verify tracking row update payload
+        # Verify tracking row update payload:
+        # Since original_target_2 (120.0) is defined but not yet touched, tracker remains ACTIVE!
         update_call = mock_client.table("signal_recovery_tracking").update.call_args[0][0]
         assert update_call["has_recovered_entry"] is True
         assert update_call["has_recovered_pre_pullback"] is True
         assert update_call["has_reached_target_after_exit"] is True
+        assert "tracking_status" not in update_call  # Still ACTIVE, not prematurely COMPLETED!
+
+    def test_completes_when_target_2_is_touched_or_single_target_setup(self):
+        mock_client = MagicMock()
+        dates = pd.date_range(start="2026-10-01", periods=10, freq="B").strftime("%Y-%m-%d").tolist()
+        sig_date = dates[0]
+        exit_date = dates[2]
+
+        bars = []
+        for idx in range(10):
+            if idx <= 2:
+                bars.append({"open": 100.0, "high": 101.0, "low": 94.0, "close": 94.5})
+            elif idx == 4:
+                # Touches Entry (100.0) and Target 1 (105.0)
+                bars.append({"open": 98.0, "high": 106.0, "low": 97.0, "close": 102.0})
+            elif idx == 6:
+                # Touches Target 2 (110.0)
+                bars.append({"open": 104.0, "high": 111.0, "low": 103.0, "close": 110.5})
+            else:
+                bars.append({"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0})
+
+        df_price = pd.DataFrame(bars, index=dates)
+
+        active_tracker = {
+            "signal_id": "sig-recovery-test-02",
+            "asset_id": "asset-uuid-froto",
+            "original_exit_date": exit_date,
+            "original_exit_status": "stopped_out",
+            "entry_reference": 100.0,
+            "pre_pullback_level": None,
+            "original_target_1": 105.0,
+            "original_target_2": 110.0,
+            "tracking_start_date": exit_date,
+            "tracking_end_date": dates[-1],
+            "last_checked_date": exit_date,
+            "tracking_status": "ACTIVE",
+            "has_recovered_entry": False,
+            "has_recovered_pre_pullback": False,
+            "has_reached_target_after_exit": False,
+        }
+
+        mock_client.table("signal_recovery_tracking").select().eq().execute.return_value.data = [active_tracker]
+        mock_client.table("signal_recovery_events").select().in_().execute.return_value.data = []
+        mock_client.table("trade_signals").select().in_().execute.return_value.data = [
+            {"id": "sig-recovery-test-02", "signal_date": sig_date}
+        ]
+
+        stats = reconcile_post_exit_recoveries(
+            client=mock_client,
+            asset_id_map={"FROTO": "asset-uuid-froto"},
+            asset_data={"FROTO": df_price},
+            today_str=dates[-1]
+        )
+
+        assert stats["checked"] == 1
+        assert stats["completed"] == 1
+
+        insert_calls = mock_client.table("signal_recovery_events").insert.call_args[0][0]
+        event_types = [e["event_type"] for e in insert_calls]
+        assert "TARGET_1_TOUCHED_AFTER_EXIT" in event_types
+        assert "TARGET_2_TOUCHED_AFTER_EXIT" in event_types
+
+        update_call = mock_client.table("signal_recovery_tracking").update.call_args[0][0]
         assert update_call["tracking_status"] == "COMPLETED"
+
+    def test_missing_signal_date_yields_none_sessions_since_signal(self):
+        mock_client = MagicMock()
+        dates = pd.date_range(start="2026-10-01", periods=6, freq="B").strftime("%Y-%m-%d").tolist()
+        exit_date = dates[1]
+
+        bars = []
+        for idx in range(6):
+            if idx == 3:
+                bars.append({"open": 98.0, "high": 102.0, "low": 97.0, "close": 101.0})
+            else:
+                bars.append({"open": 95.0, "high": 96.0, "low": 94.0, "close": 95.0})
+
+        df_price = pd.DataFrame(bars, index=dates)
+
+        active_tracker = {
+            "signal_id": "sig-recovery-no-date",
+            "asset_id": "asset-uuid-froto",
+            "original_exit_date": exit_date,
+            "original_exit_status": "stopped_out",
+            "entry_reference": 100.0,
+            "pre_pullback_level": None,
+            "original_target_1": 105.0,
+            "original_target_2": None,
+            "tracking_start_date": exit_date,
+            "tracking_end_date": dates[-1],
+            "last_checked_date": exit_date,
+            "tracking_status": "ACTIVE",
+            "has_recovered_entry": False,
+            "has_recovered_pre_pullback": False,
+            "has_reached_target_after_exit": False,
+        }
+
+        mock_client.table("signal_recovery_tracking").select().eq().execute.return_value.data = [active_tracker]
+        mock_client.table("signal_recovery_events").select().in_().execute.return_value.data = []
+        # Signal date is not in price history!
+        mock_client.table("trade_signals").select().in_().execute.return_value.data = [
+            {"id": "sig-recovery-no-date", "signal_date": "2025-01-01"}
+        ]
+
+        reconcile_post_exit_recoveries(
+            client=mock_client,
+            asset_id_map={"FROTO": "asset-uuid-froto"},
+            asset_data={"FROTO": df_price},
+            today_str=dates[-1]
+        )
+
+        insert_calls = mock_client.table("signal_recovery_events").insert.call_args[0][0]
+        entry_touch = next(e for e in insert_calls if e["event_type"] == "ENTRY_TOUCHED")
+        assert entry_touch["sessions_since_exit"] == 2
+        # Zero synthetic/fabricated sessions! Must be None when date is not found
+        assert entry_touch["sessions_since_signal"] is None
 
 
 class TestBackfillClosedSignals:
