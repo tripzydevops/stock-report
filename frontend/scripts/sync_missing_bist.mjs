@@ -51,7 +51,7 @@ async function run() {
 
   console.log(`Need to fetch prices for ${toFetch.length} BIST stocks...`);
 
-  const today = '2026-11-06';
+  const today = new Date().toISOString().slice(0, 10);
   const priceRows = [];
   let foundCount = 0;
 
@@ -74,19 +74,7 @@ async function run() {
       });
       console.log(`[${i+1}/${toFetch.length}] ✓ ${asset.symbol}: ₺${q.price}`);
     } else {
-      // Baseline fallback for newly listed or unindexed BIST stocks
-      // So no asset in database has 0 or null
-      priceRows.push({
-        asset_id: asset.id,
-        date: today,
-        open: 25.0,
-        high: 25.0,
-        low: 25.0,
-        close: 25.0,
-        adj_close: 25.0,
-        volume: 50000
-      });
-      console.log(`[${i+1}/${toFetch.length}] ~ ${asset.symbol}: baseline ₺25.00`);
+      console.log(`[${i+1}/${toFetch.length}] ~ ${asset.symbol}: quote unavailable, skipping.`);
     }
 
     // Small delay every 10 requests
