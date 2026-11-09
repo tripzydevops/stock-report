@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 // Comprehensive registry of popular TEFAS Mutual & Money Market (Para Piyasası) Funds
 const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultPrice: number }> = {
-  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.5925 },
+  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.6070 },
   PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 6.8520 },
   KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 4.1200 },
   NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 3.4500 },
@@ -244,29 +244,45 @@ export async function POST(request: NextRequest) {
             try {
               const tRes = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json;charset=UTF-8', 'User-Agent': 'Mozilla/5.0' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json, text/plain, */*',
+                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                },
                 body: JSON.stringify({ fonKodu: cleanSym.toUpperCase(), dil: 'TR', periyod: 1 }),
-                signal: AbortSignal.timeout(4000),
+                signal: AbortSignal.timeout(6000),
               });
               if (tRes.ok) {
                 const tj = await tRes.json();
-                const latest = tj?.data?.[0];
-                const p = latest ? parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.')) : NaN;
-                if (!isNaN(p) && p > 0) {
+                const list = tj?.resultList || tj?.data;
+                const latest = Array.isArray(list) && list.length > 0 ? list[list.length - 1] : null;
+                const prev = Array.isArray(list) && list.length > 1 ? list[list.length - 2] : null;
+                const rawPrice = latest ? (latest.FIYAT ?? latest.fiyat) : null;
+                const p = rawPrice != null ? parseFloat(String(rawPrice).replace(',', '.')) : NaN;
+                const rawPrev = prev ? (prev.FIYAT ?? prev.fiyat) : null;
+                const prevPrice = rawPrev != null ? parseFloat(String(rawPrev).replace(',', '.')) : null;
+
+                if (!isNaN(p) && p > 0 && latest) {
                   let sDate = new Date().toISOString().slice(0, 10);
                   const rawT = String(latest.TARIH || latest.tarih || '').trim();
-                  const pParts = rawT.split('.');
-                  if (pParts.length === 3 && pParts[2].length === 4) {
-                    sDate = `${pParts[2]}-${pParts[1].padStart(2, '0')}-${pParts[0].padStart(2, '0')}`;
+                  if (/^\d{4}-\d{2}-\d{2}/.test(rawT)) {
+                    sDate = rawT.slice(0, 10);
+                  } else {
+                    const pParts = rawT.split('.');
+                    if (pParts.length === 3 && pParts[2].length === 4) {
+                      sDate = `${pParts[2]}-${pParts[1].padStart(2, '0')}-${pParts[0].padStart(2, '0')}`;
+                    }
                   }
                   await serverSupabase.from('price_history').upsert({
                     asset_id: assetId,
                     date: sDate,
                     close: p,
-                    open: null,
-                    high: null,
-                    low: null,
-                    volume: null,
+                    open: prevPrice && !isNaN(prevPrice) ? prevPrice : p,
+                    high: Math.max(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+                    low: Math.min(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+                    volume: typeof latest.PAY_SAYISI === 'number' ? latest.PAY_SAYISI : null,
+                    source: 'tefas',
+                    observed_at: new Date().toISOString(),
                   }, { onConflict: 'asset_id,date' });
                 }
               }

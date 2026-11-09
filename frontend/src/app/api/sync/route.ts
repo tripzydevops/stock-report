@@ -11,11 +11,79 @@ interface QuoteResult {
   symbol: string;
   price: number;
   sessionDate: string;
+  source?: string;
+  observedAt?: string;
   open?: number | null;
   prevClose?: number | null;
   high?: number | null;
   low?: number | null;
   volume?: number | null;
+}
+
+function parseTefasDate(rawDate?: any): string | null {
+  if (!rawDate) return null;
+  if (typeof rawDate === 'number') {
+    const d = new Date(rawDate > 1e11 ? rawDate : rawDate * 1000);
+    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
+  }
+  const s = String(rawDate).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    return s.slice(0, 10);
+  }
+  const parts = s.split('.');
+  if (parts.length === 3 && parts[2].length === 4) {
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return null;
+}
+
+async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
+  try {
+    const res = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify({ fonKodu: code.toUpperCase(), dil: 'TR', periyod: 1 }),
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const data = json?.resultList || json?.data;
+    if (Array.isArray(data) && data.length > 0) {
+      const latest = data[data.length - 1];
+      const prev = data.length > 1 ? data[data.length - 2] : null;
+      const rawPrice = latest.FIYAT ?? latest.fiyat;
+      const p = parseFloat(String(rawPrice).replace(',', '.'));
+      const rawPrev = prev ? (prev.FIYAT ?? prev.fiyat) : null;
+      const prevPrice = rawPrev != null ? parseFloat(String(rawPrev).replace(',', '.')) : null;
+
+      if (!isNaN(p) && p > 0) {
+        const sessionDate = parseTefasDate(latest.TARIH ?? latest.tarih);
+        if (!sessionDate) return null;
+        return {
+          symbol: code.toUpperCase(),
+          price: p,
+          sessionDate,
+          source: 'tefas',
+          observedAt: new Date().toISOString(),
+          open: prevPrice && !isNaN(prevPrice) ? prevPrice : p,
+          prevClose: prevPrice && !isNaN(prevPrice) ? prevPrice : null,
+          high: Math.max(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+          low: Math.min(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+          volume: typeof latest.PAY_SAYISI === 'number' ? latest.PAY_SAYISI : null,
+        };
+      }
+    }
+    return null;
+  } catch (err) {
+    console.warn(`TEFAS quote fetch error for ${code}:`, err);
+    return null;
+  }
 }
 
 async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
@@ -51,6 +119,8 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
       symbol,
       price,
       sessionDate,
+      source: 'yahoo',
+      observedAt: new Date().toISOString(),
       open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null,
       prevClose: typeof meta?.previousClose === 'number' ? meta.previousClose : (typeof meta?.chartPreviousClose === 'number' ? meta.chartPreviousClose : null),
       high: typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null,
@@ -140,29 +210,36 @@ export async function POST(request: Request) {
       }
     }
 
-    // Normalize symbols for Yahoo Finance
+    // Distinguish TEFAS funds from Yahoo Finance symbols
     const rawSymbols = Array.from(symbolSet);
-    const symbolsToSync: string[] = [];
+    const yahooSymbolsToSync: string[] = [];
+    const tefasSymbolsToSync: string[] = [];
 
     for (const sym of rawSymbols) {
       if (sym === 'TRY=X' || sym === 'XU100.IS' || sym.endsWith('.IS')) {
-        symbolsToSync.push(sym);
+        yahooSymbolsToSync.push(sym);
       } else {
-        // Check if known BIST or US in dbAssets
         const matched = dbAssets?.find(a => a.symbol.toUpperCase() === sym.toUpperCase() || a.symbol.replace('.IS', '').toUpperCase() === sym.toUpperCase());
-        if (matched && matched.market === 'BIST' && !sym.endsWith('.IS')) {
-          symbolsToSync.push(`${sym}.IS`);
+        if (matched && matched.market === 'TEFAS') {
+          tefasSymbolsToSync.push(sym.toUpperCase());
+        } else if (matched && matched.market === 'BIST' && !sym.endsWith('.IS')) {
+          yahooSymbolsToSync.push(`${sym}.IS`);
         } else {
-          symbolsToSync.push(sym);
+          yahooSymbolsToSync.push(sym);
         }
       }
     }
 
-    const uniqueSymbolsToSync = Array.from(new Set(symbolsToSync));
+    const uniqueYahoo = Array.from(new Set(yahooSymbolsToSync));
+    const uniqueTefas = Array.from(new Set(tefasSymbolsToSync));
 
-    // 5. Fetch live quotes with 15-worker concurrency pool
-    const quoteResults = await fetchWithConcurrency(uniqueSymbolsToSync, fetchLiveQuote, 15);
-    const quotes = quoteResults.filter((q): q is QuoteResult => q !== null);
+    // 5. Fetch live quotes with bounded concurrency
+    const [yahooResults, tefasResults] = await Promise.all([
+      fetchWithConcurrency(uniqueYahoo, fetchLiveQuote, 15),
+      fetchWithConcurrency(uniqueTefas, fetchTefasQuote, 10),
+    ]);
+
+    const quotes = [...yahooResults, ...tefasResults].filter((q): q is QuoteResult => q !== null);
 
     if (quotes.length === 0) {
       return NextResponse.json({
@@ -217,8 +294,15 @@ export async function POST(request: Request) {
           high: q.high ?? null,
           low: q.low ?? null,
           volume: q.volume ?? null,
-          adj_close: q.price
+          adj_close: q.price,
+          source: q.source || (q.symbol.endsWith('.IS') || q.symbol === 'TRY=X' || q.symbol === 'SPY' ? 'yahoo' : 'yahoo'),
+          observed_at: q.observedAt || new Date().toISOString(),
         });
+      }
+
+      // Skip ORB calculation for TEFAS mutual funds
+      if (q.source === 'tefas') {
+        continue;
       }
 
       // ORB calculation

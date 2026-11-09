@@ -41,21 +41,28 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
     const res = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/json',
         'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       },
       body: JSON.stringify({ fonKodu: code.toUpperCase(), dil: 'TR', periyod: 1 }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
+      next: { revalidate: 0 },
     });
     if (!res.ok) return null;
     const json = await res.json();
-    const data = json?.data;
+    const data = json?.resultList || json?.data;
     if (Array.isArray(data) && data.length > 0) {
-      const latest = data[0];
-      const p = parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.'));
+      // Items in resultList are in ascending chronological order; the newest quote is the last item
+      const latest = data[data.length - 1];
+      const prev = data.length > 1 ? data[data.length - 2] : null;
+      const rawPrice = latest.FIYAT ?? latest.fiyat;
+      const p = parseFloat(String(rawPrice).replace(',', '.'));
+      const rawPrevPrice = prev ? (prev.FIYAT ?? prev.fiyat) : null;
+      const prevPrice = rawPrevPrice != null ? parseFloat(String(rawPrevPrice).replace(',', '.')) : null;
+
       if (!isNaN(p) && p > 0) {
-        const sessionDate = parseTefasDate(latest.TARIH || latest.tarih);
+        const sessionDate = parseTefasDate(latest.TARIH ?? latest.tarih);
         if (!sessionDate) {
           console.warn(`Unrecognized TEFAS date for ${code}: ${latest.TARIH || latest.tarih}`);
           return null;
@@ -65,15 +72,16 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
           sessionDate,
           observedAt: new Date().toISOString(),
           source: 'tefas',
-          open: null,
-          high: null,
-          low: null,
-          volume: null,
+          open: prevPrice && !isNaN(prevPrice) ? prevPrice : p,
+          high: Math.max(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+          low: Math.min(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
+          volume: typeof latest.PAY_SAYISI === 'number' ? latest.PAY_SAYISI : null,
         };
       }
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`Live TEFAS quote fetch failed for ${code}:`, err);
     return null;
   }
 }
@@ -246,7 +254,7 @@ export async function POST(request: NextRequest) {
 
 // Comprehensive registry of popular TEFAS Mutual & Money Market (Para Piyasası) Funds
 const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultPrice: number }> = {
-  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.5925 },
+  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.6070 },
   PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 6.8520 },
   KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 4.1200 },
   NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 3.4500 },

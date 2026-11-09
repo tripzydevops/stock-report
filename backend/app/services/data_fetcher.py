@@ -106,43 +106,41 @@ def fetch_tefas_prices(fund_codes: List[str], start_date: str, end_date: str) ->
     Fetches mutual fund prices from TEFAS API.
     """
     results = {}
-    url = "https://www.tefas.gov.tr/api/DB/BindHistoryInfo"
+    url = "https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir"
     headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent": "Mozilla/5.0"
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
     
-    with httpx.Client(timeout=10.0) as client:
+    with httpx.Client(timeout=15.0) as client:
         for code in fund_codes:
-            data = {
-                "fontip": "YAT",
-                "sfontip": "",
-                "fonkod": code.upper(),
-                "fongrup": "",
-                "bastarih": start_date,
-                "bittarih": end_date,
-                "fonturkod": "",
-                "fonunvankod": ""
+            clean_code = code.upper().strip()
+            payload = {
+                "fonKodu": clean_code,
+                "dil": "TR",
+                "periyod": 1
             }
             try:
-                response = client.post(url, data=data, headers=headers)
+                response = client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 json_data = response.json()
                 
-                if json_data and 'data' in json_data:
-                    df = pd.DataFrame(json_data['data'])
+                raw_list = json_data.get("resultList") or json_data.get("data") or []
+                if raw_list:
+                    df = pd.DataFrame(raw_list)
                     if not df.empty:
-                        # Map TEFAS columns to standard OHLCV
-                        # TARIH, FIYAT, KISI_SAYISI, PAY_SAYISI
-                        df['date'] = pd.to_datetime(df['TARIH'], format='%d.%m.%Y').dt.tz_localize(None)
-                        df['close'] = df['FIYAT'].astype(float)
-                        df['open'] = df['close']
-                        df['high'] = df['close']
-                        df['low'] = df['close']
+                        date_col = 'tarih' if 'tarih' in df.columns else 'TARIH'
+                        price_col = 'fiyat' if 'fiyat' in df.columns else 'FIYAT'
+                        df['date'] = pd.to_datetime(df[date_col]).dt.tz_localize(None)
+                        df['close'] = df[price_col].astype(str).str.replace(',', '.').astype(float)
+                        df['open'] = df['close'].shift(1).fillna(df['close'])
+                        df['high'] = df[['open', 'close']].max(axis=1)
+                        df['low'] = df[['open', 'close']].min(axis=1)
                         df['volume'] = df['PAY_SAYISI'].astype(float) if 'PAY_SAYISI' in df.columns else 0.0
                         df['adj_close'] = df['close']
                         df.set_index('date', inplace=True)
-                        results[code] = validate_ohlcv_dataframe(df, strict=False)
+                        results[clean_code] = validate_ohlcv_dataframe(df, strict=False)
             except Exception as e:
                 logger.error(f"Error fetching TEFAS prices for {code}: {str(e)}")
                 

@@ -2080,7 +2080,7 @@ export default function Home() {
         { s: 'SISE', n: 'Şişecam', m: 'BIST', p: 44.30, c: 0.10, r: 41.2, e: 'Below 200 EMA', v: 0.70 },
         { s: 'AKBNK', n: 'Akbank', m: 'BIST', p: 68.65, c: 1.15, r: 57.1, e: 'Above 200 EMA', v: 1.30 },
         { s: 'GARAN', n: 'Garanti BBVA', m: 'BIST', p: 144.30, c: 1.40, r: 60.5, e: 'Above 200 EMA', v: 1.45 },
-        { s: 'ZBJ', n: 'Ziraat Portföy Başak Para Piyasası', m: 'TEFAS', p: 5.5905, c: 0.12, r: 60.0, e: 'Above 200 EMA', v: 1.00 },
+        { s: 'ZBJ', n: 'Ziraat Portföy Başak Para Piyasası', m: 'TEFAS', p: 5.6070, c: 0.30, r: 60.0, e: 'Above 200 EMA', v: 1.00 },
         { s: 'PPZ', n: 'Azimut Portföy Para Piyasası', m: 'TEFAS', p: 7.0998, c: 0.15, r: 60.0, e: 'Above 200 EMA', v: 1.00 },
         { s: 'MAC', n: 'Marmara Capital Hisse Fonu', m: 'TEFAS', p: 0.6418, c: 0.65, r: 56.0, e: 'Above 200 EMA', v: 1.00 },
         { s: 'TTE', n: 'İş Portföy BIST Teknoloji Fonu', m: 'TEFAS', p: 1.0077, c: 0.85, r: 58.0, e: 'Above 200 EMA', v: 1.00 },
