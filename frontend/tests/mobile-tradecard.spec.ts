@@ -40,8 +40,8 @@ test.describe('Mobile TradeCard Expanded View', () => {
     const t0Badge = page.locator('text=/T0.*%3|T0 Kâr/i').first();
     await expect(t0Badge).toBeVisible();
 
-    // Verify Setup / Confidence star indicator exists
-    const qualityLabel = page.locator('text=/⭐|Algoritmik Kurulum|Onaylanan Kriterler/i').first();
+    // Verify Setup / Confidence star indicator exists inside the open modal
+    const qualityLabel = page.locator('div.fixed.inset-0').locator('text=/Algoritmik Kurulum|Kurulum Kalitesi|Onaylanan Kriterler|Kriter/i').first();
     await expect(qualityLabel).toBeVisible();
 
     // Save screenshot focused on the unified AI Co-Pilot modal

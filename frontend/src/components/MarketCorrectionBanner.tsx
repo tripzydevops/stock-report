@@ -16,7 +16,7 @@ export default function MarketCorrectionBanner({
   onNavigateToTab,
 }: MarketCorrectionBannerProps) {
   const { language } = useLanguage();
-  const [isDismissed, setIsDismissed] = useState<boolean>(true); // start closed until mounted to avoid flicker
+  const [isDismissed, setIsDismissed] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeMarketTab, setActiveMarketTab] = useState<'US' | 'BIST'>('US');
 

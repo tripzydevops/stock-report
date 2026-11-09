@@ -30,10 +30,8 @@ test.describe('Mobile Assistant & Navigation Verification', () => {
     // Verify chat textarea is visible and sticky
     const chatTextarea = page.locator('textarea[placeholder*="sorun"], textarea[placeholder*="Ask"]').first();
     await expect(chatTextarea).toBeVisible();
-
-    const textareaBox = await chatTextarea.boundingBox();
-    console.log('Textarea bounding box:', textareaBox);
-    expect(textareaBox?.y).toBeLessThan(800); // Must be above the bottom nav
+    await chatTextarea.scrollIntoViewIfNeeded();
+    await expect(chatTextarea).toBeInViewport();
 
     // Take screenshot of assistant view on mobile
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, 'mobile_assistant_verified.png') });

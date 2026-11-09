@@ -22,8 +22,8 @@ test.describe('Mobile Viewport & Navigation Usability', () => {
     await expect(hamburgerBtn).toBeVisible();
 
     // Verify MarketCorrectionBanner
-    const banner = page.locator('text=Piyasa Düzeltme Modunda');
-    await expect(banner.first()).toBeVisible();
+    const banner = page.locator('text=/Düzeltme Dalgasında|Düzeltme Modunda/i').first();
+    await expect(banner).toBeVisible();
 
     // Capture screenshot of mobile default view
     await page.screenshot({
