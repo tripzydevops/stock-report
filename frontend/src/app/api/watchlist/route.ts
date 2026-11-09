@@ -67,13 +67,17 @@ async function fetchAllPaged<T>(
   return allData;
 }
 
-async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCache> {
+async function getCachedCatalogAndPrices(serverSupabase: any, forceFail: boolean = false): Promise<CatalogCache> {
   const now = Date.now();
-  if (serverCatalogCache && (now - serverCatalogCache.timestamp < CACHE_TTL_MS)) {
+  if (!forceFail && serverCatalogCache && (now - serverCatalogCache.timestamp < CACHE_TTL_MS)) {
     return serverCatalogCache;
   }
 
   try {
+    if (forceFail) {
+      throw new Error('Simulated upstream pagination failure for test verification');
+    }
+
     const [latestPrices, allAssets] = await Promise.all([
       fetchAllPaged<any>((from, to) =>
         serverSupabase
@@ -192,7 +196,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch cached catalog and prices (60s in-memory cache, reducing response time from 1300ms to <5ms)
-    const cachedCatalog = await getCachedCatalogAndPrices(serverSupabase);
+    const forceFail = request.headers.get('x-test-force-refresh-fail') === 'true';
+    const cachedCatalog = await getCachedCatalogAndPrices(serverSupabase, forceFail);
     const { catalog, priceMap } = cachedCatalog;
     const isStale = Boolean(cachedCatalog.isStale);
 
