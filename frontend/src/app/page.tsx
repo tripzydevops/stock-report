@@ -1201,6 +1201,11 @@ export default function Home() {
               status: regData.us.status,
               close: Number(regData.us.close),
               trend: regData.us.trend,
+              changePct: regData.us.changePct,
+              return5d: regData.us.return5d,
+              descriptionTr: regData.us.descriptionTr,
+              descriptionEn: regData.us.descriptionEn,
+              isCorrection: regData.us.isCorrection,
             });
           }
           if (regData.bist) {
@@ -1208,6 +1213,11 @@ export default function Home() {
               status: regData.bist.status,
               close: Number(regData.bist.close),
               trend: regData.bist.trend,
+              changePct: regData.bist.changePct,
+              return5d: regData.bist.return5d,
+              descriptionTr: regData.bist.descriptionTr,
+              descriptionEn: regData.bist.descriptionEn,
+              isCorrection: regData.bist.isCorrection,
             });
           }
         } else {
@@ -1221,18 +1231,26 @@ export default function Home() {
         ]);
         if (usRes.data && usRes.data.length > 0) {
           const us = usRes.data[0];
+          const usStatus = us.regime === 'bullish' ? 'Bullish' : us.regime === 'bearish' ? 'Bearish' : 'Neutral';
           setUsRegime({
-            status: us.regime === 'bullish' ? 'Bullish' : us.regime === 'bearish' ? 'Bearish' : 'Neutral',
-            close: Number(us.index_close) || 766.81,
+            status: usStatus,
+            close: Number(us.index_close) || 735.29,
             trend: us.regime === 'bullish' ? 'up' : us.regime === 'bearish' ? 'down' : 'flat',
+            descriptionTr: us.notes || (usStatus === 'Bearish' ? 'Düzeltme ve kâr satışı modu' : 'Dengeleme ve toparlanma'),
+            descriptionEn: us.notes || (usStatus === 'Bearish' ? 'Correction & pullback mode' : 'Consolidation & recovery'),
+            isCorrection: usStatus === 'Bearish',
           });
         }
         if (bistRes.data && bistRes.data.length > 0) {
           const bist = bistRes.data[0];
+          const bistStatus = bist.regime === 'bullish' ? 'Bullish' : bist.regime === 'bearish' ? 'Bearish' : 'Neutral';
           setBistRegime({
-            status: bist.regime === 'bullish' ? 'Bullish' : bist.regime === 'bearish' ? 'Bearish' : 'Neutral',
-            close: Number(bist.index_close) || 11591.54,
+            status: bistStatus,
+            close: Number(bist.index_close) || 11530.18,
             trend: bist.regime === 'bullish' ? 'up' : bist.regime === 'bearish' ? 'down' : 'flat',
+            descriptionTr: bist.notes || (bistStatus === 'Bearish' ? 'Düzeltme ve kâr satışı modu' : 'Dengeleme ve toparlanma'),
+            descriptionEn: bist.notes || (bistStatus === 'Bearish' ? 'Correction & pullback mode' : 'Consolidation & recovery'),
+            isCorrection: bistStatus === 'Bearish',
           });
         }
       }
@@ -3179,6 +3197,146 @@ export default function Home() {
     isRefreshing,
   ]);
 
+  const discountedDividendMetrics = useMemo(() => {
+    // 1. Identify dividend compounders in portfolio
+    const divHoldings = portfolio.filter(p => 
+      p.isDividend || p.strategyType === 'CORE_DIVIDEND'
+    );
+
+    // Identify which ones are currently discounted / in buy zone:
+    // Criteria: dcaZone === 'BUY' OR trading below entryPrice (pnlPercent < 0)
+    const buyZoneHoldings = divHoldings.filter(p => 
+      p.dcaZone === 'BUY' || (p.entryPrice > 0 && p.currentPrice <= p.entryPrice) || (p.pnlPercent !== undefined && p.pnlPercent < 0)
+    );
+
+    const candidates = buyZoneHoldings.length > 0 ? buyZoneHoldings : divHoldings;
+
+    if (candidates.length > 0) {
+      const itemsWithYield = candidates.map(p => {
+        const cleanSym = p.symbol.replace('.IS', '').trim().toUpperCase();
+        const divItem = dividends.find(d => d.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+        const summaryItem = dividendSummaryMap.get(cleanSym);
+        const rawYield = summaryItem && Number(summaryItem.trailing_yield_pct) > 0
+          ? Number(summaryItem.trailing_yield_pct)
+          : (divItem?.dividendYield || 0);
+        return { symbol: cleanSym, yield: rawYield };
+      }).filter(item => item.yield > 0);
+
+      if (itemsWithYield.length > 0) {
+        itemsWithYield.sort((a, b) => b.yield - a.yield);
+        const yields = itemsWithYield.map(i => i.yield);
+        const minY = Math.min(...yields);
+        const maxY = Math.max(...yields);
+        const topSymbols = itemsWithYield.slice(0, 2).map(i => i.symbol);
+        const symbolsStr = topSymbols.join(' & ');
+        const yieldStr = Math.abs(minY - maxY) < 0.05
+          ? `%${minY.toFixed(2)}`
+          : `%${minY.toFixed(2)} – %${maxY.toFixed(2)}`;
+        
+        return {
+          yieldStr,
+          symbolsStr,
+          isInBuyZone: buyZoneHoldings.length > 0,
+        };
+      }
+    }
+
+    // Fallback: If no portfolio dividend holdings, query top dividend yields from dividendSummaries view
+    if (dividendSummaries.length > 0) {
+      const valid = dividendSummaries
+        .filter(d => {
+          const y = Number(d.trailing_yield_pct);
+          return Number.isFinite(y) && y > 3.0 && y < 35.0;
+        })
+        .sort((a, b) => Number(b.trailing_yield_pct) - Number(a.trailing_yield_pct));
+
+      if (valid.length > 0) {
+        const top2 = valid.slice(0, 2);
+        const y1 = Number(top2[0].trailing_yield_pct);
+        const y2 = top2.length > 1 ? Number(top2[1].trailing_yield_pct) : y1;
+        const minY = Math.min(y1, y2);
+        const maxY = Math.max(y1, y2);
+        const symbolsStr = top2.map(d => (d.symbol || '').replace('.IS', '')).join(' & ');
+        return {
+          yieldStr: Math.abs(minY - maxY) < 0.05 ? `%${minY.toFixed(2)}` : `%${minY.toFixed(2)} – %${maxY.toFixed(2)}`,
+          symbolsStr,
+          isInBuyZone: true,
+        };
+      }
+    }
+
+    return {
+      yieldStr: '%7.09 – %8.55',
+      symbolsStr: 'ISMEN & TURSG',
+      isInBuyZone: true,
+    };
+  }, [portfolio, dividends, dividendSummaryMap, dividendSummaries]);
+
+  const getLocalizedRegime = (status?: 'Bullish' | 'Neutral' | 'Bearish') => {
+    switch (status) {
+      case 'Bullish':
+        return language === 'tr' ? 'Yükseliş' : 'Bullish';
+      case 'Bearish':
+        return language === 'tr' ? 'Düzeltme' : 'Correction';
+      default:
+        return language === 'tr' ? 'Tepki & Denge' : 'Rebound';
+    }
+  };
+
+  const dynamicMarketContextSubtitle = useMemo(() => {
+    const bistCloseStr = bistRegime?.close
+      ? bistRegime.close.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { maximumFractionDigits: 0 })
+      : '';
+
+    if (language === 'tr') {
+      if (usRegime?.status === 'Bearish' && bistRegime?.status === 'Bearish') {
+        return bistCloseStr 
+          ? `Küresel kâr satışları; BIST ${bistCloseStr} desteğinde taban arayışı`
+          : 'Küresel düzeltme & destek seviyelerinde taban arayışı';
+      }
+      if (usRegime?.status === 'Bearish' && bistRegime?.status === 'Bullish') {
+        return bistCloseStr 
+          ? `ABD teknoloji kâr satışlarına karşın BIST pozitif ayrışıyor (${bistCloseStr})`
+          : 'BIST küresel düzeltmeden pozitif ayrışıyor';
+      }
+      if (usRegime?.status === 'Bullish' && bistRegime?.status === 'Bullish') {
+        return 'Küresel risk iştahı güçlü; BIST ve ABD piyasaları yükseliş trendinde';
+      }
+      if (bistRegime?.status === 'Neutral') {
+        return bistCloseStr 
+          ? `BIST ${bistCloseStr} bandında konsolidasyon & denge arayışı` 
+          : 'Destek seviyesinde dengeleme & taban arayışı';
+      }
+      if (bistRegime?.descriptionTr) {
+        return bistRegime.descriptionTr;
+      }
+      return 'Piyasalar destek seviyelerinde taban arayışında';
+    } else {
+      if (usRegime?.status === 'Bearish' && bistRegime?.status === 'Bearish') {
+        return bistCloseStr
+          ? `Global profit-taking; BIST consolidating above ${bistCloseStr}`
+          : 'Global pullback; testing major index support floors';
+      }
+      if (usRegime?.status === 'Bearish' && bistRegime?.status === 'Bullish') {
+        return bistCloseStr
+          ? `BIST diverging positively amidst US pullback (${bistCloseStr})`
+          : 'BIST holding strong above key dynamic moving averages';
+      }
+      if (usRegime?.status === 'Bullish' && bistRegime?.status === 'Bullish') {
+        return 'Global risk appetite strong across BIST and US benchmarks';
+      }
+      if (bistRegime?.status === 'Neutral') {
+        return bistCloseStr
+          ? `BIST consolidating near ${bistCloseStr} support floor`
+          : 'Consolidation & technical support defense';
+      }
+      if (bistRegime?.descriptionEn) {
+        return bistRegime.descriptionEn;
+      }
+      return 'Benchmarks consolidating at technical support';
+    }
+  }, [language, bistRegime, usRegime]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#070b13] text-slate-900 dark:text-slate-100 flex antialiased selection:bg-blue-500/20">
       {/* Left Navigation Sidebar */}
@@ -3381,42 +3539,56 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between">
+              <div 
+                onClick={() => handleTabChange('dividend')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('dividend'); }}
+                title={language === 'tr' ? 'Temettü Portföyü ve Kartopu Projeksiyonunu Aç' : 'Open Dividend Portfolio & Projections'}
+                className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between cursor-pointer hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all group"
+              >
                 <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider group-hover:text-emerald-500 transition-colors">
                     {language === 'tr' ? 'İskontolu Temettü Verimi' : 'Dividend Accumulation'}
                   </span>
                   <div className="flex items-baseline gap-2 mt-0.5">
                     <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                      %7.09 – %8.55
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">
-                    {language === 'tr' ? 'ISMEN & TURSG alım bölgesinde' : 'ISMEN & TURSG in deep buy zone'}
-                  </span>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-lg font-black shrink-0">
-                  💎
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    {language === 'tr' ? 'Piyasa Yönü & Rejim' : 'Market Regime Context'}
-                  </span>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                      🇺🇸 SPY: {usRegime?.status === 'Bearish' ? (language === 'tr' ? 'Düzeltme' : 'Correction') : usRegime?.status} · 🇹🇷 BIST: {bistRegime?.status === 'Neutral' ? (language === 'tr' ? 'Tepki & Denge' : 'Rebound') : bistRegime?.status}
+                      {discountedDividendMetrics.yieldStr}
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400">
                     {language === 'tr'
-                      ? 'ABD teknoloji kâr satışları; BIST 9.400 üzerinde taban arayışı'
-                      : 'US tech profit-taking; BIST consolidating above 9,400'}
+                      ? `${discountedDividendMetrics.symbolsStr} ${discountedDividendMetrics.isInBuyZone ? 'alım bölgesinde' : 'temettü odağında'}`
+                      : `${discountedDividendMetrics.symbolsStr} ${discountedDividendMetrics.isInBuyZone ? 'in deep buy zone' : 'dividend focus'}`}
                   </span>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-lg font-black shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-lg font-black shrink-0 group-hover:scale-110 transition-transform">
+                  💎
+                </div>
+              </div>
+
+              <div 
+                onClick={() => handleTabChange('quant')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('quant'); }}
+                title={language === 'tr' ? 'Kantitatif Rejim ve Göstergeleri Aç' : 'Open Quant Regime & Indicators'}
+                className="p-3.5 rounded-2xl bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex items-center justify-between cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/5 transition-all group"
+              >
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider group-hover:text-amber-500 transition-colors">
+                    {language === 'tr' ? 'Piyasa Yönü & Rejim' : 'Market Regime Context'}
+                  </span>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                      🇺🇸 SPY: {getLocalizedRegime(usRegime?.status)} · 🇹🇷 BIST: {getLocalizedRegime(bistRegime?.status)}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 line-clamp-1" title={dynamicMarketContextSubtitle}>
+                    {dynamicMarketContextSubtitle}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-lg font-black shrink-0 group-hover:scale-110 transition-transform">
                   🌐
                 </div>
               </div>
