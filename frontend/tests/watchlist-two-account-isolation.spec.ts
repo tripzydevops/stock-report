@@ -321,10 +321,11 @@ test.describe('Watchlist Multi-Tenant Authenticated Persistence & Account Isolat
     const signInTrigger = page.locator('button:has-text("Bulut Senkronizasyonu"), button:has-text("Giriş Yap"), button:has-text("Sign in")').first();
     if (await signInTrigger.isVisible({ timeout: 4000 }).catch(() => false)) {
       await signInTrigger.click();
+      const authForm = page.locator('form:has(input[type="email"])').first();
       await page.waitForSelector('input[type="email"]');
       await page.fill('input[type="email"]', userAEmail!);
       await page.fill('input[type="password"]', userAPassword!);
-      await page.click('button[type="submit"]');
+      await authForm.locator('button[type="submit"]').click();
       await page.waitForTimeout(2000);
     }
 
