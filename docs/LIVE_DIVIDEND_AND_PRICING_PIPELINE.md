@@ -311,3 +311,13 @@ Following an exhaustive source-code review, 8 concrete architectural and data-in
 
 ### 8.5 Mobile AbortSignal Combination Safety
 - **Network Timeout Preservation:** In `supabaseClient.ts`, replaced the logic that ignored the 9-second timeout when an external `options.signal` was passed. Used `AbortSignal.any` (with a backwards-compatible event listener fallback) to trigger cancellation whenever either the mobile timeout OR the caller's cancellation signal fires.
+
+### 8.6 Automated Daily Sync Engine for All 75 TEFAS Funds
+- **Vulnerability:** Previously, mutual funds on TEFAS (e.g. `ZBJ`, `PPZ`, `KLU`) were not updated automatically by daily jobs because Yahoo Finance returns 404 for TEFAS tickers, and TEFAS platform migrated from legacy endpoints to `/api/funds/fonFiyatBilgiGetir` returning an ascending `resultList` structure.
+- **Remediation Engine ([`scripts/sync_tefas_funds.py`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/scripts/sync_tefas_funds.py)):**
+  - Concurrently queries the official TEFAS endpoint across all 75 indexed funds using bounded thread workers.
+  - Correctly sorts chronologically ascending records, establishing previous-close as session open, and computing high, low, and volume.
+  - Upserts price history bars to `public.price_history` in Supabase with `source: 'tefas'` and `observed_at: NOW()`.
+  - Integrated into [`run_scheduled_job.ps1`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/run_scheduled_job.ps1) and standalone runner [`run_tefas_sync.ps1`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/run_tefas_sync.ps1).
+  - Validated with dedicated Pytest test suite ([`backend/tests/test_tefas_sync.py`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/backend/tests/test_tefas_sync.py)) covering date parsing, chronological ordering, and dry-run safety (160/160 passing).
+

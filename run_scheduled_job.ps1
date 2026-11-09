@@ -15,8 +15,17 @@ Add-Content -Path $logFile -Value "[$timestamp] Starting MarketPulse automated s
 $env:PYTHONIOENCODING = "utf-8"
 
 try {
-    # Run the export and sync script
+    # 1. Run the TEFAS fund synchronization engine
+    $tefasScript = Join-Path $projectRoot "scripts\sync_tefas_funds.py"
+    $tefasTimestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $logFile -Value "[$tefasTimestamp] Synchronizing 75 TEFAS mutual & money market funds..."
+    & $pythonExe $tefasScript *>> $logFile
+
+    # 2. Run the export and equity/crypto/ETF sync script
+    $exportTimestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $logFile -Value "[$exportTimestamp] Generating MarketPulse workbook and syncing equities..."
     & $pythonExe $scriptPath *>> $logFile
+
     $endTimestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Add-Content -Path $logFile -Value "[$endTimestamp] MarketPulse automated run finished successfully."
 } catch {

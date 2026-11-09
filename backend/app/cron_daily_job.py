@@ -43,6 +43,10 @@ def db_upsert_prices(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.Data
         if not asset_id or df.empty:
             continue
 
+        is_tefas_sym = symbol in asset_id_map and any(
+            len(symbol) <= 4 and symbol.isalpha() and not symbol.endswith(".IS") for _ in [0]
+        )
+        now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
         for idx, row in df.tail(5).iterrows():  # Only upsert last 5 days (efficiency)
             dt = idx if isinstance(idx, datetime.date) else idx.date()
             rows.append({
@@ -54,6 +58,8 @@ def db_upsert_prices(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.Data
                 "close": float(row["close"]),
                 "adj_close": float(row.get("adj_close", row["close"])) if pd.notna(row.get("adj_close")) else None,
                 "volume": int(row.get("volume", 0)) if pd.notna(row.get("volume")) else None,
+                "source": "tefas" if is_tefas_sym else "yahoo",
+                "observed_at": now_utc,
             })
 
     if rows:
