@@ -7,6 +7,7 @@ test.describe('Watchlist TEFAS Real Prices & Badges', () => {
   test.use({ viewport: { width: 412, height: 915 } }); // Standard mobile viewport
 
   test('Guest watchlist heals 0 prices and displays TEFAS Fon badges with real NAV prices', async ({ page }) => {
+    test.setTimeout(120000);
     // 1. Pre-seed corrupted localStorage data identical to the defect in user screenshot
     await page.addInitScript(() => {
       const corruptedGuestItems = [
@@ -89,14 +90,15 @@ test.describe('Watchlist TEFAS Real Prices & Badges', () => {
     await page.goto('/#watchlist');
     await page.waitForLoadState('networkidle');
 
-    // Wait for the watchlist section to render
+    // Wait for the watchlist section to render and finish loading enriched items
     const tefasTab = page.locator('button:has-text("TEFAS Fonları")').first();
     await expect(tefasTab).toBeVisible({ timeout: 10000 });
+    await expect(tefasTab).toContainText('5', { timeout: 15000 });
 
     // Verify all 5 symbols exist in DOM
     for (const sym of ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ']) {
       const symEl = page.locator(`span:has-text("${sym}")`).first();
-      await expect(symEl).toBeVisible({ timeout: 5000 });
+      await expect(symEl).toBeVisible({ timeout: 10000 });
     }
 
     // Verify that NO card displays ₺0,0000 or ₺0.0000

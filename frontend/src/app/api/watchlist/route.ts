@@ -4,29 +4,29 @@ import { getAuthenticatedSupabase, getServerSupabase } from '@/lib/supabaseServe
 export const dynamic = 'force-dynamic';
 
 // Comprehensive registry of popular TEFAS Mutual & Money Market (Para Piyasası) Funds
-const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultPrice: number }> = {
-  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.6070 },
-  PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 6.8520 },
-  KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 4.1200 },
-  NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 3.4500 },
-  YLY: { name: 'Yapı Kredi Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 5.2010 },
-  TI2: { name: 'İş Portföy İki Para Piyasası Fonu', sector: 'Para Piyasası (TL)', defaultPrice: 8.4200 },
-  ZPE: { name: 'Ziraat Portföy Katılım Para Piyasası Fonu', sector: 'Katılım Para Piyasası', defaultPrice: 4.9015 },
-  TTE: { name: 'İş Portföy BIST Teknoloji Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.1540 },
-  MAC: { name: 'Marmara Capital Portföy Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 12.8500 },
-  AFT: { name: 'Ak Portföy Yeni Teknolojiler Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.6520 },
-  YAY: { name: 'Yapı Kredi Portföy Yabancı Teknoloji Fonu', sector: 'Yabancı Hisse Fonu', defaultPrice: 2.3040 },
-  TCD: { name: 'Tacirler Portföy Değişken Fon', sector: 'Değişken Fon', defaultPrice: 7.2010 },
-  BIO: { name: 'Ak Portföy Sağlık Sektörü Yabancı Hisse', sector: 'Yabancı Hisse Fonu', defaultPrice: 0.4520 },
-  IHK: { name: 'İş Portföy İhracatçı Şirketler Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 1.8540 },
-  HKH: { name: 'Hedef Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 3.2500 },
-  IDH: { name: 'İş Portföy BIST Temettü 25 Fonu', sector: 'Temettü Hisse Fonu', defaultPrice: 2.1020 },
-  IIH: { name: 'İstanbul Portföy Üçüncü Hisse Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 4.5030 },
-  TAU: { name: 'İş Portföy BIST Banka Endeksi Fonu', sector: 'Banka Hisse Fonu', defaultPrice: 1.7520 },
-  GMR: { name: 'Inveo Portföy İkinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 5.8010 },
-  ST1: { name: 'Strateji Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu', defaultPrice: 9.1020 },
-  KRS: { name: 'Kare Portföy Döviz Serbest Fon', sector: 'Serbest Fon', defaultPrice: 2.4050 },
-  IPB: { name: 'İstanbul Portföy Birinci Değişken Fon', sector: 'Değişken Fon', defaultPrice: 8.9020 },
+const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string }> = {
+  ZBJ: { name: 'Ziraat Portföy Başak Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  PPZ: { name: 'Azimut Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  KLU: { name: 'Kalyon Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  NRK: { name: 'Nurol Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  YLY: { name: 'Yapı Kredi Portföy Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  TI2: { name: 'İş Portföy İki Para Piyasası Fonu', sector: 'Para Piyasası (TL)' },
+  ZPE: { name: 'Ziraat Portföy Katılım Para Piyasası Fonu', sector: 'Katılım Para Piyasası' },
+  TTE: { name: 'İş Portföy BIST Teknoloji Fonu', sector: 'Hisse Senedi Fonu' },
+  MAC: { name: 'Marmara Capital Portföy Hisse Fonu', sector: 'Hisse Senedi Fonu' },
+  AFT: { name: 'Ak Portföy Yeni Teknolojiler Yabancı Hisse', sector: 'Yabancı Hisse Fonu' },
+  YAY: { name: 'Yapı Kredi Portföy Yabancı Teknoloji Fonu', sector: 'Yabancı Hisse Fonu' },
+  TCD: { name: 'Tacirler Portföy Değişken Fon', sector: 'Değişken Fon' },
+  BIO: { name: 'Ak Portföy Sağlık Sektörü Yabancı Hisse', sector: 'Yabancı Hisse Fonu' },
+  IHK: { name: 'İş Portföy İhracatçı Şirketler Hisse Fonu', sector: 'Hisse Senedi Fonu' },
+  HKH: { name: 'Hedef Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu' },
+  IDH: { name: 'İş Portföy BIST Temettü 25 Fonu', sector: 'Temettü Hisse Fonu' },
+  IIH: { name: 'İstanbul Portföy Üçüncü Hisse Fonu', sector: 'Hisse Senedi Fonu' },
+  TAU: { name: 'İş Portföy BIST Banka Endeksi Fonu', sector: 'Banka Hisse Fonu' },
+  GMR: { name: 'Inveo Portföy İkinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu' },
+  ST1: { name: 'Strateji Portföy Birinci Hisse Senedi Fonu', sector: 'Hisse Senedi Fonu' },
+  KRS: { name: 'Kare Portföy Döviz Serbest Fon', sector: 'Serbest Fon' },
+  IPB: { name: 'İstanbul Portföy Birinci Değişken Fon', sector: 'Değişken Fon' },
 };
 
 interface CatalogCache {
@@ -36,10 +36,34 @@ interface CatalogCache {
 }
 
 let serverCatalogCache: CatalogCache | null = null;
-const CACHE_TTL_MS = 60 * 1000; // 60-second in-memory cache for 1300+ catalog assets and prices
+const CACHE_TTL_MS = 60 * 1000; // 60-second in-memory cache for catalog assets and prices
 
 function invalidateCatalogCache() {
   serverCatalogCache = null;
+}
+
+/**
+ * Deterministic paginated query helper looping through Supabase PostgREST
+ * until fewer than pageSize rows return, checking for errors at each page.
+ */
+async function fetchAllPaged<T>(
+  queryFactory: (rangeStart: number, rangeEnd: number) => any,
+  pageSize: number = 1000
+): Promise<T[]> {
+  const allData: T[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await queryFactory(offset, offset + pageSize - 1);
+    if (error) {
+      console.error(`Error in fetchAllPaged at offset ${offset}:`, error);
+      break;
+    }
+    if (!data || data.length === 0) break;
+    allData.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allData;
 }
 
 async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCache> {
@@ -48,44 +72,23 @@ async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCa
     return serverCatalogCache;
   }
 
-  const [pricesPart1, pricesPart2, pricesPart3, assetsPart1, assetsPart2, assetsPart3] = await Promise.all([
-    serverSupabase
-      .from('v_latest_prices')
-      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
-      .range(0, 999),
-    serverSupabase
-      .from('v_latest_prices')
-      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
-      .range(1000, 1999),
-    serverSupabase
-      .from('v_latest_prices')
-      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
-      .range(2000, 2999),
-    serverSupabase
-      .from('assets')
-      .select('id, symbol, name, market, asset_class, currency, sector')
-      .eq('is_active', true)
-      .order('symbol', { ascending: true })
-      .range(0, 999),
-    serverSupabase
-      .from('assets')
-      .select('id, symbol, name, market, asset_class, currency, sector')
-      .eq('is_active', true)
-      .order('symbol', { ascending: true })
-      .range(1000, 1999),
-    serverSupabase
-      .from('assets')
-      .select('id, symbol, name, market, asset_class, currency, sector')
-      .eq('is_active', true)
-      .order('symbol', { ascending: true })
-      .range(2000, 2999),
+  const [latestPrices, allAssets] = await Promise.all([
+    fetchAllPaged<any>((from, to) =>
+      serverSupabase
+        .from('v_latest_prices')
+        .select('asset_id, latest_price, latest_date, open, high, low, high_52w, low_52w, volume, rsi_14')
+        .order('asset_id', { ascending: true })
+        .range(from, to)
+    ),
+    fetchAllPaged<any>((from, to) =>
+      serverSupabase
+        .from('assets')
+        .select('id, symbol, name, market, asset_class, currency, sector')
+        .eq('is_active', true)
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
   ]);
-
-  const latestPrices = [
-    ...(pricesPart1.data || []),
-    ...(pricesPart2.data || []),
-    ...(pricesPart3.data || []),
-  ];
 
   const priceMap = new Map<string, any>();
   for (const p of latestPrices) {
@@ -94,24 +97,18 @@ async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCa
     }
   }
 
-  const allAssets = [
-    ...(assetsPart1.data || []),
-    ...(assetsPart2.data || []),
-    ...(assetsPart3.data || []),
-  ];
-
   const catalog = allAssets.map((a: any) => {
     const cleanSym = (a.symbol || '').replace('.IS', '').toUpperCase();
     const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
     const isFund = a.market === 'TEFAS' || a.asset_class === 'fund' || Boolean(tefasFallback);
 
     const p = priceMap.get(a.id);
-    let latestPrice = Number(p?.latest_price) || 0;
-    if (latestPrice === 0 && tefasFallback?.defaultPrice) {
-      latestPrice = tefasFallback.defaultPrice;
-    }
-    const openPrice = Number(p?.open) || latestPrice;
-    const dailyChangePercent = openPrice > 0 ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2)) : 0;
+    const hasValidPrice = p?.latest_price != null && !isNaN(Number(p.latest_price)) && Number(p.latest_price) > 0;
+    const latestPrice = hasValidPrice ? Number(p.latest_price) : null;
+    const openPrice = p?.open != null && !isNaN(Number(p.open)) ? Number(p.open) : latestPrice;
+    const dailyChangePercent = (latestPrice !== null && openPrice !== null && openPrice > 0)
+      ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
+      : 0;
 
     return {
       id: a.id,
@@ -122,12 +119,13 @@ async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCa
       currency: a.currency,
       sector: a.sector || tefasFallback?.sector || '',
       latestPrice,
+      latestDate: p?.latest_date || null,
       openPrice,
       dailyChangePercent,
-      high52w: p?.high_52w ? Number(p.high_52w) : null,
-      low52w: p?.low_52w ? Number(p.low_52w) : null,
-      volume: p?.volume ? Number(p.volume) : null,
-      rsi14: p?.rsi_14 ? Number(p.rsi_14) : null,
+      high52w: p?.high_52w != null ? Number(p.high_52w) : null,
+      low52w: p?.low_52w != null ? Number(p.low_52w) : null,
+      volume: p?.volume != null ? Number(p.volume) : null,
+      rsi14: p?.rsi_14 != null ? Number(p.rsi_14) : null,
     };
   });
 
@@ -189,12 +187,12 @@ export async function GET(request: NextRequest) {
       const priceInfo = priceMap.get(item.asset_id) || {};
       const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
 
-      let latestPrice = Number(priceInfo.latest_price) || 0;
-      if (latestPrice === 0 && tefasFallback?.defaultPrice) {
-        latestPrice = tefasFallback.defaultPrice;
-      }
-      const openPrice = Number(priceInfo.open) || latestPrice;
-      const dailyChange = openPrice > 0 ? ((latestPrice - openPrice) / openPrice) * 100 : 0;
+      const hasValidPrice = priceInfo.latest_price != null && !isNaN(Number(priceInfo.latest_price)) && Number(priceInfo.latest_price) > 0;
+      const latestPrice = hasValidPrice ? Number(priceInfo.latest_price) : null;
+      const openPrice = priceInfo.open != null && !isNaN(Number(priceInfo.open)) ? Number(priceInfo.open) : latestPrice;
+      const dailyChange = (latestPrice !== null && openPrice !== null && openPrice > 0)
+        ? ((latestPrice - openPrice) / openPrice) * 100
+        : 0;
 
       const isFund = asset.market === 'TEFAS' || asset.asset_class === 'fund' || Boolean(tefasFallback);
 
@@ -213,12 +211,13 @@ export async function GET(request: NextRequest) {
         alertBelow: item.alert_below ? Number(item.alert_below) : null,
         addedAt: item.added_at,
         latestPrice,
+        latestDate: priceInfo.latest_date || null,
         openPrice,
         dailyChangePercent: Number(dailyChange.toFixed(2)),
-        high52w: priceInfo.high_52w ? Number(priceInfo.high_52w) : null,
-        low52w: priceInfo.low_52w ? Number(priceInfo.low_52w) : null,
-        volume: priceInfo.volume ? Number(priceInfo.volume) : null,
-        rsi14: priceInfo.rsi_14 ? Number(priceInfo.rsi_14) : null,
+        high52w: priceInfo.high_52w != null ? Number(priceInfo.high_52w) : null,
+        low52w: priceInfo.low_52w != null ? Number(priceInfo.low_52w) : null,
+        volume: priceInfo.volume != null ? Number(priceInfo.volume) : null,
+        rsi14: priceInfo.rsi_14 != null ? Number(priceInfo.rsi_14) : null,
       };
     });
 
@@ -360,14 +359,17 @@ export async function POST(request: NextRequest) {
                       sDate = `${pParts[2]}-${pParts[1].padStart(2, '0')}-${pParts[0].padStart(2, '0')}`;
                     }
                   }
+                  // TEFAS funds only have a daily Net Asset Value (NAV).
+                  // Mutual funds do NOT have intraday open/high/low swings.
+                  // PAY_SAYISI is circulation units, NOT daily traded volume.
                   await serverSupabase.from('price_history').upsert({
                     asset_id: assetId,
                     date: sDate,
                     close: p,
-                    open: prevPrice && !isNaN(prevPrice) ? prevPrice : p,
-                    high: Math.max(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
-                    low: Math.min(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
-                    volume: typeof latest.PAY_SAYISI === 'number' ? latest.PAY_SAYISI : null,
+                    open: null,
+                    high: null,
+                    low: null,
+                    volume: null,
                     source: 'tefas',
                     observed_at: new Date().toISOString(),
                   }, { onConflict: 'asset_id,date' });
@@ -417,22 +419,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'assetId veya geçerli bir symbol gereklidir' }, { status: 400 });
     }
 
-    // Strict Multi-Tenant Isolation: Guest sessions are maintained locally in client storage
+    // Unauthenticated requests cannot execute private database mutations
     if (!user) {
-      return NextResponse.json({
-        success: true,
-        message: 'Guest watchlist is maintained locally in client storage',
-        guest: true,
-        data: {
-          id: `guest_${assetId}`,
-          user_id: 'guest',
-          asset_id: assetId,
-          notes: notes || null,
-          alert_above: alertAbove ? Number(alertAbove) : null,
-          alert_below: alertBelow ? Number(alertBelow) : null,
-          added_at: new Date().toISOString(),
-        }
-      });
+      return NextResponse.json(
+        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
+        { status: 401 }
+      );
     }
 
     // Check if item already exists for this authenticated user (evaluates auth.uid() in RLS)
@@ -523,9 +515,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id, assetId veya symbol parametresi gereklidir' }, { status: 400 });
     }
 
-    // Guest sessions are handled in client localStorage
+    // Unauthenticated requests cannot execute private database mutations
     if (!user) {
-      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', guest: true });
+      return NextResponse.json(
+        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
+        { status: 401 }
+      );
     }
 
     let query = authSupabase.from('watchlist_items').delete().eq('user_id', user.id);
@@ -562,8 +557,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'id veya assetId gereklidir' }, { status: 400 });
     }
 
+    // Unauthenticated requests cannot execute private database mutations
     if (!user) {
-      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', guest: true });
+      return NextResponse.json(
+        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
+        { status: 401 }
+      );
     }
 
     const updates: Record<string, any> = {};

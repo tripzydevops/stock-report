@@ -18,8 +18,9 @@ export interface WatchlistItemData {
   alertAbove?: number | null;
   alertBelow?: number | null;
   addedAt: string;
-  latestPrice: number;
-  openPrice: number;
+  latestPrice: number | null;
+  latestDate?: string | null;
+  openPrice: number | null;
   dailyChangePercent: number;
   high52w?: number | null;
   low52w?: number | null;
@@ -36,8 +37,9 @@ export interface CatalogAsset {
   currency: string;
   sector: string;
   isWatched: boolean;
-  latestPrice?: number;
-  openPrice?: number;
+  latestPrice?: number | null;
+  latestDate?: string | null;
+  openPrice?: number | null;
   dailyChangePercent?: number;
   high52w?: number | null;
   low52w?: number | null;
@@ -52,10 +54,22 @@ interface WatchlistViewProps {
 
 export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: WatchlistViewProps) {
   const { language } = useLanguage();
-  const { user, isDemoMode } = useAuth();
+  const { user, session, isDemoMode } = useAuth();
 
   const isGuest = !user || isDemoMode;
   const activeUserId = user?.id || 'guest';
+
+  // Helper: Request headers attaching Bearer JWT token if signed in
+  const getAuthHeaders = useCallback((includeContentType = true) => {
+    const headers: Record<string, string> = {};
+    if (includeContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+  }, [session?.access_token]);
 
   const [items, setItems] = useState<WatchlistItemData[]>([]);
   const [catalog, setCatalog] = useState<CatalogAsset[]>([]);
@@ -116,8 +130,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       setLoading(true);
       setError(null);
 
-      // Always fetch catalog for search & asset details
-      const res = await fetch(`/api/watchlist?userId=${encodeURIComponent(isGuest ? 'guest' : user.id)}`);
+      // Always fetch catalog for search & asset details, attaching user JWT when authenticated
+      const res = await fetch(`/api/watchlist?userId=${encodeURIComponent(isGuest ? 'guest' : user.id)}`, {
+        headers: getAuthHeaders(false),
+      });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
@@ -138,9 +154,15 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
           const isFund = match?.market === 'TEFAS' || match?.assetClass === 'fund' || item.market === 'TEFAS' || item.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ', 'KLU', 'NRK', 'YLY', 'ZPE', 'AFT', 'YAY', 'TCD', 'BIO', 'IHK', 'HKH', 'IDH', 'IIH', 'TAU', 'GMR', 'ST1', 'KRS', 'IPB'].includes(cleanSym);
 
-          const latestPrice = match?.latestPrice !== undefined && match.latestPrice > 0 ? match.latestPrice : (item.latestPrice || 0);
-          const openPrice = match?.openPrice !== undefined && match.openPrice > 0 ? match.openPrice : (item.openPrice || latestPrice);
-          const dailyChange = openPrice > 0 ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2)) : (match?.dailyChangePercent ?? item.dailyChangePercent ?? 0);
+          const latestPrice = (match?.latestPrice !== undefined && match.latestPrice !== null && match.latestPrice > 0)
+            ? match.latestPrice
+            : (item.latestPrice !== null && item.latestPrice !== undefined && item.latestPrice > 0 ? item.latestPrice : null);
+          const openPrice = match?.openPrice !== undefined && match.openPrice !== null
+            ? match.openPrice
+            : (item.openPrice !== null && item.openPrice !== undefined ? item.openPrice : latestPrice);
+          const dailyChange = (latestPrice !== null && openPrice !== null && openPrice > 0)
+            ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
+            : (match?.dailyChangePercent ?? item.dailyChangePercent ?? 0);
 
           return {
             ...item,
@@ -151,6 +173,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             currency: match?.currency || item.currency || 'TRY',
             sector: match?.sector || item.sector || '',
             latestPrice,
+            latestDate: match?.latestDate || item.latestDate || null,
             openPrice,
             dailyChangePercent: dailyChange,
             high52w: match?.high52w ?? item.high52w ?? null,
@@ -171,7 +194,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     } finally {
       setLoading(false);
     }
-  }, [isGuest, user?.id, loadGuestItems, saveGuestItems]);
+  }, [isGuest, user?.id, getAuthHeaders, loadGuestItems, saveGuestItems]);
 
   useEffect(() => {
     fetchData();
@@ -210,8 +233,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         );
         const isFund = found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
         const targetSymbol = found?.symbol || (found?.market === 'BIST' ? `${cleanSym}.IS` : sym);
-        const latestPrice = found?.latestPrice || 0;
-        const openPrice = found?.openPrice || latestPrice;
+        const latestPrice = (found?.latestPrice !== undefined && found.latestPrice !== null && found.latestPrice > 0)
+          ? found.latestPrice
+          : null;
+        const openPrice = found?.openPrice !== undefined && found.openPrice !== null ? found.openPrice : latestPrice;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${cleanSym}`,
           assetId: found?.id || `asset_${cleanSym}`,
@@ -223,6 +248,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           sector: found?.sector || '',
           addedAt: new Date().toISOString(),
           latestPrice,
+          latestDate: found?.latestDate || null,
           openPrice,
           dailyChangePercent: found?.dailyChangePercent || 0,
           high52w: found?.high52w || null,
@@ -239,9 +265,14 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       } else {
         const res = await fetch('/api/watchlist', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({ symbol: sym, userId: user.id }),
         });
+
+        if (res.status === 401) {
+          alert(language === 'tr' ? 'Oturum süreniz doldu veya giriş yapmalısınız.' : 'Session expired or authentication required.');
+          return;
+        }
 
         if (res.ok) {
           setQuickAddSymbol('');
@@ -275,7 +306,15 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     try {
       const res = await fetch(`/api/watchlist?id=${encodeURIComponent(id)}&userId=${encodeURIComponent(user.id)}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(false),
       });
+
+      if (res.status === 401) {
+        setItems(previousItems);
+        alert(language === 'tr' ? 'Oturum süreniz doldu veya yetkisiz işlem.' : 'Session expired or authentication required.');
+        return;
+      }
+
       if (!res.ok) {
         setItems(previousItems);
         alert('Kaldırılamadı');
@@ -296,8 +335,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       setIsSubmitting(true);
       if (isGuest) {
         const isFund = selectedAssetForAdd.market === 'TEFAS' || selectedAssetForAdd.assetClass === 'fund';
-        const latestPrice = selectedAssetForAdd.latestPrice || 0;
-        const openPrice = selectedAssetForAdd.openPrice || latestPrice;
+        const latestPrice = (selectedAssetForAdd.latestPrice !== undefined && selectedAssetForAdd.latestPrice !== null && selectedAssetForAdd.latestPrice > 0)
+          ? selectedAssetForAdd.latestPrice
+          : null;
+        const openPrice = selectedAssetForAdd.openPrice !== undefined && selectedAssetForAdd.openPrice !== null ? selectedAssetForAdd.openPrice : latestPrice;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${selectedAssetForAdd.symbol}`,
           assetId: selectedAssetForAdd.id,
@@ -312,6 +353,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           alertBelow: addAlertBelow ? parseFloat(addAlertBelow) : undefined,
           addedAt: new Date().toISOString(),
           latestPrice,
+          latestDate: selectedAssetForAdd.latestDate || null,
           openPrice,
           dailyChangePercent: selectedAssetForAdd.dailyChangePercent || 0,
           high52w: selectedAssetForAdd.high52w || null,
@@ -331,7 +373,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       } else {
         const res = await fetch('/api/watchlist', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(true),
           body: JSON.stringify({
             userId: user.id,
             assetId: selectedAssetForAdd.id,
@@ -341,6 +383,11 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             alertBelow: addAlertBelow ? parseFloat(addAlertBelow) : undefined,
           }),
         });
+
+        if (res.status === 401) {
+          alert(language === 'tr' ? 'Oturum süreniz doldu veya giriş yapmalısınız.' : 'Session expired or authentication required.');
+          return;
+        }
 
         if (res.ok) {
           setIsAddModalOpen(false);
@@ -383,7 +430,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
       const res = await fetch('/api/watchlist', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(true),
         body: JSON.stringify({
           id: editingItem.id,
           userId: user.id,
@@ -392,6 +439,11 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           alertBelow: editAlertBelow ? parseFloat(editAlertBelow) : null,
         }),
       });
+
+      if (res.status === 401) {
+        alert(language === 'tr' ? 'Oturum süreniz doldu veya yetkisiz işlem.' : 'Session expired or authentication required.');
+        return;
+      }
 
       if (res.ok) {
         setEditingItem(null);
@@ -427,8 +479,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           );
           const isFund = packType === 'TEFAS' || found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
           const targetSymbol = found?.symbol || (packType === 'BIST' ? `${cleanSym}.IS` : cleanSym);
-          const latestPrice = found?.latestPrice || 0;
-          const openPrice = found?.openPrice || latestPrice;
+          const latestPrice = (found?.latestPrice !== undefined && found.latestPrice !== null && found.latestPrice > 0)
+            ? found.latestPrice
+            : null;
+          const openPrice = found?.openPrice !== undefined && found.openPrice !== null ? found.openPrice : latestPrice;
 
           return {
             id: `guest_pack_${Date.now()}_${idx}_${cleanSym}`,
@@ -441,6 +495,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             sector: found?.sector || '',
             addedAt: new Date().toISOString(),
             latestPrice,
+            latestDate: found?.latestDate || null,
             openPrice,
             dailyChangePercent: found?.dailyChangePercent || 0,
             high52w: found?.high52w || null,
@@ -466,15 +521,22 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         setFeedbackMsg(language === 'tr' ? `✓ ${packName} koleksiyonu eklendi (+${toAdd.length} yeni varlık)` : `✓ ${packName} pack added (+${toAdd.length} assets)`);
         setTimeout(() => setFeedbackMsg(null), 3000);
       } else {
-        await Promise.all(
+        const responses = await Promise.all(
           symbolsToFind.map(sym =>
             fetch('/api/watchlist', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: getAuthHeaders(true),
               body: JSON.stringify({ symbol: sym, userId: user.id }),
             })
           )
         );
+
+        const hasUnauthorized = responses.some(r => r.status === 401);
+        if (hasUnauthorized) {
+          alert(language === 'tr' ? 'Oturum süreniz doldu veya giriş yapmalısınız.' : 'Session expired or authentication required.');
+          return;
+        }
+
         await fetchData();
         setFeedbackMsg(language === 'tr' ? `✓ ${packName} koleksiyonu eklendi` : `✓ ${packName} pack added`);
         setTimeout(() => setFeedbackMsg(null), 3000);
@@ -517,8 +579,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           valA = a.dailyChangePercent;
           valB = b.dailyChangePercent;
         } else if (sortField === 'price') {
-          valA = a.latestPrice;
-          valB = b.latestPrice;
+          valA = a.latestPrice ?? -1;
+          valB = b.latestPrice ?? -1;
         }
 
         if (valA < valB) return sortAsc ? -1 : 1;
@@ -532,7 +594,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     const totalCount = items.length;
     if (totalCount === 0) return { totalCount: 0, avgChange: 0, topGainer: null, activeAlertsCount: 0 };
 
-    const avgChange = items.reduce((acc, i) => acc + i.dailyChangePercent, 0) / totalCount;
+    const avgChange = items.reduce((acc, i) => acc + (i.dailyChangePercent || 0), 0) / totalCount;
     const sortedByGain = [...items].sort((a, b) => b.dailyChangePercent - a.dailyChangePercent);
     const topGainer = sortedByGain[0] || null;
     const activeAlertsCount = items.filter(i => i.alertAbove || i.alertBelow).length;
@@ -541,7 +603,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   }, [items]);
 
   // Format currency
-  const formatPrice = (val: number, cur: string) => {
+  const formatPrice = (val: number | null | undefined, cur: string) => {
+    if (val === null || val === undefined || isNaN(val) || val <= 0) {
+      return language === 'tr' ? 'Fiyat Yok' : 'Price Unavailable';
+    }
     const symbol = cur === 'USD' ? '$' : cur === 'EUR' ? '€' : '₺';
     if (val >= 100) return `${symbol}${val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     if (val >= 1) return `${symbol}${val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}`;
@@ -570,8 +635,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   };
 
   // 52-Week Range Gauge Bar
-  const renderRangeBar = (curr: number, low?: number | null, high?: number | null) => {
-    if (!low || !high || high <= low) {
+  const renderRangeBar = (curr?: number | null, low?: number | null, high?: number | null) => {
+    if (!curr || curr <= 0 || !low || !high || high <= low) {
       return (
         <div className="text-[11px] text-slate-400 dark:text-slate-500 italic">
           {language === 'tr' ? 'Aralık yok' : 'No range'}
@@ -953,12 +1018,12 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             const badgeType = isFund ? 'TEFAS Fon' : isEtf ? 'ETF' : 'Hisse';
 
             let alertBelowDistance: number | null = null;
-            if (item.alertBelow && item.latestPrice > 0) {
+            if (item.alertBelow && item.latestPrice !== null && item.latestPrice > 0) {
               alertBelowDistance = ((item.latestPrice - item.alertBelow) / item.latestPrice) * 100;
             }
 
             let alertAboveDistance: number | null = null;
-            if (item.alertAbove && item.latestPrice > 0) {
+            if (item.alertAbove && item.latestPrice !== null && item.latestPrice > 0) {
               alertAboveDistance = ((item.alertAbove - item.latestPrice) / item.latestPrice) * 100;
             }
 
@@ -998,6 +1063,11 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                     <div className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-mono">
                       {formatPrice(item.latestPrice, item.currency)}
                     </div>
+                    {item.latestDate && (
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {item.latestDate}
+                      </div>
+                    )}
                     <div className="flex items-center justify-end gap-1.5 mt-0.5">
                       {renderSparkline(item.dailyChangePercent)}
                       <span
@@ -1110,7 +1180,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                             symbol: item.symbol,
                             name: item.name,
                             market: item.market,
-                            currentPrice: item.latestPrice,
+                            currentPrice: item.latestPrice || 0,
                             currency: item.currency,
                           })
                         }
@@ -1187,7 +1257,12 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                       </td>
 
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
-                        {formatPrice(item.latestPrice, item.currency)}
+                        <div>{formatPrice(item.latestPrice, item.currency)}</div>
+                        {item.latestDate && (
+                          <div className="text-[10px] text-slate-400 font-normal">
+                            {item.latestDate}
+                          </div>
+                        )}
                       </td>
 
                       <td className="py-3 px-4">
@@ -1256,7 +1331,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                                   symbol: item.symbol,
                                   name: item.name,
                                   market: item.market,
-                                  currentPrice: item.latestPrice,
+                                  currentPrice: item.latestPrice || 0,
                                   currency: item.currency,
                                 })
                               }
