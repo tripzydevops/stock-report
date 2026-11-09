@@ -124,6 +124,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const [editAlertAbove, setEditAlertAbove] = useState('');
   const [editAlertBelow, setEditAlertBelow] = useState('');
 
+  // Cache & freshness indicator
+  const [dataStatus, setDataStatus] = useState<'live' | 'stale'>('live');
+  const [catalogFetchedAt, setCatalogFetchedAt] = useState<string | null>(null);
+
   // Fetch watchlist data
   const fetchData = useCallback(async () => {
     try {
@@ -138,6 +142,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
       const data = await res.json();
+      setDataStatus(data.dataStatus === 'stale' ? 'stale' : 'live');
+      if (data.catalogFetchedAt) {
+        setCatalogFetchedAt(data.catalogFetchedAt);
+      }
       const serverCatalog: CatalogAsset[] = data.catalog || [];
       setCatalog(serverCatalog);
 
@@ -796,6 +804,32 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           </button>
         </div>
 
+        {/* Stale Cache Notice Banner */}
+        {dataStatus === 'stale' && (
+          <div className="mt-2.5 py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <div>
+                <span className="font-bold">
+                  {language === 'tr' ? 'Önbellek Verisi Gösteriliyor' : 'Serving Cached Snapshot'}
+                </span>
+                <span className="text-[11px] block text-amber-700/80 dark:text-amber-400/80">
+                  {language === 'tr'
+                    ? `Canlı katalog yenilenirken sunucu gecikmesi oluştu. ${catalogFetchedAt ? new Date(catalogFetchedAt).toLocaleTimeString('tr-TR') : ''} tarihli son doğrulanmış önbellek görüntüleniyor.`
+                    : `Live catalog refresh delayed. Showing verified snapshot from ${catalogFetchedAt ? new Date(catalogFetchedAt).toLocaleTimeString() : 'previous complete update'}.`}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="text-xs font-bold px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+            >
+              {language === 'tr' ? 'Tekrar Dene' : 'Retry'}
+            </button>
+          </div>
+        )}
+
         {/* Feedback Message Banner */}
         {feedbackMsg && (
           <div className="mt-2.5 py-1.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-1">
@@ -823,7 +857,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
             <div className="bg-white/80 dark:bg-slate-900/60 backdrop-blur-xs p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
-                {language === 'tr' ? 'Ortalama Günlük Fark' : 'Average 1D Change'}
+                {language === 'tr' ? 'Ortalama Seans Farkı (Açılıştan)' : 'Avg Session Change (From Open)'}
               </span>
               <span className={`text-base sm:text-lg font-black font-mono ${stats.avgChange === null ? 'text-slate-500 dark:text-slate-400' : stats.avgChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                 {stats.avgChange === null ? '-' : `${stats.avgChange >= 0 ? '+' : ''}${stats.avgChange.toFixed(2)}%`}
@@ -1235,7 +1269,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 <tr className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   <th className="py-3 px-4">{language === 'tr' ? 'Varlık / Sembol' : 'Symbol / Asset'}</th>
                   <th className="py-3 px-4">{language === 'tr' ? 'Son Fiyat' : 'Price'}</th>
-                  <th className="py-3 px-4">{language === 'tr' ? 'Günlük Fark' : '1D Change'}</th>
+                  <th className="py-3 px-4">{language === 'tr' ? 'Seans Farkı (Açılıştan)' : 'Session Change (From Open)'}</th>
                   <th className="py-3 px-4 min-w-[140px]">{language === 'tr' ? '52-Haftalık Aralık' : '52W Range'}</th>
                   <th className="py-3 px-4">{language === 'tr' ? 'Fiyat Hedefleri' : 'Alerts / Targets'}</th>
                   <th className="py-3 px-4">{language === 'tr' ? 'Yatırım Tezi / Not' : 'Thesis Note'}</th>

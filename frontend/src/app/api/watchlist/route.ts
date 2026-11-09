@@ -33,6 +33,7 @@ interface CatalogCache {
   catalog: any[];
   priceMap: Map<string, any>;
   timestamp: number;
+  isStale?: boolean;
 }
 
 let serverCatalogCache: CatalogCache | null = null;
@@ -135,13 +136,17 @@ async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCa
       catalog,
       priceMap,
       timestamp: now,
+      isStale: false,
     };
 
     return serverCatalogCache;
   } catch (err) {
     if (serverCatalogCache) {
       console.warn('Pagination failed, serving previous stale catalog cache:', err);
-      return serverCatalogCache;
+      return {
+        ...serverCatalogCache,
+        isStale: true,
+      };
     }
     throw err;
   }
@@ -187,7 +192,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch cached catalog and prices (60s in-memory cache, reducing response time from 1300ms to <5ms)
-    const { catalog, priceMap } = await getCachedCatalogAndPrices(serverSupabase);
+    const cachedCatalog = await getCachedCatalogAndPrices(serverSupabase);
+    const { catalog, priceMap } = cachedCatalog;
+    const isStale = Boolean(cachedCatalog.isStale);
 
     // 3. Format watchlist items with combined data
     const items = (watchlistData || []).map((item: any) => {
@@ -240,6 +247,9 @@ export async function GET(request: NextRequest) {
         ...c,
         isWatched: watchedAssetIds.has(c.id),
       })),
+      dataStatus: isStale ? 'stale' : 'live',
+      catalogFetchedAt: new Date(cachedCatalog.timestamp).toISOString(),
+      refreshFailed: isStale,
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
@@ -495,6 +505,14 @@ export async function DELETE(request: NextRequest) {
     const serverSupabase = getServerSupabase();
     const { data: { user } } = await authSupabase.auth.getUser();
 
+    // 1. Strict Auth Guard: Reject unauthenticated requests immediately
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
+        { status: 401 }
+      );
+    }
+
     const url = new URL(request.url);
     let id = url.searchParams.get('id');
     let assetId = url.searchParams.get('assetId');
@@ -525,14 +543,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id, assetId veya symbol parametresi gereklidir' }, { status: 400 });
     }
 
-    // Unauthenticated requests cannot execute private database mutations
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
-        { status: 401 }
-      );
-    }
-
     let query = authSupabase.from('watchlist_items').delete().eq('user_id', user.id);
 
     if (id) {
@@ -541,10 +551,17 @@ export async function DELETE(request: NextRequest) {
       query = query.eq('asset_id', assetId);
     }
 
-    const { error } = await query;
+    const { data, error } = await query.select();
     if (error) {
       console.error('Watchlist DELETE error:', error);
       throw error;
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: 'Varlık bulunamadı veya bu işlem için yetkiniz yok' },
+        { status: 404 }
+      );
     }
 
     invalidateCatalogCache();
@@ -560,19 +577,19 @@ export async function PATCH(request: NextRequest) {
     const authSupabase = getAuthenticatedSupabase(request);
     const { data: { user } } = await authSupabase.auth.getUser();
 
-    const body = await request.json();
-    const { id, assetId, notes, alertAbove, alertBelow } = body;
-
-    if (!id && !assetId) {
-      return NextResponse.json({ error: 'id veya assetId gereklidir' }, { status: 400 });
-    }
-
-    // Unauthenticated requests cannot execute private database mutations
+    // 1. Strict Auth Guard: Reject unauthenticated requests immediately
     if (!user) {
       return NextResponse.json(
         { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
         { status: 401 }
       );
+    }
+
+    const body = await request.json();
+    const { id, assetId, notes, alertAbove, alertBelow } = body;
+
+    if (!id && !assetId) {
+      return NextResponse.json({ error: 'id veya assetId gereklidir' }, { status: 400 });
     }
 
     const updates: Record<string, any> = {};
@@ -587,11 +604,18 @@ export async function PATCH(request: NextRequest) {
       query = query.eq('asset_id', assetId);
     }
 
-    const { data, error } = await query.select().single();
+    const { data, error } = await query.select();
     if (error) throw error;
 
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: 'Varlık bulunamadı veya bu işlem için yetkiniz yok' },
+        { status: 404 }
+      );
+    }
+
     invalidateCatalogCache();
-    return NextResponse.json({ success: true, item: data, userId: user.id });
+    return NextResponse.json({ success: true, item: data[0], userId: user.id });
   } catch (err: any) {
     console.error('Watchlist API PATCH error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
