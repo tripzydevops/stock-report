@@ -36,6 +36,13 @@ export interface CatalogAsset {
   currency: string;
   sector: string;
   isWatched: boolean;
+  latestPrice?: number;
+  openPrice?: number;
+  dailyChangePercent?: number;
+  high52w?: number | null;
+  low52w?: number | null;
+  volume?: number | null;
+  rsi14?: number | null;
 }
 
 interface WatchlistViewProps {
@@ -114,10 +121,46 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
       const data = await res.json();
-      setCatalog(data.catalog || []);
+      const serverCatalog: CatalogAsset[] = data.catalog || [];
+      setCatalog(serverCatalog);
 
       if (isGuest) {
-        setItems(loadGuestItems());
+        const guestRaw = loadGuestItems();
+        // Enrich guest items with catalog prices and metadata
+        const enriched = guestRaw.map(item => {
+          const cleanSym = (item.symbol || '').replace('.IS', '').toUpperCase();
+          const match = serverCatalog.find(
+            c => c.id === item.assetId ||
+                 c.symbol.toUpperCase() === item.symbol.toUpperCase() ||
+                 c.symbol.toUpperCase().replace('.IS', '') === cleanSym
+          );
+
+          const isFund = match?.market === 'TEFAS' || match?.assetClass === 'fund' || item.market === 'TEFAS' || item.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ', 'KLU', 'NRK', 'YLY', 'ZPE', 'AFT', 'YAY', 'TCD', 'BIO', 'IHK', 'HKH', 'IDH', 'IIH', 'TAU', 'GMR', 'ST1', 'KRS', 'IPB'].includes(cleanSym);
+
+          const latestPrice = match?.latestPrice !== undefined && match.latestPrice > 0 ? match.latestPrice : (item.latestPrice || 0);
+          const openPrice = match?.openPrice !== undefined && match.openPrice > 0 ? match.openPrice : (item.openPrice || latestPrice);
+          const dailyChange = openPrice > 0 ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2)) : (match?.dailyChangePercent ?? item.dailyChangePercent ?? 0);
+
+          return {
+            ...item,
+            symbol: item.symbol || match?.symbol || cleanSym,
+            name: match?.name || item.name,
+            assetClass: isFund ? 'fund' : (match?.assetClass || item.assetClass || 'stock'),
+            market: isFund ? 'TEFAS' : (match?.market || item.market || 'BIST'),
+            currency: match?.currency || item.currency || 'TRY',
+            sector: match?.sector || item.sector || '',
+            latestPrice,
+            openPrice,
+            dailyChangePercent: dailyChange,
+            high52w: match?.high52w ?? item.high52w ?? null,
+            low52w: match?.low52w ?? item.low52w ?? null,
+            volume: match?.volume ?? item.volume ?? null,
+            rsi14: match?.rsi14 ?? item.rsi14 ?? null,
+          };
+        });
+
+        setItems(enriched);
+        saveGuestItems(enriched);
       } else {
         setItems(data.items || []);
       }
@@ -127,7 +170,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     } finally {
       setLoading(false);
     }
-  }, [isGuest, user?.id, loadGuestItems]);
+  }, [isGuest, user?.id, loadGuestItems, saveGuestItems]);
 
   useEffect(() => {
     fetchData();
@@ -158,20 +201,28 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     try {
       setIsQuickAdding(true);
       if (isGuest) {
-        const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === sym);
+        const cleanSym = sym.replace('.IS', '');
+        const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === cleanSym);
+        const isFund = found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
+        const latestPrice = found?.latestPrice || 0;
+        const openPrice = found?.openPrice || latestPrice;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${sym}`,
           assetId: found?.id || `asset_${sym}`,
           symbol: sym,
           name: found?.name || sym,
-          assetClass: found?.assetClass || 'stock',
-          market: (found?.market as any) || 'BIST',
-          currency: (found?.currency as any) || 'TRY',
+          assetClass: isFund ? 'fund' : (found?.assetClass || 'stock'),
+          market: isFund ? 'TEFAS' : ((found?.market as any) || 'BIST'),
+          currency: (found?.currency as any) || (found?.market === 'US' ? 'USD' : 'TRY'),
           sector: found?.sector || '',
           addedAt: new Date().toISOString(),
-          latestPrice: 0,
-          openPrice: 0,
-          dailyChangePercent: 0,
+          latestPrice,
+          openPrice,
+          dailyChangePercent: found?.dailyChangePercent || 0,
+          high52w: found?.high52w || null,
+          low52w: found?.low52w || null,
+          volume: found?.volume || null,
+          rsi14: found?.rsi14 || null,
         };
         const updated = [newItem, ...items.filter(i => i.symbol !== sym)];
         setItems(updated);
@@ -234,22 +285,29 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     try {
       setIsSubmitting(true);
       if (isGuest) {
+        const isFund = selectedAssetForAdd.market === 'TEFAS' || selectedAssetForAdd.assetClass === 'fund';
+        const latestPrice = selectedAssetForAdd.latestPrice || 0;
+        const openPrice = selectedAssetForAdd.openPrice || latestPrice;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${selectedAssetForAdd.symbol}`,
           assetId: selectedAssetForAdd.id,
           symbol: selectedAssetForAdd.symbol,
           name: selectedAssetForAdd.name,
-          assetClass: selectedAssetForAdd.assetClass,
-          market: selectedAssetForAdd.market,
+          assetClass: isFund ? 'fund' : selectedAssetForAdd.assetClass,
+          market: isFund ? 'TEFAS' : selectedAssetForAdd.market,
           currency: selectedAssetForAdd.currency,
           sector: selectedAssetForAdd.sector,
           notes: addNotes.trim() || undefined,
           alertAbove: addAlertAbove ? parseFloat(addAlertAbove) : undefined,
           alertBelow: addAlertBelow ? parseFloat(addAlertBelow) : undefined,
           addedAt: new Date().toISOString(),
-          latestPrice: 0,
-          openPrice: 0,
-          dailyChangePercent: 0,
+          latestPrice,
+          openPrice,
+          dailyChangePercent: selectedAssetForAdd.dailyChangePercent || 0,
+          high52w: selectedAssetForAdd.high52w || null,
+          low52w: selectedAssetForAdd.low52w || null,
+          volume: selectedAssetForAdd.volume || null,
+          rsi14: selectedAssetForAdd.rsi14 || null,
         };
         const updated = [newItem, ...items.filter(i => i.assetId !== selectedAssetForAdd.id)];
         setItems(updated);
@@ -350,20 +408,29 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     try {
       if (isGuest) {
         const newGuestItems: WatchlistItemData[] = symbolsToFind.map((sym, idx) => {
-          const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === sym);
+          const cleanSym = sym.toUpperCase().replace('.IS', '');
+          const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === cleanSym);
+          const isFund = packType === 'TEFAS' || found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
+          const latestPrice = found?.latestPrice || 0;
+          const openPrice = found?.openPrice || latestPrice;
+
           return {
             id: `guest_pack_${Date.now()}_${idx}_${sym}`,
             assetId: found?.id || `asset_${sym}`,
             symbol: sym,
             name: found?.name || sym,
-            assetClass: found?.assetClass || 'stock',
-            market: (found?.market as any) || packType,
+            assetClass: isFund ? 'fund' : (found?.assetClass || 'stock'),
+            market: isFund ? 'TEFAS' : ((found?.market as any) || packType),
             currency: (found?.currency as any) || (packType === 'US' ? 'USD' : 'TRY'),
             sector: found?.sector || '',
             addedAt: new Date().toISOString(),
-            latestPrice: 0,
-            openPrice: 0,
-            dailyChangePercent: 0,
+            latestPrice,
+            openPrice,
+            dailyChangePercent: found?.dailyChangePercent || 0,
+            high52w: found?.high52w || null,
+            low52w: found?.low52w || null,
+            volume: found?.volume || null,
+            rsi14: found?.rsi14 || null,
           };
         });
         const existingSymbols = new Set(items.map(i => i.symbol));
@@ -391,9 +458,9 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const filteredItems = useMemo(() => {
     return items
       .filter(item => {
-        if (marketFilter === 'BIST' && item.market !== 'BIST') return false;
+        if (marketFilter === 'BIST' && (item.market !== 'BIST' || item.assetClass === 'fund')) return false;
         if (marketFilter === 'US' && item.market !== 'US') return false;
-        if (marketFilter === 'TEFAS' && item.market !== 'TEFAS') return false;
+        if (marketFilter === 'TEFAS' && item.market !== 'TEFAS' && item.assetClass !== 'fund') return false;
         if (marketFilter === 'ALERTS' && !item.alertAbove && !item.alertBelow) return false;
 
         if (searchQuery.trim()) {
@@ -639,9 +706,9 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             {[
               { id: 'ALL', label: language === 'tr' ? '🌟 Tümü' : '🌟 All', count: items.length },
-              { id: 'BIST', label: '🇹🇷 BIST Hisseleri', count: items.filter(i => i.market === 'BIST').length },
+              { id: 'BIST', label: '🇹🇷 BIST Hisseleri', count: items.filter(i => i.market === 'BIST' && i.assetClass !== 'fund').length },
               { id: 'US', label: '🇺🇸 ABD Hisse & ETF', count: items.filter(i => i.market === 'US').length },
-              { id: 'TEFAS', label: '🏦 TEFAS Fonları', count: items.filter(i => i.market === 'TEFAS').length },
+              { id: 'TEFAS', label: '🏦 TEFAS Fonları', count: items.filter(i => i.market === 'TEFAS' || i.assetClass === 'fund').length },
               { id: 'ALERTS', label: '🔔 Alarmlı', count: items.filter(i => i.alertAbove || i.alertBelow).length },
             ].map(tab => (
               <button
@@ -796,8 +863,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           {filteredItems.map(item => {
             const isPositive = item.dailyChangePercent >= 0;
             const cleanSym = item.symbol.replace('.IS', '');
-            const flag = item.market === 'BIST' ? '🇹🇷' : item.market === 'US' ? '🇺🇸' : '🏦';
-            const badgeType = item.assetClass === 'fund' ? 'TEFAS Fon' : item.assetClass === 'etf' ? 'ETF' : 'Hisse';
+            const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
+            const isEtf = item.assetClass === 'etf';
+            const flag = isFund ? '🏦' : item.market === 'US' ? '🇺🇸' : '🇹🇷';
+            const badgeType = isFund ? 'TEFAS Fon' : isEtf ? 'ETF' : 'Hisse';
 
             let alertBelowDistance: number | null = null;
             if (item.alertBelow && item.latestPrice > 0) {
@@ -1006,7 +1075,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 {filteredItems.map(item => {
                   const isPositive = item.dailyChangePercent >= 0;
                   const cleanSym = item.symbol.replace('.IS', '');
-                  const flag = item.market === 'BIST' ? '🇹🇷' : item.market === 'US' ? '🇺🇸' : '🏦';
+                  const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
+                  const isEtf = item.assetClass === 'etf';
+                  const flag = isFund ? '🏦' : item.market === 'US' ? '🇺🇸' : '🇹🇷';
+                  const badgeType = isFund ? 'TEFAS Fon' : isEtf ? 'ETF' : 'Hisse';
 
                   return (
                     <tr
@@ -1019,8 +1091,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                           <div>
                             <div className="font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
                               <span>{cleanSym}</span>
-                              <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
-                                {item.assetClass}
+                              <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">
+                                {badgeType}
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[160px]">
@@ -1179,9 +1251,11 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                         >
                           <div>
                             <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{c.market === 'BIST' ? '🇹🇷' : c.market === 'US' ? '🇺🇸' : '🏦'}</span>
+                              <span>{(c.market === 'TEFAS' || c.assetClass === 'fund') ? '🏦' : c.market === 'US' ? '🇺🇸' : '🇹🇷'}</span>
                               <span>{c.symbol}</span>
-                              <span className="text-[10px] text-slate-400 font-normal">({c.assetClass})</span>
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                ({(c.market === 'TEFAS' || c.assetClass === 'fund') ? 'TEFAS Fon' : c.assetClass === 'etf' ? 'ETF' : 'Hisse'})
+                              </span>
                             </div>
                             <div className="text-[11px] text-slate-500 truncate max-w-[280px]">{c.name}</div>
                           </div>
@@ -1200,7 +1274,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">
-                      {selectedAssetForAdd.market === 'BIST' ? '🇹🇷' : selectedAssetForAdd.market === 'US' ? '🇺🇸' : '🏦'}
+                      {(selectedAssetForAdd.market === 'TEFAS' || selectedAssetForAdd.assetClass === 'fund') ? '🏦' : selectedAssetForAdd.market === 'US' ? '🇺🇸' : '🇹🇷'}
                     </span>
                     <div>
                       <span className="font-black text-sm text-slate-900 dark:text-white">{selectedAssetForAdd.symbol}</span>

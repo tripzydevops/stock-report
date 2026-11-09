@@ -68,19 +68,34 @@ export async function GET(request: NextRequest) {
       watchlistData = data || [];
     }
 
-    // 2. Fetch latest prices for all assets to enrich watchlist
-    const { data: latestPrices, error: pricesError } = await serverSupabase
-      .from('v_latest_prices')
-      .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
-      .limit(2000);
+    // 2. Fetch latest prices for all assets to enrich watchlist (bypassing Supabase 1,000-row REST clamp)
+    const [pricesPart1, pricesPart2, pricesPart3] = await Promise.all([
+      serverSupabase
+        .from('v_latest_prices')
+        .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
+        .range(0, 999),
+      serverSupabase
+        .from('v_latest_prices')
+        .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
+        .range(1000, 1999),
+      serverSupabase
+        .from('v_latest_prices')
+        .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
+        .range(2000, 2999),
+    ]);
 
-    if (pricesError) {
-      console.warn('Warning: Could not fetch v_latest_prices:', pricesError.message);
-    }
+    const latestPrices = [
+      ...(pricesPart1.data || []),
+      ...(pricesPart2.data || []),
+      ...(pricesPart3.data || []),
+    ];
+
+    if (pricesPart1.error) console.warn('Warning: Could not fetch v_latest_prices part 1:', pricesPart1.error.message);
+    if (pricesPart2.error) console.warn('Warning: Could not fetch v_latest_prices part 2:', pricesPart2.error.message);
 
     const priceMap = new Map<string, any>();
-    if (latestPrices) {
-      for (const p of latestPrices) {
+    for (const p of latestPrices) {
+      if (p.asset_id) {
         priceMap.set(p.asset_id, p);
       }
     }
@@ -88,21 +103,29 @@ export async function GET(request: NextRequest) {
     // 3. Format watchlist items with combined data
     const items = (watchlistData || []).map((item: any) => {
       const asset = item.assets || {};
+      const cleanSym = (asset.symbol || '').replace('.IS', '').toUpperCase();
       const priceInfo = priceMap.get(item.asset_id) || {};
-      const latestPrice = Number(priceInfo.latest_price) || 0;
+      const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
+
+      let latestPrice = Number(priceInfo.latest_price) || 0;
+      if (latestPrice === 0 && tefasFallback?.defaultPrice) {
+        latestPrice = tefasFallback.defaultPrice;
+      }
       const openPrice = Number(priceInfo.open) || latestPrice;
       const dailyChange = openPrice > 0 ? ((latestPrice - openPrice) / openPrice) * 100 : 0;
+
+      const isFund = asset.market === 'TEFAS' || asset.asset_class === 'fund' || Boolean(tefasFallback);
 
       return {
         id: item.id,
         userId: item.user_id,
         assetId: item.asset_id,
-        symbol: asset.symbol || 'UNKNOWN',
-        name: asset.name || asset.symbol || 'Bilinmeyen Varlık',
-        assetClass: asset.asset_class || 'stock',
-        market: asset.market || 'BIST',
+        symbol: asset.symbol || cleanSym || 'UNKNOWN',
+        name: asset.name || tefasFallback?.name || asset.symbol || 'Bilinmeyen Varlık',
+        assetClass: isFund ? 'fund' : (asset.asset_class || 'stock'),
+        market: isFund ? 'TEFAS' : (asset.market || 'BIST'),
         currency: asset.currency || (asset.market === 'US' ? 'USD' : 'TRY'),
-        sector: asset.sector || '',
+        sector: asset.sector || tefasFallback?.sector || '',
         notes: item.notes || '',
         alertAbove: item.alert_above ? Number(item.alert_above) : null,
         alertBelow: item.alert_below ? Number(item.alert_below) : null,
@@ -117,33 +140,73 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // 4. Also fetch active catalog of assets for search/autocomplete
-    const { data: allAssets, error: allAssetsError } = await serverSupabase
-      .from('assets')
-      .select('id, symbol, name, market, asset_class, currency, sector')
-      .eq('is_active', true)
-      .order('symbol', { ascending: true })
-      .limit(2000);
+    // 4. Fetch complete active catalog of assets (bypassing Supabase 1,000-row REST clamp)
+    const [assetsPart1, assetsPart2, assetsPart3] = await Promise.all([
+      serverSupabase
+        .from('assets')
+        .select('id, symbol, name, market, asset_class, currency, sector')
+        .eq('is_active', true)
+        .order('symbol', { ascending: true })
+        .range(0, 999),
+      serverSupabase
+        .from('assets')
+        .select('id, symbol, name, market, asset_class, currency, sector')
+        .eq('is_active', true)
+        .order('symbol', { ascending: true })
+        .range(1000, 1999),
+      serverSupabase
+        .from('assets')
+        .select('id, symbol, name, market, asset_class, currency, sector')
+        .eq('is_active', true)
+        .order('symbol', { ascending: true })
+        .range(2000, 2999),
+    ]);
 
-    if (allAssetsError) {
-      console.warn('Warning: Could not fetch all assets:', allAssetsError.message);
-    }
+    const allAssets = [
+      ...(assetsPart1.data || []),
+      ...(assetsPart2.data || []),
+      ...(assetsPart3.data || []),
+    ];
+
+    if (assetsPart1.error) console.warn('Warning: Could not fetch assets part 1:', assetsPart1.error.message);
+    if (assetsPart2.error) console.warn('Warning: Could not fetch assets part 2:', assetsPart2.error.message);
 
     const watchedAssetIds = new Set(items.map(i => i.assetId));
 
     return NextResponse.json({
       userId: user?.id || 'guest',
       items,
-      catalog: (allAssets || []).map((a: any) => ({
-        id: a.id,
-        symbol: a.symbol,
-        name: a.name,
-        market: a.market,
-        assetClass: a.asset_class,
-        currency: a.currency,
-        sector: a.sector,
-        isWatched: watchedAssetIds.has(a.id),
-      })),
+      catalog: allAssets.map((a: any) => {
+        const cleanSym = (a.symbol || '').replace('.IS', '').toUpperCase();
+        const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
+        const isFund = a.market === 'TEFAS' || a.asset_class === 'fund' || Boolean(tefasFallback);
+
+        const p = priceMap.get(a.id);
+        let latestPrice = Number(p?.latest_price) || 0;
+        if (latestPrice === 0 && tefasFallback?.defaultPrice) {
+          latestPrice = tefasFallback.defaultPrice;
+        }
+        const openPrice = Number(p?.open) || latestPrice;
+        const dailyChangePercent = openPrice > 0 ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2)) : 0;
+
+        return {
+          id: a.id,
+          symbol: a.symbol,
+          name: a.name || tefasFallback?.name || a.symbol,
+          market: isFund ? 'TEFAS' : a.market,
+          assetClass: isFund ? 'fund' : a.asset_class,
+          currency: a.currency,
+          sector: a.sector || tefasFallback?.sector || '',
+          isWatched: watchedAssetIds.has(a.id),
+          latestPrice,
+          openPrice,
+          dailyChangePercent,
+          high52w: p?.high_52w ? Number(p.high_52w) : null,
+          low52w: p?.low_52w ? Number(p.low_52w) : null,
+          volume: p?.volume ? Number(p.volume) : null,
+          rsi14: p?.rsi_14 ? Number(p.rsi_14) : null,
+        };
+      }),
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {
