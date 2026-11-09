@@ -17,11 +17,12 @@ interface QuoteResult {
   volume?: number | null;
 }
 
-function parseTefasDate(rawDate?: any): string {
-  if (!rawDate) return new Date().toISOString().slice(0, 10);
+function parseTefasDate(rawDate?: any): string | null {
+  if (!rawDate) return null;
   if (typeof rawDate === 'number') {
     const d = new Date(rawDate > 1e11 ? rawDate : rawDate * 1000);
     if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return null;
   }
   const s = String(rawDate).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
@@ -32,7 +33,7 @@ function parseTefasDate(rawDate?: any): string {
   if (parts.length === 3 && parts[2].length === 4) {
     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
   }
-  return new Date().toISOString().slice(0, 10);
+  return null;
 }
 
 async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
@@ -55,6 +56,10 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
       const p = parseFloat(String(latest.FIYAT || latest.fiyat).replace(',', '.'));
       if (!isNaN(p) && p > 0) {
         const sessionDate = parseTefasDate(latest.TARIH || latest.tarih);
+        if (!sessionDate) {
+          console.warn(`Unrecognized TEFAS date for ${code}: ${latest.TARIH || latest.tarih}`);
+          return null;
+        }
         return {
           price: p,
           sessionDate,
@@ -99,12 +104,16 @@ async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResu
     const price = meta?.regularMarketPrice;
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
 
-    let sessionDate = new Date().toISOString().slice(0, 10);
+    let sessionDate: string | null = null;
     if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
       const d = new Date(meta.regularMarketTime * 1000);
       if (!isNaN(d.getTime())) {
         sessionDate = d.toISOString().slice(0, 10);
       }
+    }
+    if (!sessionDate) {
+      console.warn(`Unrecognized or missing market timestamp for ${symbol}`);
+      return null;
     }
 
     return {
@@ -361,7 +370,7 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
 
     let priceStatus: 'live' | 'unavailable' = 'unavailable';
 
-    if (quote && typeof quote.price === 'number' && Number.isFinite(quote.price) && quote.price > 0) {
+    if (quote && typeof quote.price === 'number' && Number.isFinite(quote.price) && quote.price > 0 && quote.sessionDate) {
       const { error: priceError } = await supabase.from('price_history').upsert({
         asset_id: asset.id,
         date: quote.sessionDate,
@@ -370,6 +379,8 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
         high: quote.high ?? null,
         low: quote.low ?? null,
         volume: quote.volume ?? null,
+        source: quote.source,
+        observed_at: quote.observedAt,
       }, { onConflict: 'asset_id,date' });
 
       if (priceError) {
@@ -419,7 +430,13 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
       success: true,
       asset,
       price_status: priceStatus,
-      quote: quote ? { price: quote.price, change: quote.prevClose ? ((quote.price - quote.prevClose) / quote.prevClose) * 100 : 0 } : null,
+      quote: quote ? {
+        price: quote.price,
+        change: quote.prevClose ? ((quote.price - quote.prevClose) / quote.prevClose) * 100 : 0,
+        source: quote.source,
+        observedAt: quote.observedAt,
+        sessionDate: quote.sessionDate,
+      } : null,
       addedToWatchlist,
       userId,
     }, { status: existingAsset ? 200 : 201 });

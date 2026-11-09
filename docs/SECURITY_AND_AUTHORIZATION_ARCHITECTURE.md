@@ -121,6 +121,26 @@ The background sync endpoint ([`/api/sync`](file:///C:/Users/elif/.gemini/antigr
 * **Fail-Closed Protection**: In production (`NODE_ENV === 'production'`), requests lacking a valid secret are immediately rejected with HTTP 401 Unauthorized.
 * **Safe Data Contracts**: Removed all synthetic fallback prices and fake volume numbers (`100000`). If a market quote is unavailable, fields remain clean `null`, preserving data integrity.
 
+### 3.5 Request-Scoped Authenticated Server Client (`getAuthenticatedSupabase`)
+For user-authenticated API endpoints (e.g. `/api/watchlist`), standard unauthenticated or anonymous server clients fail RLS evaluation because Supabase's `auth.uid()` evaluates to `null`. 
+To preserve user identity across Next.js API route handlers without compromising RLS:
+
+* **Token Extraction:** `getAuthenticatedSupabase(request)` inspects incoming HTTP request headers for an `Authorization: Bearer <token>` header or Supabase auth session cookies (`sb-<project-ref>-auth-token`).
+* **Header Forwarding:** If an access token is detected, it is forwarded in the Supabase client options via `global: { headers: { Authorization: `Bearer ${token}` } }`.
+* **Identity Verification:** The route handler calls `await authSupabase.auth.getUser()`. If a valid user is resolved, all downstream queries and mutations evaluate with `auth.uid() = user.id`.
+* **Safe Guest Fallback:** If the visitor is unauthenticated, the route handler immediately short-circuits with `{ data: [], guest: true }` without triggering unauthenticated DB queries that would violate PostgreSQL RLS.
+
+### 3.6 Guest Watchlist Synchronization & LocalStorage Unification
+To prevent inconsistency between the dedicated Watchlist tab and inline card star toggles:
+* **Dual-Key Sync:** Both `marketpulse_guest_watchlist` (`WatchlistItemData[]`) and `marketpulse_guest_starred_tickers` (`string[]`) are updated atomically in [`TradeCard.tsx`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/src/components/TradeCard.tsx).
+* **Authenticated Authorization Headers:** When a user is signed in, client-side requests to `/api/watchlist` attach `Authorization: Bearer <access_token>` from the active Supabase session.
+
+### 3.7 Price Ingestion Provenance & Forward Database Migration
+To guarantee strict auditability and eliminate fallback date assumptions:
+* **Forward Migration:** Added `source VARCHAR(50)` and `observed_at TIMESTAMPTZ` columns to `public.price_history` via [`20261108220000_forward_hardening_rls_and_price_metadata.sql`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/supabase/migrations/20261108220000_forward_hardening_rls_and_price_metadata.sql) with an index on `source`.
+* **Zero Date Guessing:** In `fetchLiveQuote` and `parseTefasDate` ([`frontend/src/app/api/assets/route.ts`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/src/app/api/assets/route.ts)), if the upstream provider does not deliver a verifiable timestamp, `observedAt` and `sessionDate` return `null`. The system never silently substitutes `today`.
+* **Provenance Tracking:** Ingested price rows explicitly store `source` (e.g. `yahoo_finance`, `tefas`) and `observed_at` to establish data provenance.
+
 ---
 
 ## 4. Continuous Integration & Security Automation
@@ -184,8 +204,9 @@ All automated test suites execute cleanly:
 ### 5.2 Backend Pytest Suite (`155/155 Passed`)
 * 155 tests across algorithmic screeners, AVWAP calculations, post-exit recovery tracking (concurrency-safe), end-to-end verified trade lifecycle journeys (`test_complete_journey.py`), assistant LLM agents, and Supabase data synchronization pass with 0 errors.
 
-### 5.3 Database Migration Linter (`3/3 Valid`)
+### 5.3 Database Migration Linter (`4/4 Valid`)
 * Validated using `python scripts/validate_migrations.py`:
   1. `20260922141511_initial_core_schema.sql`
   2. `20261027000000_report_files_and_movements.sql`
   3. `20261108102000_harden_portfolio_rls.sql`
+  4. `20261108220000_forward_hardening_rls_and_price_metadata.sql`

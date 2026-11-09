@@ -25,6 +25,49 @@ export function getServerSupabase(): SupabaseClient {
 }
 
 /**
+ * Request-scoped authenticated Supabase client.
+ * Extracts the user's JWT access token from the incoming request Authorization header
+ * or Supabase auth session cookie, attaching it to request headers so PostgreSQL RLS
+ * policies can evaluate `auth.uid() = user_id`.
+ */
+export function getAuthenticatedSupabase(request: Request): SupabaseClient {
+  const authHeader = request.headers.get('authorization') || '';
+  let token: string | null = null;
+  if (authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7).trim();
+  }
+
+  // Also check standard Supabase auth cookie headers if present
+  if (!token) {
+    const cookieHeader = request.headers.get('cookie') || '';
+    const match = cookieHeader.match(/sb-[a-zA-Z0-9_-]+-auth-token=([^;]+)/);
+    if (match) {
+      try {
+        const decoded = decodeURIComponent(match[1]);
+        const parsed = JSON.parse(decoded);
+        if (Array.isArray(parsed) && parsed[0]) {
+          token = parsed[0];
+        } else if (parsed?.access_token) {
+          token = parsed.access_token;
+        }
+      } catch {
+        // Invalid cookie encoding
+      }
+    }
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  });
+}
+
+/**
  * Privileged administrative Supabase client.
  * Uses SUPABASE_SERVICE_ROLE_KEY to bypass RLS for administrative operations
  * (e.g., generating signed storage download URLs, internal sync routines).

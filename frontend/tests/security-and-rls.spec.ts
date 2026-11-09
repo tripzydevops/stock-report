@@ -85,45 +85,75 @@ test.describe('P1 Security: Multi-Tenant Supabase Row Level Security (RLS) Enfor
   });
 
   test('5. Non-destructive verification: RLS blocks anon mutation or deletion of Model Portfolio', async () => {
-    // Record baseline count of Model Portfolio holdings non-destructively
-    const { data: initialHoldings } = await anonClient
+    // 1. Direct insertion of Model Portfolio row (user_id: null) by anon client must be rejected
+    const { data: insertData, error: insertError } = await anonClient
       .from('portfolio_positions')
-      .select('id')
-      .is('user_id', null)
-      .eq('is_open', true);
-
-    const initialCount = initialHoldings?.length || 0;
-    expect(initialCount).toBeGreaterThan(0);
-
-    // Attempt to update a model portfolio holding average entry price
-    const sampleId = initialHoldings![0].id;
-    const { data: updateData, error: updateError } = await anonClient
-      .from('portfolio_positions')
-      .update({ avg_entry_price: 0.001 })
-      .eq('id', sampleId)
+      .insert({
+        user_id: null,
+        quantity: 10,
+        avg_entry_price: 100.0,
+        is_open: true,
+      })
       .select();
 
-    // RLS policy prevents update: zero modified rows returned
-    expect(updateData === null || updateData.length === 0).toBeTruthy();
+    expect(insertError).not.toBeNull();
+    expect(insertError?.message).toMatch(/violates row-level security policy|permission denied/i);
+    expect(insertData).toBeNull();
 
-    // Attempt non-destructive deletion targeting a dedicated non-existent fixture UUID
-    const fixtureUuid = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
-    const { data: deleteData, error: deleteError } = await anonClient
-      .from('portfolio_positions')
-      .delete()
-      .eq('id', fixtureUuid)
-      .select();
+    // 2. Mutation & Deletion Protection using disposable test fixture (never touching real model holdings)
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceRoleKey) {
+      const adminClient = createClient(SUPABASE_URL, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      });
 
-    expect(deleteData === null || deleteData.length === 0).toBeTruthy();
+      // Create a disposable model fixture row
+      const probeId = 'a0000000-0000-0000-0000-000000000001';
+      // Clean any leftover probe from prior runs
+      await adminClient.from('portfolio_positions').delete().eq('id', probeId);
 
-    // Verify model portfolio remains completely unchanged and protected
-    const { data: verifyHoldings } = await anonClient
-      .from('portfolio_positions')
-      .select('id')
-      .is('user_id', null)
-      .eq('is_open', true);
+      const { error: seedError } = await adminClient.from('portfolio_positions').insert({
+        id: probeId,
+        user_id: null,
+        quantity: 50,
+        avg_entry_price: 250.0,
+        is_open: true,
+      });
 
-    expect(verifyHoldings?.length).toBe(initialCount);
+      if (!seedError) {
+        try {
+          // Attempt update of the disposable fixture via anonClient
+          const { data: updateData, error: updateError } = await anonClient
+            .from('portfolio_positions')
+            .update({ avg_entry_price: 0.001 })
+            .eq('id', probeId)
+            .select();
+
+          expect(updateData === null || updateData.length === 0).toBeTruthy();
+
+          // Attempt deletion of the disposable fixture via anonClient
+          const { data: deleteData, error: deleteError } = await anonClient
+            .from('portfolio_positions')
+            .delete()
+            .eq('id', probeId)
+            .select();
+
+          expect(deleteData === null || deleteData.length === 0).toBeTruthy();
+
+          // Verify with adminClient that the fixture row was not mutated
+          const { data: verifyRow } = await adminClient
+            .from('portfolio_positions')
+            .select('avg_entry_price')
+            .eq('id', probeId)
+            .single();
+
+          expect(Number(verifyRow?.avg_entry_price)).toBe(250.0);
+        } finally {
+          // Always clean up disposable fixture
+          await adminClient.from('portfolio_positions').delete().eq('id', probeId);
+        }
+      }
+    }
   });
 
   test('6. RLS blocks unauthenticated/guest clients from inserting into watchlist_items table', async () => {

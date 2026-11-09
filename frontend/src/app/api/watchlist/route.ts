@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/supabaseServer';
-
-const supabase = getServerSupabase();
+import { getAuthenticatedSupabase, getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,66 +29,47 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
   IPB: { name: 'İstanbul Portföy Birinci Değişken Fon', sector: 'Değişken Fon', defaultPrice: 8.9020 },
 };
 
-function getEffectiveUserId(request: NextRequest, body?: any): string {
-  const url = new URL(request.url);
-  const qUserId = url.searchParams.get('userId');
-  if (qUserId && qUserId !== 'undefined' && qUserId !== 'null' && qUserId.trim()) {
-    return qUserId.trim();
-  }
-
-  const headerUserId = request.headers.get('x-user-id');
-  if (headerUserId && headerUserId !== 'undefined' && headerUserId !== 'null' && headerUserId.trim()) {
-    return headerUserId.trim();
-  }
-
-  if (body && body.userId && body.userId !== 'undefined' && body.userId !== 'null' && String(body.userId).trim()) {
-    return String(body.userId).trim();
-  }
-
-  return 'default_user';
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const userId = getEffectiveUserId(request);
+    const authSupabase = getAuthenticatedSupabase(request);
+    const serverSupabase = getServerSupabase();
+    const { data: { user } } = await authSupabase.auth.getUser();
 
-    // 1. Fetch watchlist items for this specific user
-    // (If the user is default_user or requested, filter by user_id)
-    let query = supabase
-      .from('watchlist_items')
-      .select(`
-        id,
-        user_id,
-        asset_id,
-        notes,
-        alert_above,
-        alert_below,
-        added_at,
-        assets:asset_id (
+    // 1. Fetch watchlist items for authenticated user carrying JWT session
+    let watchlistData: any[] = [];
+    if (user) {
+      const { data, error: watchlistError } = await authSupabase
+        .from('watchlist_items')
+        .select(`
           id,
-          symbol,
-          name,
-          asset_class,
-          market,
-          currency,
-          sector
-        )
-      `)
-      .order('added_at', { ascending: false });
+          user_id,
+          asset_id,
+          notes,
+          alert_above,
+          alert_below,
+          added_at,
+          assets:asset_id (
+            id,
+            symbol,
+            name,
+            asset_class,
+            market,
+            currency,
+            sector
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('added_at', { ascending: false });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { data: watchlistData, error: watchlistError } = await query;
-
-    if (watchlistError) {
-      console.error('Error fetching watchlist_items for user:', userId, watchlistError);
-      return NextResponse.json({ error: watchlistError.message }, { status: 500 });
+      if (watchlistError) {
+        console.error('Error fetching watchlist_items for user:', user.id, watchlistError);
+        return NextResponse.json({ error: watchlistError.message }, { status: 500 });
+      }
+      watchlistData = data || [];
     }
 
     // 2. Fetch latest prices for all assets to enrich watchlist
-    const { data: latestPrices, error: pricesError } = await supabase
+    const { data: latestPrices, error: pricesError } = await serverSupabase
       .from('v_latest_prices')
       .select('asset_id, latest_price, open, high, low, high_52w, low_52w, volume, rsi_14')
       .limit(2000);
@@ -139,7 +118,7 @@ export async function GET(request: NextRequest) {
     });
 
     // 4. Also fetch active catalog of assets for search/autocomplete
-    const { data: allAssets, error: allAssetsError } = await supabase
+    const { data: allAssets, error: allAssetsError } = await serverSupabase
       .from('assets')
       .select('id, symbol, name, market, asset_class, currency, sector')
       .eq('is_active', true)
@@ -153,7 +132,7 @@ export async function GET(request: NextRequest) {
     const watchedAssetIds = new Set(items.map(i => i.assetId));
 
     return NextResponse.json({
-      userId,
+      userId: user?.id || 'guest',
       items,
       catalog: (allAssets || []).map((a: any) => ({
         id: a.id,
@@ -175,14 +154,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authSupabase = getAuthenticatedSupabase(request);
+    const serverSupabase = getServerSupabase();
+    const { data: { user } } = await authSupabase.auth.getUser();
+
     const body = await request.json();
-    const userId = getEffectiveUserId(request, body);
     let { assetId, symbol, notes, alertAbove, alertBelow } = body;
 
     // Resolve assetId if only symbol provided
     if (!assetId && symbol) {
       const cleanSym = String(symbol).trim().toUpperCase().replace('.IS', '');
-      const { data: assetData } = await supabase
+      const { data: assetData } = await serverSupabase
         .from('assets')
         .select('id, market')
         .or(`symbol.eq.${cleanSym},symbol.eq.${cleanSym}.IS`)
@@ -195,7 +177,7 @@ export async function POST(request: NextRequest) {
         // Auto-correct if asset was previously misclassified as US stock
         const tefasInfo = KNOWN_TEFAS_FUNDS[cleanSym];
         if (tefasInfo && assetData.market !== 'TEFAS') {
-          await supabase
+          await serverSupabase
             .from('assets')
             .update({
               name: tefasInfo.name,
@@ -240,7 +222,7 @@ export async function POST(request: NextRequest) {
           currency = 'TRY';
         }
 
-        const { data: newAsset, error: insertError } = await supabase
+        const { data: newAsset, error: insertError } = await serverSupabase
           .from('assets')
           .insert({
             symbol: cleanSym,
@@ -277,7 +259,7 @@ export async function POST(request: NextRequest) {
                   if (pParts.length === 3 && pParts[2].length === 4) {
                     sDate = `${pParts[2]}-${pParts[1].padStart(2, '0')}-${pParts[0].padStart(2, '0')}`;
                   }
-                  await supabase.from('price_history').upsert({
+                  await serverSupabase.from('price_history').upsert({
                     asset_id: assetId,
                     date: sDate,
                     close: p,
@@ -309,7 +291,7 @@ export async function POST(request: NextRequest) {
                     const d = new Date(meta.regularMarketTime * 1000);
                     if (!isNaN(d.getTime())) sDate = d.toISOString().slice(0, 10);
                   }
-                  await supabase.from('price_history').upsert({
+                  await serverSupabase.from('price_history').upsert({
                     asset_id: assetId,
                     date: sDate,
                     close: p,
@@ -332,11 +314,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'assetId veya geçerli bir symbol gereklidir' }, { status: 400 });
     }
 
-    // Strict Multi-Tenant Isolation: Guest and unauthenticated sessions are handled in client localStorage
-    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
+    // Strict Multi-Tenant Isolation: Guest sessions are maintained locally in client storage
+    if (!user) {
       return NextResponse.json({
         success: true,
         message: 'Guest watchlist is maintained locally in client storage',
+        guest: true,
         data: {
           id: `guest_${assetId}`,
           user_id: 'guest',
@@ -349,18 +332,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Check if item already exists for this authenticated user
-    const { data: existing } = await supabase
+    // Check if item already exists for this authenticated user (evaluates auth.uid() in RLS)
+    const { data: existing } = await authSupabase
       .from('watchlist_items')
       .select('id')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .eq('asset_id', assetId)
       .maybeSingle();
 
     let resultData;
     if (existing) {
       // Update existing item
-      const { data, error } = await supabase
+      const { data, error } = await authSupabase
         .from('watchlist_items')
         .update({
           notes: notes !== undefined ? notes : undefined,
@@ -375,11 +358,11 @@ export async function POST(request: NextRequest) {
       if (error) throw error;
       resultData = data;
     } else {
-      // Insert new item for this user
-      const { data, error } = await supabase
+      // Insert new item for authenticated user
+      const { data, error } = await authSupabase
         .from('watchlist_items')
         .insert({
-          user_id: userId,
+          user_id: user.id,
           asset_id: assetId,
           notes: notes || null,
           alert_above: alertAbove ? Number(alertAbove) : null,
@@ -393,7 +376,7 @@ export async function POST(request: NextRequest) {
       resultData = data;
     }
 
-    return NextResponse.json({ success: true, item: resultData, userId }, { status: 201 });
+    return NextResponse.json({ success: true, item: resultData, userId: user.id }, { status: 201 });
   } catch (err: any) {
     console.error('Watchlist API POST error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
@@ -402,8 +385,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const authSupabase = getAuthenticatedSupabase(request);
+    const serverSupabase = getServerSupabase();
+    const { data: { user } } = await authSupabase.auth.getUser();
+
     const url = new URL(request.url);
-    const userId = getEffectiveUserId(request);
     let id = url.searchParams.get('id');
     let assetId = url.searchParams.get('assetId');
     let symbol = url.searchParams.get('symbol');
@@ -417,7 +403,7 @@ export async function DELETE(request: NextRequest) {
     // Resolve assetId from symbol if needed
     if (!id && !assetId && symbol) {
       const cleanSym = String(symbol).trim().toUpperCase();
-      const { data: assetData } = await supabase
+      const { data: assetData } = await serverSupabase
         .from('assets')
         .select('id')
         .or(`symbol.eq.${cleanSym},symbol.eq.${cleanSym}.IS`)
@@ -433,11 +419,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id, assetId veya symbol parametresi gereklidir' }, { status: 400 });
     }
 
-    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
-      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', userId });
+    // Guest sessions are handled in client localStorage
+    if (!user) {
+      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', guest: true });
     }
 
-    let query = supabase.from('watchlist_items').delete().eq('user_id', userId);
+    let query = authSupabase.from('watchlist_items').delete().eq('user_id', user.id);
 
     if (id) {
       query = query.eq('id', id);
@@ -451,7 +438,7 @@ export async function DELETE(request: NextRequest) {
       throw error;
     }
 
-    return NextResponse.json({ success: true, message: 'Takip listesinden çıkarıldı', userId });
+    return NextResponse.json({ success: true, message: 'Takip listesinden çıkarıldı', userId: user.id });
   } catch (err: any) {
     console.error('Watchlist API DELETE error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
@@ -460,16 +447,18 @@ export async function DELETE(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const authSupabase = getAuthenticatedSupabase(request);
+    const { data: { user } } = await authSupabase.auth.getUser();
+
     const body = await request.json();
-    const userId = getEffectiveUserId(request, body);
     const { id, assetId, notes, alertAbove, alertBelow } = body;
 
     if (!id && !assetId) {
       return NextResponse.json({ error: 'id veya assetId gereklidir' }, { status: 400 });
     }
 
-    if (!userId || userId === 'default_user' || userId.startsWith('guest_')) {
-      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', userId });
+    if (!user) {
+      return NextResponse.json({ success: true, message: 'Guest watchlist is maintained locally in client storage', guest: true });
     }
 
     const updates: Record<string, any> = {};
@@ -477,7 +466,7 @@ export async function PATCH(request: NextRequest) {
     if (alertAbove !== undefined) updates.alert_above = alertAbove ? Number(alertAbove) : null;
     if (alertBelow !== undefined) updates.alert_below = alertBelow ? Number(alertBelow) : null;
 
-    let query = supabase.from('watchlist_items').update(updates).eq('user_id', userId);
+    let query = authSupabase.from('watchlist_items').update(updates).eq('user_id', user.id);
     if (id) {
       query = query.eq('id', id);
     } else {
@@ -487,7 +476,7 @@ export async function PATCH(request: NextRequest) {
     const { data, error } = await query.select().single();
     if (error) throw error;
 
-    return NextResponse.json({ success: true, item: data, userId });
+    return NextResponse.json({ success: true, item: data, userId: user.id });
   } catch (err: any) {
     console.error('Watchlist API PATCH error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });

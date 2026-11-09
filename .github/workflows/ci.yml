@@ -136,7 +136,7 @@ jobs:
         run: |
           npx next start -p 3001 &
           npx wait-on http://localhost:3001
-          npx playwright test tests/security-and-rls.spec.ts tests/dividend-and-prices.spec.ts tests/desktop-view.spec.ts --workers=1
+          npx playwright test tests/security-and-rls.spec.ts tests/dividend-and-prices.spec.ts tests/desktop-view.spec.ts tests/responsive-matrix.spec.ts --workers=1
 
       - name: Upload Playwright Test Report
         if: always()

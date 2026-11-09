@@ -38,29 +38,27 @@ test.describe('P2 Responsive Matrix: Multi-Viewport Layout & Overflow Verificati
       }
 
       // Invariant 3: Switch to Dividend Tab and check table containment
-      const dividendTabButton = page.locator('button:has-text("Temettü"), button:has-text("Dividend"), [data-tab="dividend"]').first();
-      if (await dividendTabButton.isVisible()) {
-        await dividendTabButton.click();
-        await page.waitForTimeout(500);
+      const dividendTabButton = page.locator('button:visible:has-text("Temettü"), button:visible:has-text("Dividend")').first();
+      await expect(dividendTabButton).toBeVisible();
+      await dividendTabButton.click();
+      await page.waitForTimeout(500);
 
-        // Verify page still does not overflow horizontally
-        const isDividendOverflowing = await page.evaluate(() => {
-          return document.documentElement.scrollWidth > window.innerWidth;
-        });
-        expect(isDividendOverflowing).toBeFalsy();
-      }
+      // Verify page still does not overflow horizontally
+      const isDividendOverflowing = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > window.innerWidth;
+      });
+      expect(isDividendOverflowing).toBeFalsy();
 
       // Invariant 4: Switch to Portfolio Tab and verify table containment
-      const portfolioTabButton = page.locator('button:has-text("Portföy"), button:has-text("Portfolio"), [data-tab="portfolio"]').first();
-      if (await portfolioTabButton.isVisible()) {
-        await portfolioTabButton.click();
-        await page.waitForTimeout(500);
+      const portfolioTabButton = page.locator('button:visible:has-text("Portföy"), button:visible:has-text("Portfolio")').first();
+      await expect(portfolioTabButton).toBeVisible();
+      await portfolioTabButton.click();
+      await page.waitForTimeout(500);
 
-        const isPortfolioOverflowing = await page.evaluate(() => {
-          return document.documentElement.scrollWidth > window.innerWidth;
-        });
-        expect(isPortfolioOverflowing).toBeFalsy();
-      }
+      const isPortfolioOverflowing = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > window.innerWidth;
+      });
+      expect(isPortfolioOverflowing).toBeFalsy();
     });
   }
 });

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
-import { PortfolioItem } from '../lib/supabaseClient';
+import { supabase, PortfolioItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -104,9 +104,14 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
   useEffect(() => {
     if (!user?.id && typeof window !== 'undefined') {
       try {
-        const stored = JSON.parse(localStorage.getItem('marketpulse_guest_starred_tickers') || '[]');
-        if (Array.isArray(stored) && stored.includes(signal.symbol)) {
+        const guestWatchlist = JSON.parse(localStorage.getItem('marketpulse_guest_watchlist') || '[]');
+        if (Array.isArray(guestWatchlist) && guestWatchlist.some((item: any) => item.symbol === signal.symbol)) {
           setIsStarred(true);
+        } else {
+          const stored = JSON.parse(localStorage.getItem('marketpulse_guest_starred_tickers') || '[]');
+          if (Array.isArray(stored) && stored.includes(signal.symbol)) {
+            setIsStarred(true);
+          }
         }
       } catch {}
     }
@@ -118,23 +123,54 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
       const nextState = !isStarred;
       setIsStarred(nextState);
       if (user?.id) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
         if (nextState) {
           await fetch('/api/watchlist', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ symbol: signal.symbol, userId: user.id }),
           });
         } else {
           await fetch(`/api/watchlist?symbol=${encodeURIComponent(signal.symbol)}&userId=${encodeURIComponent(user.id)}`, {
             method: 'DELETE',
+            headers,
           });
         }
       } else if (typeof window !== 'undefined') {
+        // Unified Guest Watchlist in localStorage
+        const guestWatchlist = JSON.parse(localStorage.getItem('marketpulse_guest_watchlist') || '[]');
+        let updatedWatchlist = Array.isArray(guestWatchlist) ? [...guestWatchlist] : [];
+        if (nextState) {
+          if (!updatedWatchlist.some((i: any) => i.symbol === signal.symbol)) {
+            updatedWatchlist.push({
+              id: `guest_${signal.symbol}`,
+              assetId: `guest_asset_${signal.symbol}`,
+              symbol: signal.symbol,
+              name: (signal as any).name || signal.symbol,
+              assetClass: 'stock',
+              market: (signal as any).market || 'BIST',
+              currency: 'TRY',
+              latestPrice: signal.currentPrice || signal.entryPrice,
+              openPrice: signal.entryPrice,
+              dailyChangePercent: 0,
+              addedAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          updatedWatchlist = updatedWatchlist.filter((i: any) => i.symbol !== signal.symbol);
+        }
+        localStorage.setItem('marketpulse_guest_watchlist', JSON.stringify(updatedWatchlist));
+
+        // Keep ticker list in sync
         const stored = JSON.parse(localStorage.getItem('marketpulse_guest_starred_tickers') || '[]');
-        const updated = nextState 
+        const updatedTickers = nextState 
           ? Array.from(new Set([...stored, signal.symbol])) 
           : stored.filter((s: string) => s !== signal.symbol);
-        localStorage.setItem('marketpulse_guest_starred_tickers', JSON.stringify(updated));
+        localStorage.setItem('marketpulse_guest_starred_tickers', JSON.stringify(updatedTickers));
       }
     } catch (err) {
       console.error('Star toggle error:', err);
