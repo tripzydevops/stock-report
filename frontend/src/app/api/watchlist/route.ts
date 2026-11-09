@@ -44,7 +44,7 @@ function invalidateCatalogCache() {
 
 /**
  * Deterministic paginated query helper looping through Supabase PostgREST
- * until fewer than pageSize rows return, checking for errors at each page.
+ * until fewer than pageSize rows return, throwing on error to prevent partial catalog caching.
  */
 async function fetchAllPaged<T>(
   queryFactory: (rangeStart: number, rangeEnd: number) => any,
@@ -56,7 +56,7 @@ async function fetchAllPaged<T>(
     const { data, error } = await queryFactory(offset, offset + pageSize - 1);
     if (error) {
       console.error(`Error in fetchAllPaged at offset ${offset}:`, error);
-      break;
+      throw new Error(`Catalog pagination failed at offset ${offset}: ${error.message}`);
     }
     if (!data || data.length === 0) break;
     allData.push(...data);
@@ -72,70 +72,79 @@ async function getCachedCatalogAndPrices(serverSupabase: any): Promise<CatalogCa
     return serverCatalogCache;
   }
 
-  const [latestPrices, allAssets] = await Promise.all([
-    fetchAllPaged<any>((from, to) =>
-      serverSupabase
-        .from('v_latest_prices')
-        .select('asset_id, latest_price, latest_date, open, high, low, high_52w, low_52w, volume, rsi_14')
-        .order('asset_id', { ascending: true })
-        .range(from, to)
-    ),
-    fetchAllPaged<any>((from, to) =>
-      serverSupabase
-        .from('assets')
-        .select('id, symbol, name, market, asset_class, currency, sector')
-        .eq('is_active', true)
-        .order('id', { ascending: true })
-        .range(from, to)
-    ),
-  ]);
+  try {
+    const [latestPrices, allAssets] = await Promise.all([
+      fetchAllPaged<any>((from, to) =>
+        serverSupabase
+          .from('v_latest_prices')
+          .select('asset_id, latest_price, latest_date, open, high, low, high_52w, low_52w, volume, rsi_14')
+          .order('asset_id', { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllPaged<any>((from, to) =>
+        serverSupabase
+          .from('assets')
+          .select('id, symbol, name, market, asset_class, currency, sector')
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+          .range(from, to)
+      ),
+    ]);
 
-  const priceMap = new Map<string, any>();
-  for (const p of latestPrices) {
-    if (p.asset_id) {
-      priceMap.set(p.asset_id, p);
+    const priceMap = new Map<string, any>();
+    for (const p of latestPrices) {
+      if (p.asset_id) {
+        priceMap.set(p.asset_id, p);
+      }
     }
-  }
 
-  const catalog = allAssets.map((a: any) => {
-    const cleanSym = (a.symbol || '').replace('.IS', '').toUpperCase();
-    const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
-    const isFund = a.market === 'TEFAS' || a.asset_class === 'fund' || Boolean(tefasFallback);
+    const catalog = allAssets.map((a: any) => {
+      const cleanSym = (a.symbol || '').replace('.IS', '').toUpperCase();
+      const tefasFallback = KNOWN_TEFAS_FUNDS[cleanSym];
+      const isFund = a.market === 'TEFAS' || a.asset_class === 'fund' || Boolean(tefasFallback);
 
-    const p = priceMap.get(a.id);
-    const hasValidPrice = p?.latest_price != null && !isNaN(Number(p.latest_price)) && Number(p.latest_price) > 0;
-    const latestPrice = hasValidPrice ? Number(p.latest_price) : null;
-    const openPrice = p?.open != null && !isNaN(Number(p.open)) ? Number(p.open) : latestPrice;
-    const dailyChangePercent = (latestPrice !== null && openPrice !== null && openPrice > 0)
-      ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
-      : 0;
+      const p = priceMap.get(a.id);
+      const hasValidPrice = p?.latest_price != null && !isNaN(Number(p.latest_price)) && Number(p.latest_price) > 0;
+      const latestPrice = hasValidPrice ? Number(p.latest_price) : null;
+      const hasValidOpen = p?.open != null && !isNaN(Number(p.open)) && Number(p.open) > 0;
+      const openPrice = hasValidOpen ? Number(p.open) : null;
+      const dailyChangePercent = (latestPrice !== null && openPrice !== null && openPrice > 0)
+        ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
+        : null;
 
-    return {
-      id: a.id,
-      symbol: a.symbol,
-      name: a.name || tefasFallback?.name || a.symbol,
-      market: isFund ? 'TEFAS' : a.market,
-      assetClass: isFund ? 'fund' : a.asset_class,
-      currency: a.currency,
-      sector: a.sector || tefasFallback?.sector || '',
-      latestPrice,
-      latestDate: p?.latest_date || null,
-      openPrice,
-      dailyChangePercent,
-      high52w: p?.high_52w != null ? Number(p.high_52w) : null,
-      low52w: p?.low_52w != null ? Number(p.low_52w) : null,
-      volume: p?.volume != null ? Number(p.volume) : null,
-      rsi14: p?.rsi_14 != null ? Number(p.rsi_14) : null,
+      return {
+        id: a.id,
+        symbol: a.symbol,
+        name: a.name || tefasFallback?.name || a.symbol,
+        market: isFund ? 'TEFAS' : a.market,
+        assetClass: isFund ? 'fund' : a.asset_class,
+        currency: a.currency,
+        sector: a.sector || tefasFallback?.sector || '',
+        latestPrice,
+        latestDate: p?.latest_date || null,
+        openPrice,
+        dailyChangePercent,
+        high52w: p?.high_52w != null ? Number(p.high_52w) : null,
+        low52w: p?.low_52w != null ? Number(p.low_52w) : null,
+        volume: p?.volume != null ? Number(p.volume) : null,
+        rsi14: p?.rsi_14 != null ? Number(p.rsi_14) : null,
+      };
+    });
+
+    serverCatalogCache = {
+      catalog,
+      priceMap,
+      timestamp: now,
     };
-  });
 
-  serverCatalogCache = {
-    catalog,
-    priceMap,
-    timestamp: now,
-  };
-
-  return serverCatalogCache;
+    return serverCatalogCache;
+  } catch (err) {
+    if (serverCatalogCache) {
+      console.warn('Pagination failed, serving previous stale catalog cache:', err);
+      return serverCatalogCache;
+    }
+    throw err;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -189,10 +198,11 @@ export async function GET(request: NextRequest) {
 
       const hasValidPrice = priceInfo.latest_price != null && !isNaN(Number(priceInfo.latest_price)) && Number(priceInfo.latest_price) > 0;
       const latestPrice = hasValidPrice ? Number(priceInfo.latest_price) : null;
-      const openPrice = priceInfo.open != null && !isNaN(Number(priceInfo.open)) ? Number(priceInfo.open) : latestPrice;
+      const hasValidOpen = priceInfo.open != null && !isNaN(Number(priceInfo.open)) && Number(priceInfo.open) > 0;
+      const openPrice = hasValidOpen ? Number(priceInfo.open) : null;
       const dailyChange = (latestPrice !== null && openPrice !== null && openPrice > 0)
-        ? ((latestPrice - openPrice) / openPrice) * 100
-        : 0;
+        ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
+        : null;
 
       const isFund = asset.market === 'TEFAS' || asset.asset_class === 'fund' || Boolean(tefasFallback);
 
@@ -213,7 +223,7 @@ export async function GET(request: NextRequest) {
         latestPrice,
         latestDate: priceInfo.latest_date || null,
         openPrice,
-        dailyChangePercent: Number(dailyChange.toFixed(2)),
+        dailyChangePercent: dailyChange,
         high52w: priceInfo.high_52w != null ? Number(priceInfo.high_52w) : null,
         low52w: priceInfo.low_52w != null ? Number(priceInfo.low_52w) : null,
         volume: priceInfo.volume != null ? Number(priceInfo.volume) : null,
@@ -243,6 +253,14 @@ export async function POST(request: NextRequest) {
     const authSupabase = getAuthenticatedSupabase(request);
     const serverSupabase = getServerSupabase();
     const { data: { user } } = await authSupabase.auth.getUser();
+
+    // 1. Strict Auth Guard: Reject unauthenticated private requests immediately before any catalog operations
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
+        { status: 401 }
+      );
+    }
 
     const body = await request.json();
     let { assetId, symbol, notes, alertAbove, alertBelow } = body;
@@ -417,14 +435,6 @@ export async function POST(request: NextRequest) {
 
     if (!assetId) {
       return NextResponse.json({ error: 'assetId veya geçerli bir symbol gereklidir' }, { status: 400 });
-    }
-
-    // Unauthenticated requests cannot execute private database mutations
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Giriş yapmanız gerekmektedir (Authentication required)' },
-        { status: 401 }
-      );
     }
 
     // Check if item already exists for this authenticated user (evaluates auth.uid() in RLS)

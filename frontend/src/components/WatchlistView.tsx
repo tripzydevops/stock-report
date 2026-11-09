@@ -21,7 +21,7 @@ export interface WatchlistItemData {
   latestPrice: number | null;
   latestDate?: string | null;
   openPrice: number | null;
-  dailyChangePercent: number;
+  dailyChangePercent: number | null;
   high52w?: number | null;
   low52w?: number | null;
   volume?: number | null;
@@ -40,7 +40,7 @@ export interface CatalogAsset {
   latestPrice?: number | null;
   latestDate?: string | null;
   openPrice?: number | null;
-  dailyChangePercent?: number;
+  dailyChangePercent?: number | null;
   high52w?: number | null;
   low52w?: number | null;
   volume?: number | null;
@@ -154,15 +154,17 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
           const isFund = match?.market === 'TEFAS' || match?.assetClass === 'fund' || item.market === 'TEFAS' || item.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ', 'KLU', 'NRK', 'YLY', 'ZPE', 'AFT', 'YAY', 'TCD', 'BIO', 'IHK', 'HKH', 'IDH', 'IIH', 'TAU', 'GMR', 'ST1', 'KRS', 'IPB'].includes(cleanSym);
 
+          // Strict Provenance: Only adopt observed prices and dates directly from the server catalog.
+          // Zero legacy fallback: previous unproven hardcoded numbers in guest localStorage are discarded.
           const latestPrice = (match?.latestPrice !== undefined && match.latestPrice !== null && match.latestPrice > 0)
             ? match.latestPrice
-            : (item.latestPrice !== null && item.latestPrice !== undefined && item.latestPrice > 0 ? item.latestPrice : null);
-          const openPrice = match?.openPrice !== undefined && match.openPrice !== null
+            : null;
+          const openPrice = (match?.openPrice !== undefined && match.openPrice !== null && match.openPrice > 0)
             ? match.openPrice
-            : (item.openPrice !== null && item.openPrice !== undefined ? item.openPrice : latestPrice);
+            : null;
           const dailyChange = (latestPrice !== null && openPrice !== null && openPrice > 0)
             ? Number((((latestPrice - openPrice) / openPrice) * 100).toFixed(2))
-            : (match?.dailyChangePercent ?? item.dailyChangePercent ?? 0);
+            : (match?.dailyChangePercent ?? null);
 
           return {
             ...item,
@@ -173,13 +175,13 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             currency: match?.currency || item.currency || 'TRY',
             sector: match?.sector || item.sector || '',
             latestPrice,
-            latestDate: match?.latestDate || item.latestDate || null,
+            latestDate: match?.latestDate || null,
             openPrice,
             dailyChangePercent: dailyChange,
-            high52w: match?.high52w ?? item.high52w ?? null,
-            low52w: match?.low52w ?? item.low52w ?? null,
-            volume: match?.volume ?? item.volume ?? null,
-            rsi14: match?.rsi14 ?? item.rsi14 ?? null,
+            high52w: match?.high52w ?? null,
+            low52w: match?.low52w ?? null,
+            volume: match?.volume ?? null,
+            rsi14: match?.rsi14 ?? null,
           };
         });
 
@@ -236,7 +238,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         const latestPrice = (found?.latestPrice !== undefined && found.latestPrice !== null && found.latestPrice > 0)
           ? found.latestPrice
           : null;
-        const openPrice = found?.openPrice !== undefined && found.openPrice !== null ? found.openPrice : latestPrice;
+        const openPrice = (found?.openPrice !== undefined && found.openPrice !== null && found.openPrice > 0) ? found.openPrice : null;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${cleanSym}`,
           assetId: found?.id || `asset_${cleanSym}`,
@@ -250,7 +252,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           latestPrice,
           latestDate: found?.latestDate || null,
           openPrice,
-          dailyChangePercent: found?.dailyChangePercent || 0,
+          dailyChangePercent: found?.dailyChangePercent ?? null,
           high52w: found?.high52w || null,
           low52w: found?.low52w || null,
           volume: found?.volume || null,
@@ -338,7 +340,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         const latestPrice = (selectedAssetForAdd.latestPrice !== undefined && selectedAssetForAdd.latestPrice !== null && selectedAssetForAdd.latestPrice > 0)
           ? selectedAssetForAdd.latestPrice
           : null;
-        const openPrice = selectedAssetForAdd.openPrice !== undefined && selectedAssetForAdd.openPrice !== null ? selectedAssetForAdd.openPrice : latestPrice;
+        const openPrice = (selectedAssetForAdd.openPrice !== undefined && selectedAssetForAdd.openPrice !== null && selectedAssetForAdd.openPrice > 0) ? selectedAssetForAdd.openPrice : null;
         const newItem: WatchlistItemData = {
           id: `guest_${Date.now()}_${selectedAssetForAdd.symbol}`,
           assetId: selectedAssetForAdd.id,
@@ -355,7 +357,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           latestPrice,
           latestDate: selectedAssetForAdd.latestDate || null,
           openPrice,
-          dailyChangePercent: selectedAssetForAdd.dailyChangePercent || 0,
+          dailyChangePercent: selectedAssetForAdd.dailyChangePercent ?? null,
           high52w: selectedAssetForAdd.high52w || null,
           low52w: selectedAssetForAdd.low52w || null,
           volume: selectedAssetForAdd.volume || null,
@@ -482,7 +484,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           const latestPrice = (found?.latestPrice !== undefined && found.latestPrice !== null && found.latestPrice > 0)
             ? found.latestPrice
             : null;
-          const openPrice = found?.openPrice !== undefined && found.openPrice !== null ? found.openPrice : latestPrice;
+          const openPrice = found?.openPrice !== undefined && found.openPrice !== null ? found.openPrice : null;
 
           return {
             id: `guest_pack_${Date.now()}_${idx}_${cleanSym}`,
@@ -497,7 +499,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             latestPrice,
             latestDate: found?.latestDate || null,
             openPrice,
-            dailyChangePercent: found?.dailyChangePercent || 0,
+            dailyChangePercent: found?.dailyChangePercent ?? null,
             high52w: found?.high52w || null,
             low52w: found?.low52w || null,
             volume: found?.volume || null,
@@ -576,8 +578,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           valA = a.symbol;
           valB = b.symbol;
         } else if (sortField === 'change') {
-          valA = a.dailyChangePercent;
-          valB = b.dailyChangePercent;
+          valA = a.dailyChangePercent ?? -9999;
+          valB = b.dailyChangePercent ?? -9999;
         } else if (sortField === 'price') {
           valA = a.latestPrice ?? -1;
           valB = b.latestPrice ?? -1;
@@ -592,10 +594,14 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   // Aggregate stats
   const stats = useMemo(() => {
     const totalCount = items.length;
-    if (totalCount === 0) return { totalCount: 0, avgChange: 0, topGainer: null, activeAlertsCount: 0 };
+    if (totalCount === 0) return { totalCount: 0, avgChange: null, topGainer: null, activeAlertsCount: 0 };
 
-    const avgChange = items.reduce((acc, i) => acc + (i.dailyChangePercent || 0), 0) / totalCount;
-    const sortedByGain = [...items].sort((a, b) => b.dailyChangePercent - a.dailyChangePercent);
+    const itemsWithChange = items.filter(i => i.dailyChangePercent !== null && i.dailyChangePercent !== undefined);
+    const avgChange = itemsWithChange.length > 0
+      ? itemsWithChange.reduce((acc, i) => acc + (i.dailyChangePercent as number), 0) / itemsWithChange.length
+      : null;
+
+    const sortedByGain = [...itemsWithChange].sort((a, b) => (b.dailyChangePercent as number) - (a.dailyChangePercent as number));
     const topGainer = sortedByGain[0] || null;
     const activeAlertsCount = items.filter(i => i.alertAbove || i.alertBelow).length;
 
@@ -614,7 +620,12 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   };
 
   // Sparkline micro-path generator
-  const renderSparkline = (changePct: number) => {
+  const renderSparkline = (changePct: number | null) => {
+    if (changePct === null || changePct === undefined) {
+      return (
+        <span className="w-14 text-center text-slate-300 dark:text-slate-600 text-xs font-mono font-bold">-</span>
+      );
+    }
     const isPositive = changePct >= 0;
     const color = isPositive ? '#10b981' : '#ef4444';
     const points = isPositive
@@ -814,8 +825,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
               <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 block">
                 {language === 'tr' ? 'Ortalama Günlük Fark' : 'Average 1D Change'}
               </span>
-              <span className={`text-base sm:text-lg font-black font-mono ${stats.avgChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                {stats.avgChange >= 0 ? '+' : ''}{stats.avgChange.toFixed(2)}%
+              <span className={`text-base sm:text-lg font-black font-mono ${stats.avgChange === null ? 'text-slate-500 dark:text-slate-400' : stats.avgChange >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                {stats.avgChange === null ? '-' : `${stats.avgChange >= 0 ? '+' : ''}${stats.avgChange.toFixed(2)}%`}
               </span>
             </div>
 
@@ -827,9 +838,9 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                   {stats.topGainer ? stats.topGainer.symbol.replace('.IS', '') : '-'}
                 </span>
-                {stats.topGainer && (
+                {stats.topGainer && stats.topGainer.dailyChangePercent !== null && (
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                    +{stats.topGainer.dailyChangePercent.toFixed(1)}%
+                    {stats.topGainer.dailyChangePercent >= 0 ? '+' : ''}{stats.topGainer.dailyChangePercent.toFixed(1)}%
                   </span>
                 )}
               </div>
@@ -1010,7 +1021,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       {viewMode === 'cards' && filteredItems.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {filteredItems.map(item => {
-            const isPositive = item.dailyChangePercent >= 0;
+            const isPositive = item.dailyChangePercent !== null && item.dailyChangePercent >= 0;
             const cleanSym = item.symbol.replace('.IS', '');
             const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
             const isEtf = item.assetClass === 'etf';
@@ -1070,15 +1081,21 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                     )}
                     <div className="flex items-center justify-end gap-1.5 mt-0.5">
                       {renderSparkline(item.dailyChangePercent)}
-                      <span
-                        className={`text-xs font-black px-2 py-0.5 rounded-lg font-mono ${
-                          isPositive
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
-                        }`}
-                      >
-                        {isPositive ? '+' : ''}{item.dailyChangePercent.toFixed(2)}%
-                      </span>
+                      {item.dailyChangePercent !== null ? (
+                        <span
+                          className={`text-xs font-black px-2 py-0.5 rounded-lg font-mono ${
+                            isPositive
+                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                          }`}
+                        >
+                          {isPositive ? '+' : ''}{item.dailyChangePercent.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-lg font-mono bg-slate-100 dark:bg-slate-800 text-slate-400">
+                          -
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1227,7 +1244,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
                 {filteredItems.map(item => {
-                  const isPositive = item.dailyChangePercent >= 0;
+                  const isPositive = item.dailyChangePercent !== null && item.dailyChangePercent >= 0;
                   const cleanSym = item.symbol.replace('.IS', '');
                   const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
                   const isEtf = item.assetClass === 'etf';
@@ -1268,15 +1285,21 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           {renderSparkline(item.dailyChangePercent)}
-                          <span
-                            className={`font-black font-mono px-2 py-0.5 rounded-lg text-xs ${
-                              isPositive
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                                : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
-                            }`}
-                          >
-                            {isPositive ? '+' : ''}{item.dailyChangePercent.toFixed(2)}%
-                          </span>
+                          {item.dailyChangePercent !== null ? (
+                            <span
+                              className={`font-black font-mono px-2 py-0.5 rounded-lg text-xs ${
+                                isPositive
+                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                  : 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                              }`}
+                            >
+                              {isPositive ? '+' : ''}{item.dailyChangePercent.toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="font-medium font-mono px-2 py-0.5 rounded-lg text-xs bg-slate-100 dark:bg-slate-800 text-slate-400">
+                              -
+                            </span>
+                          )}
                         </div>
                       </td>
 
