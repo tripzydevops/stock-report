@@ -171,6 +171,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
           ? Array.from(new Set([...stored, signal.symbol])) 
           : stored.filter((s: string) => s !== signal.symbol);
         localStorage.setItem('marketpulse_guest_starred_tickers', JSON.stringify(updatedTickers));
+        window.dispatchEvent(new CustomEvent('marketpulse:watchlist-updated', { detail: { symbol: signal.symbol } }));
       }
     } catch (err) {
       console.error('Star toggle error:', err);

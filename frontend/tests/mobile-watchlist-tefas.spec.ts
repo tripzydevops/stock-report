@@ -115,12 +115,37 @@ test.describe('Watchlist TEFAS Real Prices & Badges', () => {
     const bistTab = page.locator('button:has-text("BIST Hisseleri")');
     await expect(bistTab).toContainText('0');
 
-    // Take screenshot for visual validation artifact
+    // 3. Test Speed Add: Click the BIST 30 speed-add pill button
+    const bistSpeedAddBtn = page.locator('button:has-text("BIST 30")').first();
+    await expect(bistSpeedAddBtn).toBeVisible({ timeout: 5000 });
+    await bistSpeedAddBtn.click();
+
+    // Verify feedback message appears
+    const feedbackToast = page.locator('text=/BIST 30 koleksiyonu eklendi/i').first();
+    await expect(feedbackToast).toBeVisible({ timeout: 5000 });
+
+    // Verify BIST Hisseleri tab now shows 5
+    await expect(bistTab).toContainText('5');
+
+    // 4. Test Speed Add: Click the ABD Devleri (US) speed-add pill button
+    const usSpeedAddBtn = page.locator('button:has-text("ABD Devleri")').first();
+    await expect(usSpeedAddBtn).toBeVisible({ timeout: 5000 });
+    await usSpeedAddBtn.click();
+
+    // Verify US tab now shows 5
+    const usTab = page.locator('button:has-text("ABD Hisse")');
+    await expect(usTab).toContainText('5');
+
+    // Verify All tab now shows 15 (5 TEFAS + 5 BIST + 5 US)
+    const allTab = page.locator('button:has-text("Tümü")');
+    await expect(allTab).toContainText('15');
+
+    // Take screenshot for visual validation artifact showing all speed-added collections
     await page.screenshot({
-      path: path.join(ARTIFACTS_DIR, 'verified_watchlist_tefas.png'),
+      path: path.join(ARTIFACTS_DIR, 'verified_speed_add_all_packs.png'),
       fullPage: true,
     });
 
-    console.log('Screenshot successfully saved to verified_watchlist_tefas.png');
+    console.log('Screenshot successfully saved to verified_speed_add_all_packs.png');
   });
 });

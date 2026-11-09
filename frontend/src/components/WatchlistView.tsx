@@ -102,6 +102,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const [addAlertAbove, setAddAlertAbove] = useState('');
   const [addAlertBelow, setAddAlertBelow] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   // Quick Note / Alert Edit State
   const [editingItem, setEditingItem] = useState<WatchlistItemData | null>(null);
@@ -200,19 +201,24 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
     try {
       setIsQuickAdding(true);
+      const cleanSym = sym.replace('.IS', '');
       if (isGuest) {
-        const cleanSym = sym.replace('.IS', '');
-        const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === cleanSym);
+        const found = catalog.find(
+          c => c.symbol.toUpperCase() === sym || 
+               c.symbol.toUpperCase() === `${cleanSym}.IS` ||
+               c.symbol.toUpperCase().replace('.IS', '') === cleanSym
+        );
         const isFund = found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
+        const targetSymbol = found?.symbol || (found?.market === 'BIST' ? `${cleanSym}.IS` : sym);
         const latestPrice = found?.latestPrice || 0;
         const openPrice = found?.openPrice || latestPrice;
         const newItem: WatchlistItemData = {
-          id: `guest_${Date.now()}_${sym}`,
-          assetId: found?.id || `asset_${sym}`,
-          symbol: sym,
+          id: `guest_${Date.now()}_${cleanSym}`,
+          assetId: found?.id || `asset_${cleanSym}`,
+          symbol: targetSymbol,
           name: found?.name || sym,
           assetClass: isFund ? 'fund' : (found?.assetClass || 'stock'),
-          market: isFund ? 'TEFAS' : ((found?.market as any) || 'BIST'),
+          market: isFund ? 'TEFAS' : ((found?.market as any) || (found?.currency === 'USD' ? 'US' : 'BIST')),
           currency: (found?.currency as any) || (found?.market === 'US' ? 'USD' : 'TRY'),
           sector: found?.sector || '',
           addedAt: new Date().toISOString(),
@@ -224,10 +230,12 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           volume: found?.volume || null,
           rsi14: found?.rsi14 || null,
         };
-        const updated = [newItem, ...items.filter(i => i.symbol !== sym)];
+        const updated = [newItem, ...items.filter(i => i.symbol.toUpperCase().replace('.IS', '') !== cleanSym)];
         setItems(updated);
         saveGuestItems(updated);
         setQuickAddSymbol('');
+        setFeedbackMsg(language === 'tr' ? `✓ ${cleanSym} takip listesine eklendi` : `✓ ${cleanSym} added to watchlist`);
+        setTimeout(() => setFeedbackMsg(null), 3000);
       } else {
         const res = await fetch('/api/watchlist', {
           method: 'POST',
@@ -238,6 +246,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
         if (res.ok) {
           setQuickAddSymbol('');
           await fetchData();
+          setFeedbackMsg(language === 'tr' ? `✓ ${cleanSym} takip listesine eklendi` : `✓ ${cleanSym} added to watchlist`);
+          setTimeout(() => setFeedbackMsg(null), 3000);
         } else {
           const data = await res.json();
           alert(data.error || 'Varlık bulunamadı');
@@ -404,20 +414,26 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     if (packType === 'TEFAS') symbolsToFind = ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'];
     if (packType === 'US') symbolsToFind = ['NVDA', 'AAPL', 'SPY', 'QQQ', 'MSFT'];
 
+    const packName = packType === 'BIST' ? 'BIST 30' : packType === 'TEFAS' ? 'TEFAS Fonlar' : 'ABD Devleri';
     setIsSubmitting(true);
     try {
       if (isGuest) {
         const newGuestItems: WatchlistItemData[] = symbolsToFind.map((sym, idx) => {
           const cleanSym = sym.toUpperCase().replace('.IS', '');
-          const found = catalog.find(c => c.symbol.toUpperCase() === sym || c.symbol.toUpperCase().replace('.IS', '') === cleanSym);
+          const found = catalog.find(
+            c => c.symbol.toUpperCase() === sym || 
+                 c.symbol.toUpperCase() === `${cleanSym}.IS` || 
+                 c.symbol.toUpperCase().replace('.IS', '') === cleanSym
+          );
           const isFund = packType === 'TEFAS' || found?.market === 'TEFAS' || found?.assetClass === 'fund' || ['ZBJ', 'TI2', 'TTE', 'MAC', 'PPZ'].includes(cleanSym);
+          const targetSymbol = found?.symbol || (packType === 'BIST' ? `${cleanSym}.IS` : cleanSym);
           const latestPrice = found?.latestPrice || 0;
           const openPrice = found?.openPrice || latestPrice;
 
           return {
-            id: `guest_pack_${Date.now()}_${idx}_${sym}`,
-            assetId: found?.id || `asset_${sym}`,
-            symbol: sym,
+            id: `guest_pack_${Date.now()}_${idx}_${cleanSym}`,
+            assetId: found?.id || `asset_${cleanSym}`,
+            symbol: targetSymbol,
             name: found?.name || sym,
             assetClass: isFund ? 'fund' : (found?.assetClass || 'stock'),
             market: isFund ? 'TEFAS' : ((found?.market as any) || packType),
@@ -433,22 +449,39 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             rsi14: found?.rsi14 || null,
           };
         });
-        const existingSymbols = new Set(items.map(i => i.symbol));
-        const updated = [...newGuestItems.filter(i => !existingSymbols.has(i.symbol)), ...items];
+
+        const existingCleanSymbols = new Set(items.map(i => i.symbol.toUpperCase().replace('.IS', '')));
+        const toAdd = newGuestItems.filter(i => !existingCleanSymbols.has(i.symbol.toUpperCase().replace('.IS', '')));
+
+        if (toAdd.length === 0) {
+          setFeedbackMsg(language === 'tr' ? `ℹ️ ${packName} paketindeki varlıklar zaten listenizde ekli.` : `ℹ️ All assets in ${packName} are already in your watchlist.`);
+          setTimeout(() => setFeedbackMsg(null), 3000);
+          return;
+        }
+
+        const updated = [...toAdd, ...items];
         setItems(updated);
         saveGuestItems(updated);
+
+        setFeedbackMsg(language === 'tr' ? `✓ ${packName} koleksiyonu eklendi (+${toAdd.length} yeni varlık)` : `✓ ${packName} pack added (+${toAdd.length} assets)`);
+        setTimeout(() => setFeedbackMsg(null), 3000);
       } else {
-        for (const sym of symbolsToFind) {
-          await fetch('/api/watchlist', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ symbol: sym, userId: user.id }),
-          });
-        }
+        await Promise.all(
+          symbolsToFind.map(sym =>
+            fetch('/api/watchlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ symbol: sym, userId: user.id }),
+            })
+          )
+        );
         await fetchData();
+        setFeedbackMsg(language === 'tr' ? `✓ ${packName} koleksiyonu eklendi` : `✓ ${packName} pack added`);
+        setTimeout(() => setFeedbackMsg(null), 3000);
       }
     } catch (err) {
       console.error('Starter pack add error:', err);
+      alert('Koleksiyon eklenirken hata oluştu');
     } finally {
       setIsSubmitting(false);
     }
@@ -648,6 +681,57 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             {isQuickAdding ? (language === 'tr' ? 'Ekleniyor...' : 'Adding...') : (language === 'tr' ? '+ Hızlı Ekle' : '+ Add')}
           </button>
         </form>
+
+        {/* Quick Starter Pack Pills (Always accessible for 1-click addition) */}
+        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1">
+            <span>⚡</span>
+            <span>{language === 'tr' ? 'Hızlı Koleksiyonlar:' : 'Quick Packs:'}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => handleAddStarterPack('BIST')}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-xl bg-white hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-300 hover:text-blue-600 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer whitespace-nowrap active:scale-95 shadow-2xs disabled:opacity-50"
+          >
+            <span>🇹🇷</span>
+            <span>BIST 30</span>
+            <span className="text-[10px] text-slate-400 font-normal">({items.filter(i => (i.market === 'BIST' && i.assetClass !== 'fund')).length}/5)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddStarterPack('TEFAS')}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-xl bg-white hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-300 hover:text-blue-600 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer whitespace-nowrap active:scale-95 shadow-2xs disabled:opacity-50"
+          >
+            <span>🏦</span>
+            <span>TEFAS Fonlar</span>
+            <span className="text-[10px] text-slate-400 font-normal">({items.filter(i => i.market === 'TEFAS' || i.assetClass === 'fund').length}/5)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddStarterPack('US')}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-xl bg-white hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-300 hover:text-blue-600 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer whitespace-nowrap active:scale-95 shadow-2xs disabled:opacity-50"
+          >
+            <span>🇺🇸</span>
+            <span>ABD Devleri</span>
+            <span className="text-[10px] text-slate-400 font-normal">({items.filter(i => i.market === 'US').length}/5)</span>
+          </button>
+        </div>
+
+        {/* Feedback Message Banner */}
+        {feedbackMsg && (
+          <div className="mt-2.5 py-1.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-1">
+            <span>{feedbackMsg}</span>
+            <button
+              onClick={() => setFeedbackMsg(null)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-2 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Aggregate Metrics Ribbon */}
         {items.length > 0 && (
