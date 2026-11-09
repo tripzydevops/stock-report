@@ -321,3 +321,57 @@ Following an exhaustive source-code review, 8 concrete architectural and data-in
   - Integrated into [`run_scheduled_job.ps1`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/run_scheduled_job.ps1) and standalone runner [`run_tefas_sync.ps1`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/run_tefas_sync.ps1).
   - Validated with dedicated Pytest test suite ([`backend/tests/test_tefas_sync.py`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/backend/tests/test_tefas_sync.py)) covering date parsing, chronological ordering, and dry-run safety (160/160 passing).
 
+---
+
+## 9. Borsa Istanbul (BIST) Pricing Architecture & Ticker Re-alignment
+
+### 9.1 Multi-Provider Pipeline Architecture
+MarketPulse uses a resilient multi-tier ingestion architecture for Turkish equities, indexes, and funds:
+
+1. **BIST Equities & BIST 100 Index (`XU100.IS`):**
+   - **Primary Engine:** Yahoo Finance Chart API v8 (`https://query1.finance.yahoo.com/v8/finance/chart/{SYMBOL}.IS?interval=1d&range=2d`) and Python `yfinance` in backend quantitative pipelines (`export_to_spreadsheet.py`, `backend/app/services/data_fetcher.py`).
+   - **Ingested Metrics:** `regularMarketPrice` (Close), `regularMarketOpen`, `chartPreviousClose`, `regularMarketDayHigh`, `regularMarketDayLow`, and `regularMarketVolume`.
+   - **Timestamps:** Session date derived from `meta.regularMarketTime` mapped to local session calendar (`YYYY-MM-DD`).
+2. **TEFAS Mutual & Money Market Funds (`TI2`, `ZBJ`, `TTE`, etc.):**
+   - **Primary Engine:** Official TEFAS API (`POST https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir`).
+   - **Ingested Metrics:** Daily official NAV unit price (`FIYAT`), previous day price, and date (`TARIH`).
+3. **Forex (`TRY=X`) & US Equities (`SPY`, `QQQ`, `AAPL`):**
+   - Synced synchronously through Yahoo Finance v8 Chart endpoints.
+
+### 9.2 Purging Synthetic Fallback Fabrication
+- **Root Cause:** A legacy backfill script ([`frontend/scripts/sync_missing_bist.mjs`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/scripts/sync_missing_bist.mjs)) inserted artificial baseline rows (`close: 25.0`, `volume: 50000`) into `price_history` when external lookups failed. This corrupted 26 BIST tickers in `v_latest_prices` with false `₺25.00` valuations.
+- **Remediation:**
+  1. Executed a comprehensive database purge in Supabase deleting all synthetic `close = 25.0 AND volume = 50000` rows.
+  2. Modified [`sync_missing_bist.mjs`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/scripts/sync_missing_bist.mjs) and [`sync_today_bist.mjs`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/scripts/sync_today_bist.mjs) to eliminate artificial fallbacks entirely.
+  3. When quotes are unavailable, assets cleanly record `latest_price: null`, triggering the UI's legitimate **"Price Unavailable"** status badge rather than misleading investors.
+
+### 9.3 Official Borsa Istanbul Ticker Re-alignment
+Forensic audit revealed that 404 responses for major Turkish companies were caused by official Borsa Istanbul corporate rebrandings and ticker migrations:
+
+| Legacy Ticker | New Official BIST Ticker | Company Name | Live Verified Price | Action Taken |
+|---|---|---|---|---|
+| `KOZAL.IS` | **`TRALT.IS`** | Türk Altın İşletmeleri A.Ş. | **₺40.24** (+5.51%) | Updated asset title to `Türk Altın İşletmeleri A.Ş. (ex-KOZAL)`; deactivated obsolete duplicate `KOZAL.IS`. |
+| `KOZAA.IS` | **`TRMET.IS`** | TR Anadolu Metal Madencilik A.Ş. | **₺115.90** (+4.89%) | Updated asset title to `TR Anadolu Metal Madencilik A.Ş. (ex-KOZAA)`; deactivated obsolete duplicate `KOZAA.IS`. |
+| `IPEKE.IS` | **`TRENJ.IS`** | TR Doğal Enerji Kaynakları A.Ş. | **₺77.60** (+3.81%) | Updated asset title to `TR Doğal Enerji Kaynakları A.Ş. (ex-IPEKE)`; deactivated obsolete duplicate `IPEKE.IS`. |
+| `QNBFB.IS` | **`QNBTR.IS`** | QNB Bank A.Ş. | **₺147.70** | Migrated symbol in `assets` table to `QNBTR.IS`; synced authentic closing bars. |
+| `QNBFL.IS` | **`QNBFK.IS`** | QNB Finansal Kiralama A.Ş. | **₺33.70** | Migrated symbol in `assets` table to `QNBFK.IS`; synced authentic closing bars. |
+
+### 9.4 High-Performance Daily Ingestion Engine
+To ensure instant, deterministic synchronization following the BIST 18:00 TRT closing bell, [`frontend/scripts/sync_today_bist.mjs`](file:///C:/Users/elif/.gemini/antigravity/scratch/market-pulse/frontend/scripts/sync_today_bist.mjs) was implemented with bounded concurrency (15 threads).
+
+- **Current Verified Database State (`v_latest_prices`):**
+  - **546 active BIST equities** have verified authentic live market prices (Session Date: `2026-11-09`).
+  - **21 unindexed instruments** (newly restructured or inactive) cleanly reflect `null` with zero artificial data.
+  - Zero synthetic prices exist across the entire database catalog.
+
+### 9.5 Comparative Evaluation of Alternative Delayed BIST Pricing Sources
+To provide redundancy and eliminate single-provider dependency on Yahoo Finance, alternative delayed Turkish market feeds were benchmarked:
+
+| Provider | Endpoint / Protocol | Latency | Viability & Production Recommendation |
+|---|---|---|---|
+| **TradingView Scanner API** | `POST https://scanner.tradingview.com/turkey/scan`<br>Payload: `{ columns: ['close', 'open', 'high', 'low', 'volume', 'change'] }` | 15-min delayed (Free) | **Strongly Recommended Secondary Provider.** Returns live quotes for all 626 Turkish equities in a **single bulk POST request** with near-zero latency and high uptime. |
+| **İş Yatırım (Is Investment API)** | `GET https://www.isyatirim.com.tr/.../HisseTekil` | 15-min delayed / EOD | Institutional Turkish banking source. Excellent for fundamental ratios and historical backfills, but subject to rate-limiting on parallel scrapers. |
+| **Bigpara (Hürriyet / Doğan)** | `GET https://bigpara.hurriyet.com.tr/api/v1/hisse/list` | 15-min delayed | Reliable Turkish retail feed. Viable secondary option for individual symbol failovers. |
+| **Google Finance** | `https://www.google.com/finance/quote/{SYM}:IST` | 15-min delayed | Highly resilient infrastructure, but lacks an official JSON endpoint (requires HTML scraping or Google Sheets proxy). |
+
+

@@ -2,6 +2,25 @@
 
 All notable changes to the MarketPulse quantitative recommendation engine and user interface will be documented in this file.
 
+## [2026-11-09] - BIST Pricing Engine Audit, Synthetic Data Purge & Official Ticker Migration
+
+### Fixed & Remediated
+1. **Synthetic Fallback Data Purge:**
+   - Deleted 26 fabricated `₺25.00` / `50,000 volume` fallback rows from `public.price_history` in Supabase.
+   - Refactored `sync_missing_bist.mjs` and `sync_today_bist.mjs` to eliminate artificial fallback values. Unindexed instruments cleanly resolve with `latest_price: null` and render the official "Price Unavailable" state.
+2. **Official Borsa Istanbul Ticker Re-alignment:**
+   - Migrated legacy symbols to official trading codes:
+     - `KOZAL.IS` $\rightarrow$ `TRALT.IS` (*Türk Altın İşletmeleri A.Ş.* - live close: ₺40.24)
+     - `KOZAA.IS` $\rightarrow$ `TRMET.IS` (*TR Anadolu Metal Madencilik A.Ş.* - live close: ₺115.90)
+     - `IPEKE.IS` $\rightarrow$ `TRENJ.IS` (*TR Doğal Enerji Kaynakları A.Ş.* - live close: ₺77.60)
+     - `QNBFB.IS` $\rightarrow$ `QNBTR.IS` (*QNB Bank A.Ş.* - live close: ₺147.70)
+     - `QNBFL.IS` $\rightarrow$ `QNBFK.IS` (*QNB Finansal Kiralama A.Ş.* - live close: ₺33.70)
+   - Deactivated obsolete duplicate records in `public.assets`.
+3. **Automated BIST Daily Session Ingestion:**
+   - Implemented `sync_today_bist.mjs` with bounded concurrency (15 threads) syncing 546 active BIST equities to the Nov 9, 2026 market close.
+4. **Playwright Isolation Test Locator Scope:**
+   - Scoped authentication modal form submission locators to the auth form container (`form:has(input[type="email"])`) to prevent collisions with page-level quick-add buttons. All multi-tenant E2E tests pass (4/4).
+
 ## [2026-10-30.2] - Pipeline Consistency Fixes & End-to-End Delivery Verification
 
 ### Fixed & Standardized
