@@ -367,11 +367,29 @@ To ensure instant, deterministic synchronization following the BIST 18:00 TRT cl
 ### 9.5 Comparative Evaluation of Alternative Delayed BIST Pricing Sources
 To provide redundancy and eliminate single-provider dependency on Yahoo Finance, alternative delayed Turkish market feeds were benchmarked:
 
-| Provider | Endpoint / Protocol | Latency | Viability & Production Recommendation |
+| Provider | Endpoint / Protocol | Latency | Viability & Production Status |
 |---|---|---|---|
-| **TradingView Scanner API** | `POST https://scanner.tradingview.com/turkey/scan`<br>Payload: `{ columns: ['close', 'open', 'high', 'low', 'volume', 'change'] }` | 15-min delayed (Free) | **Strongly Recommended Secondary Provider.** Returns live quotes for all 626 Turkish equities in a **single bulk POST request** with near-zero latency and high uptime. |
+| **TradingView Scanner API** | `POST https://scanner.tradingview.com/turkey/scan`<br>Payload: `{ columns: ['close', 'open', 'high', 'low', 'volume', 'change', 'change_abs'] }` | 15-min delayed (Free) | **Active Production Fallback.** Ingests quotes for all 626 Turkish equities in a single batch or single symbol query without authentication or rate limits. Fully integrated across frontend and backend. |
 | **İş Yatırım (Is Investment API)** | `GET https://www.isyatirim.com.tr/.../HisseTekil` | 15-min delayed / EOD | Institutional Turkish banking source. Excellent for fundamental ratios and historical backfills, but subject to rate-limiting on parallel scrapers. |
 | **Bigpara (Hürriyet / Doğan)** | `GET https://bigpara.hurriyet.com.tr/api/v1/hisse/list` | 15-min delayed | Reliable Turkish retail feed. Viable secondary option for individual symbol failovers. |
 | **Google Finance** | `https://www.google.com/finance/quote/{SYM}:IST` | 15-min delayed | Highly resilient infrastructure, but lacks an official JSON endpoint (requires HTML scraping or Google Sheets proxy). |
+
+### 9.6 Active Dual-Provider Failover Architecture (TradingView Turkey Scanner)
+To guarantee 100% price ingestion resilience independent of Yahoo Finance, MarketPulse implements an automated dual-provider ingestion pipeline:
+
+1. **Frontend Client & API Layer (`frontend/src/lib/tradingViewScanner.ts`):**
+   - Provides `fetchTradingViewBistQuote(symbol)` and `fetchTradingViewBistQuotesBatch(symbols)`.
+   - Normalizes BIST tickers (`THYAO.IS` $\rightarrow$ `BIST:THYAO`).
+   - Computes previous close (`close - change_abs`) and parses session date.
+   - **`POST /api/sync`:** When Yahoo Finance returns `!res.ok`, empty data, non-finite price, or network failure, automatically falls back to TradingView single-quote query. A secondary bulk sweep also batches all unrecovered BIST symbols into a single TradingView scan request.
+   - **`POST /api/watchlist`:** When adding a new BIST asset, if Yahoo fails to seed the latest quote, TradingView provides the seed quote.
+   - **`sync_today_bist.mjs`:** Standalone daily sync script falls back to TradingView for any symbol where Yahoo v8 Chart fails.
+
+2. **Backend Quantitative Engine (`backend/app/services/data_fetcher.py`):**
+   - Implemented `fetch_bist_prices_tradingview(symbols: List[str]) -> Dict[str, pd.DataFrame]`.
+   - In `fetch_bist_prices()`, checks for any symbols missing or empty from `yf.download()` and executes TradingView scanner batch fallback.
+   - Formats columns to standard OHLCV DataFrames with session datetime indices.
+   - Covered by automated Pytest unit tests in `backend/tests/test_tradingview_fallback.py` (3/3 passing).
+
 
 

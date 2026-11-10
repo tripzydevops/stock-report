@@ -2,6 +2,22 @@
 
 All notable changes to the MarketPulse quantitative recommendation engine and user interface will be documented in this file.
 
+## [2026-11-10] - Dual-Provider BIST Pricing: TradingView Scanner API Automated Failover
+
+### Added & Hardened
+1. **Independent Delayed BIST Pricing Provider (TradingView Turkey Scanner):**
+   - Implemented `frontend/src/lib/tradingViewScanner.ts` querying `POST https://scanner.tradingview.com/turkey/scan` for `BIST:${SYMBOL}` tickers.
+   - Extracts `close`, `open`, `high`, `low`, `volume`, and computes `prevClose = close - change_abs`.
+   - Free, fast 15-minute delayed market feed covering all 626 Borsa Istanbul stocks without API keys or rate limits.
+2. **Multi-Point Ingestion Failover Across Frontend & API:**
+   - **`POST /api/sync`:** If Yahoo Finance returns HTTP errors, empty data, or non-finite prices, automatically falls back to TradingView single-quote query, plus a bulk batch sweep for all remaining unresolved BIST symbols.
+   - **`POST /api/watchlist`:** If Yahoo fails to seed quotes for newly added BIST assets, falls back to TradingView to seed `price_history`.
+   - **`scripts/sync_today_bist.mjs`:** Daily cron sync script automatically fails over to TradingView if Yahoo v8 Chart fails.
+3. **Backend Quantitative Engine Fallback (`data_fetcher.py`):**
+   - Implemented `fetch_bist_prices_tradingview()` in Python with `httpx`.
+   - In `fetch_bist_prices()`, symbols that return empty or missing from `yf.download()` are recovered via batch TradingView scanner scan.
+   - Built dedicated Pytest unit tests in `backend/tests/test_tradingview_fallback.py` (3/3 passing, full test suite 160/160 passing).
+
 ## [2026-11-09] - BIST Pricing Engine Audit, Synthetic Data Purge & Official Ticker Migration
 
 ### Fixed & Remediated

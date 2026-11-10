@@ -60,10 +60,70 @@ def fetch_us_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.Data
         
     return results
 
+def fetch_bist_prices_tradingview(symbols: List[str]) -> Dict[str, pd.DataFrame]:
+    """
+    Fetches delayed BIST price bars from TradingView Turkey Scanner API.
+    Acts as an independent fallback provider when Yahoo Finance fails or returns 404.
+    """
+    results = {}
+    if not symbols:
+        return results
+
+    clean_map = {sym.replace(".IS", "").upper(): sym for sym in symbols}
+    tv_tickers = [f"BIST:{k}" for k in clean_map.keys()]
+
+    url = "https://scanner.tradingview.com/turkey/scan"
+    payload = {
+        "symbols": {"tickers": tv_tickers},
+        "columns": ["close", "open", "high", "low", "volume", "change", "change_abs"]
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json"
+    }
+
+    try:
+        with httpx.Client(timeout=8.0) as client:
+            resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                today = pd.Timestamp.now().normalize()
+                for item in data:
+                    ticker = item.get("s", "").replace("BIST:", "").upper()
+                    vals = item.get("d", [])
+                    if not ticker or not isinstance(vals, list) or len(vals) < 5:
+                        continue
+                    close = vals[0]
+                    if not isinstance(close, (int, float)) or close <= 0:
+                        continue
+                    open_p = vals[1] if isinstance(vals[1], (int, float)) else close
+                    high_p = vals[2] if isinstance(vals[2], (int, float)) else close
+                    low_p = vals[3] if isinstance(vals[3], (int, float)) else close
+                    vol = vals[4] if isinstance(vals[4], (int, float)) else 0
+
+                    df = pd.DataFrame([{
+                        "open": float(open_p),
+                        "high": float(high_p),
+                        "low": float(low_p),
+                        "close": float(close),
+                        "adj_close": float(close),
+                        "volume": int(vol)
+                    }], index=[today])
+                    df = validate_ohlcv_dataframe(df, strict=False)
+
+                    original_sym = clean_map.get(ticker, ticker)
+                    results[original_sym] = df
+    except Exception as e:
+        logger.warning(f"TradingView scanner fallback error for {symbols}: {e}")
+
+    return results
+
 def fetch_bist_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.DataFrame]:
     """
     Fetches daily OHLCV price data for Turkish stocks (BIST).
     Automatically appends .IS if missing.
+    Fails over to TradingView Scanner API if Yahoo Finance fails for any symbols.
     """
     normalized_symbols = [f"{sym}.IS" if not sym.endswith('.IS') else sym for sym in symbols]
     
@@ -98,6 +158,15 @@ def fetch_bist_prices(symbols: List[str], period: str = '1y') -> Dict[str, pd.Da
                     continue
     except Exception as e:
         logger.error(f"Error fetching BIST prices for {symbols}: {str(e)}")
+
+    # TradingView Scanner fallback for any missing or failed symbols
+    missing = [sym for sym in symbols if sym not in results and sym.replace('.IS', '') not in results]
+    if missing:
+        try:
+            tv_results = fetch_bist_prices_tradingview(missing)
+            results.update(tv_results)
+        except Exception as tv_e:
+            logger.warning(f"TradingView fallback error: {tv_e}")
         
     return results
 

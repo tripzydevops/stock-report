@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedSupabase, getServerSupabase } from '@/lib/supabaseServer';
+import { fetchTradingViewBistQuote } from '@/lib/tradingViewScanner';
 
 export const dynamic = 'force-dynamic';
 
@@ -413,6 +414,7 @@ export async function POST(request: NextRequest) {
             }
           } else {
             // Attempt to seed live price from Yahoo Finance preserving actual provider session date and fields
+            let priceSeeded = false;
             try {
               const yfSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
               const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfSym}?interval=1d&range=2d`, {
@@ -437,11 +439,36 @@ export async function POST(request: NextRequest) {
                     high: typeof meta?.regularMarketDayHigh === 'number' ? meta.regularMarketDayHigh : null,
                     low: typeof meta?.regularMarketDayLow === 'number' ? meta.regularMarketDayLow : null,
                     volume: typeof meta?.regularMarketVolume === 'number' ? meta.regularMarketVolume : null,
+                    source: 'yahoo',
+                    observed_at: new Date().toISOString(),
                   }, { onConflict: 'asset_id,date' });
+                  priceSeeded = true;
                 }
               }
             } catch (e) {
-              console.warn('Initial price fetch error:', e);
+              console.warn('Initial price fetch error from Yahoo:', e);
+            }
+
+            // Fallback to TradingView Scanner if Yahoo failed for BIST stocks
+            if (!priceSeeded && market === 'BIST') {
+              try {
+                const tvQuote = await fetchTradingViewBistQuote(cleanSym);
+                if (tvQuote && tvQuote.price > 0) {
+                  await serverSupabase.from('price_history').upsert({
+                    asset_id: assetId,
+                    date: tvQuote.sessionDate,
+                    close: tvQuote.price,
+                    open: tvQuote.open,
+                    high: tvQuote.high,
+                    low: tvQuote.low,
+                    volume: tvQuote.volume,
+                    source: 'tradingview',
+                    observed_at: tvQuote.observedAt,
+                  }, { onConflict: 'asset_id,date' });
+                }
+              } catch (tvErr) {
+                console.warn('TradingView fallback error in watchlist route:', tvErr);
+              }
             }
           }
         }

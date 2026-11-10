@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
+import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch } from '@/lib/tradingViewScanner';
 
 const supabase = getAdminSupabase();
 
@@ -87,6 +88,7 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
 }
 
 async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
+  const isBist = symbol.endsWith('.IS') || symbol === 'XU100.IS';
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
     const res = await fetch(url, {
@@ -98,14 +100,32 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
       next: { revalidate: 0 }
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (isBist) {
+        const tvQuote = await fetchTradingViewBistQuote(symbol);
+        if (tvQuote && tvQuote.price > 0) return tvQuote;
+      }
+      return null;
+    }
     const json = await res.json();
     const result = json?.chart?.result?.[0];
-    if (!result) return null;
+    if (!result) {
+      if (isBist) {
+        const tvQuote = await fetchTradingViewBistQuote(symbol);
+        if (tvQuote && tvQuote.price > 0) return tvQuote;
+      }
+      return null;
+    }
 
     const meta = result.meta;
     const price = meta?.regularMarketPrice;
-    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+      if (isBist) {
+        const tvQuote = await fetchTradingViewBistQuote(symbol);
+        if (tvQuote && tvQuote.price > 0) return tvQuote;
+      }
+      return null;
+    }
 
     let sessionDate = new Date().toISOString().slice(0, 10);
     if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
@@ -128,6 +148,14 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
       volume: typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : null,
     };
   } catch (e) {
+    if (isBist) {
+      try {
+        const tvQuote = await fetchTradingViewBistQuote(symbol);
+        if (tvQuote && tvQuote.price > 0) return tvQuote;
+      } catch (tvErr) {
+        console.warn(`TradingView fallback also failed for ${symbol}:`, tvErr);
+      }
+    }
     console.warn(`Failed to fetch live quote for ${symbol}:`, e);
     return null;
   }
@@ -240,6 +268,23 @@ export async function POST(request: Request) {
     ]);
 
     const quotes = [...yahooResults, ...tefasResults].filter((q): q is QuoteResult => q !== null);
+
+    // Secondary safety sweep: If any BIST symbols returned null from primary fetch, sweep them via TradingView Scanner
+    const resolvedSymbols = new Set(quotes.map(q => q.symbol.toUpperCase()));
+    const unpricedBist = uniqueYahoo.filter(sym => (sym.endsWith('.IS') || sym === 'XU100.IS') && !resolvedSymbols.has(sym.toUpperCase()));
+    if (unpricedBist.length > 0) {
+      try {
+        const tvBatch = await fetchTradingViewBistQuotesBatch(unpricedBist);
+        for (const [, q] of tvBatch.entries()) {
+          if (q && q.price > 0 && !resolvedSymbols.has(q.symbol.toUpperCase())) {
+            quotes.push(q);
+            resolvedSymbols.add(q.symbol.toUpperCase());
+          }
+        }
+      } catch (tvErr) {
+        console.warn('TradingView batch secondary sweep failed:', tvErr);
+      }
+    }
 
     if (quotes.length === 0) {
       return NextResponse.json({
