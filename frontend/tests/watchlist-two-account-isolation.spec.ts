@@ -23,8 +23,8 @@ function loadEnv(): Record<string, string> {
 }
 
 const env = loadEnv();
-const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalghadzfevfjx.supabase.co';
-const SUPABASE_ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
+const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3001';
 
 const userAEmail = env.TEST_USER_A_EMAIL;
@@ -43,10 +43,12 @@ test.describe('Watchlist Multi-Tenant Authenticated Persistence & Account Isolat
   const createdFixtureIdsForB: string[] = [];
 
   test.beforeAll(async () => {
-    test.skip(!userAEmail || !userAPassword || !userBEmail || !userBPassword,
-      'Test user credentials not configured in TEST_USER_A_* / TEST_USER_B_* env vars.');
+    test.skip(
+      !SUPABASE_URL || !SUPABASE_ANON_KEY || !userAEmail || !userAPassword || !userBEmail || !userBPassword,
+      'Supabase configuration or test user credentials not configured in environment variables.'
+    );
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
@@ -217,72 +219,110 @@ test.describe('Watchlist Multi-Tenant Authenticated Persistence & Account Isolat
 
   test('2. Direct Database PostgreSQL RLS Enforcement (Bypassing API ownership filters)', async () => {
     // Instantiate direct authenticated PostgREST clients for User A and User B
-    const clientA = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const clientA = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${tokenA}` } }
     });
-    const clientB = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const clientB = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${tokenB}` } }
     });
 
-    // 1. First, create a fixture directly as User A
-    const { data: fixtureRow, error: insertError } = await clientA
-      .from('watchlist_items')
-      .insert({
-        user_id: userIdA,
-        asset_id: '25dfa345-3d22-4e53-b6aa-ef17b4d1cf03', // THYAO asset ID
-        notes: '[DIRECT_RLS_PROBE] Created by User A directly in Postgres',
-      })
-      .select()
+    // Dynamically retrieve any valid asset ID from assets table rather than hardcoding
+    const { data: anyAsset, error: assetErr } = await clientA
+      .from('assets')
+      .select('id')
+      .limit(1)
       .single();
+    expect(assetErr).toBeNull();
+    expect(anyAsset?.id).toBeDefined();
+    const testAssetId = anyAsset!.id;
 
-    expect(insertError).toBeNull();
-    expect(fixtureRow).toBeDefined();
-    const probeId = fixtureRow.id;
-    createdFixtureIdsForA.push(probeId);
+    let probeId: string | null = null;
+    try {
+      // 1. Create a fixture directly as User A
+      const { data: fixtureRow, error: insertError } = await clientA
+        .from('watchlist_items')
+        .insert({
+          user_id: userIdA,
+          asset_id: testAssetId,
+          notes: '[DIRECT_RLS_PROBE] Created by User A directly in Postgres',
+        })
+        .select()
+        .single();
 
-    // 2. User B directly attempts to SELECT User A's row without specifying user_id filter
-    // RLS policy: (auth.uid() = user_id) MUST evaluate to FALSE, returning 0 rows!
-    const { data: bSelectData, error: bSelectError } = await clientB
-      .from('watchlist_items')
-      .select('*')
-      .eq('id', probeId);
+      expect(insertError).toBeNull();
+      expect(fixtureRow).toBeDefined();
+      const validProbeId = fixtureRow.id;
+      probeId = validProbeId;
+      createdFixtureIdsForA.push(validProbeId);
 
-    expect(bSelectError).toBeNull();
-    expect(bSelectData).toEqual([]); // Zero rows returned directly by PostgreSQL engine!
+      // 2. User B directly attempts to SELECT User A's row without specifying user_id filter
+      // RLS policy: (auth.uid() = user_id) MUST evaluate to FALSE, returning 0 rows!
+      const { data: bSelectData, error: bSelectError } = await clientB
+        .from('watchlist_items')
+        .select('*')
+        .eq('id', validProbeId);
 
-    // 3. User B directly attempts to UPDATE User A's row
-    const { data: bUpdateData, error: bUpdateError } = await clientB
-      .from('watchlist_items')
-      .update({ notes: 'CRITICAL_RLS_BREACH' })
-      .eq('id', probeId)
-      .select();
+      expect(bSelectError).toBeNull();
+      expect(bSelectData).toEqual([]); // Zero rows returned directly by PostgreSQL engine!
 
-    expect(bUpdateError).toBeNull();
-    expect(bUpdateData).toEqual([]); // 0 rows mutated by PostgreSQL engine!
+      // 3. User B directly attempts to UPDATE User A's row
+      const { data: bUpdateData, error: bUpdateError } = await clientB
+        .from('watchlist_items')
+        .update({ notes: 'CRITICAL_RLS_BREACH' })
+        .eq('id', validProbeId)
+        .select();
 
-    // 4. User B directly attempts to DELETE User A's row
-    const { data: bDeleteData, error: bDeleteError } = await clientB
-      .from('watchlist_items')
-      .delete()
-      .eq('id', probeId)
-      .select();
+      expect(bUpdateError).toBeNull();
+      expect(bUpdateData).toEqual([]); // 0 rows mutated by PostgreSQL engine!
 
-    expect(bDeleteError).toBeNull();
-    expect(bDeleteData).toEqual([]); // 0 rows deleted by PostgreSQL engine!
+      // 4. User B directly attempts to DELETE User A's row
+      const { data: bDeleteData, error: bDeleteError } = await clientB
+        .from('watchlist_items')
+        .delete()
+        .eq('id', validProbeId)
+        .select();
 
-    // 5. Verify via User A client that row is intact and unmutated
-    const { data: aVerifyData } = await clientA
-      .from('watchlist_items')
-      .select('notes')
-      .eq('id', probeId)
-      .single();
+      expect(bDeleteError).toBeNull();
+      expect(bDeleteData).toEqual([]); // 0 rows deleted by PostgreSQL engine!
 
-    expect(aVerifyData?.notes).toBe('[DIRECT_RLS_PROBE] Created by User A directly in Postgres');
+      // 5. User B directly attempts to INSERT a row with user_id = userIdA (masquerading as User A)
+      // PostgreSQL WITH CHECK policy: (auth.uid() = user_id) MUST reject or block this insertion!
+      const { data: bMaliciousInsert, error: bInsertError } = await clientB
+        .from('watchlist_items')
+        .insert({
+          user_id: userIdA,
+          asset_id: testAssetId,
+          notes: 'CRITICAL_RLS_INSERT_BREACH',
+        })
+        .select();
 
-    // 6. User A cleans up its own probe row
-    await clientA.from('watchlist_items').delete().eq('id', probeId);
+      // Either Postgres throws an RLS error or returns 0 rows (depending on Supabase PostgREST version)
+      if (bInsertError) {
+        expect(bInsertError.message).toMatch(/policy|violat|denied|permission/i);
+      } else {
+        expect(bMaliciousInsert).toEqual([]);
+      }
+
+      // 6. Verify via User A client that original row is intact and unmutated
+      const { data: aVerifyData } = await clientA
+        .from('watchlist_items')
+        .select('notes')
+        .eq('id', validProbeId)
+        .single();
+
+      expect(aVerifyData?.notes).toBe('[DIRECT_RLS_PROBE] Created by User A directly in Postgres');
+    } finally {
+      // 7. Guaranteed cleanup in finally block even if assertions fail
+      if (probeId) {
+        try {
+          await clientA.from('watchlist_items').delete().eq('id', probeId);
+        } catch {
+          // ignore cleanup error
+        }
+      }
+    }
   });
 
   test('3. Controlled Stale-Cache Fallback Verification', async ({ request }) => {
@@ -317,31 +357,51 @@ test.describe('Watchlist Multi-Tenant Authenticated Persistence & Account Isolat
     await page.goto(`${BASE_URL}/#watchlist`);
     await page.waitForLoadState('networkidle');
 
-    // 2. Click sign-in button if not already authenticated in this context
-    const signInTrigger = page.locator('button:has-text("Bulut Senkronizasyonu"), button:has-text("Giriş Yap"), button:has-text("Sign in")').first();
-    if (await signInTrigger.isVisible({ timeout: 4000 }).catch(() => false)) {
-      await signInTrigger.click();
-      const authForm = page.locator('form:has(input[type="email"])').first();
-      await page.waitForSelector('input[type="email"]');
-      await page.fill('input[type="email"]', userAEmail!);
-      await page.fill('input[type="password"]', userAPassword!);
-      await authForm.locator('button[type="submit"]').click();
-      await page.waitForTimeout(2000);
-    }
+    // 2. Open auth modal and authenticate explicitly as User A
+    const signInTrigger = page.locator('button:has-text("Giriş Yap"), button:has-text("Sign In"), button:has-text("Sign in"), button:has-text("Bulut Senkronizasyonu")').first();
+    await expect(signInTrigger).toBeVisible({ timeout: 10000 });
+    await signInTrigger.click();
 
-    // 3. Quick add an asset (e.g. KCHOL)
+    const authForm = page.locator('form:has(input[type="email"])').first();
+    await expect(authForm).toBeVisible({ timeout: 5000 });
+    await page.fill('input[type="email"]', userAEmail!);
+    await page.fill('input[type="password"]', userAPassword!);
+    await authForm.locator('button[type="submit"]').click();
+
+    // 3. Strictly verify authenticated state is active (wait for user's email to appear in UI)
+    await expect(page.locator(`text=${userAEmail}`).first()).toBeVisible({ timeout: 15000 });
+
+    // 4. Quick add an asset and intercept the authenticated POST /api/watchlist network request
     const quickInput = page.locator('input[placeholder*="Hızlı Varlık Ekle"], input[placeholder*="Quick add"]').first();
     await expect(quickInput).toBeVisible({ timeout: 10000 });
+
+    const postPromise = page.waitForResponse(
+      res => res.url().includes('/api/watchlist') && res.request().method() === 'POST' && res.status() === 200,
+      { timeout: 15000 }
+    );
+
     await quickInput.fill('KCHOL');
     await quickInput.press('Enter');
-    await page.waitForTimeout(2000);
 
-    // 4. Verify KCHOL card is present in DOM
+    const postResponse = await postPromise;
+    const postData = await postResponse.json();
+    expect(postData.success).toBe(true);
+    expect(postData.item).toBeDefined();
+    expect(postData.item.userId).toBe(userIdA);
+    if (postData.item.id) {
+      createdFixtureIdsForA.push(postData.item.id);
+    }
+
+    // 5. Verify KCHOL card is rendered in DOM
     await expect(page.locator('text=KCHOL').first()).toBeVisible({ timeout: 10000 });
 
-    // 5. Reload page and confirm persistence across session restore
+    // 6. Reload page and confirm authenticated persistence across full browser reload
     await page.reload();
     await page.waitForLoadState('networkidle');
+
+    // Confirm session is still authenticated
+    await expect(page.locator(`text=${userAEmail}`).first()).toBeVisible({ timeout: 15000 });
+    // Confirm KCHOL card persisted and rendered from user's remote cloud watchlist
     await expect(page.locator('text=KCHOL').first()).toBeVisible({ timeout: 10000 });
   });
 });

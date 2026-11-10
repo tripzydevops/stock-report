@@ -38,9 +38,14 @@ export async function fetchAssets(filters?: { market?: string; asset_class?: str
   return fetchWithHandle(`/api/assets${query ? `?${query}` : ''}`);
 }
 
-export async function addAsset(data: AssetCreate) {
+export async function addAsset(data: AssetCreate, token?: string) {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   return fetchWithHandle('/api/assets', {
     method: 'POST',
+    headers,
     body: JSON.stringify(data),
   });
 }

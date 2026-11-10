@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
+import { fetchTradingViewBistQuote } from '@/lib/tradingViewScanner';
 
 const supabase = getServerSupabase();
 
@@ -9,7 +10,7 @@ interface QuoteResult {
   price: number;
   sessionDate: string;
   observedAt: string;
-  source: 'yahoo' | 'tefas';
+  source: 'yahoo' | 'tefas' | 'tradingview';
   open?: number | null;
   prevClose?: number | null;
   high?: number | null;
@@ -374,6 +375,26 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
       quote = await fetchTefasQuote(cleanSymbol);
     } else {
       quote = await fetchLiveQuote(cleanSymbol, cleanMarket);
+      if (!quote && cleanMarket === 'BIST') {
+        try {
+          const tvQuote = await fetchTradingViewBistQuote(cleanSymbol);
+          if (tvQuote && tvQuote.price > 0) {
+            quote = {
+              price: tvQuote.price,
+              sessionDate: tvQuote.sessionDate,
+              observedAt: tvQuote.observedAt,
+              source: 'tradingview',
+              open: tvQuote.open,
+              prevClose: tvQuote.prevClose,
+              high: tvQuote.high,
+              low: tvQuote.low,
+              volume: tvQuote.volume,
+            };
+          }
+        } catch (tvErr) {
+          console.warn('TradingView fallback error in assets route:', tvErr);
+        }
+      }
     }
 
     let priceStatus: 'live' | 'unavailable' = 'unavailable';

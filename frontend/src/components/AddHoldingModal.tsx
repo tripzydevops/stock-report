@@ -3,16 +3,55 @@
 import React, { useState } from 'react';
 import { PortfolioItem } from '../lib/supabaseClient';
 
+export interface HoldingAssetOption {
+  symbol: string;
+  name: string;
+  market: string;
+  price?: number;
+}
+
 interface AddHoldingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddHolding: (holding: PortfolioItem, isDividend: boolean, dividendYield?: number) => void;
+  availableAssets?: HoldingAssetOption[];
 }
+
+const COMMON_BIST_ALIASES: Record<string, { symbol: string; name: string }> = {
+  ASELSAN: { symbol: 'ASELS', name: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
+  TEKFEN: { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+  'TEKFEN HOLDING': { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+  'TEKFEN HOLDİNG': { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+  GARANTI: { symbol: 'GARAN', name: 'TÜRKİYE GARANTİ BANKASI A.Ş.' },
+  'GARANTI BANKASI': { symbol: 'GARAN', name: 'TÜRKİYE GARANTİ BANKASI A.Ş.' },
+  ISBANK: { symbol: 'ISCTR', name: 'TÜRKİYE İŞ BANKASI A.Ş. (C)' },
+  'IS BANKASI': { symbol: 'ISCTR', name: 'TÜRKİYE İŞ BANKASI A.Ş. (C)' },
+  AKBANK: { symbol: 'AKBNK', name: 'AKBANK T.A.Ş.' },
+  YAPİKREDİ: { symbol: 'YKBNK', name: 'YAPI VE KREDİ BANKASI A.Ş.' },
+  'YAPI KREDI': { symbol: 'YKBNK', name: 'YAPI VE KREDİ BANKASI A.Ş.' },
+  KOC: { symbol: 'KCHOL', name: 'KOÇ HOLDİNG A.Ş.' },
+  'KOC HOLDING': { symbol: 'KCHOL', name: 'KOÇ HOLDİNG A.Ş.' },
+  SABANCI: { symbol: 'SAHOL', name: 'HACI ÖMER SABANCI HOLDİNG A.Ş.' },
+  'SABANCI HOLDING': { symbol: 'SAHOL', name: 'HACI ÖMER SABANCI HOLDİNG A.Ş.' },
+  THY: { symbol: 'THYAO', name: 'TÜRK HAVA YOLLARI A.O.' },
+  'TURK HAVA YOLLARI': { symbol: 'THYAO', name: 'TÜRK HAVA YOLLARI A.O.' },
+  TUPRAS: { symbol: 'TUPRS', name: 'TÜPRAŞ TÜRKİYE PETROL RAFİNERİLERİ A.Ş.' },
+  BIM: { symbol: 'BIMAS', name: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+  BIMAS: { symbol: 'BIMAS', name: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+  ENKA: { symbol: 'ENKAI', name: 'ENKA İNŞAAT VE SANAYİ A.Ş.' },
+  SISICAM: { symbol: 'SISE', name: 'TÜRKİYE ŞİŞE VE CAM FABRİKALARI A.Ş.' },
+  EREGLI: { symbol: 'EREGL', name: 'EREĞLİ DEMİR VE ÇELİK FABRİKALARI T.A.Ş.' },
+  PETKIM: { symbol: 'PETKM', name: 'PETKİM PETROKİMYA HOLDİNG A.Ş.' },
+  TURKCELL: { symbol: 'TCELL', name: 'TURKCELL İLETİŞİM HİZMETLERİ A.Ş.' },
+  TURKTELEKOM: { symbol: 'TTKOM', name: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
+  'TURK TELEKOM': { symbol: 'TTKOM', name: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
+};
 
 export default function AddHoldingModal({
   isOpen,
   onClose,
   onAddHolding,
+  availableAssets = [],
 }: AddHoldingModalProps) {
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
@@ -25,17 +64,77 @@ export default function AddHoldingModal({
   const [isDividend, setIsDividend] = useState(false);
   const [dividendYieldStr, setDividendYieldStr] = useState<string>('5.0');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   if (!isOpen) return null;
+
+  // Filter matching assets for live autocomplete suggestions
+  const query = symbol.trim().toUpperCase();
+  const suggestions: Array<{ symbol: string; name: string; market: 'BIST' | 'US'; price?: number }> = [];
+
+  if (query.length >= 2) {
+    // 1. Check known aliases
+    for (const [aliasKey, aliasVal] of Object.entries(COMMON_BIST_ALIASES)) {
+      if (aliasKey.includes(query) || aliasVal.symbol.includes(query)) {
+        if (!suggestions.some(s => s.symbol === aliasVal.symbol)) {
+          const matchAsset = availableAssets.find(a => a.symbol.replace('.IS', '').toUpperCase() === aliasVal.symbol);
+          suggestions.push({
+            symbol: aliasVal.symbol,
+            name: aliasVal.name,
+            market: 'BIST',
+            price: matchAsset?.price,
+          });
+        }
+      }
+    }
+
+    // 2. Check available catalog assets
+    for (const asset of availableAssets) {
+      if (suggestions.length >= 6) break;
+      const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
+      const assetNameUpper = (asset.name || '').toUpperCase();
+      if (cleanSym.includes(query) || assetNameUpper.includes(query)) {
+        if (!suggestions.some(s => s.symbol === cleanSym)) {
+          suggestions.push({
+            symbol: cleanSym,
+            name: asset.name,
+            market: (asset.market === 'US' ? 'US' : 'BIST'),
+            price: asset.price,
+          });
+        }
+      }
+    }
+  }
+
+  const handleSelectSuggestion = (s: { symbol: string; name: string; market: 'BIST' | 'US'; price?: number }) => {
+    setSymbol(s.symbol);
+    setName(s.name);
+    setMarket(s.market);
+    if (s.price && s.price > 0) {
+      setEntryPriceStr(s.price.toFixed(2));
+      setCurrentPriceStr(s.price.toFixed(2));
+    }
+    setShowSuggestions(false);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    const sym = symbol.replace('.IS', '').trim().toUpperCase();
+    let sym = symbol.replace('.IS', '').trim().toUpperCase();
     if (!sym) {
-      setErrorMsg('Please enter a valid stock symbol (e.g. THYAO or NVDA)');
+      setErrorMsg('Please enter a valid stock symbol (e.g. THYAO, ASELS, NVDA)');
       return;
+    }
+
+    // Check alias resolution (e.g. user typed "ASELSAN" -> resolves to "ASELS")
+    let resolvedName = name.trim();
+    let resolvedMarket = market;
+    if (COMMON_BIST_ALIASES[sym]) {
+      const alias = COMMON_BIST_ALIASES[sym];
+      sym = alias.symbol;
+      resolvedName = resolvedName || alias.name;
+      resolvedMarket = 'BIST';
     }
 
     const shares = parseFloat(sharesStr);
@@ -51,7 +150,7 @@ export default function AddHoldingModal({
       return;
     }
 
-    const curr = market === 'US' ? 'USD' : 'TRY';
+    const curr = resolvedMarket === 'US' ? 'USD' : 'TRY';
     const totalCost = shares * entryPrice;
     const curPrice = !isNaN(currentPrice) && currentPrice > 0 ? currentPrice : entryPrice;
     const currentValue = shares * curPrice;
@@ -65,8 +164,8 @@ export default function AddHoldingModal({
 
     const newHolding: PortfolioItem = {
       symbol: sym,
-      name: name.trim() || sym,
-      market: market,
+      name: resolvedName || sym,
+      market: resolvedMarket,
       shares: Number(shares),
       entryPrice: Number(entryPrice),
       currentPrice: Number(curPrice),
@@ -95,6 +194,7 @@ export default function AddHoldingModal({
     setEntryDate(new Date().toISOString().slice(0, 10));
     setStopLossStr('');
     setIsDividend(false);
+    setShowSuggestions(false);
   };
 
   const currencySymbol = market === 'US' ? '$' : '₺';
@@ -137,7 +237,7 @@ export default function AddHoldingModal({
 
             {/* Symbol & Market */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div className="relative">
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
                   Ticker / Symbol *
                 </label>
@@ -149,13 +249,36 @@ export default function AddHoldingModal({
                   onChange={(e) => {
                     const val = e.target.value.toUpperCase();
                     setSymbol(val);
-                    if (val.endsWith('.IS') || (!['AAPL', 'NVDA', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'SPY', 'QQQ'].includes(val) && val.length >= 4 && !val.includes('.'))) {
-                      // default bist
-                    }
+                    setShowSuggestions(true);
                   }}
-                  placeholder="e.g. THYAO, NVDA"
+                  onFocus={() => setShowSuggestions(true)}
+                  placeholder="e.g. THYAO, ASELS, TKFEN, NVDA"
                   className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white font-black tracking-wide"
                 />
+
+                {/* Autocomplete Suggestions Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s.symbol}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(s)}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-800 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors cursor-pointer"
+                      >
+                        <div className="truncate pr-2">
+                          <span className="font-black text-xs text-blue-600 dark:text-blue-400 mr-1.5">{s.symbol}</span>
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{s.name}</span>
+                        </div>
+                        {s.price && s.price > 0 && (
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                            {s.market === 'US' ? '$' : '₺'}{s.price.toFixed(2)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

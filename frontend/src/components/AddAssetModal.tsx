@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { addAsset } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 interface AddAssetModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface AddAssetModalProps {
 }
 
 export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetModalProps) {
+  const { user, session } = useAuth();
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
   const [assetClass, setAssetClass] = useState('Stock');
@@ -23,19 +25,49 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
     setError('');
 
     try {
-      let activeUserId = 'default_user';
-      if (typeof window !== 'undefined') {
+      let activeUserId = user?.id || 'default_user';
+      if (!user && typeof window !== 'undefined') {
         activeUserId = localStorage.getItem('marketpulse_guest_user_id') || 'default_user';
       }
 
-      await addAsset({ 
+      const res: any = await addAsset({ 
         symbol, 
         name, 
         asset_class: assetClass, 
         market,
         userId: activeUserId,
         addToWatchlist: true,
-      });
+      }, session?.access_token);
+
+      // In guest mode, save directly to local guest watchlist
+      if (!user && typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('marketpulse_guest_watchlist');
+          const currentItems = raw ? JSON.parse(raw) : [];
+          const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
+          const targetSym = market === 'BIST' ? `${cleanSym}.IS` : cleanSym;
+          const isFund = market === 'TEFAS' || assetClass.toLowerCase() === 'fund';
+          const guestItem = {
+            id: `guest_${Date.now()}_${cleanSym}`,
+            assetId: res?.asset?.id || `asset_${cleanSym}`,
+            symbol: targetSym,
+            name: name || cleanSym,
+            assetClass: isFund ? 'fund' : (assetClass.toLowerCase() === 'etf' ? 'etf' : 'stock'),
+            market: isFund ? 'TEFAS' : market,
+            currency: market === 'US' ? 'USD' : 'TRY',
+            sector: '',
+            addedAt: new Date().toISOString(),
+            latestPrice: res?.quote?.price || null,
+            latestDate: res?.quote?.sessionDate || null,
+            openPrice: null,
+            dailyChangePercent: null,
+          };
+          const updated = [guestItem, ...currentItems.filter((i: any) => (i.symbol || '').toUpperCase().replace('.IS', '') !== cleanSym)];
+          localStorage.setItem('marketpulse_guest_watchlist', JSON.stringify(updated));
+        } catch (storageErr) {
+          console.warn('Failed to save to guest watchlist:', storageErr);
+        }
+      }
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('marketpulse:asset-added', { detail: { symbol, name, market } }));

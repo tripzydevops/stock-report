@@ -1952,16 +1952,54 @@ export default function Home() {
         }
 
         let { data: positionsData } = await positionsQuery;
-        if ((!positionsData || positionsData.length === 0) && user && !isDemoMode) {
-          // Seamlessly fallback to model portfolio so open holdings are never blank
-          const fallbackQuery = await supabase
-            .from('portfolio_positions')
-            .select('*, assets(symbol, name, market)')
-            .eq('is_open', true)
-            .is('user_id', null)
-            .order('created_at', { ascending: true });
-          positionsData = fallbackQuery.data;
+
+        // Check for saved guest portfolio in localStorage if in guest mode
+        let guestLoadedFromStorage = false;
+        if (!user || isDemoMode) {
+          if (typeof window !== 'undefined') {
+            try {
+              const savedGuest = localStorage.getItem('marketpulse_guest_portfolio');
+              if (savedGuest) {
+                const parsed = JSON.parse(savedGuest);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  // Re-hydrate with live prices from loadedAssets
+                  const rehydrated = parsed.map((p: PortfolioItem) => {
+                    const cleanP = p.symbol.replace('.IS', '').toUpperCase();
+                    const live = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanP);
+                    const curPrice = live && live.price > 0 ? live.price : p.currentPrice;
+                    const curVal = p.shares * curPrice;
+                    const pnl = curVal - p.totalCost;
+                    const pnlPct = p.totalCost > 0 ? (pnl / p.totalCost) * 100 : 0;
+                    return {
+                      ...p,
+                      currentPrice: curPrice,
+                      currentValue: curVal,
+                      pnlAmount: pnl,
+                      pnlPercent: pnlPct,
+                    };
+                  });
+                  setPortfolio(rehydrated);
+                  setDividends(prevDivs => deriveDividendsFromPortfolio(rehydrated, prevDivs, dividendSummaryMap));
+                  guestLoadedFromStorage = true;
+                }
+              }
+            } catch (e) {
+              console.warn('Could not read guest portfolio:', e);
+            }
+          }
         }
+
+        if (!guestLoadedFromStorage) {
+          if ((!positionsData || positionsData.length === 0) && user && !isDemoMode) {
+            // Seamlessly fallback to model portfolio so open holdings are never blank
+            const fallbackQuery = await supabase
+              .from('portfolio_positions')
+              .select('*, assets(symbol, name, market)')
+              .eq('is_open', true)
+              .is('user_id', null)
+              .order('created_at', { ascending: true });
+            positionsData = fallbackQuery.data;
+          }
 
         if (positionsData && positionsData.length > 0) {
           const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
@@ -2057,6 +2095,7 @@ export default function Home() {
               localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
             }
           } catch (e) {}
+        }
         }
 
         const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -2306,7 +2345,19 @@ export default function Home() {
 
   const handleRemoveHolding = async (symbol: string) => {
     // 1. Immediately update UI state
-    setPortfolio(prev => prev.filter(item => item.symbol !== symbol));
+    setPortfolio(prev => {
+      const updated = prev.filter(item => item.symbol !== symbol);
+      if (!user || isDemoMode) {
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          } catch (e) {
+            console.warn('Could not update guest portfolio on remove:', e);
+          }
+        }
+      }
+      return updated;
+    });
     setDividends(prev => prev.filter(item => item.symbol !== symbol));
 
     // 2. Persist deletion in Supabase
@@ -2353,8 +2404,48 @@ export default function Home() {
     }
   };
 
+  const COMMON_BIST_ALIASES: Record<string, { symbol: string; name: string }> = {
+    ASELSAN: { symbol: 'ASELS', name: 'ASELSAN ELEKTRONİK SANAYİ VE TİCARET A.Ş.' },
+    TEKFEN: { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+    'TEKFEN HOLDING': { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+    'TEKFEN HOLDİNG': { symbol: 'TKFEN', name: 'TEKFEN HOLDİNG A.Ş.' },
+    GARANTI: { symbol: 'GARAN', name: 'TÜRKİYE GARANTİ BANKASI A.Ş.' },
+    'GARANTI BANKASI': { symbol: 'GARAN', name: 'TÜRKİYE GARANTİ BANKASI A.Ş.' },
+    ISBANK: { symbol: 'ISCTR', name: 'TÜRKİYE İŞ BANKASI A.Ş. (C)' },
+    'IS BANKASI': { symbol: 'ISCTR', name: 'TÜRKİYE İŞ BANKASI A.Ş. (C)' },
+    AKBANK: { symbol: 'AKBNK', name: 'AKBANK T.A.Ş.' },
+    YAPİKREDİ: { symbol: 'YKBNK', name: 'YAPI VE KREDİ BANKASI A.Ş.' },
+    'YAPI KREDI': { symbol: 'YKBNK', name: 'YAPI VE KREDİ BANKASI A.Ş.' },
+    KOC: { symbol: 'KCHOL', name: 'KOÇ HOLDİNG A.Ş.' },
+    'KOC HOLDING': { symbol: 'KCHOL', name: 'KOÇ HOLDİNG A.Ş.' },
+    SABANCI: { symbol: 'SAHOL', name: 'HACI ÖMER SABANCI HOLDİNG A.Ş.' },
+    'SABANCI HOLDING': { symbol: 'SAHOL', name: 'HACI ÖMER SABANCI HOLDİNG A.Ş.' },
+    THY: { symbol: 'THYAO', name: 'TÜRK HAVA YOLLARI A.O.' },
+    'TURK HAVA YOLLARI': { symbol: 'THYAO', name: 'TÜRK HAVA YOLLARI A.O.' },
+    TUPRAS: { symbol: 'TUPRS', name: 'TÜPRAŞ TÜRKİYE PETROL RAFİNERİLERİ A.Ş.' },
+    BIM: { symbol: 'BIMAS', name: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+    BIMAS: { symbol: 'BIMAS', name: 'BİM BİRLEŞİK MAĞAZALAR A.Ş.' },
+    ENKA: { symbol: 'ENKAI', name: 'ENKA İNŞAAT VE SANAYİ A.Ş.' },
+    SISICAM: { symbol: 'SISE', name: 'TÜRKİYE ŞİŞE VE CAM FABRİKALARI A.Ş.' },
+    EREGLI: { symbol: 'EREGL', name: 'EREĞLİ DEMİR VE ÇELİK FABRİKALARI T.A.Ş.' },
+    PETKIM: { symbol: 'PETKM', name: 'PETKİM PETROKİMYA HOLDİNG A.Ş.' },
+    TURKCELL: { symbol: 'TCELL', name: 'TURKCELL İLETİŞİM HİZMETLERİ A.Ş.' },
+    TURKTELEKOM: { symbol: 'TTKOM', name: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
+    'TURK TELEKOM': { symbol: 'TTKOM', name: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
+  };
+
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv?: boolean, divYield?: number) => {
-    const cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
+    let cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
+    let resolvedName = newHolding.name || cleanSymUpper;
+    let resolvedMarket = newHolding.market || 'BIST';
+
+    if (COMMON_BIST_ALIASES[cleanSymUpper]) {
+      const alias = COMMON_BIST_ALIASES[cleanSymUpper];
+      cleanSymUpper = alias.symbol;
+      resolvedName = (resolvedName === newHolding.symbol || !resolvedName) ? alias.name : resolvedName;
+      resolvedMarket = 'BIST';
+    }
+
     const isCoreDiv = Boolean(
       isDiv || 
       newHolding.isDividend || 
@@ -2364,6 +2455,9 @@ export default function Home() {
     );
     const enrichedHolding: PortfolioItem = {
       ...newHolding,
+      symbol: cleanSymUpper,
+      name: resolvedName,
+      market: resolvedMarket,
       entryDate: newHolding.entryDate || new Date().toISOString().slice(0, 10),
       strategyType: isCoreDiv ? 'CORE_DIVIDEND' : (newHolding.strategyType || 'SWING'),
       isDividend: isCoreDiv
@@ -2373,6 +2467,15 @@ export default function Home() {
       const filtered = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
       const updated = [enrichedHolding, ...filtered];
       setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
+      if (!user || isDemoMode) {
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          } catch (e) {
+            console.warn('Failed to save guest portfolio:', e);
+          }
+        }
+      }
       return updated;
     });
 
@@ -2390,23 +2493,24 @@ export default function Home() {
 
     // 2. Persist to Supabase
     try {
-      const cleanSym = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
+      const cleanSym = cleanSymUpper;
       const isSymbol = `${cleanSym}.IS`;
       let { data: assetData } = await supabase
         .from('assets')
-        .select('id')
-        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol},symbol.ilike.${cleanSym}%`)
+        .select('id, symbol, name, market')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol},name.ilike.%${cleanSym}%`)
         .limit(1);
 
       let assetId = assetData && assetData.length > 0 ? assetData[0].id : null;
       if (!assetId) {
-        const { data: newAsset } = await supabase.from('assets').insert([{
-          symbol: newHolding.market === 'BIST' ? `${cleanSym}.IS` : cleanSym,
-          name: newHolding.name || cleanSym,
-          market: newHolding.market || 'BIST',
-          asset_class: 'stock'
+        const { data: newAsset, error: newAssetErr } = await supabase.from('assets').insert([{
+          symbol: resolvedMarket === 'BIST' ? `${cleanSym}.IS` : cleanSym,
+          name: resolvedName,
+          market: resolvedMarket,
+          asset_class: 'stock',
+          currency: resolvedMarket === 'US' ? 'USD' : 'TRY',
         }]).select('id').single();
-        if (newAsset) assetId = newAsset.id;
+        if (newAsset && !newAssetErr) assetId = newAsset.id;
       }
 
       if (assetId) {
@@ -2420,7 +2524,7 @@ export default function Home() {
           : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
 
         if (user && !isDemoMode) {
-          await supabase.from('portfolio_positions').insert([{
+          const { error: posError } = await supabase.from('portfolio_positions').insert([{
             user_id: user.id,
             asset_id: assetId,
             quantity: newHolding.shares,
@@ -2431,6 +2535,9 @@ export default function Home() {
             entry_date: orderDateStr,
             notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding')
           }]);
+          if (posError) {
+            console.error('Error adding portfolio position:', posError);
+          }
         }
 
         // Also record an Executed Order in Supabase and UI state!
@@ -4365,6 +4472,7 @@ export default function Home() {
         isOpen={isHoldingModalOpen}
         onClose={() => setIsHoldingModalOpen(false)}
         onAddHolding={handleAddHolding}
+        availableAssets={assets}
       />
 
       <TradeHoldingModal

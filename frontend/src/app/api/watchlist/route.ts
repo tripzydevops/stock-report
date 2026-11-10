@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch cached catalog and prices (60s in-memory cache, reducing response time from 1300ms to <5ms)
-    const forceFail = request.headers.get('x-test-force-refresh-fail') === 'true';
+    const forceFail = process.env.NODE_ENV !== 'production' && request.headers.get('x-test-force-refresh-fail') === 'true';
     const cachedCatalog = await getCachedCatalogAndPrices(serverSupabase, forceFail);
     const { catalog, priceMap } = cachedCatalog;
     const isStale = Boolean(cachedCatalog.isStale);
