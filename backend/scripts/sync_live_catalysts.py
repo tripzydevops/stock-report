@@ -96,6 +96,30 @@ def identify_symbol_and_category(title: str, desc: str):
 
     return matched_sym, category, verdict, impact, takeaway
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+def generate_embedding(text: str) -> list[float] | None:
+    if not GEMINI_API_KEY or not text.strip():
+        return None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key={GEMINI_API_KEY}"
+    try:
+        import json
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({
+                "content": {"parts": [{"text": text[:1000]}]},
+                "outputDimensionality": 384
+            }).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data.get("embedding", {}).get("values")
+    except Exception as e:
+        print(f"Warning: Failed to generate embedding: {e}")
+        return None
+
 def fetch_and_sync_news():
     print("Fetching live news & KAP regulatory feeds...")
     rss_urls = [
@@ -182,6 +206,9 @@ def fetch_and_sync_news():
     for cat in top_catalysts:
         if cat['title'] not in existing_titles:
             try:
+                emb = generate_embedding(f"{cat['symbol']}: {cat['title']}. {cat['ai_takeaway']}")
+                if emb and len(emb) == 384:
+                    cat['embedding'] = emb
                 res = client.table('market_catalysts').insert(cat).execute()
                 inserted_count += 1
                 print(f"  + Added: [{cat['published_at'][:10]}] {cat['symbol']} | {cat['category']} | {cat['title'][:60]}")

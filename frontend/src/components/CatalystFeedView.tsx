@@ -27,6 +27,8 @@ export default function CatalystFeedView({
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'DIVIDEND' | 'MACRO'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [semanticMatches, setSemanticMatches] = useState<MarketCatalyst[] | null>(null);
+  const [isSearchingSemantic, setIsSearchingSemantic] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
 
@@ -84,15 +86,52 @@ export default function CatalystFeedView({
     }
   };
 
-  // Filter Logic
-  const filteredCatalysts = catalysts.filter(item => {
-    const sym = item.symbol.toUpperCase().replace('.IS', '');
-    const matchesSearch = searchQuery === '' || 
-      item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.aiTakeaway.toLowerCase().includes(searchQuery.toLowerCase());
+  // Debounced Semantic Search using Supabase pgvector API
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || q.length < 3) {
+      setSemanticMatches(null);
+      setIsSearchingSemantic(false);
+      return;
+    }
 
-    if (!matchesSearch) return false;
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingSemantic(true);
+        const res = await fetch(`/api/catalysts?q=${encodeURIComponent(q)}&limit=40`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.isSemantic && Array.isArray(json.catalysts) && json.catalysts.length > 0) {
+            setSemanticMatches(json.catalysts);
+          } else {
+            setSemanticMatches(null);
+          }
+        }
+      } catch {
+        setSemanticMatches(null);
+      } finally {
+        setIsSearchingSemantic(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Filter Logic: uses semantic vector matches if active, otherwise original catalysts
+  const sourceCatalysts = semanticMatches !== null ? semanticMatches : catalysts;
+
+  const filteredCatalysts = sourceCatalysts.filter(item => {
+    const sym = item.symbol.toUpperCase().replace('.IS', '');
+    
+    // If not using semantic vector search, do substring match
+    if (semanticMatches === null && searchQuery.trim() !== '') {
+      const matchesSearch = 
+        item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.aiTakeaway.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchesSearch) return false;
+    }
+
     if (dateFilter && !isDateInRange(item.publishedAt, dateFilter)) return false;
 
     if (filter === 'PORTFOLIO') {
@@ -149,16 +188,23 @@ export default function CatalystFeedView({
         </div>
 
         {/* Search Input */}
-        <div className="w-full md:w-64">
+        <div className="w-full md:w-72">
           <div className="relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t.catalysts.searchPlaceholder}
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              placeholder={language === 'tr' ? 'KAP ara veya semantik soru sor...' : 'Search disclosures or ask AI...'}
+              className="w-full pl-8 pr-8 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
-            <span className="absolute left-2.5 top-2 text-gray-400 text-xs">🔍</span>
+            <span className="absolute left-2.5 top-2 text-gray-400 text-xs">
+              {isSearchingSemantic ? '⚡' : '🔍'}
+            </span>
+            {semanticMatches !== null && (
+              <span className="absolute right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                pgvector
+              </span>
+            )}
           </div>
         </div>
       </div>

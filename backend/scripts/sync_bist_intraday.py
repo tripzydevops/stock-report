@@ -33,8 +33,35 @@ if env_path.exists():
     load_dotenv(env_path)
 
 import httpx
-from app.services.data_fetcher import get_bist_trading_session_date
+from datetime import timedelta
 from app.core.database import get_supabase_client, upsert_rows
+
+def get_bist_trading_session_date(dt: datetime | None = None) -> date:
+    """
+    Returns the latest official Borsa Istanbul (BIST) trading session date.
+    BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
+    Rolls back to the most recent completed session on weekends or pre-market.
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    trt_time = dt.astimezone(timezone(timedelta(hours=3)))
+    weekday = trt_time.weekday()  # 0 = Monday, 6 = Sunday
+    hour = trt_time.hour
+
+    target = trt_time.date()
+    if weekday == 6:  # Sunday -> Friday (-2 days)
+        target = target - timedelta(days=2)
+    elif weekday == 5:  # Saturday -> Friday (-1 day)
+        target = target - timedelta(days=1)
+    elif weekday == 0 and hour < 10:  # Monday pre-market -> Friday (-3 days)
+        target = target - timedelta(days=3)
+    elif hour < 10:  # Tue-Fri pre-market -> Previous day (-1 day)
+        target = target - timedelta(days=1)
+
+    return target
 
 def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
     """

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 interface SourceCitation {
   title: string;
@@ -176,6 +177,78 @@ export async function POST(req: NextRequest) {
         { title: 'Global Macro & US Treasury Yield Tracker', source: 'Macro Intelligence' },
         { title: 'BIST 100 & SPY Dual-Market Regime Engine', source: 'Internal Database' }
       );
+    }
+
+    // E. Semantic Search on KAP Disclosures & News Catalysts (pgvector)
+    const isCatalystQuery =
+      lower.includes('kap') ||
+      lower.includes('haber') ||
+      lower.includes('bildirim') ||
+      lower.includes('sözleşme') ||
+      lower.includes('sozlesme') ||
+      lower.includes('ihale') ||
+      lower.includes('buyback') ||
+      lower.includes('geri alım') ||
+      lower.includes('geri alim') ||
+      lower.includes('catalyst') ||
+      Boolean(matchedTicker);
+
+    if (isCatalystQuery && apiKey) {
+      try {
+        const supabase = getServerSupabase();
+        const embedRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: { parts: [{ text: userQuery.slice(0, 500) }] },
+              outputDimensionality: 384,
+            }),
+            signal: AbortSignal.timeout(4000),
+          }
+        );
+
+        if (embedRes.ok) {
+          const embJson = await embedRes.json();
+          const queryEmbedding = embJson?.embedding?.values;
+          if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
+            const { data: matchedCats } = await supabase.rpc('match_market_catalysts', {
+              query_embedding: queryEmbedding,
+              match_threshold: 0.28,
+              match_count: 5,
+            });
+
+            if (Array.isArray(matchedCats) && matchedCats.length > 0) {
+              toolsExecuted.push('tool_semantic_search_kap_catalysts');
+              dynamicContext += `
+[CANLI VERİ: KAP ŞİRKET BİLDİRİMLERİ & PİYASA KATALİZÖRLERİ (SEMANTİK VEKTÖR ARAMASI)]:
+${matchedCats
+  .map(
+    (c: any) =>
+      `- [${c.symbol}] (${c.category}) ${c.title} -> ${
+        c.ai_verdict === 'Bullish'
+          ? '🟢 Pozitif (Bullish)'
+          : c.ai_verdict === 'Bearish'
+          ? '🔴 Negatif (Bearish)'
+          : '🟡 Nötr (Neutral)'
+      } (Etki Skoru: ${c.impact_score}/10) | Özet: ${c.ai_takeaway}`
+  )
+  .join('\n')}
+`;
+              matchedCats.forEach((c: any) => {
+                sourcesUsed.push({
+                  title: `${c.symbol} KAP: ${c.title.slice(0, 45)}...`,
+                  source: 'Kamuyu Aydınlatma Platformu (KAP)',
+                  url: c.source_url,
+                });
+              });
+            }
+          }
+        }
+      } catch (catErr) {
+        console.warn('Semantic catalyst search non-fatal error:', catErr);
+      }
     }
 
     // 3. Build System Instruction for Gemini

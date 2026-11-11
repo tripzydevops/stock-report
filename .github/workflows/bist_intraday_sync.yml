@@ -34,11 +34,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install httpx supabase python-dotenv
 
-      - name: Execute BIST Intraday 30m Sync
+      - name: Execute BIST Intraday 30m Sync & Catalyst Ingestion
         env:
           PYTHONIOENCODING: utf-8
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python backend/scripts/sync_bist_intraday.py
+          python backend/scripts/sync_live_catalysts.py
