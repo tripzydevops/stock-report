@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
-import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch } from '@/lib/tradingViewScanner';
+import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch, getBistTradingSessionDate } from '@/lib/tradingViewScanner';
 
 const supabase = getAdminSupabase();
 
@@ -127,7 +127,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
       return null;
     }
 
-    let sessionDate = new Date().toISOString().slice(0, 10);
+    let sessionDate = isBist ? getBistTradingSessionDate() : new Date().toISOString().slice(0, 10);
     if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
       const d = new Date(meta.regularMarketTime * 1000);
       if (!isNaN(d.getTime())) {
@@ -383,7 +383,7 @@ export async function POST(request: Request) {
         market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
         date: today,
         prev_close: prevClose,
-        open_price: prevClose,
+        open_price: q.open ?? prevClose,
         current_price: currPrice,
         gap_percent: Number(gapPct.toFixed(2)),
         gap_type: gapType,

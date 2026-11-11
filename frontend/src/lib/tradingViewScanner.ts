@@ -19,6 +19,33 @@ export interface TradingViewQuoteResult {
   changePct?: number | null;
 }
 
+export function getBistTradingSessionDate(now: Date = new Date()): string {
+  // Istanbul is UTC+3 (no DST since 2016)
+  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
+  const trtDate = new Date(istanbulTimeMs);
+
+  const dayOfWeek = trtDate.getUTCDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const hour = trtDate.getUTCHours();
+
+  const targetDate = new Date(trtDate);
+
+  if (dayOfWeek === 0) {
+    // Sunday -> Friday (-2 days)
+    targetDate.setUTCDate(targetDate.getUTCDate() - 2);
+  } else if (dayOfWeek === 6) {
+    // Saturday -> Friday (-1 day)
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  } else if (dayOfWeek === 1 && hour < 10) {
+    // Monday pre-market -> Friday (-3 days)
+    targetDate.setUTCDate(targetDate.getUTCDate() - 3);
+  } else if (hour < 10) {
+    // Tuesday-Friday pre-market -> Previous trading day (-1 day)
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  return targetDate.toISOString().slice(0, 10);
+}
+
 function normalizeToTvTicker(symbol: string): string {
   const clean = symbol.replace('.IS', '').trim().toUpperCase();
   return `BIST:${clean}`;
@@ -64,7 +91,7 @@ export async function fetchTradingViewBistQuotesBatch(
     const data = json?.data;
     if (!Array.isArray(data)) return resultMap;
 
-    const todayDate = new Date().toISOString().slice(0, 10);
+    const sessionDate = getBistTradingSessionDate();
     const nowIso = new Date().toISOString();
 
     for (const item of data) {
@@ -77,26 +104,26 @@ export async function fetchTradingViewBistQuotesBatch(
       const close = typeof values[0] === 'number' && Number.isFinite(values[0]) ? values[0] : null;
       if (close === null || close <= 0) continue;
 
-      const open = typeof values[1] === 'number' && Number.isFinite(values[1]) ? values[1] : close;
-      const high = typeof values[2] === 'number' && Number.isFinite(values[2]) ? values[2] : close;
-      const low = typeof values[3] === 'number' && Number.isFinite(values[3]) ? values[3] : close;
-      const volume = typeof values[4] === 'number' && Number.isFinite(values[4]) ? Math.round(values[4]) : 0;
+      // STRICT NULL PRESERVATION - Never fabricate OHLC from close or volume from 0
+      const open = typeof values[1] === 'number' && Number.isFinite(values[1]) ? values[1] : null;
+      const high = typeof values[2] === 'number' && Number.isFinite(values[2]) ? values[2] : null;
+      const low = typeof values[3] === 'number' && Number.isFinite(values[3]) ? values[3] : null;
+      const volume = typeof values[4] === 'number' && Number.isFinite(values[4]) ? Math.round(values[4]) : null;
       const changePct = typeof values[5] === 'number' && Number.isFinite(values[5]) ? values[5] : null;
       const changeAbs = typeof values[6] === 'number' && Number.isFinite(values[6]) ? values[6] : null;
 
+      // Compute prevClose ONLY if real delta exists; otherwise leave as null
       let prevClose: number | null = null;
       if (changeAbs !== null) {
         prevClose = Number((close - changeAbs).toFixed(2));
       } else if (changePct !== null && (1 + changePct / 100) > 0) {
         prevClose = Number((close / (1 + changePct / 100)).toFixed(2));
-      } else {
-        prevClose = close;
       }
 
       const quote: TradingViewQuoteResult = {
         symbol: `${rawClean}.IS`,
         price: close,
-        sessionDate: todayDate,
+        sessionDate,
         source: 'tradingview',
         observedAt: nowIso,
         open,

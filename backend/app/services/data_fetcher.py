@@ -2,10 +2,38 @@ import logging
 import yfinance as yf
 import pandas as pd
 import httpx
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone, timedelta
 from app.models.data_contracts import validate_ohlcv_dataframe
 
 logger = logging.getLogger(__name__)
+
+def get_bist_trading_session_date(dt: Optional[datetime] = None) -> pd.Timestamp:
+    """
+    Returns the latest official Borsa Istanbul (BIST) trading session date as a normalized pd.Timestamp.
+    BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
+    Rolls back to the most recent completed session on weekends or pre-market.
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    elif dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    trt_time = dt.astimezone(timezone(timedelta(hours=3)))
+    weekday = trt_time.weekday()  # 0 = Monday, 6 = Sunday
+    hour = trt_time.hour
+
+    target = trt_time.date()
+    if weekday == 6:  # Sunday -> Friday (-2 days)
+        target = target - timedelta(days=2)
+    elif weekday == 5:  # Saturday -> Friday (-1 day)
+        target = target - timedelta(days=1)
+    elif weekday == 0 and hour < 10:  # Monday pre-market -> Friday (-3 days)
+        target = target - timedelta(days=3)
+    elif hour < 10:  # Tue-Fri pre-market -> Previous day (-1 day)
+        target = target - timedelta(days=1)
+
+    return pd.Timestamp(target)
 
 def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Safely extracts standard OHLCV column names regardless of MultiIndex structure and validates against data contracts."""
@@ -88,7 +116,7 @@ def fetch_bist_prices_tradingview(symbols: List[str]) -> Dict[str, pd.DataFrame]
             resp = client.post(url, json=payload, headers=headers)
             if resp.status_code == 200:
                 data = resp.json().get("data", [])
-                today = pd.Timestamp.now().normalize()
+                session_date = get_bist_trading_session_date()
                 for item in data:
                     ticker = item.get("s", "").replace("BIST:", "").upper()
                     vals = item.get("d", [])
@@ -97,19 +125,23 @@ def fetch_bist_prices_tradingview(symbols: List[str]) -> Dict[str, pd.DataFrame]
                     close = vals[0]
                     if not isinstance(close, (int, float)) or close <= 0:
                         continue
-                    open_p = vals[1] if isinstance(vals[1], (int, float)) else close
-                    high_p = vals[2] if isinstance(vals[2], (int, float)) else close
-                    low_p = vals[3] if isinstance(vals[3], (int, float)) else close
-                    vol = vals[4] if isinstance(vals[4], (int, float)) else 0
+                    close_val = float(close)
+                    open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else close_val
+                    high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else max(open_p, close_val)
+                    low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else min(open_p, close_val)
+                    vol = int(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else 0
+
+                    high_val = max(high_p, open_p, close_val)
+                    low_val = min(low_p, open_p, close_val)
 
                     df = pd.DataFrame([{
-                        "open": float(open_p),
-                        "high": float(high_p),
-                        "low": float(low_p),
-                        "close": float(close),
-                        "adj_close": float(close),
-                        "volume": int(vol)
-                    }], index=[today])
+                        "open": open_p,
+                        "high": high_val,
+                        "low": low_val,
+                        "close": close_val,
+                        "adj_close": close_val,
+                        "volume": vol
+                    }], index=[session_date])
                     df = validate_ohlcv_dataframe(df, strict=False)
 
                     original_sym = clean_map.get(ticker, ticker)

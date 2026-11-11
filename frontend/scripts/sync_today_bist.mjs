@@ -4,6 +4,26 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalgh
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+function getBistTradingSessionDate(now = new Date()) {
+  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
+  const trtDate = new Date(istanbulTimeMs);
+  const dayOfWeek = trtDate.getUTCDay();
+  const hour = trtDate.getUTCHours();
+  const targetDate = new Date(trtDate);
+
+  if (dayOfWeek === 0) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 2);
+  } else if (dayOfWeek === 6) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  } else if (dayOfWeek === 1 && hour < 10) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 3);
+  } else if (hour < 10) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  return targetDate.toISOString().slice(0, 10);
+}
+
 async function fetchQuoteFromTradingView(symbol) {
   try {
     const clean = symbol.replace('.IS', '').toUpperCase();
@@ -22,11 +42,11 @@ async function fetchQuoteFromTradingView(symbol) {
     if (!d || typeof d[0] !== 'number' || d[0] <= 0) return null;
     return {
       price: d[0],
-      sessionDate: new Date().toISOString().slice(0, 10),
-      open: typeof d[1] === 'number' ? d[1] : d[0],
-      high: typeof d[2] === 'number' ? d[2] : d[0],
-      low: typeof d[3] === 'number' ? d[3] : d[0],
-      volume: typeof d[4] === 'number' ? Math.round(d[4]) : 0,
+      sessionDate: getBistTradingSessionDate(),
+      open: typeof d[1] === 'number' ? d[1] : null,
+      high: typeof d[2] === 'number' ? d[2] : null,
+      low: typeof d[3] === 'number' ? d[3] : null,
+      volume: typeof d[4] === 'number' ? Math.round(d[4]) : null,
       source: 'tradingview'
     };
   } catch {

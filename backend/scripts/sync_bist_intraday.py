@@ -33,6 +33,7 @@ if env_path.exists():
     load_dotenv(env_path)
 
 import httpx
+from app.services.data_fetcher import get_bist_trading_session_date
 from app.core.database import get_supabase_client, upsert_rows
 
 def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
@@ -62,7 +63,7 @@ def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
             resp = client.post(url, json=payload, headers=headers)
             if resp.status_code == 200:
                 data = resp.json().get("data", [])
-                today_str = date.today().isoformat()
+                session_date_str = get_bist_trading_session_date().strftime("%Y-%m-%d")
                 now_iso = datetime.now(timezone.utc).isoformat()
 
                 for item in data:
@@ -73,33 +74,32 @@ def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
                     close = vals[0]
                     if not isinstance(close, (int, float)) or close <= 0:
                         continue
-                    open_p = vals[1] if isinstance(vals[1], (int, float)) else close
-                    high_p = vals[2] if isinstance(vals[2], (int, float)) else close
-                    low_p = vals[3] if isinstance(vals[3], (int, float)) else close
-                    vol = int(vals[4]) if isinstance(vals[4], (int, float)) else 0
+                    close_val = float(close)
+                    open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else None
+                    high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else None
+                    low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else None
+                    vol = int(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else None
                     change_pct = float(vals[5]) if len(vals) > 5 and isinstance(vals[5], (int, float)) else None
                     change_abs = float(vals[6]) if len(vals) > 6 and isinstance(vals[6], (int, float)) else None
 
                     prev_close = None
                     if change_abs is not None:
-                        prev_close = round(close - change_abs, 2)
+                        prev_close = round(close_val - change_abs, 2)
                     elif change_pct is not None and (1 + change_pct / 100) > 0:
-                        prev_close = round(close / (1 + change_pct / 100), 2)
-                    else:
-                        prev_close = close
+                        prev_close = round(close_val / (1 + change_pct / 100), 2)
 
                     orig_sym = clean_map.get(ticker, f"{ticker}.IS")
                     results[orig_sym] = {
                         "symbol": orig_sym,
                         "ticker": ticker,
-                        "close": float(close),
-                        "open": float(open_p),
-                        "high": float(high_p),
-                        "low": float(low_p),
+                        "close": close_val,
+                        "open": open_p,
+                        "high": high_p,
+                        "low": low_p,
                         "volume": vol,
                         "prev_close": float(prev_close) if prev_close else None,
                         "change_pct": change_pct,
-                        "session_date": today_str,
+                        "session_date": session_date_str,
                         "observed_at": now_iso
                     }
     except Exception as e:
@@ -192,7 +192,7 @@ def main():
 
         price_rows.append({
             "asset_id": asset_id,
-            "date": today_str,
+            "date": q.get("session_date", today_str),
             "open": q["open"],
             "high": q["high"],
             "low": q["low"],
@@ -204,8 +204,8 @@ def main():
         })
 
         # Calculate live Opening Range Breakout (ORB) status
-        prev_close = q["prev_close"] or q["open"]
-        open_price = q["open"]
+        prev_close = q["prev_close"] or q["open"] or q["close"]
+        open_price = q["open"] or q["close"]
         curr_price = q["close"]
 
         gap_pct = ((open_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
@@ -223,7 +223,7 @@ def main():
         clean_sym = sym.replace(".IS", "").upper()
         orb_rows.append({
             "symbol": f"{clean_sym}.IS",
-            "date": today_str,
+            "date": q.get("session_date", today_str),
             "prev_close": prev_close,
             "open_price": open_price,
             "current_price": curr_price,
@@ -231,7 +231,7 @@ def main():
             "gap_type": gap_type,
             "orb_status": orb_status,
             "bias": bias,
-            "volume_spike": bool(q["volume"] > 500000 or abs(gap_pct) > 1.0),
+            "volume_spike": bool((q["volume"] is not None and q["volume"] > 500000) or abs(gap_pct) > 1.0),
             "recommended_action": "Holding above open (Bullish)" if bias == "bullish" else "Under session pressure (Caution)"
         })
 
