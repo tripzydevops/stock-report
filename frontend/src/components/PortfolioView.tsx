@@ -12,6 +12,7 @@ import DcaOffsetEngine from './DcaOffsetEngine';
 import PortfolioBriefModal from './PortfolioBriefModal';
 import { calculateLedgerCash } from '../lib/cashLedger';
 import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
+import Pagination from './Pagination';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -71,6 +72,10 @@ export default function PortfolioView({
   const [lotSortOrder, setLotSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isCompactTable, setIsCompactTable] = useState<boolean>(true);
   const [isPortfolioBriefOpen, setIsPortfolioBriefOpen] = useState(false);
+  const [realizedPage, setRealizedPage] = useState<number>(1);
+  const [realizedPageSize, setRealizedPageSize] = useState<number>(10);
+  const [ordersPage, setOrdersPage] = useState<number>(1);
+  const [ordersPageSize, setOrdersPageSize] = useState<number>(10);
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
   };
@@ -374,6 +379,35 @@ export default function PortfolioView({
     if (!dateFilter || dateFilter.preset === 'ALL') return transfers;
     return transfers.filter(t => isDateInRange(t.transferDate, dateFilter));
   }, [transfers, dateFilter]);
+
+  // Reset pages when date filter or collections change
+  React.useEffect(() => {
+    setRealizedPage(1);
+  }, [dateFilter, realizedTrades]);
+
+  React.useEffect(() => {
+    setOrdersPage(1);
+  }, [orderSideFilter, orderAssetFilter, dateFilter, orders]);
+
+  // Paginated realized trades
+  const paginatedRealizedTrades = React.useMemo(() => {
+    const start = (realizedPage - 1) * realizedPageSize;
+    return effectiveRealizedTrades.slice(start, start + realizedPageSize);
+  }, [effectiveRealizedTrades, realizedPage, realizedPageSize]);
+
+  // Filtered & Paginated orders
+  const filteredOrders = React.useMemo(() => {
+    return effectiveOrders.filter(ord => {
+      const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
+      const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
+      return matchesSide && matchesAsset;
+    });
+  }, [effectiveOrders, orderSideFilter, orderAssetFilter]);
+
+  const paginatedOrders = React.useMemo(() => {
+    const start = (ordersPage - 1) * ordersPageSize;
+    return filteredOrders.slice(start, start + ordersPageSize);
+  }, [filteredOrders, ordersPage, ordersPageSize]);
 
   // Counterfactual & Execution Discipline Metrics (Filtered by Date if active)
   const totalTargetPnlTRY = effectiveRealizedTrades.reduce((acc, trade) => {
@@ -2331,7 +2365,7 @@ export default function PortfolioView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {effectiveRealizedTrades.map((trade) => {
+                    {paginatedRealizedTrades.map((trade) => {
                       const isProfit = trade.realizedPnl >= 0;
                       const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
                       const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
@@ -2446,7 +2480,7 @@ export default function PortfolioView({
 
               {/* Mobile Card View (< 768px) */}
               <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
-                {effectiveRealizedTrades.map((trade) => {
+                {paginatedRealizedTrades.map((trade) => {
                   const isProfit = trade.realizedPnl >= 0;
                   const hasTarget = Boolean(trade.recommendedTargetPrice && trade.recommendedTargetPrice > 0);
                   const targetPotentialPnl = trade.targetPnl !== undefined ? trade.targetPnl : 0;
@@ -2563,6 +2597,18 @@ export default function PortfolioView({
               </div>
             </>
           )}
+
+          {/* Realized Trades Pagination */}
+          {effectiveRealizedTrades.length > 0 && (
+            <Pagination
+              currentPage={realizedPage}
+              totalItems={effectiveRealizedTrades.length}
+              pageSize={realizedPageSize}
+              onPageChange={setRealizedPage}
+              onPageSizeChange={setRealizedPageSize}
+              pageSizeOptions={[10, 20, 50]}
+            />
+          )}
         </div>
       )}
 
@@ -2623,23 +2669,12 @@ export default function PortfolioView({
 
         {/* Mobile View: Executed Orders Cards (md:hidden) */}
         <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2.5">
-          {effectiveOrders
-            .filter(ord => {
-              const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
-              const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
-              return matchesSide && matchesAsset;
-            }).length === 0 ? (
-              <div className="py-8 text-center text-gray-500 text-xs">
-                Filtreye uygun işlem bulunamadı.
-              </div>
-            ) : (
-              effectiveOrders
-                .filter(ord => {
-                  const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
-                  const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
-                  return matchesSide && matchesAsset;
-                })
-                .map((ord) => {
+          {filteredOrders.length === 0 ? (
+            <div className="py-8 text-center text-gray-500 text-xs">
+              Filtreye uygun işlem bulunamadı.
+            </div>
+          ) : (
+            paginatedOrders.map((ord) => {
                   const isBuy = ord.side === 'BUY';
                   return (
                     <div
@@ -2728,13 +2763,14 @@ export default function PortfolioView({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {effectiveOrders
-                .filter(ord => {
-                  const matchesSide = orderSideFilter === 'ALL' || ord.side === orderSideFilter;
-                  const matchesAsset = orderAssetFilter === 'ALL' || ord.symbol === orderAssetFilter;
-                  return matchesSide && matchesAsset;
-                })
-                .map((ord) => {
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
+                    Filtreye uygun işlem bulunamadı.
+                  </td>
+                </tr>
+              ) : (
+                paginatedOrders.map((ord) => {
                   const isBuy = ord.side === 'BUY';
                   return (
                     <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
@@ -2791,10 +2827,22 @@ export default function PortfolioView({
                       </td>
                     </tr>
                   );
-                })}
+                }))}
             </tbody>
           </table>
         </div>
+
+        {/* Executed Orders Pagination */}
+        {filteredOrders.length > 0 && (
+          <Pagination
+            currentPage={ordersPage}
+            totalItems={filteredOrders.length}
+            pageSize={ordersPageSize}
+            onPageChange={setOrdersPage}
+            onPageSizeChange={setOrdersPageSize}
+            pageSizeOptions={[10, 20, 50]}
+          />
+        )}
       </div>
 
       {/* 5. Capital Transfers & Funding Inflows History */}
