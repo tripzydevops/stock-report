@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import Pagination from './Pagination';
 
 export interface WatchlistItemData {
   id: string;
@@ -107,6 +108,8 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [sortField, setSortField] = useState<'symbol' | 'change' | 'price' | 'date'>('date');
   const [sortAsc, setSortAsc] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   // Detailed Add Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -599,6 +602,17 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       });
   }, [items, marketFilter, searchQuery, sortField, sortAsc]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [marketFilter, searchQuery, sortField, sortAsc]);
+
+  // Paginated items
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, currentPage, pageSize]);
+
   // Aggregate stats
   const stats = useMemo(() => {
     const totalCount = items.length;
@@ -1054,7 +1068,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       {/* 4. Card View (Mobile-First Cards) */}
       {viewMode === 'cards' && filteredItems.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filteredItems.map(item => {
+          {paginatedItems.map(item => {
             const isPositive = item.dailyChangePercent !== null && item.dailyChangePercent >= 0;
             const cleanSym = item.symbol.replace('.IS', '');
             const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
@@ -1277,7 +1291,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 text-xs">
-                {filteredItems.map(item => {
+                {paginatedItems.map(item => {
                   const isPositive = item.dailyChangePercent !== null && item.dailyChangePercent >= 0;
                   const cleanSym = item.symbol.replace('.IS', '');
                   const isFund = item.market === 'TEFAS' || item.assetClass === 'fund';
@@ -1414,6 +1428,18 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             </table>
           </div>
         </div>
+      )}
+
+      {/* Pagination Controls */}
+      {filteredItems.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredItems.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[15, 30, 60]}
+        />
       )}
 
       {/* 6. Detailed Add Modal */}

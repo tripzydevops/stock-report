@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { Pagination } from './Pagination';
 
 export interface AssetData {
   id: string;
@@ -26,6 +27,8 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [sortConfig, setSortConfig] = useState<{ key: keyof AssetData; direction: 'asc' | 'desc' } | null>({
     key: 'changePercent',
     direction: 'desc'
@@ -50,6 +53,8 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
     if (aVal > bVal) return direction === 'asc' ? 1 : -1;
     return 0;
   });
+
+  const paginatedAssets = sortedAssets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const requestSort = (key: keyof AssetData) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -93,7 +98,10 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
             type="text"
             placeholder={t.assetTable.searchPlaceholder}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-48"
           />
 
@@ -101,7 +109,10 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
             {markets.map(m => (
               <button
                 key={m}
-                onClick={() => setFilter(m)}
+                onClick={() => {
+                  setFilter(m);
+                  setCurrentPage(1);
+                }}
                 className={`px-3 py-1.5 text-xs rounded-xl font-bold transition-all cursor-pointer ${
                   filter === m 
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30' 
@@ -149,7 +160,7 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {sortedAssets.map((asset) => (
+            {paginatedAssets.map((asset) => (
               <tr 
                 key={asset.id} 
                 onClick={() => onSelectAsset?.(asset)}
@@ -208,6 +219,17 @@ export default function AssetTable({ assets, onSelectAsset }: AssetTableProps) {
           </tbody>
         </table>
       </div>
+
+      {sortedAssets.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={sortedAssets.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[15, 25, 50, 100]}
+        />
+      )}
     </div>
   );
 }

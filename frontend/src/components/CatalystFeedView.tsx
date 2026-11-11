@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MarketCatalyst, PortfolioItem } from '../lib/supabaseClient';
 import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
+import Pagination from './Pagination';
 
 interface CatalystFeedViewProps {
   catalysts: MarketCatalyst[];
@@ -26,6 +27,8 @@ export default function CatalystFeedView({
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'DIVIDEND' | 'MACRO'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   const portfolioSymbols = new Set(portfolio.map(p => p.symbol.toUpperCase().replace('.IS', '')));
   const signalSymbols = new Set(signals.map(s => s.symbol.toUpperCase().replace('.IS', '')));
@@ -116,6 +119,15 @@ export default function CatalystFeedView({
   const dividendCatalysts = catalysts.filter(isDividendCatalyst);
   const dividendCatalystsCount = dividendCatalysts.length;
   const macroCatalystsCount = catalysts.filter(c => c.category.startsWith('MACRO')).length;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchQuery, dateFilter]);
+
+  const paginatedCatalysts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCatalysts.slice(start, start + pageSize);
+  }, [filteredCatalysts, currentPage, pageSize]);
 
   return (
     <div className="space-y-6 max-w-full min-w-0 overflow-x-hidden">
@@ -321,7 +333,7 @@ export default function CatalystFeedView({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredCatalysts.map((item) => {
+          {paginatedCatalysts.map((item) => {
             const cat = getCategoryMeta(item.category);
             const verdict = getVerdictStyle(item.aiVerdict);
             const isPortfolioStock = portfolioSymbols.has(item.symbol.toUpperCase().replace('.IS', ''));
@@ -436,6 +448,18 @@ export default function CatalystFeedView({
             );
           })}
         </div>
+      )}
+
+      {/* Pagination Controls */}
+      {filteredCatalysts.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredCatalysts.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          pageSizeOptions={[12, 24, 48, 96]}
+        />
       )}
     </div>
   );

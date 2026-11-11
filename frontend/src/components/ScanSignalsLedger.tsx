@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ScannedTradeSignal } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { useLanguage } from '../context/LanguageContext';
+import Pagination from './Pagination';
 
 interface ScanSignalsLedgerProps {
   signals: ScannedTradeSignal[];
@@ -17,6 +18,8 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
   const [strategyFilter, setStrategyFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeModalSignal, setActiveModalSignal] = useState<ScannedTradeSignal | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   // Metrics calculations
   const totalSignals = signals.length;
@@ -55,6 +58,17 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
       s.name.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesMarket && matchesStrategy && matchesSearch;
   });
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, marketFilter, strategyFilter, searchTerm]);
+
+  // Paginated Signals
+  const paginatedSignals = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSignals.slice(start, start + pageSize);
+  }, [filteredSignals, currentPage, pageSize]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -246,7 +260,7 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
               No trade signals match the selected filter criteria.
             </div>
           ) : (
-            filteredSignals.map((sig) => {
+            paginatedSignals.map((sig) => {
               const currSym = sig.currency === 'USD' ? '$' : '₺';
               const isWin = sig.status === 'target_hit';
               const isLoss = sig.status === 'stopped_out';
@@ -368,7 +382,7 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
                   </td>
                 </tr>
               ) : (
-                filteredSignals.map((sig) => {
+                paginatedSignals.map((sig) => {
                   const currSym = sig.currency === 'USD' ? '$' : '₺';
                   const isWin = sig.status === 'target_hit';
                   const isLoss = sig.status === 'stopped_out';
@@ -511,6 +525,18 @@ export default function ScanSignalsLedger({ signals, onSelectTicker }: ScanSigna
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {filteredSignals.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredSignals.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[15, 30, 50, 100]}
+          />
+        )}
       </div>
 
       {/* 4. Detailed Signal Modal Dialog */}

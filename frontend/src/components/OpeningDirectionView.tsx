@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { OpeningDirectionItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
 import { DateRangeFilter, formatFilterDisplay } from '../lib/dateFilter';
+import { Pagination } from './Pagination';
 
 interface OpeningDirectionViewProps {
   items: OpeningDirectionItem[];
@@ -41,6 +42,8 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH' | 'BREAKOUT' | 'SPIKE'>('ALL');
   const [sortColumn, setSortColumn] = useState<OrbSortColumn>('gapPercent');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const bullishCount = items.filter(i => i.bias.includes('Bullish')).length;
   const bearishCount = items.filter(i => i.bias.includes('Bearish')).length;
@@ -128,6 +131,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
     });
   }, [items, marketFilter, typeFilter, searchQuery, sortColumn, sortDirection]);
 
+  const paginatedItems = useMemo(() => {
+    return filteredItems.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filteredItems, currentPage, pageSize]);
+
   return (
     <div className="space-y-6">
       {dateFilter && dateFilter.preset !== 'ALL' && (
@@ -142,7 +149,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
       {/* Top ORB Summary Cards (Responsive 2x2 on Mobile, 4 Cols on Desktop) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <div 
-          onClick={() => setTypeFilter(typeFilter === 'BULLISH' ? 'ALL' : 'BULLISH')}
+          onClick={() => {
+            setTypeFilter(typeFilter === 'BULLISH' ? 'ALL' : 'BULLISH');
+            setCurrentPage(1);
+          }}
           className={`bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border cursor-pointer transition-all hover:scale-[1.01] shadow-xs ${
             typeFilter === 'BULLISH' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-gray-200 dark:border-gray-700'
           }`}
@@ -159,7 +169,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
         </div>
 
         <div 
-          onClick={() => setTypeFilter(typeFilter === 'BREAKOUT' ? 'ALL' : 'BREAKOUT')}
+          onClick={() => {
+            setTypeFilter(typeFilter === 'BREAKOUT' ? 'ALL' : 'BREAKOUT');
+            setCurrentPage(1);
+          }}
           className={`bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border cursor-pointer transition-all hover:scale-[1.01] shadow-xs ${
             typeFilter === 'BREAKOUT' ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'
           }`}
@@ -188,7 +201,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
         </div>
 
         <div 
-          onClick={() => setTypeFilter(typeFilter === 'SPIKE' ? 'ALL' : 'SPIKE')}
+          onClick={() => {
+            setTypeFilter(typeFilter === 'SPIKE' ? 'ALL' : 'SPIKE');
+            setCurrentPage(1);
+          }}
           className={`bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border cursor-pointer transition-all hover:scale-[1.01] shadow-xs ${
             typeFilter === 'SPIKE' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-gray-200 dark:border-gray-700'
           }`}
@@ -225,13 +241,19 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
                 type="text"
                 placeholder={language === 'tr' ? "Hisse ara (örn: THYAO, NVDA)..." : "Search symbol..."}
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="w-full text-xs px-3 py-2 pl-8 rounded-xl bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">🔍</span>
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
                 >
                   ✕
@@ -246,7 +268,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
                 {(['ALL', 'BIST', 'US'] as const).map(m => (
                   <button
                     key={m}
-                    onClick={() => setMarketFilter(m)}
+                    onClick={() => {
+                      setMarketFilter(m);
+                      setCurrentPage(1);
+                    }}
                     className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
                       marketFilter === m
                         ? 'bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
@@ -326,7 +351,7 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-750">
-              {filteredItems.map((row, idx) => (
+              {paginatedItems.map((row, idx) => (
                 <div
                   key={idx}
                   onClick={() => onSelectTicker?.(row.symbol)}
@@ -422,7 +447,7 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((row, idx) => (
+                paginatedItems.map((row, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                     <td className="px-5 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
@@ -501,6 +526,18 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {filteredItems.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredItems.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[15, 25, 50, 100]}
+          />
+        )}
       </div>
     </div>
   );
