@@ -184,6 +184,10 @@ async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R
   return Promise.all(results);
 }
 
+export async function GET(request: Request) {
+  return POST(request);
+}
+
 export async function POST(request: Request) {
   try {
     if (!verifyCronAuthorization(request)) {
