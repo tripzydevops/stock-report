@@ -57,12 +57,16 @@ interface AiTradeCoPilotModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: CoPilotAssetContext | null;
+  onUpdateStopLoss?: (symbol: string, newStopPrice: number) => void;
+  onTradeHolding?: (holding: any) => void;
 }
 
 export default function AiTradeCoPilotModal({
   isOpen,
   onClose,
   asset,
+  onUpdateStopLoss,
+  onTradeHolding,
 }: AiTradeCoPilotModalProps) {
   const isHolding = Boolean(asset?.shares && asset.shares > 0);
   const [activeTab, setActiveTab] = useState<'brief' | 'blueprint' | 'premortem' | 'qa'>(
@@ -72,6 +76,8 @@ export default function AiTradeCoPilotModal({
   const [userQuery, setUserQuery] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const [dcaRebuyShares, setDcaRebuyShares] = useState<number>(50);
+  const [breakevenFeedback, setBreakevenFeedback] = useState<string | null>(null);
 
   if (!isOpen || !asset) return null;
 
@@ -628,6 +634,164 @@ ${cleanSym} is a designated long-term dividend compounder (Current: ${curr}${ass
                   </div>
                 </div>
               </div>
+
+              {/* 1-Click Breakeven Stop Protection (Free Trade) */}
+              {isProfitable && onUpdateStopLoss && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🛡️</span>
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900 dark:text-white">
+                          {language === 'tr' ? 'Risksiz İşlem (Breakeven Stop) Fırsatı' : 'Free Trade Opportunity (Breakeven Stop)'}
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {language === 'tr'
+                            ? `Pozisyonunuz kârda (+%${asset.pnlPercent?.toFixed(1) || '0.0'}). Stop seviyenizi alış maliyetine (${curr}${entry.toFixed(2)}) çekerek sermaye riskinizi sıfırlayın.`
+                            : `Position is in profit (+${asset.pnlPercent?.toFixed(1) || '0.0'}%). Move stop loss to entry price (${curr}${entry.toFixed(2)}) to lock in a risk-free position.`}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdateStopLoss(asset.symbol, entry);
+                        setBreakevenFeedback(language === 'tr' ? `✓ Stop seviyesi ${curr}${entry.toFixed(2)} maliyetine çekildi!` : `✓ Stop raised to breakeven ${curr}${entry.toFixed(2)}!`);
+                        setTimeout(() => setBreakevenFeedback(null), 3500);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>🛡️</span>
+                      <span>{language === 'tr' ? 'Stopu Maliyete Çek' : 'Lock Breakeven'}</span>
+                    </button>
+                  </div>
+                  {breakevenFeedback && (
+                    <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+                      {breakevenFeedback}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Interactive DCA Rebuy Simulator on Dips */}
+              {asset.currentPrice < entry && (
+                <div className="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">📉</span>
+                      <div>
+                        <h4 className="font-bold text-xs text-gray-900 dark:text-white">
+                          {language === 'tr' ? 'Kademeli Alım (DCA) Simülatörü' : 'Interactive DCA Rebuy Simulator'}
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {language === 'tr'
+                            ? 'Düşüşlerde maliyeti aşağı çekmek ve başa baş noktasını hızlandırmak için ek alım simülasyonu.'
+                            : 'Simulate tranches to lower cost basis and accelerate breakeven turnaround.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {[25, 50, 100].map(cnt => (
+                        <button
+                          key={cnt}
+                          type="button"
+                          onClick={() => setDcaRebuyShares(cnt)}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                            dcaRebuyShares === cnt
+                              ? 'bg-purple-600 text-white shadow-xs'
+                              : 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                          }`}
+                        >
+                          +{cnt} Lot
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const currentShares = asset.shares || 100;
+                    const currentTotalCost = asset.totalCost || (entry * currentShares);
+                    const additionalCost = (dcaRebuyShares || 0) * asset.currentPrice;
+                    const simulatedTotalShares = currentShares + (dcaRebuyShares || 0);
+                    const simulatedBlendedCost = simulatedTotalShares > 0 ? (currentTotalCost + additionalCost) / simulatedTotalShares : entry;
+                    const costReduction = entry - simulatedBlendedCost;
+                    const simulatedBreakevenPct = asset.currentPrice > 0 ? ((simulatedBlendedCost - asset.currentPrice) / asset.currentPrice) * 100 : 0;
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-center">
+                          <div className="p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                            <span className="text-[10px] text-gray-400 font-sans uppercase">Ek Alım Adedi</span>
+                            <div className="flex items-center justify-center gap-1 mt-0.5">
+                              <input
+                                type="number"
+                                min="1"
+                                value={dcaRebuyShares}
+                                onChange={(e) => setDcaRebuyShares(Math.max(1, parseInt(e.target.value) || 0))}
+                                className="w-16 px-1.5 py-0.5 text-xs text-center border rounded bg-white dark:bg-gray-700 font-bold text-gray-900 dark:text-white border-purple-300"
+                              />
+                              <span className="text-[10px] font-sans text-gray-500">lot</span>
+                            </div>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                            <span className="text-[10px] text-gray-400 font-sans uppercase">Gereken Sermaye</span>
+                            <p className="font-bold text-gray-900 dark:text-white mt-0.5 text-xs">
+                              {curr}{additionalCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </p>
+                            <span className="text-[9px] text-gray-500 font-sans block">@ {curr}{asset.currentPrice.toFixed(2)}</span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                            <span className="text-[10px] text-gray-400 font-sans uppercase">Yeni Ortalama Maliyet</span>
+                            <p className="font-bold text-purple-600 dark:text-purple-400 mt-0.5 text-xs">
+                              {curr}{simulatedBlendedCost.toFixed(2)}
+                            </p>
+                            <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-sans block font-bold">
+                              {costReduction > 0 ? `-${curr}${costReduction.toFixed(2)} düşüş` : 'Maliyet artar'}
+                            </span>
+                          </div>
+
+                          <div className="p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 border border-purple-100 dark:border-purple-900/40">
+                            <span className="text-[10px] text-gray-400 font-sans uppercase">Yeni Başa Baş Farkı</span>
+                            <p className={`font-bold mt-0.5 text-xs ${simulatedBreakevenPct <= 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                              {simulatedBreakevenPct <= 0 ? 'KÂRDA' : `+%${simulatedBreakevenPct.toFixed(1)}`}
+                            </p>
+                            <span className="text-[9px] text-gray-500 font-sans block">
+                              {simulatedTotalShares} lot toplam
+                            </span>
+                          </div>
+                        </div>
+
+                        {onTradeHolding && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onTradeHolding({
+                                  symbol: asset.symbol,
+                                  name: asset.name,
+                                  market: asset.market,
+                                  shares: asset.shares || 100,
+                                  entryPrice: entry,
+                                  currentPrice: asset.currentPrice,
+                                  currency: asset.currency || 'TRY',
+                                  isDividend: asset.isDividend,
+                                });
+                                onClose();
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span>⚡</span>
+                              <span>{language === 'tr' ? `DCA Alım Emri Gir (+${dcaRebuyShares} Lot)` : `Execute DCA Tranche (+${dcaRebuyShares} Lots)`}</span>
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Macro & Catalyst Tailwinds */}
               <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 space-y-1.5">

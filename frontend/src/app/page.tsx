@@ -4504,6 +4504,11 @@ export default function Home() {
         isOpen={!!coPilotAsset}
         onClose={() => setCoPilotAsset(null)}
         asset={coPilotAsset}
+        onUpdateStopLoss={handleUpdateStopLoss}
+        onTradeHolding={(holding) => {
+          setSelectedHolding(holding);
+          setTradeModalOpen(true);
+        }}
       />
 
       <AuthModal

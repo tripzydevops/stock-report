@@ -18,6 +18,10 @@ interface MarketRegimeEvaluation {
   descriptionTr: string;
   descriptionEn: string;
   isCorrection: boolean;
+  recommendedEquityPct: number;
+  recommendedCashPct: number;
+  strategyTiltTr: string;
+  strategyTiltEn: string;
   updatedAt: string;
 }
 
@@ -72,6 +76,8 @@ function evaluateDynamicRegime(
   fallbackTrend: 'up' | 'down' | 'flat'
 ): MarketRegimeEvaluation {
   if (closes.length < 5) {
+    const isBear = fallbackStatus === 'Bearish';
+    const isBull = fallbackStatus === 'Bullish';
     return {
       symbol,
       name,
@@ -85,9 +91,21 @@ function evaluateDynamicRegime(
       drawdownFromPeakPct: 0,
       status: fallbackStatus,
       trend: fallbackTrend,
-      descriptionTr: fallbackStatus === 'Bearish' ? 'Düzeltme Modu' : 'Dengeleme & Tepki',
-      descriptionEn: fallbackStatus === 'Bearish' ? 'Correction Mode' : 'Consolidation',
-      isCorrection: fallbackStatus === 'Bearish',
+      descriptionTr: isBear ? 'Düzeltme Modu' : isBull ? 'Yükseliş Trendi' : 'Dengeleme & Tepki',
+      descriptionEn: isBear ? 'Correction Mode' : isBull ? 'Bullish Trend' : 'Consolidation',
+      isCorrection: isBear,
+      recommendedEquityPct: isBull ? 85 : isBear ? 40 : 65,
+      recommendedCashPct: isBull ? 15 : isBear ? 60 : 35,
+      strategyTiltTr: isBull
+        ? 'Momentum Kırılımları & Trend Düzeltme Dönüşleri (Yüksek Beta)'
+        : isBear
+        ? 'Sermaye Koruma & Kaliteli Temettü Hisselerinde Kademeli Alım (DCA)'
+        : 'Destek Dönüşleri, Yatay Bant İşlemleri & Temettü Nakit Akışı',
+      strategyTiltEn: isBull
+        ? 'Momentum Breakouts & Trend Pullback Reclaims (High Beta)'
+        : isBear
+        ? 'Defensive Cash Preservation & High-Quality Dividend DCA on Dips'
+        : 'Support Reversals, Range-Trading & High-Yield Dividend Cashflow',
       updatedAt: new Date().toISOString(),
     };
   }
@@ -113,6 +131,10 @@ function evaluateDynamicRegime(
   let isCorrection = false;
   let descTr = '';
   let descEn = '';
+  let equityPct = 65;
+  let cashPct = 35;
+  let tiltTr = 'Destek Dönüşleri, Yatay Bant İşlemleri & Temettü Nakit Akışı';
+  let tiltEn = 'Support Reversals, Range-Trading & High-Yield Dividend Cashflow';
 
   // Quantitative Market Regime Classification:
   // 1. Correction: Drawdown from 20-day high >= 2.2% or (5d return < -1.0% and price below 20 EMA)
@@ -120,6 +142,10 @@ function evaluateDynamicRegime(
     status = 'Bearish';
     trend = return5d < 0 ? 'down' : 'flat';
     isCorrection = true;
+    equityPct = 40;
+    cashPct = 60;
+    tiltTr = 'Sermaye Koruma & Kaliteli Temettü Hisselerinde Kademeli Alım (DCA)';
+    tiltEn = 'Defensive Cash Preservation & High-Quality Dividend DCA on Dips';
     descTr = `Son 20 günlük zirveden %${Math.abs(drawdownFromPeakPct).toFixed(1)} düzeltme; 5 günlük getiri: %${return5d.toFixed(1)}`;
     descEn = `Correction of ${Math.abs(drawdownFromPeakPct).toFixed(1)}% from 20-day peak; 5-day return: ${return5d.toFixed(1)}%`;
   }
@@ -128,6 +154,10 @@ function evaluateDynamicRegime(
     status = 'Bullish';
     trend = 'up';
     isCorrection = false;
+    equityPct = 85;
+    cashPct = 15;
+    tiltTr = 'Momentum Kırılımları & Trend Düzeltme Dönüşleri (Yüksek Beta)';
+    tiltEn = 'Momentum Breakouts & Trend Pullback Reclaims (High Beta)';
     descTr = `20 günlük EMA üzerinde güçlü yükseliş; 5 günlük getiri: +%${return5d.toFixed(1)}`;
     descEn = `Bullish trend above 20-day EMA; 5-day return: +${return5d.toFixed(1)}%`;
   }
@@ -136,6 +166,10 @@ function evaluateDynamicRegime(
     status = 'Neutral';
     trend = return5d > 0.5 ? 'up' : return5d < -0.5 ? 'down' : 'flat';
     isCorrection = false;
+    equityPct = 65;
+    cashPct = 35;
+    tiltTr = 'Destek Dönüşleri, Yatay Bant İşlemleri & Temettü Nakit Akışı';
+    tiltEn = 'Support Reversals, Range-Trading & High-Yield Dividend Cashflow';
     descTr = `Destek seviyesinde dengeleme & taban arayışı; 5 günlük getiri: %${return5d.toFixed(1)}`;
     descEn = `Consolidation & floor defense; 5-day return: ${return5d.toFixed(1)}%`;
   }
@@ -156,6 +190,10 @@ function evaluateDynamicRegime(
     descriptionTr: descTr,
     descriptionEn: descEn,
     isCorrection,
+    recommendedEquityPct: equityPct,
+    recommendedCashPct: cashPct,
+    strategyTiltTr: tiltTr,
+    strategyTiltEn: tiltEn,
     updatedAt: new Date().toISOString(),
   };
 }

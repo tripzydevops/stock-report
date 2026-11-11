@@ -12,6 +12,10 @@ export interface RegimeStatus {
   descriptionTr?: string;
   descriptionEn?: string;
   isCorrection?: boolean;
+  recommendedEquityPct?: number;
+  recommendedCashPct?: number;
+  strategyTiltTr?: string;
+  strategyTiltEn?: string;
 }
 
 interface MarketRegimeBannerProps {
@@ -103,6 +107,26 @@ export default function MarketRegimeBanner({ usRegime, bistRegime, usdTryRate }:
             <div className="flex items-center gap-1.5 bg-slate-900/80 border border-slate-800 rounded-lg px-2.5 py-1 shrink-0">
               <span className="text-[11px] font-bold text-slate-400">USD/TRY:</span>
               <span className="font-mono font-bold text-blue-400">₺{usdTryRate.toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Dynamic Allocation Guidance Pill */}
+          {(bistRegime?.recommendedEquityPct || usRegime?.recommendedEquityPct) && (
+            <div
+              className="flex items-center gap-1.5 bg-blue-950/40 border border-blue-800/60 rounded-lg px-2.5 py-1 shrink-0 cursor-help transition-all hover:bg-blue-900/40"
+              title={
+                language === 'tr'
+                  ? `Rejim Stratejisi: ${bistRegime?.strategyTiltTr || usRegime?.strategyTiltTr || 'Dengeli Strateji'}`
+                  : `Regime Strategy: ${bistRegime?.strategyTiltEn || usRegime?.strategyTiltEn || 'Balanced Strategy'}`
+              }
+            >
+              <span className="text-[11px]">💼</span>
+              <span className="text-[10px] font-bold text-blue-300 hidden md:inline">
+                {language === 'tr' ? 'Rejim Dağılımı:' : 'Allocation:'}
+              </span>
+              <span className="text-[10px] font-black text-white font-mono bg-blue-900/60 px-1.5 py-0.5 rounded border border-blue-700/50">
+                %{bistRegime?.recommendedEquityPct ?? usRegime?.recommendedEquityPct ?? 65} {language === 'tr' ? 'Hisse' : 'Stock'} · %{bistRegime?.recommendedCashPct ?? usRegime?.recommendedCashPct ?? 35} {language === 'tr' ? 'Nakit' : 'Cash'}
+              </span>
             </div>
           )}
         </div>

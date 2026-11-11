@@ -32,14 +32,32 @@ def evaluate_regime(index_df: pd.DataFrame) -> Dict:
         regime = 'Bearish'
         trend = 'down' if return_5d < 0 else 'flat'
         notes = f"Correction Mode: Drawdown {drawdown_pct:.1f}% from 20d peak; 5d return {return_5d:.1f}%"
+        equity_pct = 40
+        cash_pct = 60
+        tilt = "Defensive Cash Preservation & High-Quality Dividend DCA on Dips"
+        tilt_tr = "Sermaye Koruma & Kaliteli Temettü Hisselerinde Kademeli Alım (DCA)"
+        risk_multiplier = 0.5
     elif close > ema_20 and return_5d >= 1.0 and drawdown_pct > -1.5:
         regime = 'Bullish'
         trend = 'up'
         notes = f"Bullish Trend: Above EMA20 ({ema_20:.2f}); 5d return +{return_5d:.1f}%"
+        equity_pct = 85
+        cash_pct = 15
+        tilt = "Momentum Breakouts & Trend Pullback Reclaims (High Beta)"
+        tilt_tr = "Momentum Kırılımları & Trend Düzeltme Dönüşleri (Agresif / Yüksek Beta)"
+        risk_multiplier = 1.0
     else:
         regime = 'Neutral'
         trend = 'up' if return_5d > 0.5 else 'flat'
         notes = f"Consolidation / Rebound: 5d return {return_5d:.1f}%, EMA50: {ema_50:.2f}"
+        equity_pct = 65
+        cash_pct = 35
+        tilt = "Support Reversals, Range-Trading & High-Yield Dividend Cashflow"
+        tilt_tr = "Destek Dönüşleri, Yatay Bant İşlemleri & Temettü Nakit Akışı"
+        risk_multiplier = 0.75
+
+    dist_to_ema50 = ((close - ema_50) / ema_50) * 100.0 if ema_50 > 0 else 0.0
+    dist_to_ema200 = ((close - ema_200) / ema_200) * 100.0 if ema_200 > 0 else 0.0
         
     return {
         'regime': regime,
@@ -49,6 +67,14 @@ def evaluate_regime(index_df: pd.DataFrame) -> Dict:
         'return_5d': return_5d,
         'ema_50': ema_50,
         'ema_200': ema_200,
+        'dist_to_ema50_pct': round(dist_to_ema50, 2),
+        'dist_to_ema200_pct': round(dist_to_ema200, 2),
+        'is_golden_cross': bool(ema_50 > ema_200),
+        'recommended_equity_pct': equity_pct,
+        'recommended_cash_pct': cash_pct,
+        'strategy_tilt': tilt,
+        'strategy_tilt_tr': tilt_tr,
+        'risk_multiplier': risk_multiplier,
         'notes': notes
     }
 
