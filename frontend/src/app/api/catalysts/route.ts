@@ -26,6 +26,20 @@ async function generateQueryEmbedding(text: string, apiKey: string): Promise<num
   return null;
 }
 
+function parseImpactScore(raw: any): number | null {
+  if (raw === null || raw === undefined) return null;
+  const num = typeof raw === 'number' ? raw : parseFloat(String(raw));
+  if (Number.isFinite(num) && num >= 0 && num <= 10) {
+    return Number(num.toFixed(1));
+  }
+  return null;
+}
+
+function sanitizeTextQuery(q: string): string {
+  // Strip characters that break PostgREST or() filter syntax
+  return q.replace(/[,.()%"'\\]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = getServerSupabase();
@@ -33,7 +47,8 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q')?.trim() || '';
     const symbol = searchParams.get('symbol')?.trim().toUpperCase() || '';
     const category = searchParams.get('category')?.trim() || '';
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '25', 10)));
+    const rawLimit = parseInt(searchParams.get('limit') || '25', 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(50, Math.max(1, rawLimit)) : 25;
 
     const apiKey =
       process.env.GEMINI_API_KEY ||
@@ -46,25 +61,19 @@ export async function GET(req: NextRequest) {
       if (queryEmbedding && queryEmbedding.length === 384) {
         const { data: rpcMatches, error: rpcErr } = await supabase.rpc('match_market_catalysts', {
           query_embedding: queryEmbedding,
-          match_threshold: 0.25,
+          match_threshold: 0.22,
           match_count: limit,
+          filter_symbol: symbol ? symbol.replace('.IS', '') : null,
+          filter_category: category && category !== 'ALL' ? category : null,
         });
 
-        if (!rpcErr && Array.isArray(rpcMatches) && rpcMatches.length > 0) {
-          let results = rpcMatches;
-          if (symbol) {
-            results = results.filter((r: any) => r.symbol?.toUpperCase().replace('.IS', '') === symbol.replace('.IS', ''));
-          }
-          if (category && category !== 'ALL') {
-            results = results.filter((r: any) => r.category === category);
-          }
-
+        if (!rpcErr && Array.isArray(rpcMatches)) {
           return NextResponse.json({
             success: true,
             isSemantic: true,
             query,
-            count: results.length,
-            catalysts: results.map((r: any) => ({
+            count: rpcMatches.length,
+            catalysts: rpcMatches.map((r: any) => ({
               id: r.id,
               symbol: r.symbol,
               market: r.market || 'BIST',
@@ -73,10 +82,10 @@ export async function GET(req: NextRequest) {
               details: r.details,
               aiVerdict: r.ai_verdict,
               aiTakeaway: r.ai_takeaway,
-              impactScore: Number(r.impact_score) || 7.5,
+              impactScore: parseImpactScore(r.impact_score),
               sourceUrl: r.source_url,
               publishedAt: r.published_at,
-              similarity: r.similarity ? Number(r.similarity.toFixed(4)) : null,
+              similarity: typeof r.similarity === 'number' && Number.isFinite(r.similarity) ? Number(r.similarity.toFixed(4)) : null,
             })),
           });
         }
@@ -96,8 +105,9 @@ export async function GET(req: NextRequest) {
     if (category && category !== 'ALL') {
       dbQuery = dbQuery.eq('category', category);
     }
-    if (query) {
-      dbQuery = dbQuery.or(`title.ilike.%${query}%,details.ilike.%${query}%,ai_takeaway.ilike.%${query}%`);
+    const cleanSearch = sanitizeTextQuery(query);
+    if (cleanSearch) {
+      dbQuery = dbQuery.or(`title.ilike.%${cleanSearch}%,details.ilike.%${cleanSearch}%,ai_takeaway.ilike.%${cleanSearch}%`);
     }
 
     const { data, error } = await dbQuery;
@@ -120,7 +130,7 @@ export async function GET(req: NextRequest) {
         details: r.details,
         aiVerdict: r.ai_verdict,
         aiTakeaway: r.ai_takeaway,
-        impactScore: Number(r.impact_score) || 7.5,
+        impactScore: parseImpactScore(r.impact_score),
         sourceUrl: r.source_url,
         publishedAt: r.published_at,
       })),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketCatalyst, PortfolioItem } from '../lib/supabaseClient';
 import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange } from '../lib/dateFilter';
@@ -28,9 +28,13 @@ export default function CatalystFeedView({
   const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'DIVIDEND' | 'MACRO'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticMatches, setSemanticMatches] = useState<MarketCatalyst[] | null>(null);
+  const [searchMode, setSearchMode] = useState<'none' | 'semantic' | 'text'>('none');
   const [isSearchingSemantic, setIsSearchingSemantic] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+
+  const activeRequestIdRef = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const portfolioSymbols = new Set(portfolio.map(p => p.symbol.toUpperCase().replace('.IS', '')));
   const signalSymbols = new Set(signals.map(s => s.symbol.toUpperCase().replace('.IS', '')));
@@ -86,44 +90,77 @@ export default function CatalystFeedView({
     }
   };
 
-  // Debounced Semantic Search using Supabase pgvector API
+  // Debounced Search with AbortController and Generation ID to eliminate race conditions
   useEffect(() => {
     const q = searchQuery.trim();
-    if (!q || q.length < 3) {
+
+    // Cancel in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    if (!q || q.length < 2) {
       setSemanticMatches(null);
+      setSearchMode('none');
       setIsSearchingSemantic(false);
       return;
     }
 
+    const currentReqId = ++activeRequestIdRef.current;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     const timer = setTimeout(async () => {
       try {
         setIsSearchingSemantic(true);
-        const res = await fetch(`/api/catalysts?q=${encodeURIComponent(q)}&limit=40`);
+        const res = await fetch(`/api/catalysts?q=${encodeURIComponent(q)}&limit=40`, {
+          signal: controller.signal,
+        });
+
+        // Ignore if a newer request was dispatched
+        if (currentReqId !== activeRequestIdRef.current) return;
+
         if (res.ok) {
           const json = await res.json();
-          if (json.isSemantic && Array.isArray(json.catalysts) && json.catalysts.length > 0) {
+          if (Array.isArray(json.catalysts)) {
             setSemanticMatches(json.catalysts);
+            setSearchMode(json.isSemantic ? 'semantic' : 'text');
           } else {
-            setSemanticMatches(null);
+            setSemanticMatches([]);
+            setSearchMode(json.isSemantic ? 'semantic' : 'text');
           }
+        } else {
+          // Keep search active but empty on non-OK
+          setSemanticMatches([]);
+          setSearchMode('none');
         }
-      } catch {
-        setSemanticMatches(null);
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        if (currentReqId === activeRequestIdRef.current) {
+          setSemanticMatches(null);
+          setSearchMode('none');
+        }
       } finally {
-        setIsSearchingSemantic(false);
+        if (currentReqId === activeRequestIdRef.current) {
+          setIsSearchingSemantic(false);
+        }
       }
-    }, 450);
+    }, 400);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [searchQuery]);
 
-  // Filter Logic: uses semantic vector matches if active, otherwise original catalysts
+  // Filter Logic: uses server results if active, otherwise local catalysts
   const sourceCatalysts = semanticMatches !== null ? semanticMatches : catalysts;
 
   const filteredCatalysts = sourceCatalysts.filter(item => {
     const sym = item.symbol.toUpperCase().replace('.IS', '');
     
-    // If not using semantic vector search, do substring match
+    // If not using server search matches, do local substring match
     if (semanticMatches === null && searchQuery.trim() !== '') {
       const matchesSearch = 
         item.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -201,8 +238,12 @@ export default function CatalystFeedView({
               {isSearchingSemantic ? '⚡' : '🔍'}
             </span>
             {semanticMatches !== null && (
-              <span className="absolute right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
-                pgvector
+              <span className={`absolute right-2 top-1.5 px-1.5 py-0.5 rounded text-[9px] font-black border ${
+                searchMode === 'semantic'
+                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-700'
+                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+              }`}>
+                {searchMode === 'semantic' ? 'pgvector' : 'text'}
               </span>
             )}
           </div>
@@ -457,7 +498,9 @@ export default function CatalystFeedView({
 
                       <div className="flex items-center space-x-1 text-[11px] font-bold text-gray-500">
                         <span>⚡ {language === 'tr' ? 'Etki Derecesi:' : 'Catalyst Impact:'}</span>
-                        <span className="font-mono text-gray-900 dark:text-white">{item.impactScore}/10</span>
+                        <span className="font-mono text-gray-900 dark:text-white">
+                          {item.impactScore !== null && item.impactScore !== undefined ? `${item.impactScore}/10` : '—'}
+                        </span>
                       </div>
                     </div>
 

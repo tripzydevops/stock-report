@@ -14,7 +14,7 @@ from pandera.errors import SchemaError, SchemaErrors
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
-# 1. OHLCV Data Contract
+# 1. OHLCV Data Contracts
 # ---------------------------------------------------------
 OHLCV_SCHEMA = DataFrameSchema(
     columns={
@@ -56,14 +56,30 @@ OHLCV_SCHEMA = DataFrameSchema(
     strict=False,  # Allow extra metadata columns (e.g., date, symbol)
 )
 
+# Contract for intraday partial snapshots / close-only quotes where open/high/low/volume may be null
+SNAPSHOT_QUOTE_SCHEMA = DataFrameSchema(
+    columns={
+        "close": Column(float, Check.gt(0), nullable=False, required=True),
+        "open": Column(float, Check.gt(0), nullable=True, required=False),
+        "high": Column(float, Check.gt(0), nullable=True, required=False),
+        "low": Column(float, Check.gt(0), nullable=True, required=False),
+        "volume": Column(float, Check.ge(0), nullable=True, required=False),
+        "adj_close": Column(float, Check.gt(0), nullable=True, required=False),
+    },
+    coerce=True,
+    strict=False,
+)
+
 
 def validate_ohlcv_dataframe(
     df: pd.DataFrame,
     strict: bool = False,
     preserve_original_columns: bool = False,
+    allow_partial: bool = False,
 ) -> pd.DataFrame:
     """
-    Validates OHLCV DataFrame against OHLCV_SCHEMA.
+    Validates OHLCV DataFrame against OHLCV_SCHEMA or SNAPSHOT_QUOTE_SCHEMA.
+    If allow_partial=True, preserves null open/high/low/volume for intraday snapshots without fabricating.
     If strict=True, raises SchemaError on invalid data.
     If strict=False, logs warnings, filters out corrupted rows, and returns clean data.
     If preserve_original_columns=True, retains original column names instead of lowercase.
@@ -74,28 +90,35 @@ def validate_ohlcv_dataframe(
     work_df = df.copy()
     work_df.columns = [str(c).lower().replace(" ", "_") for c in work_df.columns]
 
+    target_schema = SNAPSHOT_QUOTE_SCHEMA if allow_partial else OHLCV_SCHEMA
+
     if strict:
-        validated = OHLCV_SCHEMA.validate(work_df)
+        validated = target_schema.validate(work_df)
         return df.loc[validated.index].copy() if preserve_original_columns else validated
 
     try:
-        validated = OHLCV_SCHEMA.validate(work_df)
+        validated = target_schema.validate(work_df)
         return df.loc[validated.index].copy() if preserve_original_columns else validated
     except (SchemaError, SchemaErrors) as err:
         logger.warning(f"Data contract validation failed on OHLCV feed: {err}. Sanitizing rows...")
-        valid_mask = (
-            (work_df["open"] > 0)
-            & (work_df["high"] > 0)
-            & (work_df["low"] > 0)
-            & (work_df["close"] > 0)
-            & (work_df["high"] >= work_df["low"] - 1e-5)
-            & (work_df["high"] >= work_df["open"] - 1e-5)
-            & (work_df["high"] >= work_df["close"] - 1e-5)
-            & (work_df["low"] <= work_df["open"] + 1e-5)
-            & (work_df["low"] <= work_df["close"] + 1e-5)
-        )
-        if "volume" in work_df.columns:
-            valid_mask = valid_mask & ((work_df["volume"].isna()) | (work_df["volume"] >= 0))
+        if allow_partial:
+            valid_mask = work_df["close"] > 0
+            if "volume" in work_df.columns:
+                valid_mask = valid_mask & ((work_df["volume"].isna()) | (work_df["volume"] >= 0))
+        else:
+            valid_mask = (
+                (work_df["open"] > 0)
+                & (work_df["high"] > 0)
+                & (work_df["low"] > 0)
+                & (work_df["close"] > 0)
+                & (work_df["high"] >= work_df["low"] - 1e-5)
+                & (work_df["high"] >= work_df["open"] - 1e-5)
+                & (work_df["high"] >= work_df["close"] - 1e-5)
+                & (work_df["low"] <= work_df["open"] + 1e-5)
+                & (work_df["low"] <= work_df["close"] + 1e-5)
+            )
+            if "volume" in work_df.columns:
+                valid_mask = valid_mask & ((work_df["volume"].isna()) | (work_df["volume"] >= 0))
 
         if preserve_original_columns:
             cleaned = df.loc[valid_mask].copy()

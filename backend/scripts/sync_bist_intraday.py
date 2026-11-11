@@ -36,11 +36,24 @@ import httpx
 from datetime import timedelta
 from app.core.database import get_supabase_client, upsert_rows
 
+# Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
+BIST_MARKET_HOLIDAYS = {
+    # 2025
+    "2025-01-01", "2025-03-31", "2025-04-01", "2025-04-23", "2025-05-01",
+    "2025-05-19", "2025-06-06", "2025-06-09", "2025-07-15", "2025-10-29",
+    # 2026
+    "2026-01-01", "2026-03-20", "2026-04-23", "2026-05-01", "2026-05-19",
+    "2026-05-27", "2026-05-28", "2026-05-29", "2026-07-15", "2026-10-29",
+    # 2027
+    "2027-01-01", "2027-03-10", "2027-03-11", "2027-03-12", "2027-04-23",
+    "2027-05-17", "2027-05-18", "2027-05-19", "2027-07-15", "2027-10-29",
+}
+
 def get_bist_trading_session_date(dt: datetime | None = None) -> date:
     """
     Returns the latest official Borsa Istanbul (BIST) trading session date.
     BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
-    Rolls back to the most recent completed session on weekends or pre-market.
+    Rolls back past weekends and official BIST market holidays.
     """
     if dt is None:
         dt = datetime.now(timezone.utc)
@@ -48,17 +61,13 @@ def get_bist_trading_session_date(dt: datetime | None = None) -> date:
         dt = dt.replace(tzinfo=timezone.utc)
 
     trt_time = dt.astimezone(timezone(timedelta(hours=3)))
-    weekday = trt_time.weekday()  # 0 = Monday, 6 = Sunday
     hour = trt_time.hour
-
     target = trt_time.date()
-    if weekday == 6:  # Sunday -> Friday (-2 days)
-        target = target - timedelta(days=2)
-    elif weekday == 5:  # Saturday -> Friday (-1 day)
+
+    if hour < 10:
         target = target - timedelta(days=1)
-    elif weekday == 0 and hour < 10:  # Monday pre-market -> Friday (-3 days)
-        target = target - timedelta(days=3)
-    elif hour < 10:  # Tue-Fri pre-market -> Previous day (-1 day)
+
+    while target.weekday() in (5, 6) or target.strftime("%Y-%m-%d") in BIST_MARKET_HOLIDAYS:
         target = target - timedelta(days=1)
 
     return target
@@ -230,22 +239,33 @@ def main():
             "observed_at": now_iso
         })
 
-        # Calculate live Opening Range Breakout (ORB) status
-        prev_close = q["prev_close"] or q["open"] or q["close"]
-        open_price = q["open"] or q["close"]
+        # Calculate genuine Opening Range Breakout (ORB) status - No baseline substitution
+        prev_close = q.get("prev_close")
+        open_price = q.get("open")
         curr_price = q["close"]
 
-        gap_pct = ((open_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
-        gap_type = 'gap_up' if gap_pct >= 0.5 else ('gap_down' if gap_pct <= -0.5 else 'flat')
-        
-        orb_status = 'consolidating'
-        bias = 'neutral'
-        if curr_price > open_price:
-            orb_status = 'above_open'
-            bias = 'bullish'
-        elif curr_price < open_price:
-            orb_status = 'below_open'
-            bias = 'bearish'
+        if prev_close is not None and prev_close > 0 and open_price is not None and open_price > 0:
+            gap_pct = round(((open_price - prev_close) / prev_close) * 100, 2)
+            gap_type = 'gap_up' if gap_pct >= 0.5 else ('gap_down' if gap_pct <= -0.5 else 'flat')
+            if curr_price > open_price:
+                orb_status = 'above_open'
+                bias = 'bullish'
+            elif curr_price < open_price:
+                orb_status = 'below_open'
+                bias = 'bearish'
+            else:
+                orb_status = 'consolidating'
+                bias = 'neutral'
+            rec_action = "Holding above open (Bullish)" if bias == "bullish" else ("Under session pressure (Caution)" if bias == "bearish" else "Consolidating near open")
+            vol_spike = bool((q["volume"] is not None and q["volume"] > 500000) or abs(gap_pct) > 1.0)
+        else:
+            # Baseline unknown: explicitly mark unavailable, NEVER fabricate a 0.0% flat gap
+            gap_pct = None
+            gap_type = 'unavailable'
+            orb_status = 'unavailable'
+            bias = 'neutral'
+            rec_action = 'Baseline unavailable'
+            vol_spike = False
 
         clean_sym = sym.replace(".IS", "").upper()
         orb_rows.append({
@@ -254,12 +274,12 @@ def main():
             "prev_close": prev_close,
             "open_price": open_price,
             "current_price": curr_price,
-            "gap_percent": round(gap_pct, 2),
+            "gap_percent": gap_pct,
             "gap_type": gap_type,
             "orb_status": orb_status,
             "bias": bias,
-            "volume_spike": bool((q["volume"] is not None and q["volume"] > 500000) or abs(gap_pct) > 1.0),
-            "recommended_action": "Holding above open (Bullish)" if bias == "bullish" else "Under session pressure (Caution)"
+            "volume_spike": vol_spike,
+            "recommended_action": rec_action
         })
 
     # 5. Upsert price_history in chunks of 100

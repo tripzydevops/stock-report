@@ -8,11 +8,50 @@ from app.models.data_contracts import validate_ohlcv_dataframe
 
 logger = logging.getLogger(__name__)
 
+import numpy as np
+
+# Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
+BIST_MARKET_HOLIDAYS = {
+    # 2025
+    "2025-01-01",  # New Year
+    "2025-03-31",  # Ramazan Bayramı Day 1
+    "2025-04-01",  # Ramazan Bayramı Day 2
+    "2025-04-23",  # National Sovereignty
+    "2025-05-01",  # Labor Day
+    "2025-05-19",  # Youth & Sports Day
+    "2025-06-06",  # Kurban Bayramı Day 1
+    "2025-06-09",  # Kurban Bayramı Day 4
+    "2025-07-15",  # Democracy Day
+    "2025-10-29",  # Republic Day
+    # 2026
+    "2026-01-01",  # New Year
+    "2026-03-20",  # Ramazan Bayramı Day 1
+    "2026-04-23",  # National Sovereignty
+    "2026-05-01",  # Labor Day
+    "2026-05-19",  # Youth & Sports Day
+    "2026-05-27",  # Kurban Bayramı Day 1
+    "2026-05-28",  # Kurban Bayramı Day 2
+    "2026-05-29",  # Kurban Bayramı Day 3
+    "2026-07-15",  # Democracy Day
+    "2026-10-29",  # Republic Day
+    # 2027
+    "2027-01-01",  # New Year
+    "2027-03-10",  # Ramazan Bayramı Day 1
+    "2027-03-11",  # Ramazan Bayramı Day 2
+    "2027-03-12",  # Ramazan Bayramı Day 3
+    "2027-04-23",  # National Sovereignty
+    "2027-05-17",  # Kurban Bayramı Day 1
+    "2027-05-18",  # Kurban Bayramı Day 2
+    "2027-05-19",  # Atatürk & Youth Day / Kurban
+    "2027-07-15",  # Democracy Day
+    "2027-10-29",  # Republic Day
+}
+
 def get_bist_trading_session_date(dt: Optional[datetime] = None) -> pd.Timestamp:
     """
     Returns the latest official Borsa Istanbul (BIST) trading session date as a normalized pd.Timestamp.
     BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
-    Rolls back to the most recent completed session on weekends or pre-market.
+    Rolls back past weekends and official BIST market holidays.
     """
     if dt is None:
         dt = datetime.now(timezone.utc)
@@ -20,17 +59,15 @@ def get_bist_trading_session_date(dt: Optional[datetime] = None) -> pd.Timestamp
         dt = dt.replace(tzinfo=timezone.utc)
 
     trt_time = dt.astimezone(timezone(timedelta(hours=3)))
-    weekday = trt_time.weekday()  # 0 = Monday, 6 = Sunday
     hour = trt_time.hour
-
     target = trt_time.date()
-    if weekday == 6:  # Sunday -> Friday (-2 days)
-        target = target - timedelta(days=2)
-    elif weekday == 5:  # Saturday -> Friday (-1 day)
+
+    # Pre-market on any day: previous session must be used
+    if hour < 10:
         target = target - timedelta(days=1)
-    elif weekday == 0 and hour < 10:  # Monday pre-market -> Friday (-3 days)
-        target = target - timedelta(days=3)
-    elif hour < 10:  # Tue-Fri pre-market -> Previous day (-1 day)
+
+    # Roll back past weekends (Saturday=5, Sunday=6) and official BIST market holidays
+    while target.weekday() in (5, 6) or target.strftime("%Y-%m-%d") in BIST_MARKET_HOLIDAYS:
         target = target - timedelta(days=1)
 
     return pd.Timestamp(target)
@@ -126,23 +163,25 @@ def fetch_bist_prices_tradingview(symbols: List[str]) -> Dict[str, pd.DataFrame]
                     if not isinstance(close, (int, float)) or close <= 0:
                         continue
                     close_val = float(close)
-                    open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else close_val
-                    high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else max(open_p, close_val)
-                    low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else min(open_p, close_val)
-                    vol = int(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else 0
+                    # STRICT NULL PRESERVATION - Never fabricate OHLC from close or volume from 0
+                    open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else np.nan
+                    high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else np.nan
+                    low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else np.nan
+                    vol = float(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else np.nan
 
-                    high_val = max(high_p, open_p, close_val)
-                    low_val = min(low_p, open_p, close_val)
+                    has_full_ohlc = not (np.isnan(open_p) or np.isnan(high_p) or np.isnan(low_p))
+                    completeness = "full_ohlcv" if has_full_ohlc and not np.isnan(vol) else ("close_only" if np.isnan(open_p) and np.isnan(high_p) and np.isnan(low_p) else "partial_ohlcv")
 
                     df = pd.DataFrame([{
                         "open": open_p,
-                        "high": high_val,
-                        "low": low_val,
+                        "high": high_p,
+                        "low": low_p,
                         "close": close_val,
                         "adj_close": close_val,
-                        "volume": vol
+                        "volume": vol,
+                        "bar_completeness": completeness,
                     }], index=[session_date])
-                    df = validate_ohlcv_dataframe(df, strict=False)
+                    df = validate_ohlcv_dataframe(df, strict=False, allow_partial=True)
 
                     original_sym = clean_map.get(ticker, ticker)
                     results[original_sym] = df

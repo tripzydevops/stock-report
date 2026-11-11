@@ -17,29 +17,41 @@ export interface TradingViewQuoteResult {
   low: number | null;
   volume: number | null;
   changePct?: number | null;
+  barCompleteness?: 'full_ohlcv' | 'partial_ohlcv' | 'close_only';
 }
+
+// Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
+export const BIST_MARKET_HOLIDAYS = new Set([
+  // 2025
+  "2025-01-01", "2025-03-31", "2025-04-01", "2025-04-23", "2025-05-01",
+  "2025-05-19", "2025-06-06", "2025-06-09", "2025-07-15", "2025-10-29",
+  // 2026
+  "2026-01-01", "2026-03-20", "2026-04-23", "2026-05-01", "2026-05-19",
+  "2026-05-27", "2026-05-28", "2026-05-29", "2026-07-15", "2026-10-29",
+  // 2027
+  "2027-01-01", "2027-03-10", "2027-03-11", "2027-03-12", "2027-04-23",
+  "2027-05-17", "2027-05-18", "2027-05-19", "2027-07-15", "2027-10-29",
+]);
 
 export function getBistTradingSessionDate(now: Date = new Date()): string {
   // Istanbul is UTC+3 (no DST since 2016)
   const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
   const trtDate = new Date(istanbulTimeMs);
-
-  const dayOfWeek = trtDate.getUTCDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
   const hour = trtDate.getUTCHours();
 
   const targetDate = new Date(trtDate);
 
-  if (dayOfWeek === 0) {
-    // Sunday -> Friday (-2 days)
-    targetDate.setUTCDate(targetDate.getUTCDate() - 2);
-  } else if (dayOfWeek === 6) {
-    // Saturday -> Friday (-1 day)
+  // If before 10:00 AM TRT, look for previous trading session
+  if (hour < 10) {
     targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-  } else if (dayOfWeek === 1 && hour < 10) {
-    // Monday pre-market -> Friday (-3 days)
-    targetDate.setUTCDate(targetDate.getUTCDate() - 3);
-  } else if (hour < 10) {
-    // Tuesday-Friday pre-market -> Previous trading day (-1 day)
+  }
+
+  // Roll back past weekends (0=Sun, 6=Sat) and official BIST market holidays
+  while (
+    targetDate.getUTCDay() === 0 ||
+    targetDate.getUTCDay() === 6 ||
+    BIST_MARKET_HOLIDAYS.has(targetDate.toISOString().slice(0, 10))
+  ) {
     targetDate.setUTCDate(targetDate.getUTCDate() - 1);
   }
 
@@ -120,6 +132,12 @@ export async function fetchTradingViewBistQuotesBatch(
         prevClose = Number((close / (1 + changePct / 100)).toFixed(2));
       }
 
+      const hasFullOhlc = open !== null && high !== null && low !== null;
+      const barCompleteness: 'full_ohlcv' | 'partial_ohlcv' | 'close_only' =
+        hasFullOhlc && volume !== null
+          ? 'full_ohlcv'
+          : (open === null && high === null && low === null ? 'close_only' : 'partial_ohlcv');
+
       const quote: TradingViewQuoteResult = {
         symbol: `${rawClean}.IS`,
         price: close,
@@ -131,7 +149,8 @@ export async function fetchTradingViewBistQuotesBatch(
         low,
         volume,
         prevClose,
-        changePct
+        changePct,
+        barCompleteness,
       };
 
       resultMap.set(rawClean, quote);

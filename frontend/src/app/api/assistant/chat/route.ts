@@ -215,31 +215,39 @@ export async function POST(req: NextRequest) {
           if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
             const { data: matchedCats } = await supabase.rpc('match_market_catalysts', {
               query_embedding: queryEmbedding,
-              match_threshold: 0.28,
+              match_threshold: 0.25,
               match_count: 5,
+              filter_symbol: matchedTicker ? matchedTicker.replace('.IS', '') : null,
             });
 
             if (Array.isArray(matchedCats) && matchedCats.length > 0) {
               toolsExecuted.push('tool_semantic_search_kap_catalysts');
+              const nowIso = new Date().toISOString();
               dynamicContext += `
-[CANLI VERİ: KAP ŞİRKET BİLDİRİMLERİ & PİYASA KATALİZÖRLERİ (SEMANTİK VEKTÖR ARAMASI)]:
+[CANLI VERİ: ŞİRKET BİLDİRİMLERİ & PİYASA KATALİZÖRLERİ (SEMANTİK VEKTÖR ARAMASI - Alınma Zamanı: ${nowIso})]:
 ${matchedCats
-  .map(
-    (c: any) =>
-      `- [${c.symbol}] (${c.category}) ${c.title} -> ${
-        c.ai_verdict === 'Bullish'
-          ? '🟢 Pozitif (Bullish)'
-          : c.ai_verdict === 'Bearish'
-          ? '🔴 Negatif (Bearish)'
-          : '🟡 Nötr (Neutral)'
-      } (Etki Skoru: ${c.impact_score}/10) | Özet: ${c.ai_takeaway}`
-  )
+  .map((c: any) => {
+    const pubDate = c.published_at ? new Date(c.published_at).toISOString().replace('T', ' ').slice(0, 16) : 'Bilinmiyor';
+    const scoreText = c.impact_score != null ? `${c.impact_score}/10` : '—';
+    const verdictText =
+      c.ai_verdict === 'Bullish'
+        ? '🟢 Pozitif (Bullish)'
+        : c.ai_verdict === 'Bearish'
+        ? '🔴 Negatif (Bearish)'
+        : '🟡 Nötr (Neutral)';
+    return `- [${c.symbol}] [Yayın Tarihi: ${pubDate} UTC] (${c.category}) "${c.title}" -> ${verdictText} (Etki Skoru: ${scoreText}) | Özet: ${c.ai_takeaway}`;
+  })
   .join('\n')}
 `;
               matchedCats.forEach((c: any) => {
+                let sourceLabel = 'Kamuyu Aydınlatma Platformu (KAP)';
+                if (c.category === 'MACRO_TCMB') sourceLabel = 'TCMB Resmi Duyuruları';
+                else if (c.category === 'MACRO_FED') sourceLabel = 'Federal Reserve / Global Macro';
+                else if (!c.source_url?.includes('kap.org.tr')) sourceLabel = 'Finans Basını & Şirket Duyurusu';
+
                 sourcesUsed.push({
-                  title: `${c.symbol} KAP: ${c.title.slice(0, 45)}...`,
-                  source: 'Kamuyu Aydınlatma Platformu (KAP)',
+                  title: `${c.symbol}: ${c.title.slice(0, 45)}...`,
+                  source: sourceLabel,
                   url: c.source_url,
                 });
               });

@@ -49,32 +49,35 @@ def main():
         return
 
     client = get_supabase_client()
-    print("Fetching market_catalysts records without embeddings...")
-    res = client.table("market_catalysts").select("id, symbol, title, details, ai_takeaway").is_("embedding", "null").limit(300).execute()
-    records = res.data or []
-    print(f"Found {len(records)} catalysts needing vector embeddings.")
+    print("Starting continuous catalyst vector embedding ingestion...")
 
-    if not records:
-        print("All catalysts already have embeddings!")
-        return
+    total_embedded = 0
+    batch_size = 50
 
-    success_count = 0
-    for idx, rec in enumerate(records, 1):
-        content = f"{rec.get('symbol', '')}: {rec.get('title', '')}. {rec.get('ai_takeaway', '')}"
-        emb = generate_embedding(content, GEMINI_API_KEY)
-        if emb and len(emb) == 384:
-            try:
-                client.table("market_catalysts").update({"embedding": emb}).eq("id", rec["id"]).execute()
-                success_count += 1
-                if idx % 10 == 0 or idx == len(records):
-                    print(f"  ✓ Processed [{idx}/{len(records)}] catalysts...")
-            except Exception as e:
-                print(f"  ! DB update error for {rec['id']}: {e}")
-        else:
-            print(f"  ! Failed to generate embedding for {rec.get('symbol')}")
-        time.sleep(0.15)  # Rate limiting buffer
+    while True:
+        res = client.table("market_catalysts").select("id, symbol, title, details, ai_takeaway").is_("embedding", "null").limit(batch_size).execute()
+        records = res.data or []
+        if not records:
+            break
 
-    print(f"\nSuccessfully generated and stored {success_count} vector embeddings in Supabase!")
+        print(f"Processing batch of {len(records)} catalysts...")
+        for idx, rec in enumerate(records, 1):
+            details_snippet = f" Details: {rec['details'][:300]}" if rec.get('details') else ""
+            content = f"{rec.get('symbol', '')}: {rec.get('title', '')}. {rec.get('ai_takeaway', '')}{details_snippet}"
+            emb = generate_embedding(content, GEMINI_API_KEY)
+            if emb and len(emb) == 384:
+                try:
+                    client.table("market_catalysts").update({"embedding": emb}).eq("id", rec["id"]).execute()
+                    total_embedded += 1
+                except Exception as e:
+                    print(f"  ! DB update error for {rec['id']}: {e}")
+            else:
+                print(f"  ! Failed to generate embedding for {rec.get('symbol')}")
+            time.sleep(0.12)  # Rate limiting buffer
+
+        print(f"  ✓ Batch complete. Total processed so far: {total_embedded}")
+
+    print(f"\nFinished: Successfully generated and stored {total_embedded} vector embeddings in Supabase!")
 
 if __name__ == "__main__":
     main()

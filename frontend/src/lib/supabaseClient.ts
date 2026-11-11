@@ -257,8 +257,9 @@ export interface MarketCatalyst {
   details?: string;
   aiVerdict: 'Bullish' | 'Bearish' | 'Neutral';
   aiTakeaway: string;
-  impactScore: number;
+  impactScore?: number | null;
   sourceUrl?: string;
   publishedAt: string;
+  similarity?: number | null;
 }
 

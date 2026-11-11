@@ -354,27 +354,42 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // ORB calculation
-      const prevClose = q.prevClose || q.price;
+      // Genuine ORB calculation - Never manufacture 0.0% flat gaps from missing baselines
+      const prevClose = typeof q.prevClose === 'number' && Number.isFinite(q.prevClose) && q.prevClose > 0 ? q.prevClose : null;
+      const openPrice = typeof q.open === 'number' && Number.isFinite(q.open) && q.open > 0 ? q.open : null;
       const currPrice = q.price;
-      const gapPct = prevClose > 0 ? ((currPrice - prevClose) / prevClose) * 100 : 0;
 
-      let gapType = 'Flat Open';
-      let orbStatus = 'Inside Range';
+      let gapPct: number | null = null;
+      let gapType = 'unavailable';
+      let orbStatus = 'unavailable';
       let bias = 'Neutral';
+      let recAction = 'Baseline unavailable';
+      let volumeSpike = false;
 
-      if (gapPct >= 0.75) {
-        gapType = 'Gap Up & Go';
-        orbStatus = 'Broke High';
-        bias = 'Strong Bullish';
-      } else if (gapPct <= -0.75) {
-        gapType = 'Gap Down';
-        orbStatus = 'Broke Low';
-        bias = 'Bearish';
-      } else if (gapPct > 0.2) {
-        gapType = 'Gap Up & Go';
-        orbStatus = 'Broke High';
-        bias = 'Bullish';
+      if (prevClose !== null && openPrice !== null) {
+        gapPct = Number((((openPrice - prevClose) / prevClose) * 100).toFixed(2));
+        if (gapPct >= 0.75) {
+          gapType = 'Gap Up & Go';
+          orbStatus = currPrice > openPrice ? 'Broke High' : 'Inside Range';
+          bias = 'Strong Bullish';
+          recAction = 'Gapping strong & holding above open';
+        } else if (gapPct <= -0.75) {
+          gapType = 'Gap Down';
+          orbStatus = currPrice < openPrice ? 'Broke Low' : 'Inside Range';
+          bias = 'Bearish';
+          recAction = 'Gapping down under session pressure';
+        } else if (gapPct > 0.2) {
+          gapType = 'Gap Up & Go';
+          orbStatus = currPrice > openPrice ? 'Broke High' : 'Inside Range';
+          bias = 'Bullish';
+          recAction = 'Modest positive open';
+        } else {
+          gapType = 'Flat Open';
+          orbStatus = 'Inside Range';
+          bias = 'Neutral';
+          recAction = 'Consolidating in session range';
+        }
+        volumeSpike = Boolean((q.volume && q.volume > 500000) || Math.abs(gapPct) > 1.0);
       }
 
       orbRows.push({
@@ -383,14 +398,14 @@ export async function POST(request: Request) {
         market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
         date: today,
         prev_close: prevClose,
-        open_price: q.open ?? prevClose,
+        open_price: openPrice,
         current_price: currPrice,
-        gap_percent: Number(gapPct.toFixed(2)),
+        gap_percent: gapPct,
         gap_type: gapType,
         orb_status: orbStatus,
         bias: bias,
-        volume_spike: Boolean((q.volume && q.volume > 500000) || Math.abs(gapPct) > 1.0),
-        recommended_action: gapPct >= 0.75 ? 'Gapping strong & holding above open' : 'Consolidating in session range'
+        volume_spike: volumeSpike,
+        recommended_action: recAction
       });
     }
 
