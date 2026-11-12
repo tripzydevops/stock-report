@@ -14,6 +14,7 @@ type HelpCategory = 'all' | 'basics' | 'signals' | 'portfolio' | 'dividend' | 'q
 type WalkthroughTab = 
   | 'signals'
   | 'copilot'
+  | 'playbook'
   | 'calculator'
   | 'dca'
   | 'stoploss'
@@ -21,6 +22,7 @@ type WalkthroughTab =
   | 'tax_arbitrage'
   | 'recovery'
   | 'orb'
+  | 'catalysts'
   | 'gemini'
   | 'backtest';
 
@@ -52,6 +54,38 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
   ];
 
   const faqs: FaqItem[] = [
+    {
+      qTr: 'Elimdeki kârdaki hisseyi ne zaman satıp, düzeltme yapınca nereden geri almalıyım? (Playbook Modalı)',
+      qEn: 'When should I scale out of a winning position and where should I buy it back cheaper? (Trade Playbook)',
+      aTr: 'Portföy sayfasındaki her hissenin yanındaki "📋 Playbook" butonuna basarak yapay zekanın 3 kademeli planını çalıştırabilirsiniz: 1) Kademe 1 (%50 Kâr Al): Yapısal direnç bölgesinde (+%6 ila +%12) pozisyonun yarısı nakde çevrilir. 2) Başabaş Kalkanı (Breakeven Shield): Kalan %50 hissenin stop-loss seviyesi doğrudan alış maliyetine çekilerek işlem tamamen "Risksiz / Bedava" hale getirilir. 3) Geri Toplama Planı (Pullback Rebuy Zone): Kâr realize edilen nakitle hissenin Fibonacci 0.382 – 0.50 düzeltme bölgesine inmesi beklenir ve dipten daha düşük maliyetle daha çok lot toplanır. Ayrıca modal içerisindeki butondan stop seviyesini tek tıkla portföyünüze uygulayabilirsiniz.',
+      aEn: 'Clicking the "📋 Playbook" button on any portfolio holding launches an autonomous 3-tier execution blueprint: 1) Scale-Out Tranche 1 (Take Profit on 50%): Bank profits at structural resistance (+6% to +12%). 2) Breakeven Shield: Instantly moves your stop-loss on the remaining 50% runner shares to your entry cost for a completely risk-free trade. 3) Pullback Rebuy Zone: Mathematical Fibonacci retracement zone (0.382–0.50) where banked cash is redeployed to re-accumulate cheaper lots without chasing tops. You can also sync the invalidation stop directly to your live portfolio with 1 click.',
+      category: 'portfolio',
+      tag: 'Kâr Al & Geri Topla',
+    },
+    {
+      qTr: 'Sabah 10:00 BIST seansı açıldığında portföyümdeki hisselerin durumunu ve kırılımları nasıl takip ederim?',
+      qEn: 'How do I monitor morning breakout momentum on my portfolio at 10:00 AM market open?',
+      aTr: 'MarketPulse seans açılışını 3 farklı kanaldan anlık olarak canlı takip eder: 1) Açılış Seansı (ORB) sayfasındaki Canlı 10:00 Seans Radarı, BIST genelinde 15 dakikalık (10:00–10:15) zirvesini kıranları ve 1.5x üzeri hacim patlamalarını listeler. 2) Üstteki "💼 Portföyüm" filtre butonu tek dokunuşla sadece elinizde tuttuğunuz varlıkları süzer. 3) Portföyüm sayfasındaki her hisse kartının yanında "10:00 Açılış" rozeti yer alır (örneğin: "⚡ 15m Zirve", "🟢 10:00: +%1.4" veya "🔴 10:00: -%0.8"). "Seansı Yenile" butonuyla TradingView seans verilerini istediğiniz an tazeleyebilirsiniz.',
+      aEn: 'MarketPulse tracks the market open via 3 integrated channels: 1) The Opening Direction (ORB) radar scans for stocks breaking their 15-minute high with >=1.5x volume expansion. 2) The "💼 Portföyüm" quick filter chip instantly isolates your owned portfolio holdings. 3) Portfolio cards display real-time opening direction badges (e.g., "⚡ 15m High Breakout", "🟢 10:00: +1.4%", or "🔴 10:00: -0.8%"). Tap "Seansı Yenile" anytime to fetch live intraday updates via TradingView.',
+      category: 'quant',
+      tag: 'Canlı 10:00 Seansı',
+    },
+    {
+      qTr: 'Gün içi fiyatlar nasıl güncellenir ve resmi tatillerde veri doğruluğu nasıl korunur?',
+      qEn: 'How are intraday prices synchronized and how is data integrity maintained across market holidays?',
+      aTr: 'MarketPulse veri motoru TradingView kurumsal tarayıcısı ve BIST resmi seans takvimiyle senkronize çalışır. En katı kuralımız: Sistem asla yapay / sentetik mum uydurmaz (örneğin eksik açılış veya hacim değerleri uydurma rakamlarla doldurulmaz, piyasa gerçeği olarak null korunur). 2025–2027 resmi BIST tatilleri (Ramazan, Kurban, 29 Ekim vb.) sistemde tanımlıdır; piyasa kapalıyken geçmiş seans tarihleri otomatik geri çekilir ve yanlış kapanış sinyalleri üretilmez.',
+      aEn: 'The market data pipeline is synchronized with TradingView scanners and official BIST calendar rules. Our strictest architecture guideline: The system never fabricates synthetic OHLC values (missing volume or bars remain genuine nulls rather than fabricated numbers). Official BIST market holidays (2025–2027) are embedded into the engine to automatically roll back session dates during closures, preventing false breakout triggers or distorted indicators.',
+      category: 'basics',
+      tag: 'Veri Güvenilirliği',
+    },
+    {
+      qTr: 'KAP Bildirimleri aramasında Vektör Semantik Arama (pgvector) nasıl çalışır?',
+      qEn: 'How does Vector Semantic Search (pgvector) work in the KAP Catalyst Feed?',
+      aTr: 'KAP sekmesinde arama yaptığınızda arama kutusu iki farklı yapay zeka modunda çalışır: 1) Vektör Arama (pgvector): Arama teriminizin kelime kelime eşleşmesi gerekmez; cümlenizin anlamsal özünü (embedding) çıkararak "ihale kazanımı", "temettü onayı", "fabrika yatırımı" veya "hisse geri alımı" ile ilgili tüm açıklamaları kavramsal benzerliğe göre listeler. 2) Metin Arama: Belirli bir hisse kodu (örn: THYAO) veya tam kelimeleri hızla tarar. Ayrıca yapay zeka etki puanları güvenilir olmayan şablonlar (örn. sabit 7.5) yerine şeffaf ve ölçülebilir şekilde sunulur.',
+      aEn: 'The KAP Catalyst Feed operates with dual-mode search intelligence: 1) Vector Semantic Search (pgvector): Rather than looking for rigid keywords, it understands the conceptual meaning of your query using embeddings to surface relevant disclosures on contract tenders, dividend authorizations, CAPEX expansions, or share buybacks. 2) Keyword Text Search: Rapidly filters exact ticker symbols or legal disclosures. Furthermore, catalyst impact scores reflect authentic model estimations rather than synthetic placeholder defaults.',
+      category: 'quant',
+      tag: 'KAP & Vektör Arama',
+    },
     {
       qTr: 'Hisselerim %10 - %20 düştü, ne yapmalıyım? Panik yapmalı mıyım?',
       qEn: 'My stocks are down 10% - 20%, what should I do? Should I panic?',
@@ -351,8 +385,8 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
             </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {language === 'tr'
-                ? '"Posizyon Hesapla" butonuyla bütçenize göre maksimum risksiz lot miktarını öğrenin. Ardından Portföyüm sayfasından işleminizi kaydedin.'
-                : 'Tap "Posizyon Hesapla" to determine exact share allocation based on your capital risk budget, then record the purchase into My Portfolio.'}
+                ? '"Posizyon Hesapla" ile bütçenize göre risksiz lot miktarını öğrenin. Kâra geçtiğinizde "📋 Playbook" ile kademeli kâr alıp dipten geri toplama planını çalıştırın.'
+                : 'Tap "Posizyon Hesapla" to size shares mathematically. When in profit, tap "📋 Playbook" to execute multi-tier scale-outs and buyback blueprints.'}
             </p>
             <button
               onClick={() => onNavigateToTab('portfolio')}
@@ -424,6 +458,17 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           </button>
           <button
             type="button"
+            onClick={() => setActiveWalkthroughTab('playbook')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeWalkthroughTab === 'playbook'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            📋 {language === 'tr' ? 'Kâr Al & Alttan Topla (Playbook)' : 'Scale-Out & Rebuy Playbook'}
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveWalkthroughTab('calculator')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               activeWalkthroughTab === 'calculator'
@@ -465,6 +510,17 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
             }`}
           >
             🔔 {language === 'tr' ? 'Açılış Seansı (ORB)' : 'Opening Range (ORB)'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveWalkthroughTab('catalysts')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              activeWalkthroughTab === 'catalysts'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            ⚡ {language === 'tr' ? 'KAP & Vektör Arama' : 'KAP & Vector Search'}
           </button>
           <button
             type="button"
@@ -675,6 +731,84 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
           </div>
         )}
 
+        {activeWalkthroughTab === 'playbook' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-slate-900/10 dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-slate-900/40 border border-indigo-500/30 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📋</span>
+                <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
+                  {language === 'tr' ? 'Otonom Kâr Al & Geri Toplama Planı (AI Trade Playbook)' : 'Autonomous Scale-Out & Pullback Rebuy Playbook'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'Portföyünüzde kâra geçmiş bir hissede en zor psikolojik karar: "Ne zaman satmalıyım?" ve "Düzeltme yaparsa nereden daha ucuza geri alabilirim?" sorularıdır. MarketPulse, her portföy varlığı için canlı teknik göstergeleri (RSI, SMA50, SMA200), maliyetinizi ve KAP bildirimlerini analiz ederek matematiksel 3 kademeli uygulama planı üretir:'
+                  : 'For profitable holdings, the most challenging trading dilemmas are: "When should I bank profits?" and "Where can I rebuy cheaper during a correction without FOMO?" MarketPulse analyzes real-time indicators (RSI, 50/200 SMAs), your entry cost, and KAP disclosures to generate an itemized 3-tier execution blueprint:'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">1. Kademe: %50 Kâr Al (Hedef 1)</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold">+6% – +12%</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400">
+                  {language === 'tr'
+                    ? 'Yapısal teknik direnç seviyesinde elinizdeki lotların yarısı satılır. İlk kâr kasaya kilitlenir ve sermaye serbest bırakılır.'
+                    : 'Half of your position is scaled out into structural resistance, banking realized gains and freeing up liquidity.'}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-600 dark:text-blue-400">2. Başabaş Kalkanı (Breakeven Shield)</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold">Free Trade</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400">
+                  {language === 'tr'
+                    ? '1. Kademe kâr alındığı an, kalan %50 lotun stop-loss seviyesi doğrudan alış maliyetinize yükseltilir. Piyasa çökse bile zarar etmeniz imkansız hale gelir.'
+                    : 'The moment Tranche 1 is banked, the stop loss on remaining runner shares moves to your entry cost. The trade becomes strictly risk-free.'}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-purple-600 dark:text-purple-400">3. Kademe: Trend Koşucusu (Hedef 2)</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold">+18% – +30%</span>
+                </div>
+                <p className="text-slate-600 dark:text-slate-400">
+                  {language === 'tr'
+                    ? 'Kalan %50 lot ile büyük makro trend genişlemesi sürülür. Tepeyi erken tahmin etmek yerine trend bozulana kadar pozisyonda kalınır.'
+                    : 'The remaining 50% rides macro trend expansion with a trailing stop rather than prematurely exiting a runaway winner.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🔄</span>
+                <span className="font-bold text-indigo-900 dark:text-indigo-200">
+                  {language === 'tr' ? 'Alttan Geri Toplama Planı (Pullback Rebuy Zone): Lot Artırma Sihri' : 'The Pullback Re-Accumulation Blueprint: Compounding Shares'}
+                </span>
+              </div>
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'Kâr satışından elde ettiğiniz nakit kenarda bekletilir. Hisse beklenen kâr realizasyonu düzeltmesini yapıp Fibonacci 0.382 – 0.50 destek bölgesine gerilediğinde, sistem alım kademelerini gösterir. Böylece tepe fiyattan kovalamak yerine düzeltmede risksiz biçimde önceki sattığınızdan daha çok lot geri toplayarak bileşik getiri sağlarsınız.'
+                  : 'Banked cash from your scale-out is kept ready. When the stock initiates a healthy retracement into its mathematical Fibonacci 0.382–0.50 support pocket, the playbook highlights exact re-accumulation levels. You compound shares at lower prices without top-tick FOMO.'}
+              </p>
+              <div className="pt-1 flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-white dark:bg-indigo-900/60 font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                  {language === 'tr' ? '🛡️ 1-Tıkla Portföy Stopunu Güncelle' : '🛡️ 1-Click Sync Stop to Portfolio'}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {language === 'tr' ? 'Modal içindeki butonla hesaplanan geçersizlik seviyesini anında canlı portföyünüze kaydedin.' : 'Instantly commit the calculated invalidation stop to your active portfolio ledger.'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeWalkthroughTab === 'calculator' && (
           <div className="space-y-4 animate-in fade-in duration-200">
             <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
@@ -762,28 +896,79 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
         {activeWalkthroughTab === 'orb' && (
           <div className="space-y-4 animate-in fade-in duration-200">
             <div className="p-4 sm:p-5 rounded-2xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 space-y-2">
-              <span className="text-xs font-black text-orange-700 dark:text-orange-300 uppercase tracking-wider block">
-                {language === 'tr' ? '15-Dakikalık Açılış Seansı Kırılımı (ORB Scanner)' : '15-Minute Opening Range Breakout Scanner'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-base">🔔</span>
+                <span className="text-xs font-black text-orange-700 dark:text-orange-300 uppercase tracking-wider block">
+                  {language === 'tr' ? 'Canlı 10:00 BIST Seansı & 15-Dakikalık ORB Kırılım Radarı' : 'Live 10:00 AM BIST Session & 15-Minute ORB Breakout Radar'}
+                </span>
+              </div>
               <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                 {language === 'tr'
-                  ? 'BIST seansı 10:00\'da açıldıktan sonra ilk 15 dakikada (10:00–10:15) oluşan yüksek ve alçak seviyeler günün ana referans koridorudur. Kurumsal algoritmalar bu tavanın üzerinde hacimli alım yaptığında gün boyu süren güçlü trendler oluşur.'
-                  : 'The high and low range established during the first 15 minutes of trading (10:00–10:15 BIST / 09:30–09:45 US) forms the opening benchmark. High-volume breakouts beyond this corridor frequently initiate intraday continuation.'}
+                  ? 'Borsa İstanbul saat 10:00\'da açıldığında, günün ilk 15 dakikasında (10:00–10:15) oluşan fiyat aralığı (ORB koridoru) kurumsal fonların yönünü belirler. Fiyat bu tavanı 20 günlük açılış ortalamasının en az 1.5 katı hacimle yukarı kırdığında ve pozitif gap ile desteklendiğinde gün boyu sürecek güçlü bir momentum avantajı yakalanır.'
+                  : 'When Borsa Istanbul opens at 10:00 AM TRT, the price corridor established in the opening 15 minutes (10:00–10:15) reveals institutional intent. Assets breaking above this ceiling on >= 1.5x volume expansion with positive gaps generate powerful intraday continuation.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 block">🟢 Açılış Gap Oranı</span>
+                <span className="text-slate-500">Pozitif açılış boşluğu (%0.5 – %2.5) kurumsal alıcı iştahını doğrular.</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="font-bold text-amber-600 dark:text-amber-400 block">🔥 Hacim Çarpanı &ge; 1.5x</span>
+                <span className="text-slate-500">İlk 15 dakikalık hacmin 20 günlük seans açılış ortalamasını katlaması.</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="font-bold text-blue-600 dark:text-blue-400 block">⚡ 15D Zirve Kırılımı</span>
+                <span className="text-slate-500">10:15 tavanının üzerinde kalıcı mum kapanışı yukarı yönü garantiler.</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                <span className="font-bold text-indigo-600 dark:text-indigo-400 block">💼 Portföyüm Filtresi</span>
+                <span className="text-slate-500">Kendi elinizdeki hisselerden kaçının seans açılışında kırdığını tek tıkla süzün.</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+              <span className="font-bold text-slate-900 dark:text-white block">
+                {language === 'tr' ? 'Portföy Kartlarında Anlık 10:00 Açılış Rozetleri:' : 'Real-Time 10:00 AM Opening Badges on Portfolio Cards:'}
+              </span>
+              <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                {language === 'tr'
+                  ? 'Portföyüm sayfasına girdiğinizde her hissenin yanında canlı açılış durumu görünür: "⚡ 15m Zirve" (15 dakikalık tavanı kıranlar), "🟢 10:00: +%1.4" (pozitif açanlar) veya "🔴 10:00: -%0.8" (satış baskılı açanlar). Üst banttaki "Seansı Yenile" butonuyla TradingView verilerini istediğiniz an tazeleyebilirsiniz.'
+                  : 'Inside My Portfolio, each holding row displays a live morning status badge: "⚡ 15m Zirve" (15m high breakout), "🟢 10:00: +1.4%" (bullish drift), or "🔴 10:00: -0.8%" (downward gap). Tap "Seansı Yenile" to trigger on-demand TradingView session sync.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activeWalkthroughTab === 'catalysts' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="p-4 sm:p-5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚡</span>
+                <span className="text-xs font-black text-rose-700 dark:text-rose-300 uppercase tracking-wider block">
+                  {language === 'tr' ? 'KAP Bildirimleri & Vektör Semantik Arama (pgvector)' : 'KAP Catalysts & Vector Semantic Search (pgvector)'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                {language === 'tr'
+                  ? 'Kamuyu Aydınlatma Platformu\'nda günde yüzlerce bildirim yayımlanır. MarketPulse, yapay zeka vektör gömmeleri (Gemini embeddings) ve Supabase pgvector motoru kullanarak şirket açıklamalarını anlamsal olarak analiz eder ve hisse fiyatına doğrudan etki eden kurumsal katalizörleri ayıklar.'
+                  : 'Hundreds of disclosures are published daily on KAP. MarketPulse uses Gemini embeddings and Supabase pgvector to analyze corporate filings semantically, extracting high-impact institutional catalysts.'}
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="font-bold text-slate-900 dark:text-white block mb-1">Açılış Gap Oranı</span>
-                <span className="text-slate-500">Pozitif açılış boşluğu (%0.5 - %2.5) alıcı iştahını doğrular.</span>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 block">💎 Pay Geri Alımları (Buybacks)</span>
+                <p className="text-slate-500">Şirket yönetiminin hisseyi ucuz bulup kendi hisselerini piyasadan toplaması en güçlü pozitif taban desteğidir.</p>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="font-bold text-slate-900 dark:text-white block mb-1">Hacim Çarpanı &ge; 1.5x</span>
-                <span className="text-slate-500">İlk 15 dakikalık hacmin 20 günlük açılış ortalamasının üzerinde olması.</span>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <span className="font-bold text-blue-600 dark:text-blue-400 block">🏗️ Yeni İş İlişkileri & İhaleler</span>
+                <p className="text-slate-500">Ciroya ve net kâra doğrudan katkı sağlayan yüksek tutarlı yurt içi ve yurt dışı sözleşme onayları.</p>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-                <span className="font-bold text-slate-900 dark:text-white block mb-1">15D Tavan Kırılımı</span>
-                <span className="text-slate-500">Tavanın üzerinde kalıcı kapanış gün boyu momentumu destekler.</span>
+              <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                <span className="font-bold text-purple-600 dark:text-purple-400 block">🧠 pgvector Semantik Tarama</span>
+                <p className="text-slate-500">Tam kelime eşleşmesi aramadan "fabrika kapasite artışı" veya "ihale" yazdığınızda anlamsal olarak ilgili tüm bildirimleri getirir.</p>
               </div>
             </div>
           </div>
@@ -1065,8 +1250,8 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {language === 'tr'
-                ? 'Varlıklarınızın anlık kâr/zarar oranı, stop-loss mesafesi, nakit defteri ve kademeli alım aksiyonları. TRY ve USD varlıkları konsolide eder.'
-                : 'Live PnL tracking, distance to stop levels, cash balance ledger, and automated DCA tranche recommendations across both TRY and USD assets.'}
+                ? 'Varlıklarınızın kâr/zarar oranı, stop-loss mesafesi, 10:00 açılış rozetleri, "📋 Playbook" (kâr alıp alttan toplama planı) ve kademeli DCA yönetimi.'
+                : 'Live PnL tracking, distance to stop levels, 10:00 AM opening badges, "📋 Playbook" (scale-out & rebuy blueprint), and automated DCA tranches.'}
             </p>
             <div className="flex items-center gap-2 pt-1">
               <button
@@ -1221,8 +1406,8 @@ export default function HelpCenterView({ onNavigateToTab, onOpenSettings }: Help
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {language === 'tr'
-                ? 'Sabah 10:00 - 10:15 aralığındaki açılış koridorunun yönünü, pozitif gap oranlarını ve 1.5x üzeri hacim patlamalarını yakalayan seans motoru.'
-                : 'Morning 15-minute range breakout scanner tracking gap percentages and 1.5x volume expansions for high-probability opening trades.'}
+                ? 'Canlı 10:00 seans radarı, 15 dakikalık koridor (10:00–10:15) kırılımları, "💼 Portföyüm" filtreleme çipi ve 1.5x üzeri hacim patlaması takibi.'
+                : 'Live 10:00 AM session radar, 15-minute range breakout tracker, "💼 Portföyüm" quick filter chip, and 1.5x volume expansion scanner.'}
             </p>
             <div className="flex items-center gap-2 pt-1">
               <button
