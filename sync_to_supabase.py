@@ -777,6 +777,10 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             except Exception:
                 days_passed = 0
 
+            # Strict chronological check: Trade outcomes can ONLY be evaluated on bars strictly AFTER the signal date
+            if days_passed < 1 or today_date <= s_dt:
+                continue
+
             # Outcome Evaluation:
             outcome_status = None
             pnl = 0.0
