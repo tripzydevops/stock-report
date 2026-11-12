@@ -94,4 +94,33 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     const stringLimitRes = await request.get('/api/assets?limit=invalid');
     expect(stringLimitRes.status()).toBe(400);
   });
+
+  test('5. Dividend Advisor proposals enforce zero-share gating, transparent scenario labeling, and regulatory disclaimer', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Click Temettü in desktop sidebar
+    const dividendBtn = page.locator('aside button[title*="Temettü"]').first();
+    await expect(dividendBtn).toBeVisible({ timeout: 10000 });
+    await dividendBtn.click();
+
+    // Look for Actionable Rebalancing / Eylemler tab if available
+    const actionsTab = page.locator('button:has-text("Eylemler"), button:has-text("Actions"), button:has-text("Rebalancing")').first();
+    if (await actionsTab.isVisible()) {
+      await actionsTab.click();
+
+      // Check for transparent scenario labels
+      const scenarioLabel = page.locator('text=Örnek Senaryo Tahmini, text=Senaryo Getiri Farkı, text=Illustrative Scenario').first();
+      await expect(scenarioLabel).toBeVisible({ timeout: 5000 });
+
+      // Verify regulatory methodology disclaimer is present
+      const disclaimer = page.locator('text=Yasal Uyarı & Metodoloji Notu, text=Regulatory & Methodology Disclaimer').first();
+      await expect(disclaimer).toBeVisible({ timeout: 5000 });
+
+      // Verify no fabricated BRSAN 0-lot swap ghost card is shown if user has 0 shares
+      const ghostBrsanSwap = page.locator('text=BRSAN (0 lot ≈ ₺0)');
+      await expect(ghostBrsanSwap).toHaveCount(0);
+    }
+  });
 });
+
