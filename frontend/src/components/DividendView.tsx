@@ -260,7 +260,9 @@ export default function DividendView({
     return Array.from(groupsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
   }, [sortedUpcoming, language, usdTryRate]);
 
-  const totalMarketCount = allMarketDividends?.length || 44;
+  const totalMarketCount = allMarketDividends && allMarketDividends.length > 0
+    ? allMarketDividends.length
+    : dividendAssets.length;
 
   return (
     <div className="space-y-6 pb-20 sm:pb-8">

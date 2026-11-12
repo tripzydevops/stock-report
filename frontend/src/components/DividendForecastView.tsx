@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import {
   ForecastParams,
@@ -165,6 +165,15 @@ export default function DividendForecastView({
       descriptionEn: '50% high-yield domestic champions combined with 50% top-tier US dollar dividend assets.',
     },
   ], []);
+
+  const hasSyncedUserCap = useRef(false);
+  useEffect(() => {
+    if (!hasSyncedUserCap.current && userPortfolioStats.totalCostTRY > 0 && selectedAssetSource === 'MY_PORTFOLIO') {
+      setInitialCapitalInput(String(Math.round(userPortfolioStats.totalCostTRY)));
+      setComparatorBaseAmount(Math.round(userPortfolioStats.totalCostTRY));
+      hasSyncedUserCap.current = true;
+    }
+  }, [userPortfolioStats.totalCostTRY, selectedAssetSource]);
 
   // When user changes asset source or scenario, auto-populate past performance metrics
   useEffect(() => {

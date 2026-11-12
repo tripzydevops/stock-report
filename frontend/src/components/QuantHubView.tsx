@@ -223,9 +223,10 @@ import { DateRangeFilter, formatFilterDisplay } from '../lib/dateFilter';
 
 interface QuantHubViewProps {
   dateFilter?: DateRangeFilter;
+  portfolioValueTRY?: number;
 }
 
-export default function QuantHubView({ dateFilter }: QuantHubViewProps = {}) {
+export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHubViewProps = {}) {
   const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'pairs' | 'factors' | 'sizing'>('pairs');
   const [pairs, setPairs] = useState<PairOpportunity[]>(FALLBACK_PAIRS);
@@ -249,7 +250,15 @@ export default function QuantHubView({ dateFilter }: QuantHubViewProps = {}) {
   const [stopLoss, setStopLoss] = useState<number>(95.0);
   const [riskBudget, setRiskBudget] = useState<number>(150.0);
   const [fixedCapital, setFixedCapital] = useState<number>(1000.0);
-  const [accountSize, setAccountSize] = useState<number>(100000.0);
+  const [accountSize, setAccountSize] = useState<number>(() => {
+    return portfolioValueTRY && portfolioValueTRY > 0 ? Math.round(portfolioValueTRY) : 100000.0;
+  });
+
+  useEffect(() => {
+    if (portfolioValueTRY && portfolioValueTRY > 0) {
+      setAccountSize(Math.round(portfolioValueTRY));
+    }
+  }, [portfolioValueTRY]);
 
   useEffect(() => {
     async function fetchQuantData() {

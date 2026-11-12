@@ -45,7 +45,7 @@ export default function PortfolioView({
   orders = [],
   transfers = [],
   usdTryRate,
-  cashBalanceTRY = 2952.26,
+  cashBalanceTRY = 0,
   dateFilter,
   orbItems = [],
   portfolioDividends,
@@ -322,9 +322,7 @@ export default function PortfolioView({
   const totalValTRY = totalStockValTRY + cashValTRY;
 
   const recordedDepositsTRY = React.useMemo(() => {
-    return transfers.length > 0
-      ? transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0)
-      : 17000.00;
+    return transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
   }, [transfers]);
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
 

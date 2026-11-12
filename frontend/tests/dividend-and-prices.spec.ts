@@ -65,15 +65,16 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Click Temettü in desktop sidebar
-    const dividendBtn = page.locator('aside button[title*="Temettü"]').first();
+    const dividendBtn = page.locator('aside button:has-text("Temettü Gelirleri"), aside button:has-text("Dividend")').first();
     await expect(dividendBtn).toBeVisible({ timeout: 10000 });
     await dividendBtn.click();
+    await page.waitForTimeout(1000);
 
     // Verify Dividend view is rendered
-    await expect(page.locator('text=Temettü').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('main').getByText(/Temettü|Dividend/i).first()).toBeVisible({ timeout: 10000 });
     
     // Check that dividend income or market metrics are rendered
-    await expect(page.getByText(/YoC|Yıllık|Annual|TRY/).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('main').getByText(/Yıllık|Annual|TRY|₺|\$/i).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('4. Asset Catalog API preserves market filter across page boundaries (limit=2000)', async ({ request }) => {

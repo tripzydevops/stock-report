@@ -35,7 +35,7 @@ export function calculateLedgerCash(
   orders: ExecutedOrder[] = [],
   transfers: CapitalTransfer[] = [],
   usdTryRate: number = 48.95,
-  initialBaseDepositTRY: number = 17000.00
+  initialBaseDepositTRY: number = 0
 ): LedgerCashResult {
   interface TimelineEvent {
     type: 'TRANSFER' | 'ORDER';
@@ -61,8 +61,8 @@ export function calculateLedgerCash(
         ref: t.id
       });
     }
-  } else {
-    // Seed initial deposit baseline
+  } else if (initialBaseDepositTRY > 0) {
+    // Seed initial deposit baseline only if explicitly provided > 0
     events.push({
       type: 'TRANSFER',
       timestamp: new Date('2026-09-16T00:00:00Z').getTime(),

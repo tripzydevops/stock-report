@@ -1043,7 +1043,15 @@ export default function Home() {
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
-  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, [], 48.95).availableCashTRY);
+  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
+
+  const totalPortfolioValueTRY = useMemo(() => {
+    const stockVal = portfolio.reduce((acc, item) => {
+      return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
+    }, 0);
+    return stockVal + cashBalance;
+  }, [portfolio, usdTryRate, cashBalance]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
@@ -4260,7 +4268,7 @@ export default function Home() {
 
         {/* TAB 1.8: INSTITUTIONAL QUANT & PAIRS STAT-ARB */}
         {activeTab === 'quant' && (
-          <QuantHubView dateFilter={dateFilter} />
+          <QuantHubView dateFilter={dateFilter} portfolioValueTRY={totalPortfolioValueTRY} />
         )}
 
         {/* TAB: WATCHLIST & RADAR (FAVORİLER) */}

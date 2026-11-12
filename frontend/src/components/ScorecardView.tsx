@@ -29,6 +29,24 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
     ? strategies.reduce((acc, s) => acc + s.winRate * s.totalTrades, 0) / totalTrades
     : 0;
 
+  // Top strategy derived dynamically from actual strategies array
+  const topStrategy = React.useMemo(() => {
+    if (!strategies || strategies.length === 0) return null;
+    return [...strategies].sort((a, b) => b.winRate - a.winRate)[0];
+  }, [strategies]);
+
+  // Dynamic lifetime profit factor from strategies
+  const lifetimeProfitFactor = React.useMemo(() => {
+    if (!strategies || strategies.length === 0) return '—';
+    const totalPfWeight = strategies.reduce((acc, s) => acc + s.totalTrades, 0);
+    if (totalPfWeight === 0) {
+      const avg = strategies.reduce((acc, s) => acc + s.profitFactor, 0) / strategies.length;
+      return avg.toFixed(2);
+    }
+    const weightedPf = strategies.reduce((acc, s) => acc + s.profitFactor * s.totalTrades, 0) / totalPfWeight;
+    return weightedPf.toFixed(2);
+  }, [strategies]);
+
   // Period-specific dynamic stats from ledger
   const targetHitCount = effectiveScannedSignals.filter(s => s.status === 'target_hit').length;
   const stoppedOutCount = effectiveScannedSignals.filter(s => s.status === 'stopped_out').length;
@@ -55,7 +73,7 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
             {isFiltered ? effectiveScannedSignals.length.toLocaleString() : totalTrades.toLocaleString()} {language === 'tr' ? 'İşlem' : 'Trades'}
           </div>
           <div className="text-[10px] sm:text-xs text-emerald-500 font-semibold mt-0.5 sm:mt-1 truncate">
-            ● {isFiltered ? formatFilterDisplay(dateFilter!, language) : (language === 'tr' ? '117 Varlık · 1 Yıl' : '117 Assets · 1Y')}
+            ● {isFiltered ? formatFilterDisplay(dateFilter!, language) : (language === 'tr' ? 'Tüm Varlıklar · 1 Yıl' : 'All Assets · 1Y')}
           </div>
         </div>
 
@@ -74,10 +92,10 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-3.5 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-xs">
           <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider block truncate">{t.scorecard.topStrategy}</span>
           <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-purple-600 dark:text-purple-400 truncate">
-            68.4%
+            {topStrategy ? `${topStrategy.winRate.toFixed(1)}%` : '—'}
           </div>
           <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 truncate">
-            {language === 'tr' ? '50 EMA Geri Çekilme' : '50 EMA Pullback'}
+            {topStrategy ? topStrategy.strategy : (language === 'tr' ? 'Strateji Belirleniyor' : 'Computing...')}
           </div>
         </div>
 
@@ -86,7 +104,7 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
             {isFiltered ? (language === 'tr' ? 'Dönem Kâr Faktörü' : 'Period Profit Factor') : t.scorecard.profitFactor}
           </span>
           <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-emerald-500 truncate">
-            {isFiltered ? periodProfitFactor : '1.82'}
+            {isFiltered ? periodProfitFactor : lifetimeProfitFactor}
           </div>
           <div className="text-[10px] sm:text-xs text-emerald-500 font-semibold mt-0.5 sm:mt-1 truncate">
             ● {language === 'tr' ? 'Toplam Kâr / Zarar > 1.5' : 'Gross Win/Loss > 1.5'}

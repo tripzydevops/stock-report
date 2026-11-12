@@ -127,11 +127,11 @@ export default function MarketCorrectionBanner({
               <p className="text-xs text-amber-800/90 dark:text-amber-300/80 mt-1 leading-relaxed max-w-4xl">
                 {activeMarketTab === 'US'
                   ? (language === 'tr'
-                      ? 'ABD borsalarında (S&P 500 & Nasdaq) son 1 haftadır tahvil faizlerindeki tırmanış (%4.45 üzeri) ve Mag-7/yarıiletken teknoloji hisselerindeki kâr realizasyonları nedeniyle sert bir düzeltme dalgası yaşanıyor. BIST 100 ise 9.000-9.200 destek bandından başlattığı tepki alımlarıyla dengelenme sürecindedir.'
-                      : 'US equities (S&P 500 & Nasdaq) are experiencing a sharp 1-week pullback driven by rising 10Y Treasury yields (>4.45%) and valuation de-risking in mega-cap tech. Meanwhile, BIST 100 is finding equilibrium above its 9,000–9,200 floor.')
+                      ? (usRegime?.descriptionTr || 'ABD borsalarında (S&P 500 & Nasdaq) son 1 haftadır tahvil faizlerindeki tırmanış (%4.45 üzeri) ve Mag-7/yarıiletken teknoloji hisselerindeki kâr realizasyonları nedeniyle sert bir düzeltme dalgası yaşanıyor. BIST 100 ise 9.000-9.200 destek bandından başlattığı tepki alımlarıyla dengelenme sürecindedir.')
+                      : (usRegime?.descriptionEn || 'US equities (S&P 500 & Nasdaq) are experiencing a sharp 1-week pullback driven by rising 10Y Treasury yields (>4.45%) and valuation de-risking in mega-cap tech. Meanwhile, BIST 100 is finding equilibrium above its 9,000–9,200 floor.'))
                   : (language === 'tr'
-                      ? 'BIST 100 endeksi önceki aylarda yaşadığı derin düzeltmenin ardından 9.000-9.200 ana desteği üzerinde taban oluşturmaktadır. Panik satışları geride kalmış olup, kurumsal yabancı ve sigorta/bankacılık alımlarıyla tepki yükselişleri görülmektedir.'
-                      : 'BIST 100 is establishing a structural floor above the 9,000–9,200 support zone following previous pullbacks. Panic selling has subsided, transitioning into an institutional relief rebound.')}
+                      ? (bistRegime?.descriptionTr || 'BIST 100 endeksi önceki aylarda yaşadığı derin düzeltmenin ardından 9.000-9.200 ana desteği üzerinde taban oluşturmaktadır. Panik satışları geride kalmış olup, kurumsal yabancı ve sigorta/bankacılık alımlarıyla tepki yükselişleri görülmektedir.')
+                      : (bistRegime?.descriptionEn || 'BIST 100 is establishing a structural floor above the 9,000–9,200 support zone following previous pullbacks. Panic selling has subsided, transitioning into an institutional relief rebound.'))}
               </p>
 
               {/* Market Tab Selector */}
