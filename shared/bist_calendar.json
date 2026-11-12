@@ -1,0 +1,70 @@
+{
+  "version": "1.0.0",
+  "exchange": "BIST",
+  "name": "Borsa Istanbul",
+  "timezone": "Europe/Istanbul",
+  "utc_offset_hours": 3,
+  "market_hours": {
+    "regular": {
+      "open": "10:00",
+      "close": "18:10",
+      "continuous_auction_close": "18:00"
+    },
+    "half_day": {
+      "open": "10:00",
+      "close": "13:00",
+      "continuous_auction_close": "12:40"
+    }
+  },
+  "full_holidays": {
+    "2025-01-01": "New Year's Day",
+    "2025-03-31": "Ramazan Bayramı Day 2",
+    "2025-04-01": "Ramazan Bayramı Day 3",
+    "2025-04-23": "National Sovereignty and Children's Day",
+    "2025-05-01": "Labour and Solidarity Day",
+    "2025-05-19": "Commemoration of Atatürk, Youth and Sports Day",
+    "2025-06-06": "Kurban Bayramı Day 1",
+    "2025-06-09": "Kurban Bayramı Day 4",
+    "2025-07-15": "Democracy and National Unity Day",
+    "2025-10-29": "Republic Day",
+    "2026-01-01": "New Year's Day",
+    "2026-03-20": "Ramazan Bayramı Day 1",
+    "2026-04-23": "National Sovereignty and Children's Day",
+    "2026-05-01": "Labour and Solidarity Day",
+    "2026-05-19": "Commemoration of Atatürk, Youth and Sports Day",
+    "2026-05-27": "Kurban Bayramı Day 1",
+    "2026-05-28": "Kurban Bayramı Day 2",
+    "2026-05-29": "Kurban Bayramı Day 3",
+    "2026-07-15": "Democracy and National Unity Day",
+    "2026-10-29": "Republic Day",
+    "2027-01-01": "New Year's Day",
+    "2027-03-10": "Ramazan Bayramı Day 1",
+    "2027-03-11": "Ramazan Bayramı Day 2",
+    "2027-03-12": "Ramazan Bayramı Day 3",
+    "2027-04-23": "National Sovereignty and Children's Day",
+    "2027-05-17": "Kurban Bayramı Day 1",
+    "2027-05-18": "Kurban Bayramı Day 2",
+    "2027-05-19": "Commemoration of Atatürk, Youth and Sports Day",
+    "2027-05-20": "Kurban Bayramı Day 4",
+    "2027-07-15": "Democracy and National Unity Day",
+    "2027-08-30": "Victory Day",
+    "2027-10-29": "Republic Day",
+    "2028-02-28": "Ramazan Bayramı Day 2",
+    "2028-02-29": "Ramazan Bayramı Day 3",
+    "2028-05-01": "Labour and Solidarity Day",
+    "2028-05-05": "Kurban Bayramı Day 1",
+    "2028-05-08": "Kurban Bayramı Day 4",
+    "2028-05-19": "Commemoration of Atatürk, Youth and Sports Day",
+    "2028-08-30": "Victory Day"
+  },
+  "half_days": {
+    "2025-06-05": "Kurban Bayramı Eve (closes 13:00 TRT)",
+    "2025-10-28": "Republic Day Eve (closes 13:00 TRT)",
+    "2026-03-19": "Ramazan Bayramı Eve (closes 13:00 TRT)",
+    "2026-05-26": "Kurban Bayramı Eve (closes 13:00 TRT)",
+    "2026-10-28": "Republic Day Eve (closes 13:00 TRT)",
+    "2027-03-09": "Ramazan Bayramı Eve (closes 13:00 TRT)",
+    "2027-10-28": "Republic Day Eve (closes 13:00 TRT)",
+    "2028-05-04": "Kurban Bayramı Eve (closes 13:00 TRT)"
+  }
+}

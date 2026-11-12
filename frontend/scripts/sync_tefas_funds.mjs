@@ -60,15 +60,18 @@ async function run() {
     const quote = await fetchTefasQuote(asset.symbol);
     if (quote && quote.price > 0) {
       successCount++;
+      // TEFAS mutual funds only have daily NAV; no intraday open/high/low swings or volume
       priceHistoryRows.push({
         asset_id: asset.id,
         date: quote.date,
-        open: quote.prevPrice,
-        high: quote.price,
-        low: quote.prevPrice,
+        open: null,
+        high: null,
+        low: null,
         close: quote.price,
         adj_close: quote.price,
-        volume: 100000
+        volume: null,
+        source: 'tefas',
+        observed_at: new Date().toISOString()
       });
 
       if (quote.name && (!asset.name || asset.name === asset.symbol)) {

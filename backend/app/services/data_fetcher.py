@@ -10,67 +10,15 @@ logger = logging.getLogger(__name__)
 
 import numpy as np
 
-# Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
-BIST_MARKET_HOLIDAYS = {
-    # 2025
-    "2025-01-01",  # New Year
-    "2025-03-31",  # Ramazan Bayramı Day 1
-    "2025-04-01",  # Ramazan Bayramı Day 2
-    "2025-04-23",  # National Sovereignty
-    "2025-05-01",  # Labor Day
-    "2025-05-19",  # Youth & Sports Day
-    "2025-06-06",  # Kurban Bayramı Day 1
-    "2025-06-09",  # Kurban Bayramı Day 4
-    "2025-07-15",  # Democracy Day
-    "2025-10-29",  # Republic Day
-    # 2026
-    "2026-01-01",  # New Year
-    "2026-03-20",  # Ramazan Bayramı Day 1
-    "2026-04-23",  # National Sovereignty
-    "2026-05-01",  # Labor Day
-    "2026-05-19",  # Youth & Sports Day
-    "2026-05-27",  # Kurban Bayramı Day 1
-    "2026-05-28",  # Kurban Bayramı Day 2
-    "2026-05-29",  # Kurban Bayramı Day 3
-    "2026-07-15",  # Democracy Day
-    "2026-10-29",  # Republic Day
-    # 2027
-    "2027-01-01",  # New Year
-    "2027-03-10",  # Ramazan Bayramı Day 1
-    "2027-03-11",  # Ramazan Bayramı Day 2
-    "2027-03-12",  # Ramazan Bayramı Day 3
-    "2027-04-23",  # National Sovereignty
-    "2027-05-17",  # Kurban Bayramı Day 1
-    "2027-05-18",  # Kurban Bayramı Day 2
-    "2027-05-19",  # Atatürk & Youth Day / Kurban
-    "2027-07-15",  # Democracy Day
-    "2027-10-29",  # Republic Day
-}
-
-def get_bist_trading_session_date(dt: Optional[datetime] = None) -> pd.Timestamp:
-    """
-    Returns the latest official Borsa Istanbul (BIST) trading session date as a normalized pd.Timestamp.
-    BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
-    Rolls back past weekends and official BIST market holidays.
-    """
-    if dt is None:
-        dt = datetime.now(timezone.utc)
-    elif dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-
-    trt_time = dt.astimezone(timezone(timedelta(hours=3)))
-    hour = trt_time.hour
-    target = trt_time.date()
-
-    # Pre-market on any day: previous session must be used
-    if hour < 10:
-        target = target - timedelta(days=1)
-
-    # Roll back past weekends (Saturday=5, Sunday=6) and official BIST market holidays
-    while target.weekday() in (5, 6) or target.strftime("%Y-%m-%d") in BIST_MARKET_HOLIDAYS:
-        target = target - timedelta(days=1)
-
-    return pd.Timestamp(target)
+# Authoritative BIST calendar and trading session resolvers
+from app.services.bist_calendar import (
+    BIST_MARKET_HOLIDAYS,
+    BIST_HALF_DAYS,
+    is_bist_holiday,
+    is_bist_half_day,
+    is_bist_market_open,
+    get_bist_trading_session_timestamp as get_bist_trading_session_date
+)
 
 def _normalize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Safely extracts standard OHLCV column names regardless of MultiIndex structure and validates against data contracts."""

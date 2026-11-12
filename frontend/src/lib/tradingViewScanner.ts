@@ -20,43 +20,16 @@ export interface TradingViewQuoteResult {
   barCompleteness?: 'full_ohlcv' | 'partial_ohlcv' | 'close_only';
 }
 
-// Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
-export const BIST_MARKET_HOLIDAYS = new Set([
-  // 2025
-  "2025-01-01", "2025-03-31", "2025-04-01", "2025-04-23", "2025-05-01",
-  "2025-05-19", "2025-06-06", "2025-06-09", "2025-07-15", "2025-10-29",
-  // 2026
-  "2026-01-01", "2026-03-20", "2026-04-23", "2026-05-01", "2026-05-19",
-  "2026-05-27", "2026-05-28", "2026-05-29", "2026-07-15", "2026-10-29",
-  // 2027
-  "2027-01-01", "2027-03-10", "2027-03-11", "2027-03-12", "2027-04-23",
-  "2027-05-17", "2027-05-18", "2027-05-19", "2027-07-15", "2027-10-29",
-]);
-
-export function getBistTradingSessionDate(now: Date = new Date()): string {
-  // Istanbul is UTC+3 (no DST since 2016)
-  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
-  const trtDate = new Date(istanbulTimeMs);
-  const hour = trtDate.getUTCHours();
-
-  const targetDate = new Date(trtDate);
-
-  // If before 10:00 AM TRT, look for previous trading session
-  if (hour < 10) {
-    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-  }
-
-  // Roll back past weekends (0=Sun, 6=Sat) and official BIST market holidays
-  while (
-    targetDate.getUTCDay() === 0 ||
-    targetDate.getUTCDay() === 6 ||
-    BIST_MARKET_HOLIDAYS.has(targetDate.toISOString().slice(0, 10))
-  ) {
-    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-  }
-
-  return targetDate.toISOString().slice(0, 10);
-}
+// Re-export authoritative BIST calendar definitions
+export {
+  BIST_MARKET_HOLIDAYS,
+  BIST_HALF_DAYS,
+  isBistHoliday,
+  isBistHalfDay,
+  isBistMarketOpen,
+  getBistTradingSessionDate
+} from './bistCalendar';
+import { getBistTradingSessionDate } from './bistCalendar';
 
 function normalizeToTvTicker(symbol: string): string {
   const clean = symbol.replace('.IS', '').trim().toUpperCase();

@@ -73,10 +73,11 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
           sessionDate,
           observedAt: new Date().toISOString(),
           source: 'tefas',
-          open: prevPrice && !isNaN(prevPrice) ? prevPrice : p,
-          high: Math.max(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
-          low: Math.min(p, prevPrice && !isNaN(prevPrice) ? prevPrice : p),
-          volume: typeof latest.PAY_SAYISI === 'number' ? latest.PAY_SAYISI : null,
+          open: null,
+          prevClose: prevPrice && !isNaN(prevPrice) ? prevPrice : null,
+          high: null,
+          low: null,
+          volume: null,
         };
       }
     }

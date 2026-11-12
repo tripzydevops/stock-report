@@ -36,41 +36,15 @@ import httpx
 from datetime import timedelta
 from app.core.database import get_supabase_client, upsert_rows
 
-# Official Borsa Istanbul (BIST) Exchange Holidays (Closed Sessions) for 2025, 2026, and 2027
-BIST_MARKET_HOLIDAYS = {
-    # 2025
-    "2025-01-01", "2025-03-31", "2025-04-01", "2025-04-23", "2025-05-01",
-    "2025-05-19", "2025-06-06", "2025-06-09", "2025-07-15", "2025-10-29",
-    # 2026
-    "2026-01-01", "2026-03-20", "2026-04-23", "2026-05-01", "2026-05-19",
-    "2026-05-27", "2026-05-28", "2026-05-29", "2026-07-15", "2026-10-29",
-    # 2027
-    "2027-01-01", "2027-03-10", "2027-03-11", "2027-03-12", "2027-04-23",
-    "2027-05-17", "2027-05-18", "2027-05-19", "2027-07-15", "2027-10-29",
-}
-
-def get_bist_trading_session_date(dt: datetime | None = None) -> date:
-    """
-    Returns the latest official Borsa Istanbul (BIST) trading session date.
-    BIST trading hours: Monday–Friday 10:00–18:10 TRT (UTC+3).
-    Rolls back past weekends and official BIST market holidays.
-    """
-    if dt is None:
-        dt = datetime.now(timezone.utc)
-    elif dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-
-    trt_time = dt.astimezone(timezone(timedelta(hours=3)))
-    hour = trt_time.hour
-    target = trt_time.date()
-
-    if hour < 10:
-        target = target - timedelta(days=1)
-
-    while target.weekday() in (5, 6) or target.strftime("%Y-%m-%d") in BIST_MARKET_HOLIDAYS:
-        target = target - timedelta(days=1)
-
-    return target
+# Authoritative BIST calendar and trading session resolvers
+from app.services.bist_calendar import (
+    BIST_MARKET_HOLIDAYS,
+    BIST_HALF_DAYS,
+    is_bist_holiday,
+    is_bist_half_day,
+    is_bist_market_open,
+    get_bist_trading_session_date
+)
 
 def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
     """

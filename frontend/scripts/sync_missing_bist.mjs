@@ -4,6 +4,42 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalghadzfevfj
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
 const supabase = createClient(url, key);
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const calendarPath = path.resolve(__dirname, '../src/data/bist_calendar.json');
+let bistHolidays = new Set();
+try {
+  const calData = JSON.parse(fs.readFileSync(calendarPath, 'utf8'));
+  bistHolidays = new Set(Object.keys(calData.full_holidays || {}));
+} catch (e) {
+  console.warn('Could not read bist_calendar.json, falling back to built-in holiday set');
+}
+
+function getBistTradingSessionDate(now = new Date()) {
+  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
+  const trtDate = new Date(istanbulTimeMs);
+  const hour = trtDate.getUTCHours();
+  const targetDate = new Date(trtDate);
+
+  if (hour < 10) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  while (
+    targetDate.getUTCDay() === 0 ||
+    targetDate.getUTCDay() === 6 ||
+    bistHolidays.has(targetDate.toISOString().slice(0, 10))
+  ) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  return targetDate.toISOString().slice(0, 10);
+}
+
 async function fetchQuote(symbol) {
   try {
     const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`, {
@@ -14,13 +50,20 @@ async function fetchQuote(symbol) {
     const json = await res.json();
     const meta = json?.chart?.result?.[0]?.meta;
     const price = meta?.regularMarketPrice;
-    if (typeof price !== 'number' || price <= 0) return null;
+    if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return null;
+    const open = typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null;
+    const high = typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null;
+    const low = typeof meta?.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : null;
+    const volume = typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : null;
+    const prevClose = typeof meta?.previousClose === 'number' && Number.isFinite(meta.previousClose) ? meta.previousClose : (typeof meta?.chartPreviousClose === 'number' ? meta.chartPreviousClose : null);
+
     return {
       price,
-      prevClose: meta?.previousClose || meta?.chartPreviousClose || price,
-      high: meta?.regularMarketDayHigh || price,
-      low: meta?.regularMarketDayLow || price,
-      volume: meta?.regularMarketVolume || 100000
+      open,
+      prevClose,
+      high,
+      low,
+      volume
     };
   } catch {
     return null;
@@ -51,7 +94,7 @@ async function run() {
 
   console.log(`Need to fetch prices for ${toFetch.length} BIST stocks...`);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getBistTradingSessionDate();
   const priceRows = [];
   let foundCount = 0;
 
@@ -65,7 +108,7 @@ async function run() {
       priceRows.push({
         asset_id: asset.id,
         date: today,
-        open: q.prevClose,
+        open: q.open,
         high: q.high,
         low: q.low,
         close: q.price,

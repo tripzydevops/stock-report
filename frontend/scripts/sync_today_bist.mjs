@@ -4,20 +4,36 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalgh
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const calendarPath = path.resolve(__dirname, '../src/data/bist_calendar.json');
+let bistHolidays = new Set();
+try {
+  const calData = JSON.parse(fs.readFileSync(calendarPath, 'utf8'));
+  bistHolidays = new Set(Object.keys(calData.full_holidays || {}));
+} catch (e) {
+  console.warn('Could not read bist_calendar.json, falling back to built-in holiday set');
+}
+
 function getBistTradingSessionDate(now = new Date()) {
   const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
   const trtDate = new Date(istanbulTimeMs);
-  const dayOfWeek = trtDate.getUTCDay();
   const hour = trtDate.getUTCHours();
   const targetDate = new Date(trtDate);
 
-  if (dayOfWeek === 0) {
-    targetDate.setUTCDate(targetDate.getUTCDate() - 2);
-  } else if (dayOfWeek === 6) {
+  if (hour < 10) {
     targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-  } else if (dayOfWeek === 1 && hour < 10) {
-    targetDate.setUTCDate(targetDate.getUTCDate() - 3);
-  } else if (hour < 10) {
+  }
+
+  while (
+    targetDate.getUTCDay() === 0 ||
+    targetDate.getUTCDay() === 6 ||
+    bistHolidays.has(targetDate.toISOString().slice(0, 10))
+  ) {
     targetDate.setUTCDate(targetDate.getUTCDate() - 1);
   }
 
@@ -87,10 +103,10 @@ async function fetchQuote(symbol) {
       price,
       sessionDate,
       source: 'yahoo',
-      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : price,
-      high: typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : price,
-      low: typeof meta?.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : price,
-      volume: typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : 0
+      open: typeof meta?.regularMarketOpen === 'number' && Number.isFinite(meta.regularMarketOpen) ? meta.regularMarketOpen : null,
+      high: typeof meta?.regularMarketDayHigh === 'number' && Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : null,
+      low: typeof meta?.regularMarketDayLow === 'number' && Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : null,
+      volume: typeof meta?.regularMarketVolume === 'number' && Number.isFinite(meta.regularMarketVolume) ? meta.regularMarketVolume : null
     };
   } catch {
     return await fetchQuoteFromTradingView(symbol);
