@@ -8,8 +8,10 @@ import { Pagination } from './Pagination';
 
 interface OpeningDirectionViewProps {
   items: OpeningDirectionItem[];
+  portfolioSymbols?: Set<string>;
   onSelectTicker?: (symbol: string) => void;
   dateFilter?: DateRangeFilter;
+  onRefreshSync?: () => Promise<void>;
 }
 
 export type OrbSortColumn = 'symbol' | 'gapPercent' | 'gapType' | 'orbStatus' | 'bias' | 'volumeSpike';
@@ -35,20 +37,41 @@ const biasRanks: Record<string, number> = {
   'Bearish': 1,
 };
 
-export default function OpeningDirectionView({ items, onSelectTicker, dateFilter }: OpeningDirectionViewProps) {
+export default function OpeningDirectionView({ 
+  items, 
+  portfolioSymbols = new Set(), 
+  onSelectTicker, 
+  dateFilter,
+  onRefreshSync 
+}: OpeningDirectionViewProps) {
   const { t, language } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US'>('ALL');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH' | 'BREAKOUT' | 'SPIKE'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH' | 'BREAKOUT' | 'SPIKE' | 'PORTFOLIO'>('ALL');
   const [sortColumn, setSortColumn] = useState<OrbSortColumn>('gapPercent');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const portfolioCount = useMemo(() => {
+    return items.filter(i => portfolioSymbols.has(i.symbol.replace('.IS', '').toUpperCase())).length;
+  }, [items, portfolioSymbols]);
 
   const bullishCount = items.filter(i => i.bias.includes('Bullish')).length;
   const bearishCount = items.filter(i => i.bias.includes('Bearish')).length;
   const brokenHighCount = items.filter(i => i.orbStatus === 'Broke High').length;
   const volumeSpikesCount = items.filter(i => i.volumeSpike).length;
+
+  const handleRefresh = async () => {
+    if (!onRefreshSync) return;
+    setIsRefreshing(true);
+    try {
+      await onRefreshSync();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleSort = (col: OrbSortColumn) => {
     if (sortColumn === col) {
@@ -93,6 +116,10 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
       if (typeFilter === 'BEARISH' && !item.bias.includes('Bearish')) return false;
       if (typeFilter === 'BREAKOUT' && item.orbStatus !== 'Broke High') return false;
       if (typeFilter === 'SPIKE' && !item.volumeSpike) return false;
+      if (typeFilter === 'PORTFOLIO') {
+        const cleanSym = item.symbol.replace('.IS', '').toUpperCase();
+        if (!portfolioSymbols.has(cleanSym)) return false;
+      }
 
       // Search query
       if (searchQuery.trim()) {
@@ -145,6 +172,64 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
           </div>
         </div>
       )}
+
+      {/* Live 10:00 AM Market Session & Breakout Radar Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-2xl p-4 sm:p-5 text-white shadow-lg border border-indigo-800/50 relative overflow-hidden">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 w-56 h-56 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {language === 'tr' ? '10:00 CANLI BIST SEANSI' : '10:00 LIVE BIST SESSION'}
+              </span>
+              <span className="text-xs text-indigo-200/80 font-mono">
+                {language === 'tr' ? '15-Dk ORB Kırılım Radarı' : '15-Min ORB Breakout Radar'}
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+              {language === 'tr' ? 'Açılış Yönü & Hacim Patlama Takibi' : 'Opening Direction & Volume Spike Monitor'}
+            </h2>
+            <p className="text-xs text-slate-300 max-w-xl">
+              {language === 'tr'
+                ? 'İlk 15 dakikalık seans aralığını yukarı kıran ve hacim çarpanı >1.5x olan hisseler gün içi momentum avantajına sahiptir.'
+                : 'Stocks breaking above the first 15-minute range with >1.5x volume expansion hold strong intraday momentum.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 justify-between md:justify-end">
+            <button
+              onClick={() => {
+                setTypeFilter(typeFilter === 'PORTFOLIO' ? 'ALL' : 'PORTFOLIO');
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                typeFilter === 'PORTFOLIO'
+                  ? 'bg-emerald-500 text-white border-emerald-400 shadow-emerald-500/20'
+                  : 'bg-white/10 hover:bg-white/15 text-white border-white/20'
+              }`}
+            >
+              <span>💼</span>
+              <span>{language === 'tr' ? `Portföyüm (${portfolioCount})` : `My Portfolio (${portfolioCount})`}</span>
+            </button>
+
+            {onRefreshSync && (
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 active:scale-95 text-white transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                <span className={isRefreshing ? 'animate-spin' : ''}>⚡</span>
+                <span>
+                  {isRefreshing 
+                    ? (language === 'tr' ? 'Taranıyor...' : 'Syncing...') 
+                    : (language === 'tr' ? 'Seansı Yenile' : 'Refresh Live')}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Top ORB Summary Cards (Responsive 2x2 on Mobile, 4 Cols on Desktop) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
@@ -285,6 +370,17 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
 
               {/* Quick Filter Chips */}
               <button
+                onClick={() => setTypeFilter(typeFilter === 'PORTFOLIO' ? 'ALL' : 'PORTFOLIO')}
+                className={`text-xs px-2.5 py-1 rounded-xl font-bold border transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                  typeFilter === 'PORTFOLIO'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <span>💼</span>
+                <span>{language === 'tr' ? `Portföy (${portfolioCount})` : `Portfolio (${portfolioCount})`}</span>
+              </button>
+              <button
                 onClick={() => setTypeFilter(typeFilter === 'BREAKOUT' ? 'ALL' : 'BREAKOUT')}
                 className={`text-xs px-2.5 py-1 rounded-xl font-bold border transition-colors shrink-0 cursor-pointer ${
                   typeFilter === 'BREAKOUT'
@@ -303,6 +399,26 @@ export default function OpeningDirectionView({ items, onSelectTicker, dateFilter
                 }`}
               >
                 🟢 {language === 'tr' ? 'Pozitif (Boğa)' : 'Bullish'}
+              </button>
+              <button
+                onClick={() => setTypeFilter(typeFilter === 'BEARISH' ? 'ALL' : 'BEARISH')}
+                className={`text-xs px-2.5 py-1 rounded-xl font-bold border transition-colors shrink-0 cursor-pointer ${
+                  typeFilter === 'BEARISH'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🔴 {language === 'tr' ? 'Negatif (Ayı)' : 'Bearish'}
+              </button>
+              <button
+                onClick={() => setTypeFilter(typeFilter === 'SPIKE' ? 'ALL' : 'SPIKE')}
+                className={`text-xs px-2.5 py-1 rounded-xl font-bold border transition-colors shrink-0 cursor-pointer ${
+                  typeFilter === 'SPIKE'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🔥 {language === 'tr' ? 'Hacim Patlaması' : 'Volume Spikes'}
               </button>
             </div>
           </div>

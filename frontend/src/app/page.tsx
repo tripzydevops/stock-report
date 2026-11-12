@@ -4323,6 +4323,7 @@ export default function Home() {
             onToggleStrategyType={handleToggleStrategyType}
             onSelectTicker={handleSelectTicker}
             portfolioDividends={dividends}
+            orbItems={orbItems}
           />
         )}
 
@@ -4381,8 +4382,10 @@ export default function Home() {
         {activeTab === 'orb' && (
           <OpeningDirectionView 
             items={orbItems}
+            portfolioSymbols={new Set(portfolio.map(p => p.symbol.replace('.IS', '').toUpperCase()))}
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
+            onRefreshSync={async () => { await handleTriggerSync(false); }}
           />
         )}
 

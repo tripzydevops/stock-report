@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer, DividendAsset } from '../lib/supabaseClient';
+import { PortfolioItem, RealizedTrade, ExecutedOrder, CapitalTransfer, DividendAsset, OpeningDirectionItem } from '../lib/supabaseClient';
 import { calculateExitDate } from '../lib/tradeTiming';
 import { calculateSectorRisk } from '../lib/sectorRisk';
 import { useLanguage } from '../context/LanguageContext';
@@ -10,6 +10,7 @@ import { TradeSignal } from './TradeCard';
 import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import DcaOffsetEngine from './DcaOffsetEngine';
 import PortfolioBriefModal from './PortfolioBriefModal';
+import TradePlaybookModal from './TradePlaybookModal';
 import { calculateLedgerCash } from '../lib/cashLedger';
 import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
 import Pagination from './Pagination';
@@ -23,6 +24,7 @@ interface PortfolioViewProps {
   usdTryRate: number;
   cashBalanceTRY?: number;
   dateFilter?: DateRangeFilter;
+  orbItems?: OpeningDirectionItem[];
   onRemoveHolding?: (symbol: string) => void;
   onAddHoldingClick?: () => void;
   onTradeHolding?: (holding: PortfolioItem) => void;
@@ -45,6 +47,7 @@ export default function PortfolioView({
   usdTryRate,
   cashBalanceTRY = 2952.26,
   dateFilter,
+  orbItems = [],
   portfolioDividends,
   onRemoveHolding,
   onAddHoldingClick,
@@ -76,6 +79,14 @@ export default function PortfolioView({
   const [realizedPageSize, setRealizedPageSize] = useState<number>(10);
   const [ordersPage, setOrdersPage] = useState<number>(1);
   const [ordersPageSize, setOrdersPageSize] = useState<number>(10);
+  const [selectedPlaybookHolding, setSelectedPlaybookHolding] = useState<PortfolioItem | null>(null);
+
+  const getOrbForSymbol = (symbol: string): OpeningDirectionItem | undefined => {
+    if (!orbItems || orbItems.length === 0) return undefined;
+    const clean = symbol.replace('.IS', '').toUpperCase();
+    return orbItems.find(o => o.symbol.replace('.IS', '').toUpperCase() === clean);
+  };
+
   const toggleLots = (sym: string) => {
     setExpandedLots(prev => ({ ...prev, [sym]: !prev[sym] }));
   };
@@ -899,10 +910,30 @@ export default function PortfolioView({
                         <span className="text-[9px] opacity-60">⇄</span>
                       </button>
                     </div>
-                    <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+                    <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                       <span className="truncate max-w-[150px] group-hover/holding:underline">{item.name}</span>
                       <span>·</span>
                       <span className="text-gray-400 font-mono text-[11px]">{formattedBoughtDate} {daysHeld ? `(${daysHeld}g)` : ''}</span>
+                      {(() => {
+                        const orb = getOrbForSymbol(item.symbol);
+                        if (!orb || orb.gapPercent === null || orb.gapPercent === undefined) return null;
+                        const isUp = orb.gapPercent >= 0;
+                        return (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.2 rounded border inline-flex items-center gap-1 ${
+                              orb.orbStatus === 'Broke High'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-700 animate-pulse'
+                                : isUp
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-rose-50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                            }`}
+                            title={`10:00 ORB Açılış: ${orb.orbStatus} (${orb.gapType})`}
+                          >
+                            <span>{orb.orbStatus === 'Broke High' ? '⚡ 15m Zirve' : (isUp ? '🟢 10:00' : '🔴 10:00')}</span>
+                            <span>{isUp ? '+' : ''}{orb.gapPercent.toFixed(1)}%</span>
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -1054,6 +1085,15 @@ export default function PortfolioView({
                     >
                       <span>📋</span>
                       <span>Brief</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlaybookHolding(item)}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-black bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-xs"
+                      title={language === 'tr' ? 'Otonom Kâr Al & Geri Toplama (Playbook)' : 'Scale-Out & Pullback Rebuy Playbook'}
+                    >
+                      <span>📋</span>
+                      <span>Playbook</span>
                     </button>
                     <button
                       type="button"
@@ -1287,6 +1327,26 @@ export default function PortfolioView({
                               · {formattedBoughtDate} {daysHeld ? `(${daysHeld}g)` : ''}
                             </span>
                           )}
+                          {(() => {
+                            const orb = getOrbForSymbol(item.symbol);
+                            if (!orb || orb.gapPercent === null || orb.gapPercent === undefined) return null;
+                            const isUp = orb.gapPercent >= 0;
+                            return (
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.2 rounded border inline-flex items-center gap-1 ${
+                                  orb.orbStatus === 'Broke High'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-700 animate-pulse'
+                                    : isUp
+                                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                      : 'bg-rose-50 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                                }`}
+                                title={`10:00 ORB Açılış: ${orb.orbStatus} (${orb.gapType})`}
+                              >
+                                <span>{orb.orbStatus === 'Broke High' ? '⚡ 15m' : (isUp ? '🟢 10:00' : '🔴 10:00')}</span>
+                                <span>{isUp ? '+' : ''}{orb.gapPercent.toFixed(1)}%</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <button
@@ -1565,6 +1625,14 @@ export default function PortfolioView({
                               >
                                 <span>📋</span>
                                 <span>Brief</span>
+                              </button>
+                              <button
+                                onClick={() => setSelectedPlaybookHolding(item)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 transition-colors border border-indigo-200 dark:border-indigo-800 cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                                title={language === 'tr' ? 'Otonom Kâr Al & Geri Toplama (Playbook)' : 'Scale-Out & Pullback Rebuy Playbook'}
+                              >
+                                <span>📋</span>
+                                <span>Playbook</span>
                               </button>
                               <button
                                 onClick={() => onToggleStrategyType?.(item.symbol)}
@@ -2003,6 +2071,13 @@ export default function PortfolioView({
                                 title="Open AI Trade Co-Pilot Analysis & Blueprint"
                               >
                                 <span>💡 Co-Pilot</span>
+                              </button>
+                              <button
+                                onClick={() => setSelectedPlaybookHolding(item)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 transition-colors border border-indigo-200 dark:border-indigo-800 flex items-center space-x-1 cursor-pointer active:scale-95 shadow-xs"
+                                title="Open AI Trade Playbook"
+                              >
+                                <span>📋 Playbook</span>
                               </button>
                               <button
                                 onClick={() => onTradeHolding?.(item)}
@@ -3056,6 +3131,15 @@ export default function PortfolioView({
         transfers={transfers}
         usdTryRate={usdTryRate}
         cashBalanceTRY={cashValTRY}
+        onSelectTicker={onSelectTicker}
+      />
+
+      {/* Autonomous Trade Playbook Modal (Multi-Tier Scale Out & Pullback Rebuy) */}
+      <TradePlaybookModal
+        isOpen={!!selectedPlaybookHolding}
+        onClose={() => setSelectedPlaybookHolding(null)}
+        holding={selectedPlaybookHolding}
+        onUpdateStopLoss={onUpdateStopLoss}
         onSelectTicker={onSelectTicker}
       />
     </div>
