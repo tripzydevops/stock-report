@@ -7,6 +7,7 @@ import type { User, Session } from '@supabase/supabase-js';
 // The canonical Model Portfolio owner ID used for unauthenticated/demo data presentation
 export const MODEL_PORTFOLIO_USER_ID = 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb';
 export const ADMIN_USER_ID = MODEL_PORTFOLIO_USER_ID;
+export const ADMIN_EMAIL = 'successofmentors@gmail.com';
 
 interface AuthContextType {
   user: User | null;
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = Boolean(
     user && (
       user.id === ADMIN_USER_ID ||
+      user.email === ADMIN_EMAIL ||
       user.app_metadata?.role === 'admin' ||
       user.user_metadata?.role === 'admin'
     )
