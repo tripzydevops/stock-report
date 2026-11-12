@@ -716,10 +716,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                 <span>{user ? '👤' : '📱'}</span>
                 <span>
                   {user
-                    ? user.email || 'Kayıtlı Kullanıcı'
+                    ? user.email || (language === 'tr' ? 'Kayıtlı Kullanıcı' : 'Signed In User')
                     : language === 'tr'
-                    ? `Cihazınıza Özel Liste (${activeUserId.slice(0, 10)})`
-                    : `Device List (${activeUserId.slice(0, 10)})`}
+                    ? 'Cihazınıza Özel Liste (Misafir)'
+                    : 'Device / Guest List'}
                 </span>
                 {!user && onOpenAuthModal && (
                   <button

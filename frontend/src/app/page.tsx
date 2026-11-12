@@ -2329,26 +2329,27 @@ export default function Home() {
     });
     setDividends(prev => prev.filter(item => item.symbol !== symbol));
 
-    // 2. Persist deletion in Supabase
-    try {
-      const cleanSym = symbol.replace('.IS', '');
-      const isSymbol = `${cleanSym}.IS`;
-      const { data: assetData } = await supabase
-        .from('assets')
-        .select('id')
-        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
-        .limit(1);
+    // 2. Persist deletion in Supabase (only for authenticated user)
+    if (user && !isDemoMode) {
+      try {
+        const cleanSym = symbol.replace('.IS', '');
+        const isSymbol = `${cleanSym}.IS`;
+        const { data: assetData } = await supabase
+          .from('assets')
+          .select('id')
+          .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+          .limit(1);
 
-      const effectiveUserId = user?.id || ADMIN_USER_ID;
-      if (assetData && assetData.length > 0) {
-        await supabase
-          .from('portfolio_positions')
-          .delete()
-          .eq('asset_id', assetData[0].id)
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
+        if (assetData && assetData.length > 0) {
+          await supabase
+            .from('portfolio_positions')
+            .delete()
+            .eq('asset_id', assetData[0].id)
+            .eq('user_id', user.id);
+        }
+      } catch (err) {
+        console.warn('Could not remove holding from Supabase:', err);
       }
-    } catch (err) {
-      console.warn('Could not remove holding from Supabase:', err);
     }
   };
 
@@ -2358,18 +2359,19 @@ export default function Home() {
     const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate).availableCashTRY;
     setCashBalance(updatedCash);
 
-    const effectiveUserId = user?.id || ADMIN_USER_ID;
-    try {
-      await supabase.from('portfolio_transfers').insert([{
-        user_id: effectiveUserId,
-        transfer_type: newTransfer.transferType,
-        amount: newTransfer.amount,
-        currency: newTransfer.currency,
-        transfer_date: newTransfer.transferDate,
-        notes: newTransfer.notes
-      }]);
-    } catch (err) {
-      console.warn('Error saving transfer to Supabase:', err);
+    if (user && !isDemoMode) {
+      try {
+        await supabase.from('portfolio_transfers').insert([{
+          user_id: user.id,
+          transfer_type: newTransfer.transferType,
+          amount: newTransfer.amount,
+          currency: newTransfer.currency,
+          transfer_date: newTransfer.transferDate,
+          notes: newTransfer.notes
+        }]);
+      } catch (err) {
+        console.warn('Error saving transfer to Supabase:', err);
+      }
     }
   };
 
@@ -2482,8 +2484,17 @@ export default function Home() {
         if (newAsset && !newAssetErr) assetId = newAsset.id;
       }
 
-      if (assetId) {
-        const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
+      const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
+      const totalVal = newHolding.shares * newHolding.entryPrice;
+      const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+      const chosenIso = orderDateStr
+        ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
+        : new Date().toISOString();
+      const displayDateTime = orderDateStr
+        ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
+        : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
+
+      if (assetId && user && !isDemoMode) {
         const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
         const resolvedStop = newHolding.stopLoss > 0 
           ? newHolding.stopLoss 
@@ -2492,9 +2503,8 @@ export default function Home() {
           ? newHolding.targetPrice
           : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
 
-        const effectiveUserId = user?.id || ADMIN_USER_ID;
         const { error: posError } = await supabase.from('portfolio_positions').insert([{
-          user_id: effectiveUserId,
+          user_id: user.id,
           asset_id: assetId,
           quantity: newHolding.shares,
           avg_entry_price: newHolding.entryPrice,
@@ -2508,19 +2518,9 @@ export default function Home() {
           console.error('Error adding portfolio position to Supabase:', posError);
         }
 
-        // Also record an Executed Order in Supabase and UI state!
-        const totalVal = newHolding.shares * newHolding.entryPrice;
-        const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-        const chosenIso = orderDateStr
-          ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
-          : new Date().toISOString();
-        const displayDateTime = orderDateStr
-          ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
-          : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
-
         try {
           await supabase.from('portfolio_orders').insert([{
-            user_id: effectiveUserId,
+            user_id: user.id,
             order_ref: refCode,
             symbol: cleanSym,
             side: 'BUY',
@@ -2536,6 +2536,7 @@ export default function Home() {
         } catch (ordErr) {
           console.warn('Could not save order log:', ordErr);
         }
+      }
 
         const newOrder: ExecutedOrder = {
           id: `ord-${Date.now()}`,
@@ -2589,7 +2590,6 @@ export default function Home() {
         }
         const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
         setCashBalance(updatedCash);
-      }
     } catch (err) {
       console.warn('Could not save holding to Supabase:', err);
     }
@@ -2649,15 +2649,6 @@ export default function Home() {
         if (target) {
           const totalShares = target.shares + additionalShares;
           const blendedEntry = ((target.shares * target.entryPrice) + (additionalShares * buyPrice)) / totalShares;
-          const effectiveUserId = user?.id || ADMIN_USER_ID;
-          await supabase
-            .from('portfolio_positions')
-            .update({ quantity: totalShares, avg_entry_price: blendedEntry })
-            .eq('asset_id', assetData[0].id)
-            .eq('is_open', true)
-            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
-
-          // Log buy order to portfolio_orders
           const totalVal = additionalShares * buyPrice;
           const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
           const executionIso = tradeDate
@@ -2667,23 +2658,33 @@ export default function Home() {
             ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
             : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-          try {
-            await supabase.from('portfolio_orders').insert([{
-              user_id: effectiveUserId,
-              order_ref: refCode,
-              symbol: cleanSym,
-              side: 'BUY',
-              order_type: 'Limit',
-              quantity: additionalShares,
-              price: buyPrice,
-              total_amount: totalVal,
-              currency: target.currency || 'TRY',
-              executed_at: executionIso,
-              status: 'Filled',
-              notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
-            }]);
-          } catch (ordErr) {
-            console.warn('Could not save buy order:', ordErr);
+          if (user && !isDemoMode) {
+            await supabase
+              .from('portfolio_positions')
+              .update({ quantity: totalShares, avg_entry_price: blendedEntry })
+              .eq('asset_id', assetData[0].id)
+              .eq('is_open', true)
+              .eq('user_id', user.id);
+
+            // Log buy order to portfolio_orders
+            try {
+              await supabase.from('portfolio_orders').insert([{
+                user_id: user.id,
+                order_ref: refCode,
+                symbol: cleanSym,
+                side: 'BUY',
+                order_type: 'Limit',
+                quantity: additionalShares,
+                price: buyPrice,
+                total_amount: totalVal,
+                currency: target.currency || 'TRY',
+                executed_at: executionIso,
+                status: 'Filled',
+                notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`
+              }]);
+            } catch (ordErr) {
+              console.warn('Could not save buy order:', ordErr);
+            }
           }
 
           const newOrder: ExecutedOrder = {
@@ -2721,17 +2722,19 @@ export default function Home() {
             };
             updatedTransfersList = [autoTransfer, ...transfers];
             setTransfers(updatedTransfersList);
-            try {
-              await supabase.from('portfolio_transfers').insert([{
-                user_id: effectiveUserId,
-                transfer_type: 'DEPOSIT',
-                amount: shortfall,
-                currency: 'TRY',
-                transfer_date: autoTransfer.transferDate,
-                notes: autoTransfer.notes
-              }]);
-            } catch (trErr) {
-              console.warn('Could not auto-save capital transfer for DCA:', trErr);
+            if (user && !isDemoMode) {
+              try {
+                await supabase.from('portfolio_transfers').insert([{
+                  user_id: user.id,
+                  transfer_type: 'DEPOSIT',
+                  amount: shortfall,
+                  currency: 'TRY',
+                  transfer_date: autoTransfer.transferDate,
+                  notes: autoTransfer.notes
+                }]);
+              } catch (trErr) {
+                console.warn('Could not auto-save capital transfer for DCA:', trErr);
+              }
             }
           }
           const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
@@ -2905,26 +2908,6 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      const effectiveUserId = user?.id || ADMIN_USER_ID;
-      if (assetData && assetData.length > 0) {
-        let posMutQuery = supabase.from('portfolio_positions');
-        if (actualSold >= target.shares) {
-          await posMutQuery
-            .delete()
-            .eq('asset_id', assetData[0].id)
-            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
-        } else {
-          await posMutQuery
-            .update({ 
-              quantity: remainingShares,
-              avg_entry_price: newAvgEntryPrice 
-            })
-            .eq('asset_id', assetData[0].id)
-            .eq('is_open', true)
-            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
-        }
-      }
-
       // Log sell order to portfolio_orders
       const totalVal = actualSold * sellPrice;
       const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
@@ -2942,23 +2925,42 @@ export default function Home() {
         ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
         : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`;
 
-      try {
-        await supabase.from('portfolio_orders').insert([{
-          user_id: effectiveUserId,
-          order_ref: refCode,
-          symbol: cleanSym,
-          side: 'SELL',
-          order_type: 'Limit',
-          quantity: actualSold,
-          price: sellPrice,
-          total_amount: totalVal,
-          currency: target.currency || 'TRY',
-          executed_at: executionIso,
-          status: 'Filled',
-          notes: orderNote
-        }]);
-      } catch (ordErr) {
-        console.warn('Could not save sell order to Supabase:', ordErr);
+      if (assetData && assetData.length > 0 && user && !isDemoMode) {
+        let posMutQuery = supabase.from('portfolio_positions');
+        if (actualSold >= target.shares) {
+          await posMutQuery
+            .delete()
+            .eq('asset_id', assetData[0].id)
+            .eq('user_id', user.id);
+        } else {
+          await posMutQuery
+            .update({ 
+              quantity: remainingShares,
+              avg_entry_price: newAvgEntryPrice 
+            })
+            .eq('asset_id', assetData[0].id)
+            .eq('is_open', true)
+            .eq('user_id', user.id);
+        }
+
+        try {
+          await supabase.from('portfolio_orders').insert([{
+            user_id: user.id,
+            order_ref: refCode,
+            symbol: cleanSym,
+            side: 'SELL',
+            order_type: 'Limit',
+            quantity: actualSold,
+            price: sellPrice,
+            total_amount: totalVal,
+            currency: target.currency || 'TRY',
+            executed_at: executionIso,
+            status: 'Filled',
+            notes: orderNote
+          }]);
+        } catch (ordErr) {
+          console.warn('Could not save sell order to Supabase:', ordErr);
+        }
       }
 
       const newSellOrder: ExecutedOrder = {
@@ -3007,14 +3009,13 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      const effectiveUserId = user?.id || ADMIN_USER_ID;
-      if (assetData && assetData.length > 0) {
+      if (assetData && assetData.length > 0 && user && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({ stop_loss: newStopPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
+          .eq('user_id', user.id);
       }
     } catch (err) {
       console.warn('Could not update stop loss in Supabase:', err);
@@ -3039,14 +3040,13 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      const effectiveUserId = user?.id || ADMIN_USER_ID;
-      if (assetData && assetData.length > 0) {
+      if (assetData && assetData.length > 0 && user && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({ target_price: newTargetPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
+          .eq('user_id', user.id);
       }
     } catch (err) {
       console.warn('Could not update target price in Supabase:', err);
@@ -3099,8 +3099,7 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      const effectiveUserId = user?.id || ADMIN_USER_ID;
-      if (assetData && assetData.length > 0) {
+      if (assetData && assetData.length > 0 && user && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({
@@ -3109,7 +3108,7 @@ export default function Home() {
           })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
+          .eq('user_id', user.id);
       }
     } catch (err) {
       console.warn('Could not update strategy type in Supabase:', err);
