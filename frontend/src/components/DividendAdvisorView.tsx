@@ -124,7 +124,7 @@ export default function DividendAdvisorView({
             moat: 'CAR %19.4 ile BIST\'in en yüksek sermaye tamponu, tertemiz NPL (%1.6)',
             advisorVerdictTr: 'Sektörün en sağlam bilançosu. Yabancı kurumsal akışların ilk tercihi; sürdürülebilir nakit temettü gücü.',
             advisorVerdictEn: 'Fortress balance sheet with sector-highest 19.4% CAR. Primary vehicle for institutional dividend investors.',
-            userShares: userHoldingMap.get('AKBNK')?.shares || 35,
+            userShares: userHoldingMap.get('AKBNK')?.shares || 0,
           },
           {
             symbol: 'GARAN',
@@ -158,7 +158,7 @@ export default function DividendAdvisorView({
             moat: 'Koç Holding kurumsal çatısı, perakende & kredi kartı hacim gücü',
             advisorVerdictTr: 'Koç Grubu güvencesiyle sağlam perakende kârlılığı. AKBNK ile birlikte güvenle tutulabilir.',
             advisorVerdictEn: 'Strong retail and credit card presence under Koç Holding umbrella. Dependable dividend supplement.',
-            userShares: userHoldingMap.get('YKBNK')?.shares || 26,
+            userShares: userHoldingMap.get('YKBNK')?.shares || 0,
           },
           {
             symbol: 'ISCTR',
@@ -192,7 +192,7 @@ export default function DividendAdvisorView({
             moat: 'KOBİ görev kredileri, ABD mahkeme süreci hukuki belirsizliği',
             advisorVerdictTr: 'Kamu sübvansiyonlu kredileri kâr marjını baskılıyor. Kâr temettü olarak dağıtılmıyor. Takas önerilir.',
             advisorVerdictEn: 'Subsidized loan burdens and US judicial overhang depress margins. Historically pays negligible cash dividends.',
-            userShares: userHoldingMap.get('HALKB')?.shares || 21,
+            userShares: userHoldingMap.get('HALKB')?.shares || 0,
           },
           {
             symbol: 'VAKBN',
@@ -209,7 +209,7 @@ export default function DividendAdvisorView({
             moat: 'Kamu altyapı finansman yükü, Hazine sermaye takviyesi ihtiyacı',
             advisorVerdictTr: 'Kârını hissedara dağıtmak yerine sermayeye eklemek zorunda. Temettü portföyü için verimsizdir.',
             advisorVerdictEn: 'Mandated to finance state infrastructure and retain earnings. Suboptimal for income-seeking portfolios.',
-            userShares: userHoldingMap.get('VAKBN')?.shares || 29,
+            userShares: userHoldingMap.get('VAKBN')?.shares || 0,
           },
         ]
       },
@@ -242,7 +242,7 @@ export default function DividendAdvisorView({
             moat: 'Mall of Istanbul, Torun Center, prime ticari portföy, %0 stopaj',
             advisorVerdictTr: 'Sektörün temettü kralı. Döviz ve TÜFE bazlı kira gelirleri enflasyona karşı en güçlü nakit kalkanıdır.',
             advisorVerdictEn: 'Flagship commercial REIT anchored by Mall of Istanbul. 0% tax + robust inflation-indexed cashflows.',
-            userShares: userHoldingMap.get('TRGYO')?.shares || 15,
+            userShares: userHoldingMap.get('TRGYO')?.shares || 0,
           },
           {
             symbol: 'EKGYO',
@@ -360,7 +360,7 @@ export default function DividendAdvisorView({
             moat: 'BIST işlem hacmi pazar payı tekeli, kredili işlem marjları, sıfır borç',
             advisorVerdictTr: 'BIST\'in temettü şampiyonu. Rekor özkaynak kârlılığı (%50+) ve %8.55 cari verim ile nakit akışının kalbidir.',
             advisorVerdictEn: 'Unrivaled brokerage volume leader delivering exceptional 8.55% current yield and +80% historical CAGR.',
-            userShares: userHoldingMap.get('ISMEN')?.shares || 258,
+            userShares: userHoldingMap.get('ISMEN')?.shares || 0,
           },
           {
             symbol: 'TURSG',
@@ -377,7 +377,7 @@ export default function DividendAdvisorView({
             moat: 'Pazar payı lideri, yüksek faizle katlanan devasa yatırım portföyü',
             advisorVerdictTr: 'Sigorta prim rezervlerini yüksek faizle işleterek muazzam kâr payı üretir. Ağustos ayında ödeme yaparak yazı dengeler.',
             advisorVerdictEn: 'Dominant underwriter generating high investment income from current policy rate environment.',
-            userShares: userHoldingMap.get('TURSG')?.shares || 1771,
+            userShares: userHoldingMap.get('TURSG')?.shares || 0,
           },
         ]
       },
@@ -410,7 +410,7 @@ export default function DividendAdvisorView({
             moat: 'İndirimli market tekeli, negatif işletme sermayesi, enflasyon kalkanı',
             advisorVerdictTr: '3 taksitli ödeme takvimiyle nakit akışını yıl içine yayar. Son taksiti 18 Aralık 2026\'da kesinleşmiştir.',
             advisorVerdictEn: '3-tranche annual distribution smooths portfolio cash flow. December 2026 tranche officially confirmed.',
-            userShares: userHoldingMap.get('BIMAS')?.shares || 6,
+            userShares: userHoldingMap.get('BIMAS')?.shares || 0,
           },
           {
             symbol: 'CCOLA',
@@ -427,7 +427,7 @@ export default function DividendAdvisorView({
             moat: 'Orta Asya ve Orta Doğu şişeleme tekeli, döviz bazlı kâr büyümesi',
             advisorVerdictTr: 'Yüksek büyüme ve defansif nakit akışı dengesi. Düşük dağıtım oranı temettünün rahatça artmasını sağlar.',
             advisorVerdictEn: 'Premier beverage bottler with rapid volume growth in emerging territories and conservative payout ratio.',
-            userShares: userHoldingMap.get('CCOLA')?.shares || 33,
+            userShares: userHoldingMap.get('CCOLA')?.shares || 0,
           },
           {
             symbol: 'AEFES',
@@ -444,7 +444,7 @@ export default function DividendAdvisorView({
             moat: 'CCI\'nin %50 kontrol gücü, küresel bira üreticisi',
             advisorVerdictTr: 'Coca-Cola İçecek\'in ana hissedarı. Yüksek temettü verimi ve uluslararası nakit üretimi.',
             advisorVerdictEn: 'Holding company controlling Coca-Cola İçecek with robust direct operational cashflows.',
-            userShares: userHoldingMap.get('AEFES')?.shares || 53,
+            userShares: userHoldingMap.get('AEFES')?.shares || 0,
           },
           {
             symbol: 'KO',
@@ -579,7 +579,7 @@ export default function DividendAdvisorView({
             moat: 'Demiryolu rayı tek üreticisi, uzun çelik profil tesisi',
             advisorVerdictTr: 'Yılda 2 taksitle öder (Kasım 2026 taksiti yaklaşıyor). Verimi sanayi devlerine göre daha mütevazıdır.',
             advisorVerdictEn: '2-tranche payer with upcoming November distribution, but lower yield than automotive peers.',
-            userShares: userHoldingMap.get('KRDMD')?.shares || 22,
+            userShares: userHoldingMap.get('KRDMD')?.shares || 0,
           },
           {
             symbol: 'BRSAN',
@@ -596,7 +596,7 @@ export default function DividendAdvisorView({
             moat: 'Kuzey Amerika enerji borusu satın alması, yüksek döviz marjı',
             advisorVerdictTr: 'Sermaye kazancı için güçlüdür fakat cari temettü verimi (%3) TTRAK veya FROTO\'ya göre zayıftır. Takas değerlendirilebilir.',
             advisorVerdictEn: 'High growth industrial pipe supplier, but modest 3% cash yield makes it better for capital gains than income.',
-            userShares: userHoldingMap.get('BRSAN')?.shares || 2,
+            userShares: userHoldingMap.get('BRSAN')?.shares || 0,
           },
         ]
       },
@@ -697,7 +697,7 @@ export default function DividendAdvisorView({
             moat: 'SOCAR Star Rafineri entegrasyonu, Türkiye\'nin tek entegre petrokimya tesisi',
             advisorVerdictTr: 'Petrokimya marjlarına bağlı döngüsel hisse; saf temettü geliri arayanlar için TUPRS veya ENJSA kadar istikrarlı değildir.',
             advisorVerdictEn: 'Cyclical commodity petrochemical producer with margin volatility; lags TUPRS and ENJSA in dividend stability.',
-            userShares: userHoldingMap.get('PETKM')?.shares || 48,
+            userShares: userHoldingMap.get('PETKM')?.shares || 0,
           },
           {
             symbol: 'GWIND',
@@ -747,7 +747,7 @@ export default function DividendAdvisorView({
             moat: 'Telekom lideri, veri merkezi yatırımları, enflasyona endeksli ARPU',
             advisorVerdictTr: 'Yılda 2 taksitle öder. 2. Taksiti 9 Aralık 2026\'da kesinleşmiştir. Enflasyon karşısında nakit üreten kale.',
             advisorVerdictEn: 'Semi-annual payer with December 9, 2026 distribution confirmed. Non-cyclical consumer utility moat.',
-            userShares: userHoldingMap.get('TCELL')?.shares || 11,
+            userShares: userHoldingMap.get('TCELL')?.shares || 0,
           },
           {
             symbol: 'KCHOL',
@@ -764,7 +764,7 @@ export default function DividendAdvisorView({
             moat: 'Tüpraş, Ford Otosan, Tofaş ve Yapı Kredi temettülerinin toplandığı ana çatı',
             advisorVerdictTr: 'Türkiye\'nin en kaliteli holdingi. İştirak temettüleriyle beslenen sağlam ve risksiz nakit havuzu.',
             advisorVerdictEn: 'Top conglomerate collecting upstream cash from Turkey\'s leading exporters and banks.',
-            userShares: userHoldingMap.get('KCHOL')?.shares || 4,
+            userShares: userHoldingMap.get('KCHOL')?.shares || 0,
           },
           {
             symbol: 'SAHOL',
@@ -798,7 +798,7 @@ export default function DividendAdvisorView({
             moat: 'Migros, Anadolu Efes, Coca-Cola İçecek ve Çelik Motor çatı şirketi',
             advisorVerdictTr: 'Migros ve CCI\'nin muazzam nakit akışını toplayan dinamik perakende holdingi.',
             advisorVerdictEn: 'Holding company capturing expanding cashflows from Migros and Coca-Cola İçecek.',
-            userShares: userHoldingMap.get('AGHOL')?.shares || 31,
+            userShares: userHoldingMap.get('AGHOL')?.shares || 0,
           },
         ]
       },
@@ -898,9 +898,9 @@ export default function DividendAdvisorView({
 
     if (hasHalkb && hasVakbn) score -= 10;
     if (bankCount >= 4) score -= 6;
-    if (userHoldingMap.get('TRGYO')) score += 5;
-    if (userHoldingMap.get('ISMEN')) score += 6;
-    if (userHoldingMap.get('TURSG')) score += 5;
+    if ((userHoldingMap.get('TRGYO')?.shares || 0) > 0) score += 5;
+    if ((userHoldingMap.get('ISMEN')?.shares || 0) > 0) score += 6;
+    if ((userHoldingMap.get('TURSG')?.shares || 0) > 0) score += 5;
 
     return Math.min(95, Math.max(55, score));
   }, [userHoldingMap, sectorCatalog]);
@@ -917,61 +917,116 @@ export default function DividendAdvisorView({
     const brsanPrice = userHoldingMap.get('BRSAN')?.currentPrice || 645.00;
     const brsanVal = brsanShares * brsanPrice;
 
-    return [
-      {
+    const trgyoShares = userHoldingMap.get('TRGYO')?.shares || 0;
+    const hasAnyReit = trgyoShares > 0 || (sectorCatalog.REIT?.stocks || []).some(s => s.userShares > 0);
+
+    const tuprsShares = userHoldingMap.get('TUPRS')?.shares || 0;
+    const enjsaShares = userHoldingMap.get('ENJSA')?.shares || 0;
+    const hasEnergy = tuprsShares > 0 || enjsaShares > 0;
+
+    const list: Array<{
+      id: string;
+      type: 'swap' | 'addition';
+      sector: string;
+      title: string;
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      current: string;
+      target: string;
+      rationale: string;
+      netIncomeDeltaTRY: number;
+      badge: string;
+    }> = [];
+
+    // 1. Bank Swap (Only if user actually holds state banks)
+    if (stateBankVal > 0) {
+      list.push({
         id: 'prop-1-bank-swap',
+        type: 'swap',
         sector: 'BANKING',
         title: language === 'tr' ? '🏛️ Bankacılık: HALKB + VAKBN ➡️ AKBNK veya ISMEN' : '🏛️ Banking: Consolidate State Banks into AKBNK / ISMEN',
         priority: 'HIGH',
         current: `HALKB (${halkbShares} lot) + VAKBN (${vakbnShares} lot) ≈ ₺${stateBankVal.toFixed(0)}`,
-        target: `AKBNK (+${Math.floor(stateBankVal / 66.9)} lot) veya ISMEN (+${Math.floor(stateBankVal / 28.78)} lot)`,
+        target: `AKBNK (+${Math.max(1, Math.floor(stateBankVal / 66.9))} lot) veya ISMEN (+${Math.max(1, Math.floor(stateBankVal / 28.78))} lot)`,
         rationale: language === 'tr'
-          ? `Portföyünüzde 4 farklı banka bulunuyor. Kamu bankalarının temettü verimi (%1.2) ve kârlılığı özel bankaların (AKBNK %34.2 ROE) çok gerisindedir. Bu sermayeyi Akbank veya İş Yatırım'a aktarmak yıllık temettünüzü anında +₺170-₺220 artırır.`
-          : `You hold 4 different banks. State banks suffer from lower ROE and negligible cash dividends. Merging HALKB and VAKBN into AKBNK or ISMEN eliminates state policy drag and boosts cashflow by +₺170-₺220/yr.`,
+          ? `Portföyünüzde kamu bankaları bulunuyor. Kamu bankalarının temettü verimi (%1.2) ve kârlılığı özel bankaların (AKBNK %34.2 ROE) çok gerisindedir. Bu sermayeyi Akbank veya İş Yatırım'a aktarmak yıllık temettünüzü anında +₺170-₺220 artırır.`
+          : `State banks suffer from lower ROE and negligible cash dividends. Merging HALKB and VAKBN into AKBNK or ISMEN eliminates state policy drag and boosts cashflow by +₺170-₺220/yr.`,
         netIncomeDeltaTRY: Math.round(stateBankVal * 0.08),
         badge: language === 'tr' ? 'Yüksek Öncelik' : 'High Priority'
-      },
-      {
+      });
+    }
+
+    // 2. REIT Boost / Addition
+    if (!hasAnyReit) {
+      list.push({
         id: 'prop-2-reit-boost',
+        type: 'addition',
         sector: 'REIT',
-        title: language === 'tr' ? '🏢 GYO: Torunlar GYO (TRGYO) %0 Stopaj Kalkanı' : '🏢 REIT: Maximize Torunlar GYO 0% Tax Shield',
+        title: language === 'tr' ? '🏢 GYO: Torunlar GYO (TRGYO) ile %0 Stopaj Kalkanı' : '🏢 REIT: Add Torunlar GYO (TRGYO) 0% Tax Shield',
         priority: 'MEDIUM',
-        current: `TRGYO (${userHoldingMap.get('TRGYO')?.shares || 15} lot)`,
-        target: 'TRGYO (+25-30 lot)',
+        current: language === 'tr' ? 'Portföyde GYO Hissesi Yok (%0 Ağırlık)' : 'No REIT Exposure (0% Allocation)',
+        target: language === 'tr' ? 'TRGYO (+25-30 lot Yeni Pozisyon) · Cari Verim %5.20 (%0 Stopaj)' : 'TRGYO (+25-30 shares) · 5.20% Net Yield (0% Tax)',
         rationale: language === 'tr'
-          ? 'Sanayi hisselerinde temettüden %10 stopaj kesilirken, Torunlar GYO gibi GYO şirketlerinde STOPAJ ORANI %0\'DIR (sıfır vergi). Mall of Istanbul kira nakit akışı ile desteklenen %5.2 net nakit getirisini portföyün defansif çekirdeği yapın.'
+          ? 'BIST şirketlerinde temettüden %10 stopaj kesilirken, Torunlar GYO gibi GYO şirketlerinde STOPAJ ORANI %0\'DIR (sıfır vergi). Mall of Istanbul kira nakit akışı ile desteklenen %5.2 net nakit getirisini portföyün defansif çekirdeği yapabilirsiniz.'
           : 'Turkish REITs enjoy 0% dividend withholding tax (vs 10% on corporate shares). Its 5.2% yield is 100% tax-free net cash flow anchored by Mall of Istanbul commercial tenants.',
         netIncomeDeltaTRY: 130,
+        badge: language === 'tr' ? '%0 Stopaj Kalkanı' : '0% Tax Shield'
+      });
+    } else if (trgyoShares > 0 && trgyoShares < 50) {
+      list.push({
+        id: 'prop-2-reit-boost',
+        type: 'addition',
+        sector: 'REIT',
+        title: language === 'tr' ? '🏢 GYO: TRGYO %0 Stopaj Kalkanını Güçlendirin' : '🏢 REIT: Scale Up TRGYO 0% Tax Shield',
+        priority: 'MEDIUM',
+        current: `TRGYO (${trgyoShares} lot mevcut pozisyon)`,
+        target: 'TRGYO (+20-30 lot ek birikim)',
+        rationale: language === 'tr'
+          ? 'Mevcut TRGYO pozisyonunuz %0 stopaj avantajıyla net vergi muafiyetine sahiptir. Geri çekilmelerde kademeli alımlarla pozisyonunuzu büyütebilirsiniz.'
+          : 'Your current TRGYO holdings provide 100% tax-free rental cash. Consider accumulating further during pullbacks.',
+        netIncomeDeltaTRY: 130,
         badge: language === 'tr' ? '%0 Stopaj' : '0% Tax'
-      },
-      {
+      });
+    }
+
+    // 3. Industrial Swap (ONLY if user actually holds BRSAN)
+    if (brsanShares > 0) {
+      list.push({
         id: 'prop-3-industrial-opt',
+        type: 'swap',
         sector: 'AUTOMOTIVE_INDUSTRIAL',
         title: language === 'tr' ? '🏭 Sanayi: BRSAN ➡️ TTRAK veya FROTO Takası' : '🏭 Industrial: Rebalance Low-Yield BRSAN into TTRAK / FROTO',
         priority: 'MEDIUM',
         current: `BRSAN (${brsanShares} lot ≈ ₺${brsanVal.toFixed(0)}) · Cari Verim %3.0`,
-        target: `TTRAK (+${Math.floor(brsanVal / 780)} lot) veya FROTO (+${Math.floor(brsanVal / 1045)} lot) · Verim %7.8`,
+        target: `TTRAK (+${Math.max(1, Math.floor(brsanVal / 780))} lot) veya FROTO (+${Math.max(1, Math.floor(brsanVal / 1045))} lot) · Verim %7.8`,
         rationale: language === 'tr'
           ? `Borusan Boru sermaye büyümesi için başarılı olsa da temettü verimi (%3.0) düşüktür. Bu sermayeyi kârının %75'ini dağıtan Türk Traktör (%7.8 verim) veya Euro gelirli Ford Otosan (%6.2 verim) ile takas etmek temettü gelirini ikiye katlar.`
           : `Borusan Boru yields only ~3.0%. Swapping into Türk Traktör (TTRAK, 7.8% yield) or Ford Otosan (FROTO, 6.2% yield) doubles your industrial dividend cash conversion.`,
-        netIncomeDeltaTRY: Math.round(brsanVal * 0.048),
+        netIncomeDeltaTRY: Math.max(50, Math.round(brsanVal * 0.048)),
         badge: language === 'tr' ? 'Verim Artırımı' : 'Yield Booster'
-      },
-      {
-        id: 'prop-4-cashflow-smoothing',
-        sector: 'GLOBAL_ETFS',
-        title: language === 'tr' ? '💧 Nakit Akışı: Yaz Boşluğunu Realty Income (O) veya BIMAS ile Doldurun' : '💧 Cashflow: Fill Summer Income Drought with O or BIMAS',
-        priority: 'MEDIUM',
-        current: language === 'tr' ? 'İlkbahar Yığılması (Mart-Mayıs)' : 'Spring Concentration (March-May)',
-        target: 'Realty Income (O) veya BİM (BIMAS 3. Taksit)',
-        rationale: language === 'tr'
-          ? 'BIST temettüleri Mart-Mayıs aylarına kümelendiğinden yaz ve sonbaharda nakit akışı kurur. Her ay ödeyen Realty Income (O) veya yılda 3 taksitle ödeyen BİM (BIMAS) eklemek temettü yağmurunu 12 aya yayar.'
-          : 'Concentrated Spring payouts leave summer dry. Adding monthly-payer Realty Income (O) or expanding 3-tranche BİM (BIMAS) creates recurring year-round monthly cash inflows.',
-        netIncomeDeltaTRY: 320,
-        badge: language === 'tr' ? 'Aylık Nakit' : 'Monthly Income'
-      },
-      {
+      });
+    }
+
+    // 4. Cashflow Smoothing (Timing diversification)
+    list.push({
+      id: 'prop-4-cashflow-smoothing',
+      type: 'addition',
+      sector: 'GLOBAL_ETFS',
+      title: language === 'tr' ? '💧 Nakit Akışı: Yaz Boşluğunu Realty Income (O) veya BIMAS ile Doldurun' : '💧 Cashflow: Fill Summer Income Drought with O or BIMAS',
+      priority: 'MEDIUM',
+      current: language === 'tr' ? 'İlkbahar Yığılması (Mart-Mayıs)' : 'Spring Concentration (March-May)',
+      target: 'Realty Income (O) veya BİM (BIMAS 3. Taksit)',
+      rationale: language === 'tr'
+        ? 'BIST temettüleri Mart-Mayıs aylarına kümelendiğinden yaz ve sonbaharda nakit akışı kurur. Her ay ödeyen Realty Income (O) veya yılda 3 taksitle ödeyen BİM (BIMAS) eklemek temettü yağmurunu 12 aya yayar.'
+        : 'Concentrated Spring payouts leave summer dry. Adding monthly-payer Realty Income (O) or expanding 3-tranche BİM (BIMAS) creates recurring year-round monthly cash inflows.',
+      netIncomeDeltaTRY: 320,
+      badge: language === 'tr' ? 'Aylık Nakit' : 'Monthly Income'
+    });
+
+    // 5. Energy Gap (Only if user has NO direct energy exposure)
+    if (!hasEnergy) {
+      list.push({
         id: 'prop-5-energy-gap',
+        type: 'addition',
         sector: 'ENERGY',
         title: language === 'tr' ? '⚡ Enerji: TUPRS (%7.4) veya ENJSA (%6.8) ile Sektörel Boşluğu Kapatın' : '⚡ Energy: Fill Energy Gap with TUPRS (7.4%) or ENJSA (6.8%)',
         priority: 'HIGH',
@@ -982,9 +1037,11 @@ export default function DividendAdvisorView({
           : 'Your portfolio currently lacks direct energy exposure. Adding national refiner Tüpraş (7.4% yield) or regulated utility Enerjisa (6.8% yield) expands your cash generation foundation.',
         netIncomeDeltaTRY: 310,
         badge: language === 'tr' ? 'Eksik Sektör' : 'Missing Sector'
-      }
-    ];
-  }, [userHoldingMap, language]);
+      });
+    }
+
+    return list;
+  }, [userHoldingMap, language, sectorCatalog]);
 
   // Sector Showdown stock selector
   const activeSectorData = sectorCatalog[selectedSector];
@@ -992,6 +1049,11 @@ export default function DividendAdvisorView({
   // Helper: Local High-Precision Advisor Reasoning Engine
   const generateLocalResponse = (query: string): string => {
     const lower = query.toLowerCase().trim();
+    const trgyoShares = userHoldingMap.get('TRGYO')?.shares || 0;
+    const brsanShares = userHoldingMap.get('BRSAN')?.shares || 0;
+    const tuprsShares = userHoldingMap.get('TUPRS')?.shares || 0;
+    const halkbShares = userHoldingMap.get('HALKB')?.shares || 0;
+    const vakbnShares = userHoldingMap.get('VAKBN')?.shares || 0;
 
     // 1. Energy Sector Showdown (TUPRS, ENJSA, AYGAZ, AKSEN, PETKM, GWIND)
     if (
@@ -1030,8 +1092,9 @@ Enerji ve altyapı sektöründe temettü açısından **2 ana şampiyon dev** ö
    - **AYGAZ (%5.40 Verim):** LPG pazar lideridir ve Tüpraş'ın %10.2'sine doğrudan ortaktır; Tüpraş temettü dağıttıkça Aygaz'a da devasa nakit akar.
    - **PETKM (%3.00 Verim):** Petrokimya döngüsel marjları baskı altındadır; saf temettü geliri için verimi TUPRS ve ENJSA'nın çok gerisindedir.
 
-⚠️ **Portföyünüzün Durumu:**
-Portföyünüzde şu an doğrudan bir Enerji/Rafineri hissesi **bulunmuyor** (yalnızca Koç Holding iştiraki dolaylı taşınmaktadır). Portföyünüze enerji nakit akışı eklemek isterseniz ilk alacağınız hisse kesinlikle **TUPRS**, defansif denge için ise **ENJSA** olmalıdır.`;
+${tuprsShares > 0
+  ? `📊 **Portföyünüzün Durumu:** Portföyünüzde **${tuprsShares} lot TUPRS** bulunmaktadır. BIST'in en yüksek temettü ödeyen rafineri devini portföyünüzde tutuyorsunuz. Defansif denge için yanına regüle elektrik dağıtım tekeli **ENJSA** ekleyerek enerji ayağınızı daha da büyütebilirsiniz.`
+  : `⚠️ **Portföyünüzün Durumu:** Portföyünüzde şu an doğrudan bir Enerji/Rafineri hissesi **bulunmuyor**. Portföyünüze enerji nakit akışı eklemek isterseniz ilk alacağınız hisse kesinlikle **TUPRS**, defansif denge için ise **ENJSA** olmalıdır.`}`;
       } else {
         return `⚡ **Energy Sector Dividend Diagnostics: Which Stock to Pick?**
 
@@ -1051,7 +1114,9 @@ In the energy and utility sector, **2 dominant champions** lead:
    - **AYGAZ (5.40%):** Domestic LPG leader holding a direct 10.2% stake in Tüpraş.
    - **PETKM (3.00%):** Cyclical petrochemical commodity exposure; suboptimal for pure income.
 
-⚠️ **Portfolio Status:** You currently have NO direct energy dividend holdings. Your primary addition should be **TUPRS**, complemented by **ENJSA**.`;
+${tuprsShares > 0
+  ? `📊 **Portfolio Status:** You hold **${tuprsShares} shares of TUPRS**. You can complement this with regulated utility **ENJSA** to expand defensive cash generation.`
+  : `⚠️ **Portfolio Status:** You currently have NO direct energy dividend holdings. Your primary addition should be **TUPRS**, complemented by **ENJSA**.`}`;
       }
     }
 
@@ -1070,8 +1135,6 @@ In the energy and utility sector, **2 dominant champions** lead:
       if (language === 'tr') {
         return `🏦 **Banka Sektörü Değerlendirmesi: Hangi Banka Daha İyi?**
 
-Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
-
 1. **Özel Bankalar (AKBNK & GARAN) Açık Ara Üstündür:**
    - **Özkaynak Kârlılığı (ROE):** Akbank (%34.2) ve Garanti (%37.1), kamu bankalarının (HALKB %18.4, VAKBN %19.2) yaklaşık **2 katı** kârlıdır.
    - **Sermaye Gücü (CAR):** Akbank %19.4 sermaye yeterliliği ile sektörün en sağlam bilançosudur.
@@ -1081,13 +1144,17 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
    - Kamu bankaları kârlarını temettü olarak dağıtmak yerine sermayeye eklemek zorundadır. Temettü verimleri %1.2 civarında kalır.
    - Ayrıca Halkbank üzerindeki ABD dava süreci sürekli bir iskonto baskısı yaratır.
 
-👉 **Danışman Kararı:** HALKB (21 lot) ve VAKBN (29 lot) hisselerinizi satıp **AKBNK** veya **ISMEN** üzerine aktarın (+₺170-₺220/yıl ek temettü).`;
+${halkbShares > 0 || vakbnShares > 0
+  ? `👉 **Danışman Kararı:** Portföyünüzdeki HALKB (${halkbShares} lot) ve VAKBN (${vakbnShares} lot) hisselerinizi satıp **AKBNK** veya **ISMEN** üzerine aktarmak yıllık temettünüzü anında artırır.`
+  : `👉 **Danışman Kararı:** Özel Tier-1 bankalar (AKBNK, GARAN) ve aracı kurumlar (ISMEN) temettü verimi ve kârlılıkta kamu bankalarından çok daha verimlidir. Portföyde kamu bankası taşımamak sermaye verimliliğinizi korur.`}`;
       } else {
         return `🏦 **Banking Showdown: Private Leaders vs State Banks**
 
 1. **Why AKBNK & GARAN Win:** Nearly double the return on equity (ROE 34% vs 18%), unmatched 19.4% CAR balance sheet, and reliable ~4.7% cash yield.
 2. **Why HALKB & VAKBN Lag:** Constrained by subsidized lending and retain capital rather than paying cash dividends (~1.2% yield).
-👉 **Action:** Consolidate HALKB + VAKBN into AKBNK or ISMEN.`;
+${halkbShares > 0 || vakbnShares > 0
+  ? `👉 **Action:** Consolidate HALKB (${halkbShares} shares) and VAKBN (${vakbnShares} shares) into AKBNK or ISMEN.`
+  : `👉 **Action:** Maintain disciplined allocation in Tier-1 private banks (AKBNK, GARAN) and ISMEN.`}`;
       }
     }
 
@@ -1147,13 +1214,17 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
    - **TRGYO (Torunlar GYO):** Mall of Istanbul ve prime ofis plazalarının TÜFE'ye endeksli kira akışına sahiptir. Cari verimi **%5.20**'dir.
    - **EKGYO (Emlak Konut):** Konut geliştirme ve gelir paylaşımı devidir (%4.80 verim). Ancak kira yerine konut satış döngüsüne duyarlıdır.
 
-👉 **Danışman Kararı:** TRGYO portföyünüzün defansif kira gelir motorudur. 15 lotunuzu koruyun, geri çekilmelerde 25-30 lota kadar artırın.`;
+${trgyoShares > 0
+  ? `👉 **Danışman Kararı:** TRGYO portföyünüzün defansif kira gelir motorudur. Mevcut **${trgyoShares} lotunuzu** koruyun, geri çekilmelerde 25-30 lota kadar artırabilirsiniz.`
+  : `👉 **Danışman Kararı:** Portföyünüzde henüz GYO hissesi bulunmamaktadır. Sanayi hisselerinden %10 stopaj kesilirken, TRGYO %0 STOPAJ AVANTAJI sunar. Portföyünüze defansif kira kalkanı olarak **25-30 lot TRGYO** yeni pozisyon olarak eklenebilir.`}`;
       } else {
         return `🏢 **REIT Showdown & Torunlar GYO (TRGYO) 0% Tax Moat:**
 
 - **0% Withholding Tax:** Turkish REITs enjoy complete exemption from the 10% dividend tax.
 - **TRGYO vs EKGYO:** TRGYO (5.2% yield) offers inflation-indexed rental cash from Mall of Istanbul, while EKGYO (4.8% yield) is exposed to residential construction cycles.
-👉 **Verdict:** TRGYO is your premier tax-free defensive cash flow anchor.`;
+${trgyoShares > 0
+  ? `👉 **Verdict:** TRGYO is your premier tax-free defensive cash flow anchor. Maintain your ${trgyoShares} shares.`
+  : `👉 **Verdict:** You currently hold no REITs. Adding an initial 25-30 shares of TRGYO establishes an immediate 0% tax-free rental cashflow shield.`}`;
       }
     }
 
@@ -1179,17 +1250,21 @@ Portföyünüzde 4 banka bulunuyor: **AKBNK, YKBNK, HALKB, VAKBN**.
    - **Dağıtım Disiplini:** Kârının **%75'ini** nakit temettü olarak dağıtır. Pazar payı %50'nin üzerindedir.
 2. **Ford Otosan (FROTO) - Euro Bazlı İhracat Kalesi:**
    - **Verim:** **%6.20**. Ford Transit ve Custom modellerinin Avrupa ihracat tekeline sahiptir; Euro döviz kalkanıdır.
-3. **Borusan Boru (BRSAN) - Neden Temettü İçin Zayıf?**
-   - Portföyünüzde 2 lot BRSAN bulunuyor. Şirket başarılı ancak cari temettü verimi sadece **%3.00**'tür. 
+3. **Borusan Boru (BRSAN) - Temettü Değerlendirmesi:**
+   - Şirket boru sanayisinde başarılı bir büyüme sergilese de cari temettü verimi sadece **%3.00** seviyesindedir.
 
-👉 **Danışman Kararı:** Saf temettü geliri hedefliyorsanız BRSAN'ı satıp **TTRAK** veya **FROTO**'ya geçmek yıllık temettü nakdinizi ikiye katlar.`;
+${brsanShares > 0
+  ? `👉 **Danışman Kararı:** Portföyünüzde bulunan **${brsanShares} lot BRSAN** hissesini satıp **TTRAK** veya **FROTO**'ya geçmek yıllık temettü nakdinizi ikiye katlar.`
+  : `👉 **Danışman Kararı:** Saf nakit temettü geliri için **TTRAK (%7.80)** veya **FROTO (%6.20)** gibi yüksek nakit akışı ve ihracat gücü olan hisseler açık ara öncelikli tercihtir.`}`;
       } else {
         return `🏭 **Automotive & Industrial Showdown:**
 
 - **TTRAK (7.8% yield):** Sector dividend champion distributing 75% of earnings with 50%+ tractor monopoly.
 - **FROTO (6.2% yield):** Export powerhouse generating hard-currency Euro revenues with high dividend growth.
 - **BRSAN (3.0% yield):** High-growth pipe manufacturer, but modest 3% yield makes it suboptimal for pure income.
-👉 **Verdict:** Swap low-yield BRSAN lots into TTRAK or FROTO to double cashflow conversion.`;
+${brsanShares > 0
+  ? `👉 **Verdict:** Swap low-yield BRSAN lots (${brsanShares} shares) into TTRAK or FROTO to double cashflow conversion.`
+  : `👉 **Verdict:** Allocate into dividend champions TTRAK or FROTO for industry-leading cashflow conversion.`}`;
       }
     }
 
@@ -1293,20 +1368,21 @@ Both are your highest cashflow generators:
 
 Portföyünüzün güçlü yönleri:
 ✅ **Bankacılık & Finans:** AKBNK, ISMEN (%8.55), TURSG (%7.09) ile güçlü getiri motoru.
-✅ **GYO:** TRGYO ile %0 stopajlı TÜFE kira kalkanı.
+${trgyoShares > 0 ? `✅ **GYO:** TRGYO (${trgyoShares} lot) ile %0 stopajlı TÜFE kira kalkanı.` : `ℹ️ **GYO Boşluğu:** Portföyde henüz GYO yok (%0 Stopaj avantajı için TRGYO eklenebilir).`}
+${tuprsShares > 0 ? `✅ **Enerji:** TUPRS (${tuprsShares} lot) ile rafineri nakit temettüsü mevcut.` : `⚡ **Enerji Boşluğu:** Portföyde doğrudan TUPRS veya ENJSA bulunmuyor.`}
 ✅ **Tüketim:** BIMAS ve CCOLA ile çoklu taksit ve dövizli ihracat.
 
-🚨 **Portföyünüzdeki En Kritik 2 Eksik & Boşluk:**
-1. ⚡ **DOĞRUDAN ENERJİ HİSSESİ YOK:** BIST'in en yüksek temettüsünü veren **TUPRS** (%7.40 verim) veya regüle elektrik tekeli **ENJSA** (%6.80 verim) portföyünüzde eksiktir!
-2. ⚠️ **Kamu Bankası Verimsizliği:** HALKB (21 lot) ve VAKBN (29 lot) kâr dağıtımı yerine sermaye biriktirdiği için portföy verimini aşağı çekmektedir.
-
-👉 **Aksiyon:** Kamu bankalarını satarak elde edilecek ~₺1.900 nakit ile doğrudan **TUPRS** veya **ENJSA** ekleyin; böylece eksik enerji ayağını tamamlayıp yıllık temettünüzü anında artırabilirsiniz.`;
+🚨 **Öncelikli Aksiyon Alanları:**
+${!trgyoShares ? `1. 🏢 **GYO %0 Stopaj Kalkanı:** BIST'te temettüden %10 stopaj kesilirken GYO'larda %0'dır. TRGYO ekleyerek net nakit akışını güçlendirin.\n` : ''}${!tuprsShares ? `2. ⚡ **Enerji:** TUPRS (%7.40) veya ENJSA (%6.80) ekleyerek sektörel çeşitlilik sağlayın.\n` : ''}${halkbShares > 0 || vakbnShares > 0 ? `3. ⚠️ **Kamu Bankası Takası:** HALKB (${halkbShares} lot) ve VAKBN (${vakbnShares} lot) kâr dağıtmadığı için AKBNK veya ISMEN'e aktarılması önerilir.\n` : ''}
+👉 **Aksiyon:** Bu adımlarla portföyünüzün yıllık temettü nakit akışını ve vergi avantajını maksimize edebilirsiniz.`;
       } else {
         return `🔍 **Portfolio Diagnostics: Missing Sectors & Rebalancing Priorities:**
 
-- **Strengths:** High yield from Financials (ISMEN 8.55%, TURSG 7.09%), 0% tax REIT (TRGYO), and retail compounders (BIMAS, CCOLA).
-- **Critical Gap:** You have **NO direct energy holdings**. Adding **TUPRS (7.4%)** or **ENJSA (6.8%)** will complete your sectoral diversification.
-- **Drag:** Suboptimal state banks (HALKB, VAKBN) should be reallocated into energy champions.`;
+- **Strengths:** High yield from Financials (ISMEN 8.55%, TURSG 7.09%) and retail compounders (BIMAS, CCOLA).
+- **Diagnostics:**
+  ${tuprsShares > 0 ? `• Energy: Covered via TUPRS (${tuprsShares} shares).` : `• Critical Gap: Missing direct energy exposure (TUPRS / ENJSA).`}
+  ${trgyoShares > 0 ? `• REITs: Covered via TRGYO (${trgyoShares} shares).` : `• Tax Gap: No REIT holding; adding TRGYO unlocks 0% tax-free distributions.`}
+  ${halkbShares > 0 || vakbnShares > 0 ? `• Drag: Suboptimal state banks should be consolidated into private leaders.` : `• Banking: Clean private bank exposure.`}`;
       }
     }
 
@@ -2189,13 +2265,21 @@ Ask about any sector or company for deep qualitative diagnostics.`;
               {/* Swap Visualizer */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-200/60 dark:border-slate-800">
                 <div>
-                  <span className="text-xs font-bold text-slate-400 block">{language === 'tr' ? 'Mevcut Pozisyon (Elden Çıkarılacak)' : 'Current Allocation (To Trim/Exit)'}</span>
-                  <span className="text-sm font-black text-rose-600 dark:text-rose-400 mt-1 block">
+                  <span className="text-xs font-bold text-slate-400 block">
+                    {language === 'tr'
+                      ? (prop.type === 'addition' ? 'Mevcut Durum' : 'Mevcut Durum / Pozisyon (Elden Çıkarılacak)')
+                      : (prop.type === 'addition' ? 'Current Status' : 'Current Allocation (To Trim/Exit)')}
+                  </span>
+                  <span className={`text-sm font-black mt-1 block ${prop.type === 'addition' ? 'text-slate-800 dark:text-slate-200' : 'text-rose-600 dark:text-rose-400'}`}>
                     {prop.current}
                   </span>
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-slate-400 block">{language === 'tr' ? 'Önerilen Hedef Varlık' : 'Target Asset (To Accumulate)'}</span>
+                  <span className="text-xs font-bold text-slate-400 block">
+                    {language === 'tr'
+                      ? (prop.type === 'addition' ? 'Önerilen Hamle / Hedef Pozisyon' : 'Önerilen Hedef Varlık')
+                      : (prop.type === 'addition' ? 'Recommended Action / Target' : 'Target Asset (To Accumulate)')}
+                  </span>
                   <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
                     {prop.target}
                   </span>
