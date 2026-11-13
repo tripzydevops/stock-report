@@ -133,6 +133,16 @@ export default function DividendView({
   }, [dividendAssets]);
   const excludedYieldCount = excludedYieldAssets.length;
 
+  // Known non-payers: assets that explicitly have 0% yield or ₺0 annual payout (not excluded from totals)
+  const knownNonPayerAssets = useMemo(() => {
+    return dividendAssets.filter(item => 
+      (item.dividendYield === 0 || item.annualPayout === 0) &&
+      item.dividendYield !== null &&
+      item.annualPayout !== null
+    );
+  }, [dividendAssets]);
+  const knownNonPayerCount = knownNonPayerAssets.length;
+
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
     const payout = item.annualPayout || 0;
     return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
@@ -142,9 +152,13 @@ export default function DividendView({
   const totalAnnualDisplay = currencyMode === 'USD' ? (totalAnnualTRY / usdTryRate) : totalAnnualTRY;
   const totalMonthlyDisplay = currencyMode === 'USD' ? (totalMonthlyTRY / usdTryRate) : totalMonthlyTRY;
 
-  // Weighted average Yield on Cost for portfolio
+  // Weighted average Yield on Cost for portfolio:
+  // Includes assets with positive entry price where annual payout is available or derivable
   const pricedCostAssets = useMemo(() => {
-    return dividendAssets.filter(item => item.annualPayout !== null && item.entryPrice > 0);
+    return dividendAssets.filter(item => 
+      item.entryPrice > 0 && 
+      (item.annualPayout !== null || (item.dividendYield !== null && typeof item.estimatedNextDPS === 'number' && item.estimatedNextDPS > 0))
+    );
   }, [dividendAssets]);
 
   const totalCostTRY = pricedCostAssets.reduce((acc, item) => {
@@ -153,7 +167,9 @@ export default function DividendView({
   }, 0);
 
   const totalCostAnnualTRY = pricedCostAssets.reduce((acc, item) => {
-    const payout = item.annualPayout || 0;
+    const payout = item.annualPayout !== null
+      ? item.annualPayout
+      : (item.dividendYield !== null && typeof item.estimatedNextDPS === 'number' ? item.shares * item.estimatedNextDPS : 0);
     return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
   }, 0);
 
@@ -330,6 +346,16 @@ export default function DividendView({
               </span>
             </div>
           )}
+          {knownNonPayerCount > 0 && (
+            <div className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400 font-normal flex items-center gap-1" title={language === 'tr' ? 'Temettü ödemeyen şirketler ₺0 olarak toplama dahildir' : 'Non-paying companies are included in the total as ₺0'}>
+              <span>ℹ️</span>
+              <span>
+                {language === 'tr'
+                  ? `${knownNonPayerCount} temettü ödemeyen varlık (₺0)`
+                  : `${knownNonPayerCount} non-paying assets (₺0)`}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -361,8 +387,11 @@ export default function DividendView({
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t.dividend.yieldOnCost}</span>
             <span className="text-[10px] bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded">YoC</span>
           </div>
-          <div className="mt-2 text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400">
-            {avgYieldOnCost.toFixed(2)}%
+          <div className="mt-2 text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 flex items-baseline gap-1.5 flex-wrap">
+            <span>{avgYieldOnCost.toFixed(2)}%</span>
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              ({pricedCostAssets.length}/{dividendAssets.length} {language === 'tr' ? 'varlık' : 'assets'})
+            </span>
           </div>
           <div className="text-[11px] text-gray-500 mt-1">
             {language === 'tr' ? 'Ağırlıklı Piyasa Verimi: ' : 'Weighted Mkt Yield: '}
@@ -761,7 +790,11 @@ export default function DividendView({
                                   {isHeld ? (language === 'tr' ? 'Tahmini Nakit Girişiniz' : 'Your Cash Inflow') : (language === 'tr' ? 'Hisse Başı Net Nakit (DPS)' : 'Dividend Per Share (DPS)')}
                                 </div>
                                 <div className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                                  {asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)} ${language === 'tr' ? 'Verim' : 'Yield'}` : (language === 'tr' ? 'Verim Belirlenmedi' : 'Yield Unavailable')}
+                                  {asset.dividendYield === 0
+                                    ? (language === 'tr' ? '%0.00 (Temettü Ödemiyor)' : '%0.00 (Non-Payer)')
+                                    : (asset.dividendYield !== null && asset.dividendYield !== undefined
+                                        ? `%${asset.dividendYield.toFixed(2)} ${language === 'tr' ? 'Verim' : 'Yield'}`
+                                        : (language === 'tr' ? 'Verim Belirlenmedi' : 'Yield Unavailable'))}
                                 </div>
                               </div>
                               <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -954,7 +987,11 @@ export default function DividendView({
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Verim</div>
-                        <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—'}</div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                          {asset.dividendYield === 0
+                            ? <span className="text-gray-400 font-semibold">%0.00</span>
+                            : (asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—')}
+                        </div>
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">Hak Kullanım</div>
@@ -1108,7 +1145,11 @@ export default function DividendView({
                         </td>
 
                         <td className="px-5 py-3.5 text-right whitespace-nowrap font-bold text-emerald-600 dark:text-emerald-400">
-                          {asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—'}
+                          {asset.dividendYield === 0 ? (
+                            <span className="text-gray-400 font-medium" title={language === 'tr' ? 'Temettü ödemesi bulunmuyor' : 'Non-dividend payer'}>
+                              %0.00 <span className="text-[10px] font-normal">({language === 'tr' ? 'Ödemesiz' : 'Non-Payer'})</span>
+                            </span>
+                          ) : (asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—')}
                         </td>
 
                         <td className="px-5 py-3.5 text-right font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">

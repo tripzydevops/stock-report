@@ -123,3 +123,37 @@ def test_stock_movement_direction_validation():
     })
     with pytest.raises(SchemaError):
         validate_movements_dataframe(invalid_df, strict=True)
+
+
+def test_position_add_request_strict_price_and_shares():
+    from app.api.portfolio import PositionAddRequest
+    from pydantic import ValidationError
+
+    # Valid position passes
+    pos = PositionAddRequest(asset_id="asset-123", shares=100, entry_price=45.50)
+    assert pos.shares == 100
+    assert pos.entry_price == 45.50
+
+    # Zero entry price fails
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=100, entry_price=0.0)
+
+    # Negative entry price fails
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=100, entry_price=-10.0)
+
+    # NaN / Inf entry price fails
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=100, entry_price=float('nan'))
+
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=100, entry_price=float('inf'))
+
+    # Zero shares fails
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=0, entry_price=45.50)
+
+    # Negative shares fails
+    with pytest.raises(ValidationError):
+        PositionAddRequest(asset_id="asset-123", shares=-5, entry_price=45.50)
+

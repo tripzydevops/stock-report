@@ -435,4 +435,135 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     const unpricedOrNoYieldCount = mixedHoldings.length - pricedAndYieldAssets.length;
     expect(unpricedOrNoYieldCount).toBe(1);
   });
+
+  test('12. Unit Test: Known non-payer (0% yield) contributes zero to totals and is not counted as unavailable yield', async () => {
+    // Asset 1 (Payer): 100 shares @ ₺100.0, Price = ₺100.0, Yield = 10.0%, Payout = ₺1,000
+    // Asset 2 (Known Non-Payer): 100 shares @ ₺50.0, Price = ₺50.0, Yield = 0.0%, Payout = ₺0.0
+    // Asset 3 (Unavailable Yield): 100 shares @ ₺80.0, Price = null, Yield = null, Payout = null
+    const portfolio: any[] = [
+      {
+        symbol: 'DIV_PAYER',
+        name: 'Dividend Payer A.Ş.',
+        market: 'BIST',
+        currency: 'TRY',
+        shares: 100,
+        entryPrice: 100.0,
+        currentPrice: 100.0,
+        dividendYield: 10.0,
+        annualPayout: 1000.0,
+      },
+      {
+        symbol: 'TECH_GROWTH',
+        name: 'Tech Growth Non-Payer A.Ş.',
+        market: 'BIST',
+        currency: 'TRY',
+        shares: 100,
+        entryPrice: 50.0,
+        currentPrice: 50.0,
+        dividendYield: 0.0, // Confirmed non-payer
+        annualPayout: 0.0,
+      },
+      {
+        symbol: 'UNKNOWN_DATA',
+        name: 'Pending Listing A.Ş.',
+        market: 'BIST',
+        currency: 'TRY',
+        shares: 100,
+        entryPrice: 80.0,
+        currentPrice: null, // Price unavailable
+        dividendYield: null, // Yield unavailable
+        annualPayout: null, // Payout unavailable
+      }
+    ];
+
+    // 1. Excluded count must contain ONLY UNKNOWN_DATA (length 1), NOT TECH_GROWTH
+    const excludedYieldAssets = portfolio.filter(item => item.annualPayout === null || item.dividendYield === null);
+    expect(excludedYieldAssets.length).toBe(1);
+    expect(excludedYieldAssets[0].symbol).toBe('UNKNOWN_DATA');
+
+    // 2. Known non-payer count: must detect exactly 1 asset with confirmed 0% yield
+    const knownNonPayerAssets = portfolio.filter(item => 
+      (item.dividendYield === 0 || item.annualPayout === 0) &&
+      item.dividendYield !== null &&
+      item.annualPayout !== null
+    );
+    expect(knownNonPayerAssets.length).toBe(1);
+    expect(knownNonPayerAssets[0].symbol).toBe('TECH_GROWTH');
+
+    // 3. Total annual dividend: sum available payouts (₺1,000 + ₺0 = ₺1,000)
+    const totalAnnualTRY = portfolio.reduce((acc, item) => {
+      const payout = item.annualPayout || 0;
+      return acc + payout;
+    }, 0);
+    expect(totalAnnualTRY).toBe(1000.0);
+
+    // 4. Priced assets for weighted current yield: includes DIV_PAYER (₺10,000 val) and TECH_GROWTH (₺5,000 val)
+    const pricedAndYieldAssets = portfolio.filter(item => item.currentPrice !== null && item.currentPrice > 0 && item.annualPayout !== null);
+    expect(pricedAndYieldAssets.length).toBe(2);
+
+    const totalPricedValTRY = pricedAndYieldAssets.reduce((acc, item) => acc + (item.shares * item.currentPrice), 0);
+    const totalPricedAnnualTRY = pricedAndYieldAssets.reduce((acc, item) => acc + (item.annualPayout || 0), 0);
+
+    expect(totalPricedValTRY).toBe(15000.0); // 10,000 + 5,000
+    expect(totalPricedAnnualTRY).toBe(1000.0); // 1,000 + 0
+
+    // Weighted market yield: (1,000 / 15,000) * 100 = 6.666...%
+    const avgCurrentYield = (totalPricedAnnualTRY / totalPricedValTRY) * 100;
+    expect(avgCurrentYield).toBeCloseTo(6.67, 1);
+
+    // 5. Yield on Cost (YoC) coverage:
+    // Both DIV_PAYER and TECH_GROWTH have entryPrice > 0 and known payout, while UNKNOWN_DATA has null payout
+    const pricedCostAssets = portfolio.filter(item => 
+      item.entryPrice > 0 && 
+      (item.annualPayout !== null || (item.dividendYield !== null && item.estimatedNextDPS !== null && item.estimatedNextDPS > 0))
+    );
+    expect(pricedCostAssets.length).toBe(2);
+    // Coverage is 2 out of 3 assets
+    expect(`${pricedCostAssets.length}/${portfolio.length}`).toBe('2/3');
+  });
+
+  test('13. Server-Side Validation: /api/portfolio/positions rejects missing, zero, negative, or nonfinite prices and quantities', async ({ request }) => {
+    // 1. Missing / Zero price
+    const resZeroPrice = await request.post('/api/portfolio/positions', {
+      data: {
+        symbol: 'THYAO',
+        shares: 10,
+        price: 0,
+      }
+    });
+    expect(resZeroPrice.status()).toBe(400);
+    const zeroJson = await resZeroPrice.json();
+    expect(zeroJson.error).toMatch(/Invalid price/i);
+
+    // 2. Negative price
+    const resNegativePrice = await request.post('/api/portfolio/positions', {
+      data: {
+        symbol: 'THYAO',
+        shares: 10,
+        price: -50.0,
+      }
+    });
+    expect(resNegativePrice.status()).toBe(400);
+
+    // 3. Zero / Negative shares
+    const resZeroShares = await request.post('/api/portfolio/positions', {
+      data: {
+        symbol: 'THYAO',
+        shares: 0,
+        price: 250.0,
+      }
+    });
+    expect(resZeroShares.status()).toBe(400);
+    const zeroSharesJson = await resZeroShares.json();
+    expect(zeroSharesJson.error).toMatch(/Invalid shares/i);
+
+    // 4. Missing symbol
+    const resNoSymbol = await request.post('/api/portfolio/positions', {
+      data: {
+        shares: 10,
+        price: 100.0,
+      }
+    });
+    expect(resNoSymbol.status()).toBe(400);
+  });
 });

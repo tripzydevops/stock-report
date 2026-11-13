@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
-from pydantic import BaseModel
+import math
+from pydantic import BaseModel, Field, field_validator
 from app.models.schemas import AssetResponse
 
 router = APIRouter(tags=["portfolio"])
@@ -27,11 +28,25 @@ class Position(BaseModel):
 
 class PositionAddRequest(BaseModel):
     asset_id: str
-    shares: int
-    entry_price: float
-    stop_loss: Optional[float] = None
-    target: Optional[float] = None
+    shares: int = Field(..., gt=0, description="Quantity of shares must be strictly positive (> 0)")
+    entry_price: float = Field(..., gt=0, description="Entry price must be strictly positive and finite (> 0)")
+    stop_loss: Optional[float] = Field(None, gt=0)
+    target: Optional[float] = Field(None, gt=0)
     notes: Optional[str] = None
+
+    @field_validator("entry_price")
+    @classmethod
+    def validate_entry_price(cls, v: float) -> float:
+        if not math.isfinite(v) or v <= 0:
+            raise ValueError("Entry price must be a finite, strictly positive number (reject zero, negative, or nonfinite prices)")
+        return v
+
+    @field_validator("shares")
+    @classmethod
+    def validate_shares(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("Shares must be strictly positive (> 0)")
+        return v
 
 class PositionUpdateRequest(BaseModel):
     stop_loss: Optional[float] = None

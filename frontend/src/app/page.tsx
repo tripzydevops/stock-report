@@ -2469,6 +2469,28 @@ export default function Home() {
   };
 
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv?: boolean, divYield?: number) => {
+    // Strict Input Guard: Reject missing, zero, negative, or nonfinite prices and shares
+    if (
+      newHolding.entryPrice === null ||
+      newHolding.entryPrice === undefined ||
+      typeof newHolding.entryPrice !== 'number' ||
+      !Number.isFinite(newHolding.entryPrice) ||
+      newHolding.entryPrice <= 0
+    ) {
+      console.warn('Blocked adding holding with missing, zero, negative, or nonfinite entry price:', newHolding.symbol, newHolding.entryPrice);
+      return;
+    }
+    if (
+      newHolding.shares === null ||
+      newHolding.shares === undefined ||
+      typeof newHolding.shares !== 'number' ||
+      !Number.isFinite(newHolding.shares) ||
+      newHolding.shares <= 0
+    ) {
+      console.warn('Blocked adding holding with missing, zero, negative, or nonfinite shares:', newHolding.symbol, newHolding.shares);
+      return;
+    }
+
     let cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
     let resolvedName = newHolding.name || cleanSymUpper;
     let resolvedMarket = newHolding.market || 'BIST';
@@ -2567,19 +2589,44 @@ export default function Home() {
           ? newHolding.targetPrice
           : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
 
-        const { error: posError } = await supabase.from('portfolio_positions').insert([{
-          user_id: effectiveUserId,
-          asset_id: assetId,
-          quantity: newHolding.shares,
-          avg_entry_price: newHolding.entryPrice,
-          stop_loss: resolvedStop,
-          target_price: resolvedTarget,
-          is_open: true,
-          entry_date: orderDateStr,
-          notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding')
-        }]);
-        if (posError) {
-          console.error('Error adding portfolio position to Supabase:', posError);
+        let posError: any = null;
+        try {
+          const apiRes = await fetch('/api/portfolio/positions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              symbol: cleanSym,
+              shares: newHolding.shares,
+              price: newHolding.entryPrice,
+              stopLoss: resolvedStop,
+              targetPrice: resolvedTarget,
+              market: resolvedMarket,
+              name: resolvedName,
+              currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
+              notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
+              isDividend: isCoreDiv,
+              userId: effectiveUserId,
+            }),
+          });
+          if (!apiRes.ok) {
+            const errJson = await apiRes.json().catch(() => ({}));
+            console.error('Server validation failed creating position:', errJson);
+            posError = errJson;
+          }
+        } catch (apiErr) {
+          console.warn('Portfolio API fetch failed, falling back to direct client:', apiErr);
+          const { error: directErr } = await supabase.from('portfolio_positions').insert([{
+            user_id: effectiveUserId,
+            asset_id: assetId,
+            quantity: newHolding.shares,
+            avg_entry_price: newHolding.entryPrice,
+            stop_loss: resolvedStop,
+            target_price: resolvedTarget,
+            is_open: true,
+            entry_date: orderDateStr,
+            notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding')
+          }]);
+          posError = directErr;
         }
 
         try {
