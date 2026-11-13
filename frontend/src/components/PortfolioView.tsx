@@ -1540,10 +1540,10 @@ export default function PortfolioView({
                                         <span>{divItem ? `+${formatCurr(divItem.annualPayout, item.currency)}/yıl` : 'Temettü'}</span>
                                       </span>
                                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
-                                        {divItem ? `%${divItem.dividendYield.toFixed(1)} Verim` : 'Core DCA'}
+                                        {divItem && divItem.dividendYield !== null && divItem.dividendYield !== undefined ? `%${divItem.dividendYield.toFixed(1)} Verim` : 'Core DCA'}
                                       </span>
                                       <span className="text-[9px] text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                                        {divItem?.payoutMonth || 'Mayıs 2027'}
+                                        {divItem?.payoutMonth || (language === 'tr' ? 'Tarih Belirlenmedi' : 'TBD')}
                                       </span>
                                     </>
                                   );
@@ -1926,7 +1926,7 @@ export default function PortfolioView({
                                       return (
                                         <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs" title={language === 'tr' ? 'Tahmini yıllık temettü nakit akışı' : 'Estimated annual dividend payout'}>
                                           <span>💎</span>
-                                          <span>{divItem ? `%${divItem.dividendYield.toFixed(1)} (+${formatCurr(divItem.annualPayout, item.currency)}/yıl)` : 'Yield / Core'}</span>
+                                          <span>{divItem ? `${divItem.dividendYield !== null && divItem.dividendYield !== undefined ? `%${divItem.dividendYield.toFixed(1)}` : 'Verim'} (+${formatCurr(divItem.annualPayout, item.currency)}/yıl)` : 'Yield / Core'}</span>
                                         </span>
                                       );
                                     })()}

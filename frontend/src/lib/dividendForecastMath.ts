@@ -592,7 +592,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     name: 'Petkim Petrokimya',
     market: 'BIST',
     currency: 'TRY',
-    currentPrice: 19.80,
+    currentPrice: 0.0,
     currentYield: 0.0,
     historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 15.0,
@@ -711,7 +711,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     name: 'Türkiye Halk Bankası',
     market: 'BIST',
     currency: 'TRY',
-    currentPrice: 22.40,
+    currentPrice: 0.0,
     currentYield: 0.0,
     historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 24.0,
@@ -728,7 +728,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     name: 'Türkiye Vakıflar Bankası',
     market: 'BIST',
     currency: 'TRY',
-    currentPrice: 24.80,
+    currentPrice: 0.0,
     currentYield: 0.0,
     historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 25.0,
@@ -745,7 +745,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     name: 'Kardemir (D)',
     market: 'BIST',
     currency: 'TRY',
-    currentPrice: 28.60,
+    currentPrice: 0.0,
     currentYield: 0.0,
     historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 15.0,
@@ -997,8 +997,8 @@ export function resolveDividendSchedule(symbol: string): {
     };
   }
 
-  let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '2027-04-15');
-  let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate);
+  let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '');
+  let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate || '');
 
   // If live data has confirmed exDate but payDate is null (common for BIST), calculate payDate as exDate + 2 business days
   if (live?.isConfirmed && live?.exDate && !live?.payDate) {
@@ -1012,13 +1012,17 @@ export function resolveDividendSchedule(symbol: string): {
   // Derive human-readable month
   let month = staticSched?.month;
   if (!month || isConfirmed) {
-    const d = new Date(payDate || exDate);
-    if (!isNaN(d.getTime())) {
-      const trMonths = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-      const suffix = staticSched?.month?.includes('Taksit') ? ` (${staticSched.month.split('(')[1]}` : '';
-      month = `${trMonths[d.getMonth()]} ${d.getFullYear()}${suffix}`;
+    if (payDate || exDate) {
+      const d = new Date(payDate || exDate);
+      if (!isNaN(d.getTime())) {
+        const trMonths = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+        const suffix = staticSched?.month?.includes('Taksit') ? ` (${staticSched.month.split('(')[1]}` : '';
+        month = `${trMonths[d.getMonth()]} ${d.getFullYear()}${suffix}`;
+      } else {
+        month = staticSched?.month || 'Tarih Belirlenmedi';
+      }
     } else {
-      month = staticSched?.month || 'TBD';
+      month = isConfirmed ? 'Açıklandı' : 'Tarih Belirlenmedi';
     }
   }
 
@@ -1443,8 +1447,8 @@ export function deriveDividendsFromPortfolio(
     currentPrice: number;
     entryPrice: number;
     currency: string;
-    dividendYield: number;
-    yieldOnCost: number;
+    dividendYield: number | null;
+    yieldOnCost: number | null;
     annualPayout: number;
     monthlyPayout: number;
     payoutRatio: number;
@@ -1508,14 +1512,18 @@ export function deriveDividendsFromPortfolio(
     const liveDbPrice = Number(divSummary?.latest_price);
     const effectivePrice = pos.currentPrice > 0 
       ? pos.currentPrice 
-      : (pos.entryPrice > 0 ? pos.entryPrice : (liveDbPrice > 0 ? liveDbPrice : (growthProfile?.currentPrice || 50)));
+      : (pos.entryPrice > 0 ? pos.entryPrice : (liveDbPrice > 0 ? liveDbPrice : (growthProfile?.currentPrice || 0)));
 
-    const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
-    const divYield = liveYield > 0 
+    const liveYield = Number(divSummary?.trailing_yield_pct);
+    const divYield: number | null = (!isNaN(liveYield) && liveYield > 0)
       ? liveYield 
-      : (growthProfile?.currentYield !== undefined ? growthProfile.currentYield : (existing?.dividendYield ?? (pos.market === 'US' ? 3.5 : 5.0)));
-    const yoc = pos.entryPrice > 0 ? (effectivePrice * divYield) / pos.entryPrice : divYield;
-    const annualPayout = (pos.shares * effectivePrice * divYield) / 100;
+      : (growthProfile?.currentYield !== undefined 
+          ? growthProfile.currentYield 
+          : (existing?.dividendYield !== undefined && existing?.dividendYield !== null 
+              ? existing.dividendYield 
+              : null));
+    const yoc = (divYield !== null && pos.entryPrice > 0) ? (effectivePrice * divYield) / pos.entryPrice : divYield;
+    const annualPayout = (divYield !== null && effectivePrice > 0) ? (pos.shares * effectivePrice * divYield) / 100 : 0;
     const monthlyPayout = annualPayout / 12;
 
     const frequency = growthProfile?.payoutFrequency || existing?.frequency || (pos.market === 'US' ? 'Quarterly' : 'Annual');
@@ -1531,14 +1539,16 @@ export function deriveDividendsFromPortfolio(
     const estimatedDPS = existing?.estimatedNextDPS || (
       sched.confirmedDPS && sched.isConfirmed 
         ? Number(sched.confirmedDPS.toFixed(4)) 
-        : (divYield === 0 ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4))))
+        : (divYield === 0 || divYield === null ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : (effectivePrice > 0 ? Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)) : 0)))
     );
     const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
 
-    const nextExDate = sched.exDate || (divYield > 0 ? (divSummary?.latest_ex_date || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15')) : '');
-    const nextPaymentDate = sched.payDate || (divYield > 0 ? (existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20')) : '');
-    const payoutMonth = sched.month || (divYield > 0 ? (existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'April 2027')) : 'Belirlenmedi');
-    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 ? 'Estimated' : (existing?.paymentStatus || 'Estimated'));
+    const nextExDate = sched.exDate || divSummary?.latest_ex_date || existing?.nextExDate || '';
+    const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || '';
+    const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
+      ? sched.month
+      : (existing?.payoutMonth || (nextExDate ? '' : 'Tarih Belirlenmedi'));
+    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : (existing?.paymentStatus || 'Estimated'));
 
     const displayName = growthProfile?.name || divSummary?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
 
@@ -1550,7 +1560,7 @@ export function deriveDividendsFromPortfolio(
       currentPrice: effectivePrice,
       currency: pos.currency || divSummary?.currency || (pos.market === 'US' ? 'USD' : 'TRY'),
       dividendYield: divYield,
-      yieldOnCost: Number(yoc.toFixed(2)),
+      yieldOnCost: yoc !== null ? Number(yoc.toFixed(2)) : null,
       annualPayout: Number(annualPayout.toFixed(2)),
       monthlyPayout: Number(monthlyPayout.toFixed(2)),
       payoutRatio: payoutRatio,
@@ -1627,14 +1637,16 @@ export function deriveAllMarketDividends(
 
     const livePrice = livePricesMap?.[cleanSym] || livePricesMap?.[`${cleanSym}.IS`];
     const liveDbPrice = Number(divSummary?.latest_price);
-    const effectivePrice = livePrice || liveDbPrice || held?.currentPrice || profile?.currentPrice || (market === 'US' ? 65.0 : 45.0);
+    const effectivePrice = livePrice || liveDbPrice || held?.currentPrice || held?.entryPrice || (profile?.currentPrice || 0);
 
-    const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
-    const divYield = liveYield > 0 ? liveYield : (profile?.currentYield !== undefined ? profile.currentYield : (market === 'US' ? 3.5 : 6.0));
+    const liveYield = Number(divSummary?.trailing_yield_pct);
+    const divYield: number | null = (!isNaN(liveYield) && liveYield > 0)
+      ? liveYield 
+      : (profile?.currentYield !== undefined ? profile.currentYield : null);
 
     const shares = isHeld && held ? held.shares : 0;
     const entryPrice = isHeld && held ? held.entryPrice : effectivePrice;
-    const yoc = entryPrice > 0 ? (effectivePrice * divYield) / entryPrice : divYield;
+    const yoc = (divYield !== null && entryPrice > 0) ? (effectivePrice * divYield) / entryPrice : divYield;
 
     const frequency = profile?.payoutFrequency || (market === 'US' ? 'Quarterly' : 'Annual');
     const trancheInfo = KNOWN_DIVIDEND_TRANCHES[cleanSym];
@@ -1643,22 +1655,26 @@ export function deriveAllMarketDividends(
     const latestDpsFromDb = Number(divSummary?.latest_dps);
     const estimatedDPS = (sched.confirmedDPS && sched.isConfirmed)
       ? Number(sched.confirmedDPS.toFixed(4))
-      : (divYield === 0 ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4))));
+      : (divYield === 0 || divYield === null ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : (effectivePrice > 0 ? Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)) : 0)));
 
     const annualPayout = isHeld
-      ? Number(((shares * effectivePrice * divYield) / 100).toFixed(2))
-      : (divYield === 0 ? 0 : Number((100 * estimatedDPS * freqDiv).toFixed(2)));
+      ? (divYield !== null && effectivePrice > 0 ? Number(((shares * effectivePrice * divYield) / 100).toFixed(2)) : 0)
+      : (divYield === 0 || divYield === null ? 0 : Number((100 * estimatedDPS * freqDiv).toFixed(2)));
     const monthlyPayout = Number((annualPayout / 12).toFixed(2));
     const estimatedNextPayout = isHeld
       ? Number((shares * estimatedDPS).toFixed(2))
-      : (divYield === 0 ? 0 : Number((100 * estimatedDPS).toFixed(2)));
+      : (divYield === 0 || divYield === null ? 0 : Number((100 * estimatedDPS).toFixed(2)));
 
     const displayName = profile?.name || divSummary?.name || held?.name || (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym);
     const safetyRating = (profile?.safetyGrade?.charAt(0) || 'A') as 'A' | 'B' | 'C';
     const payoutRatio = profile?.payoutRatio || 50;
 
-    const nextExDate = divYield > 0 ? (sched.exDate || divSummary?.latest_ex_date || '') : '';
-    const nextPayDate = divYield > 0 ? (sched.payDate || nextExDate) : '';
+    const nextExDate = sched.exDate || divSummary?.latest_ex_date || '';
+    const nextPayDate = sched.payDate || nextExDate || '';
+    const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
+      ? sched.month
+      : (nextExDate ? '' : 'Tarih Belirlenmedi');
+    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : 'Estimated');
 
     result.push({
       symbol: cleanSym,
@@ -1668,7 +1684,7 @@ export function deriveAllMarketDividends(
       currentPrice: effectivePrice,
       currency: currency,
       dividendYield: divYield,
-      yieldOnCost: Number(yoc.toFixed(2)),
+      yieldOnCost: yoc !== null ? Number(yoc.toFixed(2)) : null,
       annualPayout: annualPayout,
       monthlyPayout: monthlyPayout,
       payoutRatio: payoutRatio,
@@ -1678,8 +1694,8 @@ export function deriveAllMarketDividends(
       nextPaymentDate: nextPayDate,
       estimatedNextDPS: estimatedDPS,
       estimatedNextPayout: estimatedNextPayout,
-      payoutMonth: sched.month,
-      paymentStatus: sched.status,
+      payoutMonth: payoutMonth,
+      paymentStatus: paymentStatus,
       isHeld: isHeld,
       market: market
     });

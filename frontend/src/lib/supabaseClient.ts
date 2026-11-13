@@ -161,8 +161,8 @@ export interface DividendAsset {
   currentPrice: number;
   entryPrice: number;
   currency: string;
-  dividendYield: number;
-  yieldOnCost: number;
+  dividendYield: number | null;
+  yieldOnCost: number | null;
   annualPayout: number;
   monthlyPayout: number;
   payoutRatio: number;

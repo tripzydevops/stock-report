@@ -997,13 +997,17 @@ export default function Home() {
       }
 
       const handleHashChange = () => {
-        const newHash = window.location.hash.replace('#', '') as TabId;
-        if (VALID_TABS.includes(newHash)) {
-          setActiveTab(newHash);
+        const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
+        if (VALID_TABS.includes(hash)) {
+          setActiveTab(hash);
         }
       };
       window.addEventListener('hashchange', handleHashChange);
-      return () => window.removeEventListener('hashchange', handleHashChange);
+      window.addEventListener('popstate', handleHashChange);
+      return () => {
+        window.removeEventListener('hashchange', handleHashChange);
+        window.removeEventListener('popstate', handleHashChange);
+      };
     }
   }, []);
 
@@ -1012,7 +1016,9 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('market_pulse_active_tab', newTab);
-        window.history.replaceState(null, '', `#${newTab}`);
+        if (window.location.hash.replace('#', '').trim().toLowerCase() !== newTab) {
+          window.history.pushState(null, '', `#${newTab}`);
+        }
       } catch (e) {
         // Ignore
       }
@@ -3003,8 +3009,8 @@ export default function Home() {
           return {
             ...div,
             shares: remainingShares,
-            annualPayout: (remainingShares * div.currentPrice * div.dividendYield) / 100,
-            monthlyPayout: (remainingShares * div.currentPrice * div.dividendYield) / 1200
+            annualPayout: (remainingShares * div.currentPrice * (div.dividendYield || 0)) / 100,
+            monthlyPayout: (remainingShares * div.currentPrice * (div.dividendYield || 0)) / 1200
           };
         });
       });

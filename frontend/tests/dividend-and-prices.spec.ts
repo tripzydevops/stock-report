@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { calculateLedgerCash } from '../src/lib/cashLedger';
 import { ExecutedOrder, CapitalTransfer } from '../src/lib/supabaseClient';
+import { deriveDividendsFromPortfolio, deriveAllMarketDividends, resolveDividendSchedule } from '../src/lib/dividendForecastMath';
 
 test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
 
@@ -263,5 +264,84 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // Verify no fabricated BRSAN 0-lot swap ghost card is shown if user has 0 shares
     const ghostBrsanSwap = page.locator('text=BRSAN (0 lot ≈ ₺0)');
     await expect(ghostBrsanSwap).toHaveCount(0);
+  });
+
+  test('9. Unit Test: Unknown-yield and unannounced schedules return null / empty dates without fake fallbacks', async () => {
+    // A. Unannounced schedule test
+    const unannounced = resolveDividendSchedule('XYZ_UNKNOWN_STOCK');
+    expect(unannounced.exDate).toBe('');
+    expect(unannounced.payDate).toBe('');
+    expect(unannounced.month).toBe('Tarih Belirlenmedi');
+    expect(unannounced.isConfirmed).toBe(false);
+
+    // B. deriveDividendsFromPortfolio with unknown yield holding
+    const mockPortfolio = [{
+      symbol: 'UNKNOWN_TEST_STOCK',
+      shares: 100,
+      entryPrice: 50.0,
+      currentPrice: 55.0,
+      currency: 'TRY',
+      market: 'BIST',
+      isDividend: true,
+      strategyType: 'CORE_DIVIDEND'
+    }];
+
+    const derived = deriveDividendsFromPortfolio(mockPortfolio, [], new Map());
+    expect(derived.length).toBe(1);
+    const item = derived[0];
+
+    // Unknown yield must be null, NOT 3.5% or 5.0%
+    expect(item.dividendYield).toBeNull();
+    expect(item.yieldOnCost).toBeNull();
+    expect(item.annualPayout).toBe(0);
+    // Unannounced dates must be empty string, NOT 2027-04-15
+    expect(item.nextExDate).toBe('');
+    expect(item.nextPaymentDate).toBe('');
+    expect(item.payoutMonth).toBe('Tarih Belirlenmedi');
+
+    // C. Non-payer profile test (HALKB, VAKBN, KRDMD, PETKM)
+    const halkbSched = resolveDividendSchedule('HALKB');
+    expect(halkbSched.exDate).toBe('');
+    expect(halkbSched.month).toBe('Belirlenmedi (Dağıtım Yok)');
+
+    const vakbnSched = resolveDividendSchedule('VAKBN');
+    expect(vakbnSched.exDate).toBe('');
+    expect(vakbnSched.month).toBe('Belirlenmedi (Dağıtım Yok)');
+
+    // D. deriveAllMarketDividends with unknown symbol
+    const allMarket = deriveAllMarketDividends([], {}, []);
+    const unknownInMarket = allMarket.find(d => d.symbol === 'XYZ_UNKNOWN_STOCK');
+    if (unknownInMarket) {
+      expect(unknownInMarket.dividendYield).toBeNull();
+      expect(unknownInMarket.nextExDate).toBe('');
+    }
+  });
+
+  test('10. Tab hash navigation supports ongoing URL hash and popstate changes', async ({ page }) => {
+    test.setTimeout(30000);
+    await page.goto('/#portfolio');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Verify initial hash opened portfolio tab
+    const portfolioHeader = page.locator('h2, h3').filter({ hasText: /Portföy|Portfolio/i }).first();
+    await expect(portfolioHeader).toBeVisible({ timeout: 10000 });
+
+    // Navigate to #signals by setting location.hash
+    await page.evaluate(() => {
+      window.location.hash = '#signals';
+    });
+    await page.waitForTimeout(500);
+
+    const signalsHeader = page.getByText(/Algoritmik Alım Fırsatları|Algorithmic Buy Opportunities/i).first();
+    await expect(signalsHeader).toBeVisible({ timeout: 10000 });
+
+    // Navigate to #dividend
+    await page.evaluate(() => {
+      window.location.hash = '#dividend';
+    });
+    await page.waitForTimeout(500);
+
+    const dividendTabHeader = page.getByText(/Pasif Nakit Akışı|Passive Cashflow|Temettü Takvimi/i).first();
+    await expect(dividendTabHeader).toBeVisible({ timeout: 10000 });
   });
 });

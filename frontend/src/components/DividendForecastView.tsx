@@ -884,7 +884,7 @@ export default function DividendForecastView({
                     <span>{isSelected ? '✓' : '+'}</span>
                     <span className="font-mono">{asset.symbol}</span>
                     <span className="text-[10px] opacity-75 font-normal">
-                      (%{asset.dividendYield.toFixed(1)})
+                      ({asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(1)}` : '—'})
                     </span>
                   </button>
                 );
@@ -932,7 +932,7 @@ export default function DividendForecastView({
                     </td>
                     {activeComparatorAssets.map(a => (
                       <td key={a.symbol} className="py-3 px-4 font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                        %{a.dividendYield.toFixed(2)}
+                        {a.dividendYield !== null && a.dividendYield !== undefined ? `%${a.dividendYield.toFixed(2)}` : '—'}
                       </td>
                     ))}
                   </tr>
@@ -1057,7 +1057,7 @@ export default function DividendForecastView({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
               {activeComparatorAssets.map(a => {
                 // Approximate 5-year compounding
-                const annualDivYear1 = comparatorBaseAmount * (a.dividendYield / 100);
+                const annualDivYear1 = comparatorBaseAmount * ((a.dividendYield || 0) / 100);
                 const total5YrDividends = Array.from({ length: 5 }).reduce((acc: number, _, i) => {
                   return acc + annualDivYear1 * Math.pow(1 + a.historical3YrCagr / 100 * 0.4, i);
                 }, 0);

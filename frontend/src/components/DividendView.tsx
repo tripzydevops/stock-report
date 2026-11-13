@@ -251,7 +251,7 @@ export default function DividendView({
       }
       const grp = groupsMap.get(key)!;
       grp.assets.push(asset);
-      const dps = asset.estimatedNextDPS || (asset.currentPrice * asset.dividendYield / 100);
+      const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
       const estPayout = asset.estimatedNextPayout || (asset.shares * dps);
       const estPayoutTRY = asset.currency === 'USD' ? estPayout * usdTryRate : estPayout;
       grp.totalExpectedPayoutTRY += estPayoutTRY;
@@ -648,7 +648,7 @@ export default function DividendView({
                   {/* Grid of Cards within this Month */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {group.assets.map((asset, idx) => {
-                      const dps = asset.estimatedNextDPS || (asset.currentPrice * asset.dividendYield / 100);
+                      const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
                       const estPayout = asset.estimatedNextPayout || (asset.shares * dps);
                       const payoutDisplay = currencyMode === 'USD' ? (estPayout / usdTryRate) : estPayout;
                       const isHeld = Boolean(asset.isHeld || asset.shares > 0);
@@ -715,7 +715,7 @@ export default function DividendView({
                                   {isHeld ? (language === 'tr' ? 'Tahmini Nakit Girişiniz' : 'Your Cash Inflow') : (language === 'tr' ? 'Hisse Başı Net Nakit (DPS)' : 'Dividend Per Share (DPS)')}
                                 </div>
                                 <div className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                                  %{asset.dividendYield.toFixed(2)} {language === 'tr' ? 'Verim' : 'Yield'}
+                                  {asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)} ${language === 'tr' ? 'Verim' : 'Yield'}` : (language === 'tr' ? 'Verim Belirlenmedi' : 'Yield Unavailable')}
                                 </div>
                               </div>
                               <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -842,7 +842,7 @@ export default function DividendView({
               {group.assets.map((asset, idx) => {
                 const isHeld = Boolean(asset.isHeld || asset.shares > 0);
                 const currSym = asset.currency === 'USD' ? '$' : '₺';
-                const dps = asset.estimatedNextDPS || (asset.currentPrice * asset.dividendYield / 100);
+                const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
                 const countdown = getExDateCountdown(asset.nextExDate, language);
 
                 return (
@@ -896,17 +896,17 @@ export default function DividendView({
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Verim</div>
-                        <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">%{asset.dividendYield.toFixed(2)}</div>
+                        <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—'}</div>
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">Hak Kullanım</div>
-                        <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5 font-mono text-[11px]">{asset.nextExDate || '2027'}</div>
+                        <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5 font-mono text-[11px]">{asset.nextExDate || (language === 'tr' ? 'Belirlenmedi' : 'TBD')}</div>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-1 text-[11px]">
                       <span className="text-gray-500">
-                        Ödeme: <strong className="text-gray-800 dark:text-gray-200 font-mono">{asset.nextPaymentDate || '2027'}</strong>
+                        Ödeme: <strong className="text-gray-800 dark:text-gray-200 font-mono">{asset.nextPaymentDate || (language === 'tr' ? 'Belirlenmedi' : 'TBD')}</strong>
                       </span>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -987,7 +987,7 @@ export default function DividendView({
                   {/* Company Rows within this Month */}
                   {group.assets.map((asset, idx) => {
                     const isHeld = Boolean(asset.isHeld || asset.shares > 0);
-                    const dps = asset.estimatedNextDPS || (asset.currentPrice * asset.dividendYield / 100);
+                    const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
                     const countdown = getExDateCountdown(asset.nextExDate, language);
 
                     return (
@@ -1038,7 +1038,7 @@ export default function DividendView({
                         </td>
 
                         <td className="px-5 py-3.5 text-right whitespace-nowrap font-bold text-emerald-600 dark:text-emerald-400">
-                          %{asset.dividendYield.toFixed(2)}
+                          {asset.dividendYield !== null && asset.dividendYield !== undefined ? `%${asset.dividendYield.toFixed(2)}` : '—'}
                         </td>
 
                         <td className="px-5 py-3.5 text-right font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">
@@ -1046,11 +1046,11 @@ export default function DividendView({
                         </td>
 
                         <td className="px-5 py-3.5 text-center font-mono font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-                          {asset.nextExDate || '2027'}
+                          {asset.nextExDate || '—'}
                         </td>
 
                         <td className="px-5 py-3.5 text-center font-mono text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                          {asset.nextPaymentDate || '2027'}
+                          {asset.nextPaymentDate || '—'}
                         </td>
 
                         <td className="px-5 py-3.5 text-center whitespace-nowrap">

@@ -18,8 +18,8 @@ export interface RaindropItem {
   paymentDate?: string;
   dayOfMonth?: number;
   frequency: string;
-  dividendYield: number;
-  yieldOnCost: number;
+  dividendYield: number | null;
+  yieldOnCost: number | null;
   paymentStatus: 'Estimated' | 'Confirmed' | 'Paid';
   isQuarterlyTranche?: boolean;
   trancheNumber?: number;
@@ -124,7 +124,8 @@ export default function DividendRaindropCalendar({
 
       const baseMonth = parseMonthFromAsset(asset, dateBasis);
       const isUsd = asset.currency === 'USD';
-      const annualAmount = asset.annualPayout || (asset.shares * asset.currentPrice * (asset.dividendYield / 100));
+      const yieldPct = asset.dividendYield || 0;
+      const annualAmount = asset.annualPayout || (asset.shares * asset.currentPrice * (yieldPct / 100));
 
       const cleanSym = asset.symbol.replace('.IS', '').trim().toUpperCase();
       const customTranche = KNOWN_DIVIDEND_TRANCHES[cleanSym];
@@ -136,7 +137,7 @@ export default function DividendRaindropCalendar({
           const ratio = customTranche.ratios[t] || (1 / customTranche.months.length);
           const trancheAmount = annualAmount * ratio;
           const trancheTRY = isUsd ? trancheAmount * usdTryRate : trancheAmount;
-          const dps = (asset.currentPrice * (asset.dividendYield / 100)) * ratio;
+          const dps = (asset.currentPrice * (yieldPct / 100)) * ratio;
           const trancheLabel = customTranche.monthLabels[t];
           const trancheDate = customTranche.dates[t];
 
@@ -171,7 +172,7 @@ export default function DividendRaindropCalendar({
         // 12 monthly raindrops
         const perMonthAmount = annualAmount / 12;
         const perMonthTRY = isUsd ? perMonthAmount * usdTryRate : perMonthAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield / 100) / 12);
+        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 12);
 
         for (let m = 0; m < 12; m++) {
           buckets[m].raindrops.push({
@@ -198,7 +199,7 @@ export default function DividendRaindropCalendar({
         // 4 quarterly raindrops spaced every 3 months
         const perQuarterAmount = annualAmount / 4;
         const perQuarterTRY = isUsd ? perQuarterAmount * usdTryRate : perQuarterAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield / 100) / 4);
+        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 4);
 
         for (let q = 0; q < 4; q++) {
           const targetMonth = (baseMonth + q * 3) % 12;
@@ -227,7 +228,7 @@ export default function DividendRaindropCalendar({
         // 2 semi-annual raindrops spaced 6 months
         const perHalfAmount = annualAmount / 2;
         const perHalfTRY = isUsd ? perHalfAmount * usdTryRate : perHalfAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield / 100) / 2);
+        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 2);
 
         for (let h = 0; h < 2; h++) {
           const targetMonth = (baseMonth + h * 6) % 12;
@@ -253,7 +254,7 @@ export default function DividendRaindropCalendar({
         }
       } else {
         // Annual single raindrop (typical BIST)
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield / 100));
+        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100));
         const payout = asset.estimatedNextPayout || (asset.shares * dps);
         const payoutTRY = isUsd ? payout * usdTryRate : payout;
 
@@ -577,7 +578,7 @@ export default function DividendRaindropCalendar({
                         {/* Micro Info */}
                         <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center justify-between mt-1 pt-1 border-t border-blue-100/60 dark:border-slate-750">
                           <span>{drop.shares.toLocaleString()} lot</span>
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">%{drop.dividendYield.toFixed(1)}</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{drop.dividendYield !== null && drop.dividendYield !== undefined ? `%${drop.dividendYield.toFixed(1)}` : '—'}</span>
                         </div>
                       </div>
                     );
@@ -676,11 +677,11 @@ export default function DividendRaindropCalendar({
                       </div>
                       <div>
                         <span className="text-slate-400 block">{language === 'tr' ? 'Temettü Verimi' : 'Yield'}</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">%{drop.dividendYield.toFixed(2)}</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{drop.dividendYield !== null && drop.dividendYield !== undefined ? `%${drop.dividendYield.toFixed(2)}` : '—'}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block">{language === 'tr' ? 'Tahmini Tarih' : 'Est. Date'}</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{drop.paymentDate || drop.exDate || '2027'}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{drop.paymentDate || drop.exDate || (language === 'tr' ? 'Belirlenmedi' : 'TBD')}</span>
                       </div>
                     </div>
                   </div>
