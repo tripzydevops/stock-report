@@ -125,11 +125,22 @@ export default function AiAssistantView() {
     if (e) e.preventDefault();
     const query = inputQuery.trim();
     if (!query || isLoading) return;
+    executeSend(query);
+  };
 
+  const handleQuickChipClick = (chipQuery: string) => {
+    if (isLoading) return;
+    setInputQuery(chipQuery);
+    setTimeout(() => {
+      executeSend(chipQuery);
+    }, 50);
+  };
+
+  const executeSend = async (queryText: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: query,
+      content: queryText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -138,6 +149,119 @@ export default function AiAssistantView() {
     setIsLoading(true);
 
     try {
+      // Check for autonomous multi-agent reasoning request
+      const isMultiAgent = /multi[- ]?agent|çoklu ajan|ajanlar/i.test(queryText);
+      if (isMultiAgent) {
+        const match = queryText.toUpperCase().match(/\b(FROTO|TURSG|THYAO|ISMEN|EREGL|TUPRS|AKBNK|GARAN|ASELS|BIMAS|SOKM|MGROS|PETKM|AAPL|MSFT|NVDA)\b/);
+        const targetSym = match ? match[1] : 'FROTO';
+
+        const maRes = await fetch('/api/assistant/multi-agent-analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbol: targetSym,
+            user_profile: {
+              is_cold_start: true,
+              lifestyle_archetype: 'balanced_compounder',
+              risk_tolerance: 'moderate'
+            }
+          })
+        });
+
+        if (maRes.ok) {
+          const maData = await maRes.json();
+          const rec = maData.recommendation;
+          const formattedReply = isEn ? `### 🧠 Autonomous Multi-Agent Recommendation: **${rec.symbol}**
+**Overall Verdict:** \`${rec.overall_verdict}\` (Conviction: **${rec.conviction_score}/10**)  
+**Time Horizon:** ${rec.time_horizon}
+
+> **Executive Summary:** ${rec.executive_summary}
+
+---
+
+#### 🔍 1. ScreenerAgent (Technical Momentum & Trend)
+- **Trend Stage:** ${rec.screener_agent.trend_stage}
+- **EMA Alignment:** ${rec.screener_agent.ema_alignment}
+- **RSI Status:** ${rec.screener_agent.rsi_status}
+- **Volume Ratio:** ${rec.screener_agent.volume_surge_ratio}x (Confirmed: ${rec.screener_agent.volume_confirmed ? '✅' : '❌'})
+- **15m ORB Opening Bias:** ${rec.screener_agent.orb_bias}
+
+#### 💰 2. DividendSafetyAgent (Income & KAP Schedule)
+- **Dividend Status:** ${rec.dividend_agent.is_dividend_payer ? `Paying %${rec.dividend_agent.annual_yield_pct} yield` : 'No Payout (CapEx Growth)'}
+- **Payout Safety Score:** ${rec.dividend_agent.payout_safety_score}/100
+- **KAP Calendar Verified:** ${rec.dividend_agent.kap_schedule_verified ? '✅ Verified Regulatory Schedule' : 'ℹ️ Estimated from Historical Consistency'}
+
+#### 🛡️ 3. RiskGuardAgent (ATR Stop Loss & Position Sizing)
+- **Current Price:** ₺${rec.risk_agent.current_price}
+- **Suggested ATR Stop:** ₺${rec.risk_agent.suggested_stop_loss} (-%${rec.risk_agent.stop_loss_pct})
+- **Target Price:** ₺${rec.risk_agent.target_price} (1:${rec.risk_agent.risk_reward_ratio} Asymmetric R:R)
+- **Position Allocation:** ${rec.risk_agent.suggested_position_shares} shares (~₺${rec.risk_agent.suggested_position_value.toLocaleString()})
+- **Regime Approval:** ${rec.risk_agent.regime_approved ? '✅ Approved' : '⚠️ Defensive sizing applied'}
+
+---
+
+#### 💡 Why This Was Recommended (Cold-Start Resolution):
+${rec.why_recommended.map((w: string) => `- ${w}`).join('\n')}
+
+#### ⚠️ Key Risk Factors:
+${rec.key_risks.map((k: string) => `- ${k}`).join('\n')}
+` : `### 🧠 Otonom Çoklu Ajan Karar Raporu: **${rec.symbol}**
+**Genel Karar:** \`${rec.overall_verdict}\` (Güven Skoru: **${rec.conviction_score}/10**)  
+**Vade:** ${rec.time_horizon}
+
+> **Yönetici Özeti:** ${rec.executive_summary}
+
+---
+
+#### 🔍 1. ScreenerAgent (Teknik Tarama & Trend)
+- **Trend Evresi:** ${rec.screener_agent.trend_stage}
+- **Ortalama Uyumu:** ${rec.screener_agent.ema_alignment}
+- **RSI Göstergesi:** ${rec.screener_agent.rsi_status}
+- **Hacim Katsayısı:** ${rec.screener_agent.volume_surge_ratio}x (Hacim Onayı: ${rec.screener_agent.volume_confirmed ? '✅ Var' : '❌ Yok'})
+- **15dk ORB Açılış Yönü:** ${rec.screener_agent.orb_bias}
+
+#### 💰 2. DividendSafetyAgent (Temettü Güvencesi & KAP)
+- **Temettü Durumu:** ${rec.dividend_agent.is_dividend_payer ? `%${rec.dividend_agent.annual_yield_pct} Yıllık Verim` : 'Temettü Dağıtmıyor (Büyüme/CapEx Yatırımı)'}
+- **Sürdürülebilirlik Puanı:** ${rec.dividend_agent.payout_safety_score}/100
+- **KAP Takvim Doğrulaması:** ${rec.dividend_agent.kap_schedule_verified ? '✅ Resmi Takvim Onaylı' : 'ℹ️ Tarihsel Politika Tahmini'}
+
+#### 🛡️ 3. RiskGuardAgent (ATR Stop Loss & Pozisyon Boyutlandırma)
+- **Piyasa Fiyatı:** ₺${rec.risk_agent.current_price}
+- **Önerilen ATR Stop-Loss:** ₺${rec.risk_agent.suggested_stop_loss} (-%${rec.risk_agent.stop_loss_pct})
+- **Hedef Fiyat:** ₺${rec.risk_agent.target_price} (1:${rec.risk_agent.risk_reward_ratio} Asimetrik Risk/Kazanç)
+- **Önerilen Pozisyon:** ${rec.risk_agent.suggested_position_shares} Adet (~₺${rec.risk_agent.suggested_position_value.toLocaleString()})
+- **Piyasa Rejimi Uyumu:** ${rec.risk_agent.regime_approved ? '✅ Normal Boyutlandırma' : '⚠️ Savunma Modu (%50 Boyutlandırma)'}
+
+---
+
+#### 💡 Neden Bu Öneri Yapıldı? (Cold-Start Çözümü):
+${rec.why_recommended.map((w: string) => `- ${w}`).join('\n')}
+
+#### ⚠️ Temel Risk Faktörleri:
+${rec.key_risks.map((k: string) => `- ${k}`).join('\n')}
+`;
+
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: formattedReply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            toolsExecuted: ['ScreenerAgent', 'DividendSafetyAgent', 'RiskGuardAgent', 'SynthesisAgent'],
+            sources: [
+              {
+                title: 'MarketPulse Layer 2 Multi-Agent Engine',
+                source: 'Autonomous Reasoning Framework',
+                published: 'Canlı Çalışma'
+              }
+            ],
+          };
+
+          setMessages((prev) => [...prev, assistantMessage]);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       let response: Response | null = null;
       let lastError: any = null;
 
@@ -244,6 +368,14 @@ export default function AiAssistantView() {
         return isEn ? '🏛️ Quantitative Stock Factors' : '🏛️ Şirket Temel & Teknik Faktörleri';
       case 'tool_generate_six_month_outlook':
         return isEn ? '🔮 6-Month Forward-Looking Model' : '🔮 6 Aylık Senaryo & Volatilite Modeli';
+      case 'ScreenerAgent':
+        return isEn ? '🔍 ScreenerAgent (Stage 2 & ORB)' : '🔍 ScreenerAgent (Teknik Tarama & ORB)';
+      case 'DividendSafetyAgent':
+        return isEn ? '💰 DividendSafetyAgent (KAP & Yield)' : '💰 DividendSafetyAgent (KAP & Temettü Güvencesi)';
+      case 'RiskGuardAgent':
+        return isEn ? '🛡️ RiskGuardAgent (ATR Stop & Sizing)' : '🛡️ RiskGuardAgent (ATR Stop & Boyutlandırma)';
+      case 'SynthesisAgent':
+        return isEn ? '🧠 SynthesisAgent (Gemini 2.5 Brain)' : '🧠 SynthesisAgent (Gemini 2.5 & Cold-Start Sentezi)';
       default:
         return `🔧 ${toolKey}`;
     }
@@ -450,6 +582,26 @@ export default function AiAssistantView() {
           <span>🗑️</span>
           <span>{isEn ? 'New Chat' : 'Yeni Sohbet'}</span>
         </button>
+      </div>
+
+      {/* Quick Action Chips for Multi-Agent & Live Ingestion */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 shrink-0 mb-1">
+        {[
+          { label: '🧠 Multi-Agent: FROTO', query: 'Multi-Agent analiz FROTO' },
+          { label: '🧠 Multi-Agent: TURSG', query: 'Multi-Agent analiz TURSG' },
+          { label: '🧠 Multi-Agent: THYAO', query: 'Multi-Agent analiz THYAO' },
+          { label: '⚡ Sabah ORB Seansı', query: isEn ? 'is there any reason for the morning session to be this positive or negative' : 'bu sabah ki açılışın neye bağlı olduğunu anlat' },
+          { label: '📅 Ocak Temettüleri', query: isEn ? 'which stocks pay dividends on january' : 'ocak ayında temettü dağıtan hisseler hangileri' },
+        ].map((chip, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => handleQuickChipClick(chip.query)}
+            className="px-2.5 py-1 rounded-xl text-[11px] font-semibold whitespace-nowrap bg-gray-100 dark:bg-gray-800/80 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 border border-gray-200 dark:border-gray-700/80 transition-all cursor-pointer shadow-2xs"
+          >
+            {chip.label}
+          </button>
+        ))}
       </div>
 
       {/* Main Chat Thread */}

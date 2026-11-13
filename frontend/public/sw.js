@@ -1,8 +1,16 @@
-const CACHE_NAME = 'marketpulse-cache-v1';
+const CACHE_NAME = 'marketpulse-cache-v2';
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',
   '/globe.svg',
+];
+
+// Offline fallback candidate API endpoints
+const CACHEABLE_API_ROUTES = [
+  '/api/assets',
+  '/api/market/regime',
+  '/api/dividends',
+  '/api/catalysts',
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,7 +36,33 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // For API routes and Supabase: Network-first
+  // For Cacheable API routes (Assets, Regime, Dividends, Catalysts):
+  // Network-first with background cache update; falls back to cached response if offline
+  if (CACHEABLE_API_ROUTES.some((route) => url.pathname.startsWith(route))) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) {
+            return cached;
+          }
+          return new Response(JSON.stringify({ error: 'Network unavailable', isOffline: true }), {
+            headers: { 'Content-Type': 'application/json' },
+            status: 503,
+          });
+        })
+    );
+    return;
+  }
+
+  // Other API routes or Supabase queries: Network-first
   if (url.pathname.startsWith('/api') || url.hostname.includes('supabase.co')) {
     event.respondWith(
       fetch(event.request).catch(async () => {
