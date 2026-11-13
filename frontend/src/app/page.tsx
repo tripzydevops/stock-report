@@ -2477,7 +2477,9 @@ export default function Home() {
       !Number.isFinite(newHolding.entryPrice) ||
       newHolding.entryPrice <= 0
     ) {
+      const msg = 'Geçersiz fiyat: Alış fiyatı sıfırdan büyük ve geçerli bir sayı olmalıdır.';
       console.warn('Blocked adding holding with missing, zero, negative, or nonfinite entry price:', newHolding.symbol, newHolding.entryPrice);
+      if (typeof window !== 'undefined') alert(msg);
       return;
     }
     if (
@@ -2487,13 +2489,15 @@ export default function Home() {
       !Number.isFinite(newHolding.shares) ||
       newHolding.shares <= 0
     ) {
+      const msg = 'Geçersiz adet: Hisse adedi sıfırdan büyük ve geçerli bir sayı olmalıdır.';
       console.warn('Blocked adding holding with missing, zero, negative, or nonfinite shares:', newHolding.symbol, newHolding.shares);
+      if (typeof window !== 'undefined') alert(msg);
       return;
     }
 
     let cleanSymUpper = newHolding.symbol.replace('.IS', '').trim().toUpperCase();
     let resolvedName = newHolding.name || cleanSymUpper;
-    let resolvedMarket = newHolding.market || 'BIST';
+    let resolvedMarket = (newHolding.market || 'BIST').toUpperCase();
 
     if (COMMON_BIST_ALIASES[cleanSymUpper]) {
       const alias = COMMON_BIST_ALIASES[cleanSymUpper];
@@ -2509,59 +2513,20 @@ export default function Home() {
       MASTER_GROWTH_PROFILES[cleanSymUpper] || 
       KNOWN_DIVIDEND_LIST.includes(cleanSymUpper)
     );
-    const enrichedHolding: PortfolioItem = {
-      ...newHolding,
-      symbol: cleanSymUpper,
-      name: resolvedName,
-      market: resolvedMarket,
-      entryDate: newHolding.entryDate || new Date().toISOString().slice(0, 10),
-      strategyType: isCoreDiv ? 'CORE_DIVIDEND' : (newHolding.strategyType || 'SWING'),
-      isDividend: isCoreDiv
-    };
-    const effectiveUserId = user?.id || ADMIN_USER_ID;
+    const orderDateStr = newHolding.entryDate || new Date().toISOString().slice(0, 10);
+    const totalVal = newHolding.shares * newHolding.entryPrice;
+    const chosenIso = orderDateStr
+      ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
+      : new Date().toISOString();
+    const displayDateTime = orderDateStr
+      ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
+      : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-    // 1. Immediately update UI state and local cache
-    setPortfolio(prev => {
-      const filtered = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
-      const updated = [enrichedHolding, ...filtered];
-      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
-          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-        } catch (e) {
-          console.warn('Failed to save cached portfolio:', e);
-        }
-      }
-      return updated;
-    });
+    let serverOrderRef = `ORD-${orderDateStr.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`;
 
-    // Save override locally so it immediately persists across sessions
-    if (typeof window !== 'undefined') {
+    // 1. If user is authenticated, call server transactional API first
+    if (!isDemoMode && user) {
       try {
-        const stored = localStorage.getItem('portfolio_strategy_overrides');
-        const overrides = stored ? JSON.parse(stored) : {};
-        overrides[cleanSymUpper] = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
-        localStorage.setItem('portfolio_strategy_overrides', JSON.stringify(overrides));
-      } catch (e) {
-        // ignore local storage errors
-      }
-    }
-
-    // 2. Persist to server strictly via validated API route for authenticated users
-    try {
-      const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
-      const totalVal = newHolding.shares * newHolding.entryPrice;
-      const chosenIso = orderDateStr
-        ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
-        : new Date().toISOString();
-      const displayDateTime = orderDateStr
-        ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
-        : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
-      const cleanSym = cleanSymUpper;
-      const refCode = `ORD-${orderDateStr.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`;
-
-      if (!isDemoMode && user) {
         const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
         const resolvedStop = newHolding.stopLoss > 0 
           ? newHolding.stopLoss 
@@ -2584,80 +2549,151 @@ export default function Home() {
             currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
             notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
             isDividend: isCoreDiv,
+            entryDate: orderDateStr,
+            orderDate: orderDateStr,
+            orderType: 'Limit',
+            status: 'Filled',
           }),
         });
 
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
-          console.error('Server validation failed creating position:', errJson);
+          const errorMsg = errJson.error || 'Portföy pozisyonu kaydedilemedi.';
+          console.error('Server validation failed creating position:', errorMsg);
+          if (typeof window !== 'undefined') alert(`İşlem başarısız: ${errorMsg}`);
+          return; // Fail visibly, stop execution!
         }
+
+        const resData = await apiRes.json().catch(() => ({}));
+        if (resData?.order?.order_ref) {
+          serverOrderRef = resData.order.order_ref;
+        }
+      } catch (err: any) {
+        console.error('Network error persisting portfolio position:', err);
+        if (typeof window !== 'undefined') alert(`Sunucuya bağlanılamadı: ${err.message || 'Lütfen internet bağlantınızı kontrol ediniz.'}`);
+        return; // Fail visibly, stop execution!
+      }
+    }
+
+    const enrichedHolding: PortfolioItem = {
+      ...newHolding,
+      symbol: cleanSymUpper,
+      name: resolvedName,
+      market: resolvedMarket,
+      entryDate: orderDateStr,
+      strategyType: isCoreDiv ? 'CORE_DIVIDEND' : (newHolding.strategyType || 'SWING'),
+      isDividend: isCoreDiv
+    };
+
+    // 2. Update UI state (with DCA merge if holding already existed in local state)
+    setPortfolio(prev => {
+      const existing = prev.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
+      let updated: PortfolioItem[];
+      if (existing) {
+        const mergedShares = existing.shares + enrichedHolding.shares;
+        const mergedEntryPrice = ((existing.shares * existing.entryPrice) + (enrichedHolding.shares * enrichedHolding.entryPrice)) / mergedShares;
+        const mergedTotalCost = mergedShares * mergedEntryPrice;
+        const currPrice = existing.currentPrice || enrichedHolding.currentPrice || enrichedHolding.entryPrice;
+        const mergedValue = mergedShares * currPrice;
+        const mergedHolding: PortfolioItem = {
+          ...existing,
+          shares: mergedShares,
+          entryPrice: Number(mergedEntryPrice.toFixed(4)),
+          totalCost: Number(mergedTotalCost.toFixed(2)),
+          currentValue: Number(mergedValue.toFixed(2)),
+          pnlAmount: Number((mergedValue - mergedTotalCost).toFixed(2)),
+          pnlPercent: mergedTotalCost > 0 ? Number((((mergedValue - mergedTotalCost) / mergedTotalCost) * 100).toFixed(2)) : 0,
+        };
+        updated = [mergedHolding, ...prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper)];
+      } else {
+        updated = [enrichedHolding, ...prev];
       }
 
-      const newOrder: ExecutedOrder = {
-        id: `ord-${Date.now()}`,
-        ref: refCode,
-        symbol: cleanSym,
-        name: newHolding.name || cleanSym,
-        market: (newHolding.market || 'BIST') as any,
-        side: 'BUY',
-        orderType: 'Limit',
-        quantity: newHolding.shares,
-        price: newHolding.entryPrice,
-        totalValue: totalVal,
-        currency: newHolding.currency || 'TRY',
-        dateTime: displayDateTime,
-        executedAt: chosenIso,
-        status: 'Filled',
-        dcaNote: newHolding.dcaRationale || 'Position initiation'
-      };
-      const updatedOrders = [newOrder, ...executedOrders];
-      setExecutedOrders(updatedOrders);
+      setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Failed to save cached portfolio:', e);
+        }
+      }
+      return updated;
+    });
+
+    // Save override locally
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('portfolio_strategy_overrides');
+        const overrides = stored ? JSON.parse(stored) : {};
+        overrides[cleanSymUpper] = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+        localStorage.setItem('portfolio_strategy_overrides', JSON.stringify(overrides));
+      } catch (e) {}
+    }
+
+    // Record local executed order
+    const newOrder: ExecutedOrder = {
+      id: `ord-${Date.now()}`,
+      ref: serverOrderRef,
+      symbol: cleanSymUpper,
+      name: resolvedName,
+      market: (resolvedMarket || 'BIST') as any,
+      side: 'BUY',
+      orderType: 'Limit',
+      quantity: newHolding.shares,
+      price: newHolding.entryPrice,
+      totalValue: totalVal,
+      currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
+      dateTime: displayDateTime,
+      executedAt: chosenIso,
+      status: 'Filled',
+      dcaNote: newHolding.dcaRationale || 'Position initiation'
+    };
+    const updatedOrders = [newOrder, ...executedOrders];
+    setExecutedOrders(updatedOrders);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+      } catch (e) {}
+    }
+
+    // Cash Ledger auto-transfer adjustment
+    const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
+    const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
+    let updatedTransfersList = transfers;
+    if (shortfall > 0) {
+      const autoTransfer: CapitalTransfer = {
+        id: `trans-${Date.now()}`,
+        transferType: 'DEPOSIT',
+        amount: shortfall,
+        currency: 'TRY',
+        transferDate: orderDateStr,
+        notes: `Auto-deposit: Funded position ${cleanSymUpper} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
+      };
+      updatedTransfersList = [autoTransfer, ...transfers];
+      setTransfers(updatedTransfersList);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
         } catch (e) {}
       }
-
-      // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
-      const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
-      const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
-      let updatedTransfersList = transfers;
-      if (shortfall > 0) {
-        const autoTransfer: CapitalTransfer = {
-          id: `trans-${Date.now()}`,
-          transferType: 'DEPOSIT',
-          amount: shortfall,
-          currency: 'TRY',
-          transferDate: orderDateStr,
-          notes: `Auto-deposit: Funded position ${cleanSym} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
-        };
-        updatedTransfersList = [autoTransfer, ...transfers];
-        setTransfers(updatedTransfersList);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
-          } catch (e) {}
-        }
-        if (!isDemoMode) {
-          try {
-            await supabase.from('portfolio_transfers').insert([{
-              user_id: effectiveUserId,
-              transfer_type: 'DEPOSIT',
-              amount: shortfall,
-              currency: 'TRY',
-              transfer_date: autoTransfer.transferDate,
-              notes: autoTransfer.notes
-            }]);
-          } catch (trErr) {
-            console.warn('Could not auto-save capital transfer:', trErr);
-          }
+      if (!isDemoMode && user) {
+        try {
+          await supabase.from('portfolio_transfers').insert([{
+            user_id: user.id,
+            transfer_type: 'DEPOSIT',
+            amount: shortfall,
+            currency: 'TRY',
+            transfer_date: autoTransfer.transferDate,
+            notes: autoTransfer.notes
+          }]);
+        } catch (trErr) {
+          console.warn('Could not auto-save capital transfer:', trErr);
         }
       }
-      const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
-      setCashBalance(updatedCash);
-    } catch (err) {
-      console.warn('Could not save holding to Supabase:', err);
     }
+    const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
+    setCashBalance(updatedCash);
   };
 
   const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {

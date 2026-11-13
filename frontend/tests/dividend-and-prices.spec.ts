@@ -541,24 +541,31 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
 
     // B. Obtain authenticated token for validation testing
     const envLocalPath = path.resolve(__dirname, '../.env.local');
-    let token = '';
+    const parsedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
     if (fs.existsSync(envLocalPath)) {
-      const content = fs.readFileSync(envLocalPath, 'utf8');
-      const getVal = (k: string) => {
-        const m = content.match(new RegExp(`${k}=(.*)`));
-        return m ? m[1].trim() : '';
-      };
-      const url = getVal('NEXT_PUBLIC_SUPABASE_URL') || process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = getVal('NEXT_PUBLIC_SUPABASE_ANON_KEY') || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      const email = getVal('TEST_USER_A_EMAIL');
-      const pwd = getVal('TEST_USER_A_PASSWORD');
-
-      if (url && key && email && pwd) {
-        const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-        const { data: authData } = await supabase.auth.signInWithPassword({ email, password: pwd });
-        if (authData?.session?.access_token) {
-          token = authData.session.access_token;
+      const lines = fs.readFileSync(envLocalPath, 'utf8').split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const idx = trimmed.indexOf('=');
+          const k = trimmed.slice(0, idx).trim();
+          const v = trimmed.slice(idx + 1).trim();
+          if (!parsedEnv[k]) parsedEnv[k] = v;
         }
+      }
+    }
+
+    let token = '';
+    const url = parsedEnv.NEXT_PUBLIC_SUPABASE_URL;
+    const key = parsedEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const email = parsedEnv.TEST_USER_A_EMAIL;
+    const pwd = parsedEnv.TEST_USER_A_PASSWORD;
+
+    if (url && key && email && pwd) {
+      const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data: authData } = await supabase.auth.signInWithPassword({ email, password: pwd });
+      if (authData?.session?.access_token) {
+        token = authData.session.access_token;
       }
     }
 

@@ -8,14 +8,15 @@ const ALLOWED_MARKETS = ['BIST', 'US', 'TEFAS'] as const;
 type AllowedMarket = typeof ALLOWED_MARKETS[number];
 
 /**
- * Server-side validated portfolio position & order creation.
- * Strict Security Guarantees:
- * 1. Immediate Session Authentication check at the top (HTTP 401 on unauthenticated).
+ * Server-side validated, genuinely transactional portfolio position & order creation.
+ * Strict Architecture Guarantees:
+ * 1. Immediate Session Authentication check at the very top (HTTP 401 on unauthenticated).
  * 2. User ownership strictly bound to verified user.id (no body userId spoofing, no admin fallback).
  * 3. Enforces Row Level Security via request-scoped authenticated client (authSupabase).
- * 4. Exact symbol matching only (no broad fuzzy name matching).
- * 5. Atomic ledger integrity: if order creation fails, position is rolled back.
- * 6. Cryptographically unique order reference generated with crypto.randomUUID().
+ * 4. Exact symbol matching only (no fuzzy name matching).
+ * 5. Atomic ledger integrity via PostgreSQL transaction function (execute_portfolio_holding_and_order).
+ * 6. DCA Position Merging: If an open position exists for the asset, merges quantity and recomputes weighted entry price.
+ * 7. Preserves execution date and order status (distinguishing historical imports from live orders).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +48,10 @@ export async function POST(request: NextRequest) {
       currency,
       notes,
       isDividend,
+      entryDate,
+      orderDate,
+      orderType = 'Limit',
+      status = 'Filled',
     } = body;
 
     // Strict Symbol Validation
@@ -140,70 +145,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Atomic Write: Create Position using Authenticated Client (enforces auth.uid() = user_id)
-    const orderDateStr = new Date().toISOString().slice(0, 10);
-    const resolvedStop = stopLoss && Number.isFinite(stopLoss) && stopLoss > 0 ? Number(stopLoss) : null;
-    const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
-
-    const { data: posData, error: posError } = await authSupabase
-      .from('portfolio_positions')
-      .insert([{
-        user_id: effectiveUserId,
-        asset_id: assetId,
-        quantity: rawShares,
-        avg_entry_price: rawPrice,
-        stop_loss: resolvedStop,
-        target_price: resolvedTarget,
-        is_open: true,
-        entry_date: orderDateStr,
-        notes: notes || (isDividend ? 'Strategy: CORE_DIVIDEND' : 'Active holding'),
-      }])
-      .select()
-      .single();
-
-    if (posError || !posData) {
-      console.error('Database error inserting portfolio position:', posError);
-      return NextResponse.json(
-        { error: `Failed to insert portfolio position: ${posError?.message || 'Access denied'}` },
-        { status: 500 }
-      );
-    }
-
-    // 5. Atomic Write: Create Executed Order with Cryptographically Unique Reference
-    const datePrefix = orderDateStr.replace(/-/g, '');
+    // 4. Execution Date & Order Reference
+    const executionDateStr = entryDate || orderDate || new Date().toISOString().slice(0, 10);
+    const executionIso = executionDateStr
+      ? new Date(executionDateStr + 'T10:00:00Z').toISOString()
+      : new Date().toISOString();
+    const datePrefix = executionDateStr.replace(/-/g, '');
     const randomSuffix = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
     const orderRef = `ORD-${datePrefix}-${randomSuffix}`;
 
-    const { data: orderData, error: orderError } = await authSupabase
-      .from('portfolio_orders')
-      .insert([{
-        user_id: effectiveUserId,
-        order_ref: orderRef,
-        symbol: cleanSym,
-        side: 'BUY',
-        order_type: 'Limit',
-        quantity: rawShares,
-        price: rawPrice,
-        total_amount: Number((rawShares * rawPrice).toFixed(4)),
-        currency: currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
-        status: 'FILLED',
-        filled_at: new Date().toISOString(),
-        notes: notes || 'Imported via Dividend / Portfolio Module',
-      }])
-      .select()
-      .single();
+    const resolvedStop = stopLoss && Number.isFinite(stopLoss) && stopLoss > 0 ? Number(stopLoss) : null;
+    const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
+    const resolvedCurrency = currency || (resolvedMarket === 'US' ? 'USD' : 'TRY');
 
-    if (orderError) {
-      console.error('Order creation failed; rolling back position to maintain ledger consistency:', orderError);
-      // Rollback position to maintain complete position-cash ledger synchrony
-      await authSupabase
-        .from('portfolio_positions')
-        .delete()
-        .eq('id', posData.id)
-        .eq('user_id', effectiveUserId);
+    // 5. Genuinely Atomic Transaction: Call PostgreSQL RPC Function
+    // Inserts or merges position and records executed order in a single ACID transaction
+    const { data: rpcResult, error: rpcError } = await authSupabase.rpc(
+      'execute_portfolio_holding_and_order',
+      {
+        p_user_id: effectiveUserId,
+        p_asset_id: assetId,
+        p_symbol: cleanSym,
+        p_quantity: rawShares,
+        p_price: rawPrice,
+        p_side: 'BUY',
+        p_order_type: orderType || 'Limit',
+        p_currency: resolvedCurrency,
+        p_entry_date: executionDateStr,
+        p_executed_at: executionIso,
+        p_stop_loss: resolvedStop,
+        p_target_price: resolvedTarget,
+        p_notes: notes || (isDividend ? 'Strategy: CORE_DIVIDEND' : 'Active holding'),
+        p_order_ref: orderRef,
+        p_status: status || 'Filled',
+      }
+    );
 
+    if (rpcError) {
+      console.error('PostgreSQL transaction RPC error in execute_portfolio_holding_and_order:', rpcError);
       return NextResponse.json(
-        { error: `Ledger execution record failed: ${orderError.message}. Position creation was aborted and rolled back.` },
+        { error: `Database transaction failed: ${rpcError.message}` },
         { status: 500 }
       );
     }
@@ -211,8 +192,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        position: posData,
-        order: orderData,
+        position: rpcResult?.position,
+        order: rpcResult?.order,
         symbol: cleanSym,
         shares: rawShares,
         entryPrice: rawPrice,
