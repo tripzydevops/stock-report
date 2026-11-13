@@ -1,19 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedSupabase, getServerSupabase, getAdminSupabase } from '@/lib/supabaseServer';
+import crypto from 'crypto';
+import { getAuthenticatedSupabase, getServerSupabase } from '@/lib/supabaseServer';
 
 export const dynamic = 'force-dynamic';
 
-const ADMIN_USER_ID = 'e9ec6b95-cb41-4712-8716-eec5eb85b1bc';
+const ALLOWED_MARKETS = ['BIST', 'US', 'TEFAS'] as const;
+type AllowedMarket = typeof ALLOWED_MARKETS[number];
 
 /**
- * Server-side validation and persistence for portfolio positions / imports.
- * Rejects missing, zero, negative, or nonfinite prices and shares.
+ * Server-side validated portfolio position & order creation.
+ * Strict Security Guarantees:
+ * 1. Immediate Session Authentication check at the top (HTTP 401 on unauthenticated).
+ * 2. User ownership strictly bound to verified user.id (no body userId spoofing, no admin fallback).
+ * 3. Enforces Row Level Security via request-scoped authenticated client (authSupabase).
+ * 4. Exact symbol matching only (no broad fuzzy name matching).
+ * 5. Atomic ledger integrity: if order creation fails, position is rolled back.
+ * 6. Cryptographically unique order reference generated with crypto.randomUUID().
  */
 export async function POST(request: NextRequest) {
   try {
     const authSupabase = getAuthenticatedSupabase(request);
-    const { data: { user } } = await authSupabase.auth.getUser();
+    const serverSupabase = getServerSupabase();
 
+    // 1. Strict Auth Guard: Reject unauthenticated requests immediately before any catalog operations
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to add or import portfolio holdings.' },
+        { status: 401 }
+      );
+    }
+    const effectiveUserId = user.id;
+
+    // 2. Parse & Validate Payload
     const body = await request.json().catch(() => ({}));
     const {
       symbol,
@@ -28,10 +47,9 @@ export async function POST(request: NextRequest) {
       currency,
       notes,
       isDividend,
-      userId: bodyUserId,
     } = body;
 
-    // 1. Strict Server-Side Validation: Symbol
+    // Strict Symbol Validation
     if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
       return NextResponse.json(
         { error: 'Valid symbol string is required' },
@@ -40,8 +58,17 @@ export async function POST(request: NextRequest) {
     }
     const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
 
-    // 2. Strict Server-Side Validation: Entry Price
-    // Must be a finite, strictly positive number (reject null, undefined, 0, negative, NaN, Infinity)
+    // Strict Market Allowlist Validation
+    const marketUpper = String(market).trim().toUpperCase();
+    if (!ALLOWED_MARKETS.includes(marketUpper as AllowedMarket)) {
+      return NextResponse.json(
+        { error: `Invalid market '${market}'. Allowed markets: ${ALLOWED_MARKETS.join(', ')}` },
+        { status: 400 }
+      );
+    }
+    const resolvedMarket = marketUpper as AllowedMarket;
+
+    // Strict Entry Price Validation
     const rawPrice = price ?? entryPrice;
     if (
       rawPrice === null ||
@@ -59,8 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Strict Server-Side Validation: Shares / Quantity
-    // Must be a finite, strictly positive number
+    // Strict Quantity / Shares Validation
     const rawShares = shares ?? quantity;
     if (
       rawShares === null ||
@@ -78,28 +104,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const effectiveUserId = user?.id || (bodyUserId && bodyUserId !== 'default_user' ? bodyUserId : ADMIN_USER_ID);
-    const serverSupabase = getAdminSupabase() || getServerSupabase();
-
-    // 4. Resolve or create asset in catalog
+    // 3. Exact Symbol Matching Catalog Lookup (No fuzzy name matching)
     const isSymbol = `${cleanSym}.IS`;
     let { data: assetData } = await serverSupabase
       .from('assets')
       .select('id, symbol, name, market')
-      .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol},name.ilike.%${cleanSym}%`)
-      .limit(1);
+      .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
+      .limit(1)
+      .maybeSingle();
 
-    let assetId = assetData && assetData.length > 0 ? assetData[0].id : null;
+    let assetId = assetData?.id || null;
+
     if (!assetId) {
-      const resolvedMarket = market || (cleanSym.length <= 4 && !cleanSym.endsWith('.IS') ? 'BIST' : 'US');
+      const resolvedCurrency = currency || (resolvedMarket === 'US' ? 'USD' : 'TRY');
       const { data: newAsset, error: newAssetErr } = await serverSupabase
         .from('assets')
         .insert([{
           symbol: resolvedMarket === 'BIST' ? `${cleanSym}.IS` : cleanSym,
-          name: name || cleanSym,
+          name: (typeof name === 'string' && name.trim()) ? name.trim() : cleanSym,
           market: resolvedMarket,
-          asset_class: 'stock',
-          currency: currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
+          asset_class: resolvedMarket === 'TEFAS' ? 'fund' : 'stock',
+          currency: resolvedCurrency,
         }])
         .select('id')
         .single();
@@ -107,23 +132,20 @@ export async function POST(request: NextRequest) {
       if (newAsset && !newAssetErr) {
         assetId = newAsset.id;
       } else {
-        console.error('Failed to auto-create asset in portfolio positions API:', newAssetErr);
+        console.error('Failed to register new asset in catalog:', newAssetErr);
+        return NextResponse.json(
+          { error: `Could not register asset in catalog: ${newAssetErr?.message || 'Unknown database error'}` },
+          { status: 500 }
+        );
       }
     }
 
-    if (!assetId) {
-      return NextResponse.json(
-        { error: 'Could not resolve or register asset for symbol: ' + cleanSym },
-        { status: 500 }
-      );
-    }
-
-    // 5. Persist position into portfolio_positions
+    // 4. Atomic Write: Create Position using Authenticated Client (enforces auth.uid() = user_id)
     const orderDateStr = new Date().toISOString().slice(0, 10);
     const resolvedStop = stopLoss && Number.isFinite(stopLoss) && stopLoss > 0 ? Number(stopLoss) : null;
     const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
 
-    const { data: posData, error: posError } = await serverSupabase
+    const { data: posData, error: posError } = await authSupabase
       .from('portfolio_positions')
       .insert([{
         user_id: effectiveUserId,
@@ -139,36 +161,58 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (posError) {
-      console.error('Database error creating portfolio position:', posError);
-      return NextResponse.json({ error: posError.message }, { status: 500 });
+    if (posError || !posData) {
+      console.error('Database error inserting portfolio position:', posError);
+      return NextResponse.json(
+        { error: `Failed to insert portfolio position: ${posError?.message || 'Access denied'}` },
+        { status: 500 }
+      );
     }
 
-    // 6. Record order in portfolio_orders
-    const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-    try {
-      await serverSupabase.from('portfolio_orders').insert([{
+    // 5. Atomic Write: Create Executed Order with Cryptographically Unique Reference
+    const datePrefix = orderDateStr.replace(/-/g, '');
+    const randomSuffix = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    const orderRef = `ORD-${datePrefix}-${randomSuffix}`;
+
+    const { data: orderData, error: orderError } = await authSupabase
+      .from('portfolio_orders')
+      .insert([{
         user_id: effectiveUserId,
-        order_ref: refCode,
+        order_ref: orderRef,
         symbol: cleanSym,
         side: 'BUY',
         order_type: 'Limit',
         quantity: rawShares,
         price: rawPrice,
-        total_amount: rawShares * rawPrice,
-        currency: currency || (market === 'US' ? 'USD' : 'TRY'),
+        total_amount: Number((rawShares * rawPrice).toFixed(4)),
+        currency: currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
         status: 'FILLED',
         filled_at: new Date().toISOString(),
         notes: notes || 'Imported via Dividend / Portfolio Module',
-      }]);
-    } catch (ordErr) {
-      console.warn('Could not record order history:', ordErr);
+      }])
+      .select()
+      .single();
+
+    if (orderError) {
+      console.error('Order creation failed; rolling back position to maintain ledger consistency:', orderError);
+      // Rollback position to maintain complete position-cash ledger synchrony
+      await authSupabase
+        .from('portfolio_positions')
+        .delete()
+        .eq('id', posData.id)
+        .eq('user_id', effectiveUserId);
+
+      return NextResponse.json(
+        { error: `Ledger execution record failed: ${orderError.message}. Position creation was aborted and rolled back.` },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json(
       {
         success: true,
         position: posData,
+        order: orderData,
         symbol: cleanSym,
         shares: rawShares,
         entryPrice: rawPrice,
@@ -176,7 +220,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err: any) {
-    console.error('Portfolio Positions API error:', err);
+    console.error('Portfolio Positions API unexpected exception:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

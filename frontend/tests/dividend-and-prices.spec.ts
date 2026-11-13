@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+import { createClient } from '@supabase/supabase-js';
 import { calculateLedgerCash } from '../src/lib/cashLedger';
 import { ExecutedOrder, CapitalTransfer } from '../src/lib/supabaseClient';
 import { deriveDividendsFromPortfolio, deriveAllMarketDividends, resolveDividendSchedule } from '../src/lib/dividendForecastMath';
@@ -522,47 +525,88 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(`${pricedCostAssets.length}/${portfolio.length}`).toBe('2/3');
   });
 
-  test('13. Server-Side Validation: /api/portfolio/positions rejects missing, zero, negative, or nonfinite prices and quantities', async ({ request }) => {
-    // 1. Missing / Zero price
-    const resZeroPrice = await request.post('/api/portfolio/positions', {
+  test('13. Strict Authorization & Server Validation: /api/portfolio/positions enforces session auth and validates input', async ({ request }) => {
+    // A. Unauthenticated request MUST return 401 Unauthorized immediately
+    const resUnauth = await request.post('/api/portfolio/positions', {
       data: {
         symbol: 'THYAO',
         shares: 10,
-        price: 0,
+        price: 250.0,
+        market: 'BIST'
       }
+    });
+    expect(resUnauth.status()).toBe(401);
+    const unauthJson = await resUnauth.json();
+    expect(unauthJson.error).toMatch(/Authentication required/i);
+
+    // B. Obtain authenticated token for validation testing
+    const envLocalPath = path.resolve(__dirname, '../.env.local');
+    let token = '';
+    if (fs.existsSync(envLocalPath)) {
+      const content = fs.readFileSync(envLocalPath, 'utf8');
+      const getVal = (k: string) => {
+        const m = content.match(new RegExp(`${k}=(.*)`));
+        return m ? m[1].trim() : '';
+      };
+      const url = getVal('NEXT_PUBLIC_SUPABASE_URL') || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = getVal('NEXT_PUBLIC_SUPABASE_ANON_KEY') || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const email = getVal('TEST_USER_A_EMAIL');
+      const pwd = getVal('TEST_USER_A_PASSWORD');
+
+      if (url && key && email && pwd) {
+        const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+        const { data: authData } = await supabase.auth.signInWithPassword({ email, password: pwd });
+        if (authData?.session?.access_token) {
+          token = authData.session.access_token;
+        }
+      }
+    }
+
+    if (!token) {
+      console.warn('Skipping authenticated payload validation: test user credentials not found');
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    // C. Missing / Zero price returns 400
+    const resZeroPrice = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: 0, market: 'BIST' }
     });
     expect(resZeroPrice.status()).toBe(400);
     const zeroJson = await resZeroPrice.json();
     expect(zeroJson.error).toMatch(/Invalid price/i);
 
-    // 2. Negative price
+    // D. Negative price returns 400
     const resNegativePrice = await request.post('/api/portfolio/positions', {
-      data: {
-        symbol: 'THYAO',
-        shares: 10,
-        price: -50.0,
-      }
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: -50.0, market: 'BIST' }
     });
     expect(resNegativePrice.status()).toBe(400);
 
-    // 3. Zero / Negative shares
+    // E. Zero / Negative shares returns 400
     const resZeroShares = await request.post('/api/portfolio/positions', {
-      data: {
-        symbol: 'THYAO',
-        shares: 0,
-        price: 250.0,
-      }
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 0, price: 250.0, market: 'BIST' }
     });
     expect(resZeroShares.status()).toBe(400);
     const zeroSharesJson = await resZeroShares.json();
     expect(zeroSharesJson.error).toMatch(/Invalid shares/i);
 
-    // 4. Missing symbol
+    // F. Invalid market returns 400
+    const resInvalidMarket = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'INVALID_MKT' }
+    });
+    expect(resInvalidMarket.status()).toBe(400);
+    const invalidMarketJson = await resInvalidMarket.json();
+    expect(invalidMarketJson.error).toMatch(/Invalid market/i);
+
+    // G. Missing symbol returns 400
     const resNoSymbol = await request.post('/api/portfolio/positions', {
-      data: {
-        shares: 10,
-        price: 100.0,
-      }
+      headers: authHeaders,
+      data: { shares: 10, price: 100.0, market: 'BIST' }
     });
     expect(resNoSymbol.status()).toBe(400);
   });

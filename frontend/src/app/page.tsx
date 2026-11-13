@@ -2548,40 +2548,21 @@ export default function Home() {
       }
     }
 
-    // 2. Persist to Supabase
+    // 2. Persist to server strictly via validated API route for authenticated users
     try {
-      const cleanSym = cleanSymUpper;
-      const isSymbol = `${cleanSym}.IS`;
-      let { data: assetData } = await supabase
-        .from('assets')
-        .select('id, symbol, name, market')
-        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol},name.ilike.%${cleanSym}%`)
-        .limit(1);
-
-      let assetId = assetData && assetData.length > 0 ? assetData[0].id : null;
-      if (!assetId) {
-        const { data: newAsset, error: newAssetErr } = await supabase.from('assets').insert([{
-          symbol: resolvedMarket === 'BIST' ? `${cleanSym}.IS` : cleanSym,
-          name: resolvedName,
-          market: resolvedMarket,
-          asset_class: 'stock',
-          currency: resolvedMarket === 'US' ? 'USD' : 'TRY',
-        }]).select('id').single();
-        if (newAsset && !newAssetErr) assetId = newAsset.id;
-      }
-
       const orderDateStr = enrichedHolding.entryDate || new Date().toISOString().slice(0, 10);
       const totalVal = newHolding.shares * newHolding.entryPrice;
-      const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
       const chosenIso = orderDateStr
         ? new Date(orderDateStr + 'T10:00:00Z').toISOString()
         : new Date().toISOString();
       const displayDateTime = orderDateStr
         ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
         : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
+      const cleanSym = cleanSymUpper;
+      const refCode = `ORD-${orderDateStr.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`;
 
-      if (assetId && !isDemoMode) {
-        const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
+      if (!isDemoMode && user) {
+        const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
         const resolvedStop = newHolding.stopLoss > 0 
           ? newHolding.stopLoss 
           : (matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : null);
@@ -2589,63 +2570,26 @@ export default function Home() {
           ? newHolding.targetPrice
           : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
 
-        let posError: any = null;
-        try {
-          const apiRes = await fetch('/api/portfolio/positions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              symbol: cleanSym,
-              shares: newHolding.shares,
-              price: newHolding.entryPrice,
-              stopLoss: resolvedStop,
-              targetPrice: resolvedTarget,
-              market: resolvedMarket,
-              name: resolvedName,
-              currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
-              notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
-              isDividend: isCoreDiv,
-              userId: effectiveUserId,
-            }),
-          });
-          if (!apiRes.ok) {
-            const errJson = await apiRes.json().catch(() => ({}));
-            console.error('Server validation failed creating position:', errJson);
-            posError = errJson;
-          }
-        } catch (apiErr) {
-          console.warn('Portfolio API fetch failed, falling back to direct client:', apiErr);
-          const { error: directErr } = await supabase.from('portfolio_positions').insert([{
-            user_id: effectiveUserId,
-            asset_id: assetId,
-            quantity: newHolding.shares,
-            avg_entry_price: newHolding.entryPrice,
-            stop_loss: resolvedStop,
-            target_price: resolvedTarget,
-            is_open: true,
-            entry_date: orderDateStr,
-            notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding')
-          }]);
-          posError = directErr;
-        }
-
-        try {
-          await supabase.from('portfolio_orders').insert([{
-            user_id: effectiveUserId,
-            order_ref: refCode,
-            symbol: cleanSym,
-            side: 'BUY',
-            order_type: 'Limit',
-            quantity: newHolding.shares,
+        const apiRes = await fetch('/api/portfolio/positions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbol: cleanSymUpper,
+            shares: newHolding.shares,
             price: newHolding.entryPrice,
-            total_amount: totalVal,
-            currency: newHolding.currency || 'TRY',
-            executed_at: chosenIso,
-            status: 'Filled',
-            notes: newHolding.dcaRationale || 'Position initiation'
-          }]);
-        } catch (ordErr) {
-          console.warn('Could not save order log:', ordErr);
+            stopLoss: resolvedStop,
+            targetPrice: resolvedTarget,
+            market: resolvedMarket,
+            name: resolvedName,
+            currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
+            notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
+            isDividend: isCoreDiv,
+          }),
+        });
+
+        if (!apiRes.ok) {
+          const errJson = await apiRes.json().catch(() => ({}));
+          console.error('Server validation failed creating position:', errJson);
         }
       }
 
