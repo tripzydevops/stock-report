@@ -351,6 +351,10 @@ export default function PortfolioView({
     }, 0);
   }, [dividendAssets, usdTryRate]);
 
+  const excludedDivCount = React.useMemo(() => {
+    return dividendAssets.filter(d => d.annualPayout === null || d.dividendYield === null).length;
+  }, [dividendAssets]);
+
   const totalAnnualDivDisplay = currencyMode === 'USD' ? (totalAnnualDivTRY / usdTryRate) : totalAnnualDivTRY;
 
   // Realized profit calculation
@@ -532,9 +536,23 @@ export default function PortfolioView({
               {language === 'tr' ? 'Hisseler:' : 'Equity:'} <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalStockDisplay)}</span> • {language === 'tr' ? 'Nakit:' : 'Cash:'} {formatCurr(cashDisplay)}
             </div>
             {totalAnnualDivTRY > 0 && (
-              <div className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1" title={language === 'tr' ? 'Öngörülen 12 Aylık Net Temettü Nakit Akışı' : 'Projected 12-Month Net Passive Dividend Income'}>
+              <div
+                className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1"
+                title={
+                  excludedDivCount > 0
+                    ? (language === 'tr'
+                        ? `Öngörülen 12 Aylık Net Temettü (${excludedDivCount} verimi bilinmeyen varlık hariç)`
+                        : `Projected 12-Month Net Passive Dividend (${excludedDivCount} assets with unavailable yield excluded)`)
+                    : (language === 'tr' ? 'Öngörülen 12 Aylık Net Temettü Nakit Akışı' : 'Projected 12-Month Net Passive Dividend Income')
+                }
+              >
                 <span>💰</span>
                 <span>+{formatCurr(totalAnnualDivDisplay)}/{language === 'tr' ? 'yıl temettü' : 'yr div'}</span>
+                {excludedDivCount > 0 && (
+                  <span className="text-[9px] font-normal text-amber-600 dark:text-amber-400">
+                    ({excludedDivCount} {language === 'tr' ? 'hariç' : 'excl.'})
+                  </span>
+                )}
               </div>
             )}
           </div>

@@ -1512,7 +1512,6 @@ export function deriveDividendsFromPortfolio(
     const liveDbPrice = Number(divSummary?.latest_price);
     const rawPrice = (pos.currentPrice > 0 ? pos.currentPrice : null)
       ?? (liveDbPrice > 0 ? liveDbPrice : null)
-      ?? (growthProfile?.currentPrice && growthProfile.currentPrice > 0 ? growthProfile.currentPrice : null)
       ?? null;
     const effectivePrice: number | null = rawPrice;
 
@@ -1664,7 +1663,6 @@ export function deriveAllMarketDividends(
     const rawPrice = (livePrice && livePrice > 0 ? livePrice : null)
       ?? (liveDbPrice > 0 ? liveDbPrice : null)
       ?? (held?.currentPrice && held.currentPrice > 0 ? held.currentPrice : null)
-      ?? (profile?.currentPrice && profile.currentPrice > 0 ? profile.currentPrice : null)
       ?? null;
     const effectivePrice: number | null = rawPrice;
 

@@ -4490,6 +4490,10 @@ export default function Home() {
             dateFilter={dateFilter}
             onSelectTicker={handleSelectTicker}
             onImportCandidate={(cand) => {
+              if (!cand.price || cand.price <= 0) {
+                console.warn('Blocked adding candidate with missing or zero market price:', cand.symbol);
+                return;
+              }
               handleAddHolding({
                 symbol: cand.symbol,
                 name: cand.name,

@@ -103,8 +103,28 @@ export default function PortfolioBriefModal({
     }, 0);
   }, [dividendAssets, usdTryRate]);
 
+  const excludedDivCount = useMemo(() => {
+    return dividendAssets.filter(d => d.annualPayout === null || d.dividendYield === null).length;
+  }, [dividendAssets]);
+
   const monthlyDividendTRY = annualDividendTRY / 12;
-  const blendedDividendYieldPct = totalStockValTRY > 0 ? (annualDividendTRY / totalStockValTRY) * 100 : 0;
+
+  // Weighted dividend yield strictly from assets where both price > 0 and payout are available
+  const pricedAndYieldDivs = useMemo(() => {
+    return dividendAssets.filter(d => d.currentPrice !== null && d.currentPrice > 0 && d.annualPayout !== null);
+  }, [dividendAssets]);
+
+  const pricedStockValTRY = pricedAndYieldDivs.reduce((acc, d) => {
+    const val = d.shares * (d.currentPrice as number);
+    return acc + (d.currency === 'USD' ? val * usdTryRate : val);
+  }, 0);
+
+  const pricedAnnualDivTRY = pricedAndYieldDivs.reduce((acc, d) => {
+    const p = d.annualPayout as number;
+    return acc + (d.currency === 'USD' ? p * usdTryRate : p);
+  }, 0);
+
+  const blendedDividendYieldPct = pricedStockValTRY > 0 ? (pricedAnnualDivTRY / pricedStockValTRY) * 100 : 0;
   const dividendYieldOnCostPct = totalCostTRY > 0 ? (annualDividendTRY / totalCostTRY) * 100 : 0;
 
   // 3. Sector Diversification

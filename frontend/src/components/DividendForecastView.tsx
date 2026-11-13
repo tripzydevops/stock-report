@@ -62,11 +62,12 @@ export default function DividendForecastView({
     if (userDividendAssets.length === 0) {
       return { totalCostTRY: 0, totalAnnualTRY: 0, weightedYield: 7.82, weightedGrowth: 22.0 };
     }
-    const totalCostTRY = userDividendAssets.reduce((acc, item) => {
+    const pricedCostAssets = userDividendAssets.filter(item => item.annualPayout !== null && item.entryPrice > 0);
+    const totalCostTRY = pricedCostAssets.reduce((acc, item) => {
       const c = item.shares * item.entryPrice;
       return acc + (item.currency === 'USD' ? c * usdTryRate : c);
     }, 0);
-    const totalAnnualTRY = userDividendAssets.reduce((acc, item) => {
+    const totalAnnualTRY = pricedCostAssets.reduce((acc, item) => {
       const payout = item.annualPayout || 0;
       return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
     }, 0);

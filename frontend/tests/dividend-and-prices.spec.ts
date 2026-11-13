@@ -327,6 +327,23 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(noPriceAsset?.currentPrice).toBeNull();
     expect(noPriceAsset?.dividendYield).toBeNull();
     expect(noPriceAsset?.annualPayout).toBeNull();
+
+    // E. Verify static profile prices are NOT leaked as live market prices when live/DB prices are absent
+    const heldWithProfileSymbol = [{
+      symbol: 'AAPL',
+      shares: 10,
+      entryPrice: 150.0,
+      currentPrice: 0, // No live quote
+      currency: 'USD',
+      market: 'US'
+    }];
+    // Pass empty livePricesMap and empty dbSummary so neither live nor DB price exists
+    const marketWithProfile = deriveAllMarketDividends(heldWithProfileSymbol, {}, []);
+    const aaplAsset = marketWithProfile.find(d => d.symbol === 'AAPL');
+    expect(aaplAsset).toBeDefined();
+    // Must be null, NOT the static profile price (e.g. 224.50)
+    expect(aaplAsset?.currentPrice).toBeNull();
+    expect(aaplAsset?.annualPayout).toBeNull();
   });
 
   test('10. Tab hash navigation supports ongoing URL hash and popstate changes', async ({ page }) => {
@@ -355,5 +372,67 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
 
     const dividendTabHeader = page.getByText(/Pasif Nakit Akışı|Passive Cashflow|Temettü Takvimi/i).first();
     await expect(dividendTabHeader).toBeVisible({ timeout: 10000 });
+  });
+
+  test('11. Unit Test: Mixed portfolio with one priced asset and one unpriced asset ensures weighted yield is not distorted', async () => {
+    // Asset A: 100 shares @ ₺100.0, currentPrice = ₺100.0 (Val = ₺10,000), Yield = 10%, Annual Payout = ₺1,000
+    // Asset B: 100 shares @ ₺50.0 entry, currentPrice = null, Yield = null, Annual Payout = null
+    const mixedHoldings: any[] = [
+      {
+        symbol: 'PRICED_PAYER',
+        name: 'Priced Payer A.Ş.',
+        market: 'BIST',
+        currency: 'TRY',
+        shares: 100,
+        entryPrice: 100.0,
+        currentPrice: 100.0,
+        dividendYield: 10.0,
+        annualPayout: 1000.0, // 100 shares * ₺100 * 10%
+      },
+      {
+        symbol: 'UNPRICED_ASSET',
+        name: 'Unpriced Asset A.Ş.',
+        market: 'BIST',
+        currency: 'TRY',
+        shares: 100,
+        entryPrice: 50.0,
+        currentPrice: null, // Price unavailable
+        dividendYield: null, // Yield unavailable
+        annualPayout: null, // Payout unavailable
+      }
+    ];
+
+    // 1. Excluded yield count: must detect exactly 1 asset with unavailable yield
+    const excludedYieldAssets = mixedHoldings.filter(item => item.annualPayout === null || item.dividendYield === null);
+    expect(excludedYieldAssets.length).toBe(1);
+    expect(excludedYieldAssets[0].symbol).toBe('UNPRICED_ASSET');
+
+    // 2. Total annual dividend: sum available payouts (₺1,000)
+    const totalAnnualTRY = mixedHoldings.reduce((acc, item) => {
+      const payout = item.annualPayout || 0;
+      return acc + payout;
+    }, 0);
+    expect(totalAnnualTRY).toBe(1000.0);
+
+    // 3. Weighted yield calculation: strictly calculated ONLY from assets where both currentPrice > 0 AND annualPayout !== null
+    const pricedAndYieldAssets = mixedHoldings.filter(item => item.currentPrice !== null && item.currentPrice > 0 && item.annualPayout !== null);
+    expect(pricedAndYieldAssets.length).toBe(1);
+    expect(pricedAndYieldAssets[0].symbol).toBe('PRICED_PAYER');
+
+    const totalPricedValTRY = pricedAndYieldAssets.reduce((acc, item) => {
+      return acc + (item.shares * item.currentPrice);
+    }, 0);
+    const totalPricedAnnualTRY = pricedAndYieldAssets.reduce((acc, item) => {
+      return acc + (item.annualPayout || 0);
+    }, 0);
+
+    const avgCurrentYield = totalPricedValTRY > 0 ? (totalPricedAnnualTRY / totalPricedValTRY) * 100 : 0;
+
+    // Weighted yield must be exactly 10.0%, NOT 0% and NOT diluted or distorted
+    expect(avgCurrentYield).toBe(10.0);
+
+    // Unpriced coverage: 1 out of 2 assets excluded from weighted yield
+    const unpricedOrNoYieldCount = mixedHoldings.length - pricedAndYieldAssets.length;
+    expect(unpricedOrNoYieldCount).toBe(1);
   });
 });

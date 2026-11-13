@@ -128,6 +128,11 @@ export default function DividendView({
   const [arbitrageModalAsset, setArbitrageModalAsset] = useState<DividendAsset | null>(null);
 
   // Portfolio KPIs
+  const excludedYieldAssets = useMemo(() => {
+    return dividendAssets.filter(item => item.annualPayout === null || item.dividendYield === null);
+  }, [dividendAssets]);
+  const excludedYieldCount = excludedYieldAssets.length;
+
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
     const payout = item.annualPayout || 0;
     return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
@@ -138,20 +143,40 @@ export default function DividendView({
   const totalMonthlyDisplay = currencyMode === 'USD' ? (totalMonthlyTRY / usdTryRate) : totalMonthlyTRY;
 
   // Weighted average Yield on Cost for portfolio
-  const totalCostTRY = dividendAssets.reduce((acc, item) => {
+  const pricedCostAssets = useMemo(() => {
+    return dividendAssets.filter(item => item.annualPayout !== null && item.entryPrice > 0);
+  }, [dividendAssets]);
+
+  const totalCostTRY = pricedCostAssets.reduce((acc, item) => {
     const cost = item.shares * item.entryPrice;
     return acc + (item.currency === 'USD' ? cost * usdTryRate : cost);
   }, 0);
 
-  const avgYieldOnCost = totalCostTRY > 0 ? (totalAnnualTRY / totalCostTRY) * 100 : 0;
+  const totalCostAnnualTRY = pricedCostAssets.reduce((acc, item) => {
+    const payout = item.annualPayout || 0;
+    return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
+  }, 0);
+
+  const avgYieldOnCost = totalCostTRY > 0 ? (totalCostAnnualTRY / totalCostTRY) * 100 : 0;
   
-  // Weighted current yield for portfolio
-  const totalValTRY = dividendAssets.reduce((acc, item) => {
-    const price = item.currentPrice || 0;
-    const val = item.shares * price;
+  // Weighted current yield for portfolio:
+  // Strictly calculated ONLY from assets where BOTH current price > 0 AND annual payout is available
+  const pricedAndYieldAssets = useMemo(() => {
+    return dividendAssets.filter(item => item.currentPrice !== null && item.currentPrice > 0 && item.annualPayout !== null);
+  }, [dividendAssets]);
+
+  const totalPricedValTRY = pricedAndYieldAssets.reduce((acc, item) => {
+    const val = item.shares * (item.currentPrice as number);
     return acc + (item.currency === 'USD' ? val * usdTryRate : val);
   }, 0);
-  const avgCurrentYield = totalValTRY > 0 ? (totalAnnualTRY / totalValTRY) * 100 : 0;
+
+  const totalPricedAnnualTRY = pricedAndYieldAssets.reduce((acc, item) => {
+    const payout = item.annualPayout as number;
+    return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
+  }, 0);
+
+  const avgCurrentYield = totalPricedValTRY > 0 ? (totalPricedAnnualTRY / totalPricedValTRY) * 100 : 0;
+  const unpricedOrNoYieldCount = dividendAssets.length - pricedAndYieldAssets.length;
 
   const formatCurr = (val: number | null | undefined, curr?: string) => {
     if (val === null || val === undefined) return '—';
@@ -295,6 +320,16 @@ export default function DividendView({
           <div className="text-[11px] text-gray-500 mt-1">
             {language === 'tr' ? 'Aylık Ortalama' : 'Monthly Avg'}: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurr(totalMonthlyDisplay)}</span>
           </div>
+          {excludedYieldCount > 0 && (
+            <div className="mt-1.5 text-[10px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1" title={language === 'tr' ? 'Verimi henüz belirlenmemiş şirketler yıllık toplama dahil edilmemiştir' : 'Companies with undeclared yield are excluded from annual projection'}>
+              <span>ℹ️</span>
+              <span>
+                {language === 'tr'
+                  ? `${excludedYieldCount} verimi bilinmeyen varlık hariç`
+                  : `${excludedYieldCount} assets with unavailable yield excluded`}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -330,8 +365,16 @@ export default function DividendView({
             {avgYieldOnCost.toFixed(2)}%
           </div>
           <div className="text-[11px] text-gray-500 mt-1">
-            {language === 'tr' ? 'Piyasa Verimi: ' : 'Mkt Yield: '}{avgCurrentYield.toFixed(2)}%
+            {language === 'tr' ? 'Ağırlıklı Piyasa Verimi: ' : 'Weighted Mkt Yield: '}
+            <span className="font-bold text-gray-700 dark:text-gray-300">{avgCurrentYield.toFixed(2)}%</span>
           </div>
+          {unpricedOrNoYieldCount > 0 && (
+            <div className="text-[10px] text-gray-400 mt-0.5" title={language === 'tr' ? 'Sadece cari fiyatı ve temettü verimi bilinen varlıklar baz alınmıştır' : 'Calculated only from assets with valid current price and declared yield'}>
+              {language === 'tr'
+                ? `(${pricedAndYieldAssets.length}/${dividendAssets.length} fiyatlı varlık)`
+                : `(${pricedAndYieldAssets.length}/${dividendAssets.length} priced assets)`}
+            </div>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
@@ -777,15 +820,27 @@ export default function DividendView({
                               {!isHeld ? (
                                 <button
                                   type="button"
-                                  onClick={() => onImportCandidate?.({
-                                    symbol: asset.symbol,
-                                    name: asset.name,
-                                    market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                                    shares: 100,
-                                    price: asset.currentPrice || 0,
-                                    isDividend: true
-                                  })}
-                                  className="px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                                  disabled={!asset.currentPrice || asset.currentPrice <= 0}
+                                  onClick={() => {
+                                    if (!asset.currentPrice || asset.currentPrice <= 0) return;
+                                    onImportCandidate?.({
+                                      symbol: asset.symbol,
+                                      name: asset.name,
+                                      market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
+                                      shares: 100,
+                                      price: asset.currentPrice,
+                                      isDividend: true
+                                    });
+                                  }}
+                                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                                    !asset.currentPrice || asset.currentPrice <= 0
+                                      ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-400 border border-gray-200 dark:border-gray-700'
+                                      : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 cursor-pointer'
+                                  }`}
+                                  title={!asset.currentPrice || asset.currentPrice <= 0
+                                    ? (language === 'tr' ? 'Piyasa fiyatı mevcut olmadığı için eklenemez' : 'Cannot add to portfolio without market price')
+                                    : (language === 'tr' ? 'Portföye Ekle' : 'Add to Portfolio')
+                                  }
                                 >
                                   <span>+</span>
                                   <span>{language === 'tr' ? 'Portföye Ekle' : 'Add to Portfolio'}</span>
@@ -922,17 +977,29 @@ export default function DividendView({
                         {!isHeld && (
                           <button
                             type="button"
-                            onClick={() => onImportCandidate?.({
-                              symbol: asset.symbol,
-                              name: asset.name,
-                              market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                              shares: 100,
-                              price: asset.currentPrice || 0,
-                              isDividend: true
-                            })}
-                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                            disabled={!asset.currentPrice || asset.currentPrice <= 0}
+                            onClick={() => {
+                              if (!asset.currentPrice || asset.currentPrice <= 0) return;
+                              onImportCandidate?.({
+                                symbol: asset.symbol,
+                                name: asset.name,
+                                market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
+                                shares: 100,
+                                price: asset.currentPrice,
+                                isDividend: true
+                              });
+                            }}
+                            className={`text-xs font-bold transition-all ${
+                              !asset.currentPrice || asset.currentPrice <= 0
+                                ? 'opacity-40 cursor-not-allowed text-gray-400'
+                                : 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer'
+                            }`}
+                            title={!asset.currentPrice || asset.currentPrice <= 0
+                              ? (language === 'tr' ? 'Piyasa fiyatı mevcut değil' : 'Market price unavailable')
+                              : undefined
+                            }
                           >
-                            + Portföye Ekle
+                            + {language === 'tr' ? 'Portföye Ekle' : 'Add to Portfolio'}
                           </button>
                         )}
                       </div>
@@ -1075,16 +1142,27 @@ export default function DividendView({
                             {!isHeld && (
                               <button
                                 type="button"
-                                onClick={() => onImportCandidate?.({
-                                  symbol: asset.symbol,
-                                  name: asset.name,
-                                  market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                                  shares: 100,
-                                  price: asset.currentPrice || 0,
-                                  isDividend: true
-                                })}
-                                className="px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 rounded-md border border-blue-200 dark:border-blue-800 cursor-pointer"
-                                title="Portföye Ekle"
+                                disabled={!asset.currentPrice || asset.currentPrice <= 0}
+                                onClick={() => {
+                                  if (!asset.currentPrice || asset.currentPrice <= 0) return;
+                                  onImportCandidate?.({
+                                    symbol: asset.symbol,
+                                    name: asset.name,
+                                    market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
+                                    shares: 100,
+                                    price: asset.currentPrice,
+                                    isDividend: true
+                                  });
+                                }}
+                                className={`px-2.5 py-1 text-xs font-bold rounded-md border transition-all ${
+                                  !asset.currentPrice || asset.currentPrice <= 0
+                                    ? 'opacity-40 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700'
+                                    : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 border-blue-200 dark:border-blue-800 cursor-pointer'
+                                }`}
+                                title={!asset.currentPrice || asset.currentPrice <= 0
+                                  ? (language === 'tr' ? 'Piyasa fiyatı mevcut olmadığı için eklenemez' : 'Cannot add to portfolio without market price')
+                                  : (language === 'tr' ? 'Portföye Ekle' : 'Add to Portfolio')
+                                }
                               >
                                 + {language === 'tr' ? 'Ekle' : 'Add'}
                               </button>
