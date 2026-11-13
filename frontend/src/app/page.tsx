@@ -1910,9 +1910,38 @@ export default function Home() {
           });
 
           setRealizedTrades(reconstructedRealized);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('market_pulse_cached_orders', JSON.stringify(loadedOrders));
+              localStorage.setItem('market_pulse_cached_realized', JSON.stringify(reconstructedRealized));
+            } catch (e) {}
+          }
         } else {
-          setExecutedOrders([]);
-          setRealizedTrades([]);
+          let hasLocalCache = false;
+          if (typeof window !== 'undefined') {
+            try {
+              const cachedOrd = localStorage.getItem('market_pulse_cached_orders');
+              const cachedReal = localStorage.getItem('market_pulse_cached_realized');
+              if (cachedOrd) {
+                const parsedOrd = JSON.parse(cachedOrd);
+                if (Array.isArray(parsedOrd) && parsedOrd.length > 0) {
+                  setExecutedOrders(parsedOrd);
+                  loadedOrders = parsedOrd;
+                  hasLocalCache = true;
+                }
+              }
+              if (cachedReal) {
+                const parsedReal = JSON.parse(cachedReal);
+                if (Array.isArray(parsedReal) && parsedReal.length > 0) {
+                  setRealizedTrades(parsedReal);
+                }
+              }
+            } catch (e) {}
+          }
+          if (!hasLocalCache) {
+            setExecutedOrders([]);
+            setRealizedTrades([]);
+          }
         }
 
         // 5. Fetch Capital Transfers from Supabase (Scoped to logged-in user or Model Portfolio)
@@ -1935,8 +1964,29 @@ export default function Home() {
             notes: t.notes
           }));
           setTransfers(loadedTrans);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(loadedTrans));
+            } catch (e) {}
+          }
         } else {
-          setTransfers([]);
+          let hasLocalTrans = false;
+          if (typeof window !== 'undefined') {
+            try {
+              const cachedTr = localStorage.getItem('marketpulse_cached_transfers');
+              if (cachedTr) {
+                const parsed = JSON.parse(cachedTr);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setTransfers(parsed);
+                  loadedTrans = parsed;
+                  hasLocalTrans = true;
+                }
+              }
+            } catch (e) {}
+          }
+          if (!hasLocalTrans) {
+            setTransfers([]);
+          }
         }
 
         // User Rule: Compute cash strictly as: (All Deposits + All Sells - All Buys)
@@ -2173,6 +2223,24 @@ export default function Home() {
           if (Array.isArray(parsed) && parsed.length > 0) setPortfolio(parsed);
         }
 
+        const cachedOrders = localStorage.getItem('market_pulse_cached_orders');
+        if (cachedOrders) {
+          const parsed = JSON.parse(cachedOrders);
+          if (Array.isArray(parsed) && parsed.length > 0) setExecutedOrders(parsed);
+        }
+
+        const cachedRealized = localStorage.getItem('market_pulse_cached_realized');
+        if (cachedRealized) {
+          const parsed = JSON.parse(cachedRealized);
+          if (Array.isArray(parsed) && parsed.length > 0) setRealizedTrades(parsed);
+        }
+
+        const cachedTransfers = localStorage.getItem('marketpulse_cached_transfers');
+        if (cachedTransfers) {
+          const parsed = JSON.parse(cachedTransfers);
+          if (Array.isArray(parsed) && parsed.length > 0) setTransfers(parsed);
+        }
+
         const cachedRegimes = localStorage.getItem('market_pulse_cached_regimes');
         if (cachedRegimes) {
           const parsed = JSON.parse(cachedRegimes);
@@ -2293,24 +2361,26 @@ export default function Home() {
   };
 
   const handleRemoveHolding = async (symbol: string) => {
-    // 1. Immediately update UI state
+    const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
+    const effectiveUserId = user?.id || ADMIN_USER_ID;
+
+    // 1. Immediately update UI state and local cache
     setPortfolio(prev => {
-      const updated = prev.filter(item => item.symbol !== symbol);
-      if (!user || isDemoMode) {
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
-          } catch (e) {
-            console.warn('Could not update guest portfolio on remove:', e);
-          }
+      const updated = prev.filter(item => item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Could not update guest portfolio on remove:', e);
         }
       }
       return updated;
     });
-    setDividends(prev => prev.filter(item => item.symbol !== symbol));
+    setDividends(prev => prev.filter(item => item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper));
 
-    // 2. Persist deletion in Supabase (only for authenticated user)
-    if (user && !isDemoMode) {
+    // 2. Persist deletion in Supabase (synced to logged-in user or model portfolio)
+    if (!isDemoMode) {
       try {
         const cleanSym = symbol.replace('.IS', '');
         const isSymbol = `${cleanSym}.IS`;
@@ -2325,7 +2395,7 @@ export default function Home() {
             .from('portfolio_positions')
             .delete()
             .eq('asset_id', assetData[0].id)
-            .eq('user_id', user.id);
+            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
         }
       } catch (err) {
         console.warn('Could not remove holding from Supabase:', err);
@@ -2334,18 +2404,25 @@ export default function Home() {
   };
 
   const handleAddTransfer = async (newTransfer: CapitalTransfer) => {
+    const effectiveUserId = user?.id || ADMIN_USER_ID;
     const updatedTrans = [newTransfer, ...transfers];
     setTransfers(updatedTrans);
     const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate).availableCashTRY;
     setCashBalance(updatedCash);
 
-    if (user && !isDemoMode) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTrans));
+      } catch (e) {}
+    }
+
+    if (!isDemoMode) {
       try {
         await supabase.from('portfolio_transfers').insert([{
-          user_id: user.id,
+          user_id: effectiveUserId,
           transfer_type: newTransfer.transferType,
           amount: newTransfer.amount,
-          currency: newTransfer.currency,
+          currency: newTransfer.currency || 'TRY',
           transfer_date: newTransfer.transferDate,
           notes: newTransfer.notes
         }]);
@@ -2413,18 +2490,19 @@ export default function Home() {
       strategyType: isCoreDiv ? 'CORE_DIVIDEND' : (newHolding.strategyType || 'SWING'),
       isDividend: isCoreDiv
     };
-    // 1. Immediately update UI state
+    const effectiveUserId = user?.id || ADMIN_USER_ID;
+
+    // 1. Immediately update UI state and local cache
     setPortfolio(prev => {
       const filtered = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
       const updated = [enrichedHolding, ...filtered];
       setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
-      if (!user || isDemoMode) {
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
-          } catch (e) {
-            console.warn('Failed to save guest portfolio:', e);
-          }
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Failed to save cached portfolio:', e);
         }
       }
       return updated;
@@ -2474,7 +2552,7 @@ export default function Home() {
         ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
         : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-      if (assetId && user && !isDemoMode) {
+      if (assetId && !isDemoMode) {
         const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym);
         const resolvedStop = newHolding.stopLoss > 0 
           ? newHolding.stopLoss 
@@ -2484,7 +2562,7 @@ export default function Home() {
           : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
 
         const { error: posError } = await supabase.from('portfolio_positions').insert([{
-          user_id: user.id,
+          user_id: effectiveUserId,
           asset_id: assetId,
           quantity: newHolding.shares,
           avg_entry_price: newHolding.entryPrice,
@@ -2500,7 +2578,7 @@ export default function Home() {
 
         try {
           await supabase.from('portfolio_orders').insert([{
-            user_id: user.id,
+            user_id: effectiveUserId,
             order_ref: refCode,
             symbol: cleanSym,
             side: 'BUY',
@@ -2518,58 +2596,68 @@ export default function Home() {
         }
       }
 
-        const newOrder: ExecutedOrder = {
-          id: `ord-${Date.now()}`,
-          ref: refCode,
-          symbol: cleanSym,
-          name: newHolding.name || cleanSym,
-          market: (newHolding.market || 'BIST') as any,
-          side: 'BUY',
-          orderType: 'Limit',
-          quantity: newHolding.shares,
-          price: newHolding.entryPrice,
-          totalValue: totalVal,
-          currency: newHolding.currency || 'TRY',
-          dateTime: displayDateTime,
-          executedAt: chosenIso,
-          status: 'Filled',
-          dcaNote: newHolding.dcaRationale || 'Position initiation'
-        };
-        const updatedOrders = [newOrder, ...executedOrders];
-        setExecutedOrders(updatedOrders);
+      const newOrder: ExecutedOrder = {
+        id: `ord-${Date.now()}`,
+        ref: refCode,
+        symbol: cleanSym,
+        name: newHolding.name || cleanSym,
+        market: (newHolding.market || 'BIST') as any,
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: newHolding.shares,
+        price: newHolding.entryPrice,
+        totalValue: totalVal,
+        currency: newHolding.currency || 'TRY',
+        dateTime: displayDateTime,
+        executedAt: chosenIso,
+        status: 'Filled',
+        dcaNote: newHolding.dcaRationale || 'Position initiation'
+      };
+      const updatedOrders = [newOrder, ...executedOrders];
+      setExecutedOrders(updatedOrders);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+        } catch (e) {}
+      }
 
-        // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
-        const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
-        const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
-        let updatedTransfersList = transfers;
-        if (shortfall > 0) {
-          const autoTransfer: CapitalTransfer = {
-            id: `trans-${Date.now()}`,
-            transferType: 'DEPOSIT',
-            amount: shortfall,
-            currency: 'TRY',
-            transferDate: orderDateStr,
-            notes: `Auto-deposit: Funded position ${cleanSym} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
-          };
-          updatedTransfersList = [autoTransfer, ...transfers];
-          setTransfers(updatedTransfersList);
-          if (user && !isDemoMode) {
-            try {
-              await supabase.from('portfolio_transfers').insert([{
-                user_id: user.id,
-                transfer_type: 'DEPOSIT',
-                amount: shortfall,
-                currency: 'TRY',
-                transfer_date: autoTransfer.transferDate,
-                notes: autoTransfer.notes
-              }]);
-            } catch (trErr) {
-              console.warn('Could not auto-save capital transfer:', trErr);
-            }
+      // USER RULE: When adding a holding without adding cash, assume cash was added (do NOT assume it came from profit)
+      const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
+      const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
+      let updatedTransfersList = transfers;
+      if (shortfall > 0) {
+        const autoTransfer: CapitalTransfer = {
+          id: `trans-${Date.now()}`,
+          transferType: 'DEPOSIT',
+          amount: shortfall,
+          currency: 'TRY',
+          transferDate: orderDateStr,
+          notes: `Auto-deposit: Funded position ${cleanSym} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
+        };
+        updatedTransfersList = [autoTransfer, ...transfers];
+        setTransfers(updatedTransfersList);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
+          } catch (e) {}
+        }
+        if (!isDemoMode) {
+          try {
+            await supabase.from('portfolio_transfers').insert([{
+              user_id: effectiveUserId,
+              transfer_type: 'DEPOSIT',
+              amount: shortfall,
+              currency: 'TRY',
+              transfer_date: autoTransfer.transferDate,
+              notes: autoTransfer.notes
+            }]);
+          } catch (trErr) {
+            console.warn('Could not auto-save capital transfer:', trErr);
           }
         }
-        const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
-        setCashBalance(updatedCash);
+      }
+      const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
+      setCashBalance(updatedCash);
     } catch (err) {
       console.warn('Could not save holding to Supabase:', err);
     }
@@ -2606,6 +2694,13 @@ export default function Home() {
       // Synchronize dividend cashflow immediately
       setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
 
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+        } catch (e) {}
+      }
+
       return updated;
     });
 
@@ -2638,18 +2733,20 @@ export default function Home() {
             ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
             : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-          if (user && !isDemoMode) {
+          const effectiveUserId = user?.id || ADMIN_USER_ID;
+
+          if (!isDemoMode) {
             await supabase
               .from('portfolio_positions')
               .update({ quantity: totalShares, avg_entry_price: blendedEntry })
               .eq('asset_id', assetData[0].id)
               .eq('is_open', true)
-              .eq('user_id', user.id);
+              .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
 
             // Log buy order to portfolio_orders
             try {
               await supabase.from('portfolio_orders').insert([{
-                user_id: user.id,
+                user_id: effectiveUserId,
                 order_ref: refCode,
                 symbol: cleanSym,
                 side: 'BUY',
@@ -2686,6 +2783,11 @@ export default function Home() {
           };
           const updatedOrders = [newOrder, ...executedOrders];
           setExecutedOrders(updatedOrders);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+            } catch (e) {}
+          }
 
           // USER RULE: When buying more shares without adding cash, assume cash was added (do NOT assume it came from profit)
           const additionalCostTRY = target.currency === 'USD' ? totalVal * usdTryRate : totalVal;
@@ -2702,10 +2804,15 @@ export default function Home() {
             };
             updatedTransfersList = [autoTransfer, ...transfers];
             setTransfers(updatedTransfersList);
-            if (user && !isDemoMode) {
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
+              } catch (e) {}
+            }
+            if (!isDemoMode) {
               try {
                 await supabase.from('portfolio_transfers').insert([{
-                  user_id: user.id,
+                  user_id: effectiveUserId,
                   transfer_type: 'DEPOSIT',
                   amount: shortfall,
                   currency: 'TRY',
@@ -2837,16 +2944,33 @@ export default function Home() {
       aiTargetNote: aiNote
     };
 
-    setRealizedTrades(prev => [newRealized, ...prev]);
+    setRealizedTrades(prev => {
+      const updated = [newRealized, ...prev];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_realized', JSON.stringify(updated));
+        } catch (e) {}
+      }
+      return updated;
+    });
 
     if (actualSold >= target.shares) {
       // Full exit
-      setPortfolio(prev => prev.filter(p => p.symbol !== symbol));
+      setPortfolio(prev => {
+        const updated = prev.filter(p => p.symbol !== symbol);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
       setDividends(prev => prev.filter(d => d.symbol !== symbol));
     } else {
       // Partial sell
       setPortfolio(prev => {
-        return prev.map(item => {
+        const updated = prev.map(item => {
           if (item.symbol !== symbol) return item;
           const newTotalCost = remainingShares * newAvgEntryPrice;
           const newCurrentValue = remainingShares * item.currentPrice;
@@ -2863,6 +2987,14 @@ export default function Home() {
             pnlPercent: newPnlPercent
           };
         });
+
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
       });
 
       setDividends(prev => {
@@ -2905,13 +3037,15 @@ export default function Home() {
         ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
         : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`;
 
-      if (assetData && assetData.length > 0 && user && !isDemoMode) {
+      const effectiveUserId = user?.id || ADMIN_USER_ID;
+
+      if (assetData && assetData.length > 0 && !isDemoMode) {
         let posMutQuery = supabase.from('portfolio_positions');
         if (actualSold >= target.shares) {
           await posMutQuery
             .delete()
             .eq('asset_id', assetData[0].id)
-            .eq('user_id', user.id);
+            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
         } else {
           await posMutQuery
             .update({ 
@@ -2920,12 +3054,12 @@ export default function Home() {
             })
             .eq('asset_id', assetData[0].id)
             .eq('is_open', true)
-            .eq('user_id', user.id);
+            .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
         }
 
         try {
           await supabase.from('portfolio_orders').insert([{
-            user_id: user.id,
+            user_id: effectiveUserId,
             order_ref: refCode,
             symbol: cleanSym,
             side: 'SELL',
@@ -2962,6 +3096,11 @@ export default function Home() {
       };
       const updatedOrders = [newSellOrder, ...executedOrders];
       setExecutedOrders(updatedOrders);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+        } catch (e) {}
+      }
       const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate).availableCashTRY;
       setCashBalance(updatedCash);
     } catch (err) {
@@ -2971,15 +3110,25 @@ export default function Home() {
 
   const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
     const cleanSym = symbol.replace('.IS', '').toUpperCase();
-    setPortfolio(prev => prev.map(item => {
-      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
-      const distToStop = item.currentPrice > 0 ? ((item.currentPrice - newStopPrice) / item.currentPrice) * 100 : 0;
-      return {
-        ...item,
-        stopLoss: newStopPrice,
-        distanceToStop: distToStop
-      };
-    }));
+    setPortfolio(prev => {
+      const updated = prev.map(item => {
+        if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+        const distToStop = item.currentPrice > 0 ? ((item.currentPrice - newStopPrice) / item.currentPrice) * 100 : 0;
+        return {
+          ...item,
+          stopLoss: newStopPrice,
+          distanceToStop: distToStop
+        };
+      });
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+        } catch (e) {}
+      }
+      return updated;
+    });
 
     try {
       const isSymbol = `${cleanSym}.IS`;
@@ -2989,13 +3138,14 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      if (assetData && assetData.length > 0 && user && !isDemoMode) {
+      const effectiveUserId = user?.id || ADMIN_USER_ID;
+      if (assetData && assetData.length > 0 && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({ stop_loss: newStopPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .eq('user_id', user.id);
+          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
       }
     } catch (err) {
       console.warn('Could not update stop loss in Supabase:', err);
@@ -3004,13 +3154,23 @@ export default function Home() {
 
   const handleUpdateTargetPrice = async (symbol: string, newTargetPrice: number) => {
     const cleanSym = symbol.replace('.IS', '').toUpperCase();
-    setPortfolio(prev => prev.map(item => {
-      if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
-      return {
-        ...item,
-        targetPrice: newTargetPrice
-      };
-    }));
+    setPortfolio(prev => {
+      const updated = prev.map(item => {
+        if (item.symbol.replace('.IS', '').toUpperCase() !== cleanSym) return item;
+        return {
+          ...item,
+          targetPrice: newTargetPrice
+        };
+      });
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+        } catch (e) {}
+      }
+      return updated;
+    });
 
     try {
       const isSymbol = `${cleanSym}.IS`;
@@ -3020,13 +3180,14 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      if (assetData && assetData.length > 0 && user && !isDemoMode) {
+      const effectiveUserId = user?.id || ADMIN_USER_ID;
+      if (assetData && assetData.length > 0 && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({ target_price: newTargetPrice })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .eq('user_id', user.id);
+          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
       }
     } catch (err) {
       console.warn('Could not update target price in Supabase:', err);
@@ -3057,6 +3218,13 @@ export default function Home() {
       });
 
       setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
+
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+        } catch (e) {}
+      }
       return updated;
     });
 
@@ -3079,7 +3247,8 @@ export default function Home() {
         .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
         .limit(1);
 
-      if (assetData && assetData.length > 0 && user && !isDemoMode) {
+      const effectiveUserId = user?.id || ADMIN_USER_ID;
+      if (assetData && assetData.length > 0 && !isDemoMode) {
         await supabase
           .from('portfolio_positions')
           .update({
@@ -3088,7 +3257,7 @@ export default function Home() {
           })
           .eq('asset_id', assetData[0].id)
           .eq('is_open', true)
-          .eq('user_id', user.id);
+          .or(`user_id.eq.${effectiveUserId},user_id.is.null`);
       }
     } catch (err) {
       console.warn('Could not update strategy type in Supabase:', err);
