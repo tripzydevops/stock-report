@@ -97,7 +97,8 @@ export default function PortfolioBriefModal({
 
   const annualDividendTRY = useMemo(() => {
     return dividendAssets.reduce((acc, d) => {
-      const payoutTRY = d.currency === 'USD' ? d.annualPayout * usdTryRate : d.annualPayout;
+      const payout = d.annualPayout || 0;
+      const payoutTRY = d.currency === 'USD' ? payout * usdTryRate : payout;
       return acc + payoutTRY;
     }, 0);
   }, [dividendAssets, usdTryRate]);

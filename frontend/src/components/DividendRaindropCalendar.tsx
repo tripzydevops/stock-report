@@ -125,7 +125,7 @@ export default function DividendRaindropCalendar({
       const baseMonth = parseMonthFromAsset(asset, dateBasis);
       const isUsd = asset.currency === 'USD';
       const yieldPct = asset.dividendYield || 0;
-      const annualAmount = asset.annualPayout || (asset.shares * asset.currentPrice * (yieldPct / 100));
+      const annualAmount = asset.annualPayout || (asset.shares * (asset.currentPrice || 0) * (yieldPct / 100));
 
       const cleanSym = asset.symbol.replace('.IS', '').trim().toUpperCase();
       const customTranche = KNOWN_DIVIDEND_TRANCHES[cleanSym];
@@ -137,7 +137,7 @@ export default function DividendRaindropCalendar({
           const ratio = customTranche.ratios[t] || (1 / customTranche.months.length);
           const trancheAmount = annualAmount * ratio;
           const trancheTRY = isUsd ? trancheAmount * usdTryRate : trancheAmount;
-          const dps = (asset.currentPrice * (yieldPct / 100)) * ratio;
+          const dps = ((asset.currentPrice || 0) * (yieldPct / 100)) * ratio;
           const trancheLabel = customTranche.monthLabels[t];
           const trancheDate = customTranche.dates[t];
 
@@ -172,7 +172,7 @@ export default function DividendRaindropCalendar({
         // 12 monthly raindrops
         const perMonthAmount = annualAmount / 12;
         const perMonthTRY = isUsd ? perMonthAmount * usdTryRate : perMonthAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 12);
+        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 12);
 
         for (let m = 0; m < 12; m++) {
           buckets[m].raindrops.push({
@@ -199,7 +199,7 @@ export default function DividendRaindropCalendar({
         // 4 quarterly raindrops spaced every 3 months
         const perQuarterAmount = annualAmount / 4;
         const perQuarterTRY = isUsd ? perQuarterAmount * usdTryRate : perQuarterAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 4);
+        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 4);
 
         for (let q = 0; q < 4; q++) {
           const targetMonth = (baseMonth + q * 3) % 12;
@@ -228,7 +228,7 @@ export default function DividendRaindropCalendar({
         // 2 semi-annual raindrops spaced 6 months
         const perHalfAmount = annualAmount / 2;
         const perHalfTRY = isUsd ? perHalfAmount * usdTryRate : perHalfAmount;
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100) / 2);
+        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 2);
 
         for (let h = 0; h < 2; h++) {
           const targetMonth = (baseMonth + h * 6) % 12;
@@ -254,7 +254,7 @@ export default function DividendRaindropCalendar({
         }
       } else {
         // Annual single raindrop (typical BIST)
-        const dps = asset.estimatedNextDPS || (asset.currentPrice * (yieldPct / 100));
+        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100));
         const payout = asset.estimatedNextPayout || (asset.shares * dps);
         const payoutTRY = isUsd ? payout * usdTryRate : payout;
 

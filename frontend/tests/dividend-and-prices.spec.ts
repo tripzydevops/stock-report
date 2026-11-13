@@ -293,7 +293,10 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // Unknown yield must be null, NOT 3.5% or 5.0%
     expect(item.dividendYield).toBeNull();
     expect(item.yieldOnCost).toBeNull();
-    expect(item.annualPayout).toBe(0);
+    expect(item.annualPayout).toBeNull();
+    expect(item.monthlyPayout).toBeNull();
+    expect(item.estimatedNextDPS).toBeNull();
+    expect(item.estimatedNextPayout).toBeNull();
     // Unannounced dates must be empty string, NOT 2027-04-15
     expect(item.nextExDate).toBe('');
     expect(item.nextPaymentDate).toBe('');
@@ -308,13 +311,22 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(vakbnSched.exDate).toBe('');
     expect(vakbnSched.month).toBe('Belirlenmedi (Dağıtım Yok)');
 
-    // D. deriveAllMarketDividends with unknown symbol
-    const allMarket = deriveAllMarketDividends([], {}, []);
-    const unknownInMarket = allMarket.find(d => d.symbol === 'XYZ_UNKNOWN_STOCK');
-    if (unknownInMarket) {
-      expect(unknownInMarket.dividendYield).toBeNull();
-      expect(unknownInMarket.nextExDate).toBe('');
-    }
+    // D. deriveAllMarketDividends with unknown symbol & verify held.entryPrice is NOT leaked as currentPrice
+    const heldWithoutCurrentPrice = [{
+      symbol: 'TEST_NO_PRICE',
+      shares: 10,
+      entryPrice: 125.0, // Historical cost basis
+      currentPrice: 0,   // Live price unknown
+      currency: 'TRY',
+      market: 'BIST'
+    }];
+    const marketDerived = deriveAllMarketDividends(heldWithoutCurrentPrice, {}, []);
+    const noPriceAsset = marketDerived.find(d => d.symbol === 'TEST_NO_PRICE');
+    expect(noPriceAsset).toBeDefined();
+    // Current price must be null, strictly NOT using 125.0 entryPrice
+    expect(noPriceAsset?.currentPrice).toBeNull();
+    expect(noPriceAsset?.dividendYield).toBeNull();
+    expect(noPriceAsset?.annualPayout).toBeNull();
   });
 
   test('10. Tab hash navigation supports ongoing URL hash and popstate changes', async ({ page }) => {

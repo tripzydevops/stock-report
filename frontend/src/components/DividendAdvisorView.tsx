@@ -87,7 +87,8 @@ export default function DividendAdvisorView({
   // Total Portfolio Metrics
   const totalAnnualTRY = useMemo(() => {
     return dividendAssets.reduce((acc, item) => {
-      return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
+      const payout = item.annualPayout || 0;
+      return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
     }, 0);
   }, [dividendAssets, usdTryRate]);
 

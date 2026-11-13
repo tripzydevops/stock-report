@@ -345,7 +345,8 @@ export default function PortfolioView({
 
   const totalAnnualDivTRY = React.useMemo(() => {
     return dividendAssets.reduce((acc, d) => {
-      const p = d.currency === 'USD' ? d.annualPayout * usdTryRate : d.annualPayout;
+      const payout = d.annualPayout || 0;
+      const p = d.currency === 'USD' ? payout * usdTryRate : payout;
       return acc + p;
     }, 0);
   }, [dividendAssets, usdTryRate]);
@@ -453,7 +454,8 @@ export default function PortfolioView({
   const totalMissedDisplay = currencyMode === 'USD' ? (totalMissedGainsTRY / usdTryRate) : totalMissedGainsTRY;
   const totalProtectedDisplay = currencyMode === 'USD' ? (totalCapitalProtectedTRY / usdTryRate) : totalCapitalProtectedTRY;
 
-  const formatCurr = (val: number, curr?: string) => {
+  const formatCurr = (val: number | null | undefined, curr?: string) => {
+    if (val === null || val === undefined) return '—';
     const c = curr || currencyMode;
     const symbol = c === 'USD' ? '$' : '₺';
     return `${symbol}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1537,7 +1539,7 @@ export default function PortfolioView({
                                     <>
                                       <span className="text-xs font-black text-purple-700 dark:text-purple-300 font-mono bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs">
                                         <span>💎</span>
-                                        <span>{divItem ? `+${formatCurr(divItem.annualPayout, item.currency)}/yıl` : 'Temettü'}</span>
+                                        <span>{divItem && divItem.annualPayout !== null ? `+${formatCurr(divItem.annualPayout, item.currency)}/yıl` : 'Temettü'}</span>
                                       </span>
                                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">
                                         {divItem && divItem.dividendYield !== null && divItem.dividendYield !== undefined ? `%${divItem.dividendYield.toFixed(1)} Verim` : 'Core DCA'}
@@ -1926,7 +1928,7 @@ export default function PortfolioView({
                                       return (
                                         <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 shadow-xs" title={language === 'tr' ? 'Tahmini yıllık temettü nakit akışı' : 'Estimated annual dividend payout'}>
                                           <span>💎</span>
-                                          <span>{divItem ? `${divItem.dividendYield !== null && divItem.dividendYield !== undefined ? `%${divItem.dividendYield.toFixed(1)}` : 'Verim'} (+${formatCurr(divItem.annualPayout, item.currency)}/yıl)` : 'Yield / Core'}</span>
+                                          <span>{divItem ? `${divItem.dividendYield !== null && divItem.dividendYield !== undefined ? `%${divItem.dividendYield.toFixed(1)}` : 'Verim'} (${divItem.annualPayout !== null ? `+${formatCurr(divItem.annualPayout, item.currency)}/yıl` : '—'})` : 'Yield / Core'}</span>
                                         </span>
                                       );
                                     })()}

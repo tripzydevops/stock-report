@@ -1017,7 +1017,7 @@ export default function Home() {
       try {
         localStorage.setItem('market_pulse_active_tab', newTab);
         if (window.location.hash.replace('#', '').trim().toLowerCase() !== newTab) {
-          window.history.pushState(null, '', `#${newTab}`);
+          window.history.replaceState(null, '', `#${newTab}`);
         }
       } catch (e) {
         // Ignore
@@ -3009,8 +3009,8 @@ export default function Home() {
           return {
             ...div,
             shares: remainingShares,
-            annualPayout: (remainingShares * div.currentPrice * (div.dividendYield || 0)) / 100,
-            monthlyPayout: (remainingShares * div.currentPrice * (div.dividendYield || 0)) / 1200
+            annualPayout: div.dividendYield !== null && div.currentPrice !== null ? (remainingShares * div.currentPrice * div.dividendYield) / 100 : null,
+            monthlyPayout: div.dividendYield !== null && div.currentPrice !== null ? (remainingShares * div.currentPrice * div.dividendYield) / 1200 : null
           };
         });
       });

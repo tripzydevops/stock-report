@@ -1444,20 +1444,20 @@ export function deriveDividendsFromPortfolio(
     symbol: string;
     name: string;
     shares: number;
-    currentPrice: number;
+    currentPrice: number | null;
     entryPrice: number;
     currency: string;
     dividendYield: number | null;
     yieldOnCost: number | null;
-    annualPayout: number;
-    monthlyPayout: number;
+    annualPayout: number | null;
+    monthlyPayout: number | null;
     payoutRatio: number;
     safetyRating: 'A' | 'B' | 'C';
     frequency: string;
     nextExDate?: string;
     nextPaymentDate?: string;
-    estimatedNextDPS?: number;
-    estimatedNextPayout?: number;
+    estimatedNextDPS?: number | null;
+    estimatedNextPayout?: number | null;
     payoutMonth?: string;
     paymentStatus?: 'Estimated' | 'Confirmed';
   }> = [],
@@ -1510,9 +1510,11 @@ export function deriveDividendsFromPortfolio(
     if (!isDivAsset) continue;
 
     const liveDbPrice = Number(divSummary?.latest_price);
-    const effectivePrice = pos.currentPrice > 0 
-      ? pos.currentPrice 
-      : (pos.entryPrice > 0 ? pos.entryPrice : (liveDbPrice > 0 ? liveDbPrice : (growthProfile?.currentPrice || 0)));
+    const rawPrice = (pos.currentPrice > 0 ? pos.currentPrice : null)
+      ?? (liveDbPrice > 0 ? liveDbPrice : null)
+      ?? (growthProfile?.currentPrice && growthProfile.currentPrice > 0 ? growthProfile.currentPrice : null)
+      ?? null;
+    const effectivePrice: number | null = rawPrice;
 
     const liveYield = Number(divSummary?.trailing_yield_pct);
     const divYield: number | null = (!isNaN(liveYield) && liveYield > 0)
@@ -1522,9 +1524,19 @@ export function deriveDividendsFromPortfolio(
           : (existing?.dividendYield !== undefined && existing?.dividendYield !== null 
               ? existing.dividendYield 
               : null));
-    const yoc = (divYield !== null && pos.entryPrice > 0) ? (effectivePrice * divYield) / pos.entryPrice : divYield;
-    const annualPayout = (divYield !== null && effectivePrice > 0) ? (pos.shares * effectivePrice * divYield) / 100 : 0;
-    const monthlyPayout = annualPayout / 12;
+    const yoc: number | null = (divYield !== null && effectivePrice !== null && pos.entryPrice > 0)
+      ? (effectivePrice * divYield) / pos.entryPrice
+      : (divYield === 0 ? 0 : null);
+
+    let annualPayout: number | null = null;
+    let monthlyPayout: number | null = null;
+    if (divYield === 0) {
+      annualPayout = 0;
+      monthlyPayout = 0;
+    } else if (divYield !== null && effectivePrice !== null && effectivePrice > 0) {
+      annualPayout = Number(((pos.shares * effectivePrice * divYield) / 100).toFixed(2));
+      monthlyPayout = Number((annualPayout / 12).toFixed(2));
+    }
 
     const frequency = growthProfile?.payoutFrequency || existing?.frequency || (pos.market === 'US' ? 'Quarterly' : 'Annual');
     const payoutRatio = growthProfile?.payoutRatio || existing?.payoutRatio || 50.0;
@@ -1536,12 +1548,24 @@ export function deriveDividendsFromPortfolio(
     const sched = resolveDividendSchedule(cleanSym);
 
     const latestDpsFromDb = Number(divSummary?.latest_dps);
-    const estimatedDPS = existing?.estimatedNextDPS || (
-      sched.confirmedDPS && sched.isConfirmed 
-        ? Number(sched.confirmedDPS.toFixed(4)) 
-        : (divYield === 0 || divYield === null ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : (effectivePrice > 0 ? Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)) : 0)))
-    );
-    const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
+    let estimatedDPS: number | null = null;
+    if (existing?.estimatedNextDPS !== undefined && existing?.estimatedNextDPS !== null) {
+      estimatedDPS = existing.estimatedNextDPS;
+    } else if (sched.confirmedDPS && sched.isConfirmed) {
+      estimatedDPS = Number(sched.confirmedDPS.toFixed(4));
+    } else if (divYield === 0) {
+      estimatedDPS = 0;
+    } else if (divYield === null) {
+      estimatedDPS = null;
+    } else if (latestDpsFromDb > 0) {
+      estimatedDPS = latestDpsFromDb;
+    } else if (effectivePrice !== null && effectivePrice > 0) {
+      estimatedDPS = Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4));
+    }
+
+    const estimatedNextPayout: number | null = estimatedDPS !== null
+      ? Number((pos.shares * estimatedDPS).toFixed(2))
+      : null;
 
     const nextExDate = sched.exDate || divSummary?.latest_ex_date || existing?.nextExDate || '';
     const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || '';
@@ -1561,8 +1585,8 @@ export function deriveDividendsFromPortfolio(
       currency: pos.currency || divSummary?.currency || (pos.market === 'US' ? 'USD' : 'TRY'),
       dividendYield: divYield,
       yieldOnCost: yoc !== null ? Number(yoc.toFixed(2)) : null,
-      annualPayout: Number(annualPayout.toFixed(2)),
-      monthlyPayout: Number(monthlyPayout.toFixed(2)),
+      annualPayout: annualPayout,
+      monthlyPayout: monthlyPayout,
       payoutRatio: payoutRatio,
       safetyRating: safetyRating,
       frequency: frequency,
@@ -1637,7 +1661,12 @@ export function deriveAllMarketDividends(
 
     const livePrice = livePricesMap?.[cleanSym] || livePricesMap?.[`${cleanSym}.IS`];
     const liveDbPrice = Number(divSummary?.latest_price);
-    const effectivePrice = livePrice || liveDbPrice || held?.currentPrice || held?.entryPrice || (profile?.currentPrice || 0);
+    const rawPrice = (livePrice && livePrice > 0 ? livePrice : null)
+      ?? (liveDbPrice > 0 ? liveDbPrice : null)
+      ?? (held?.currentPrice && held.currentPrice > 0 ? held.currentPrice : null)
+      ?? (profile?.currentPrice && profile.currentPrice > 0 ? profile.currentPrice : null)
+      ?? null;
+    const effectivePrice: number | null = rawPrice;
 
     const liveYield = Number(divSummary?.trailing_yield_pct);
     const divYield: number | null = (!isNaN(liveYield) && liveYield > 0)
@@ -1645,25 +1674,56 @@ export function deriveAllMarketDividends(
       : (profile?.currentYield !== undefined ? profile.currentYield : null);
 
     const shares = isHeld && held ? held.shares : 0;
-    const entryPrice = isHeld && held ? held.entryPrice : effectivePrice;
-    const yoc = (divYield !== null && entryPrice > 0) ? (effectivePrice * divYield) / entryPrice : divYield;
+    const entryPrice = isHeld && held ? held.entryPrice : (effectivePrice ?? 0);
+    const yoc: number | null = (divYield !== null && effectivePrice !== null && entryPrice > 0)
+      ? (effectivePrice * divYield) / entryPrice
+      : (divYield === 0 ? 0 : null);
 
     const frequency = profile?.payoutFrequency || (market === 'US' ? 'Quarterly' : 'Annual');
     const trancheInfo = KNOWN_DIVIDEND_TRANCHES[cleanSym];
     const freqDiv = trancheInfo ? trancheInfo.months.length : (frequency === 'Monthly' ? 12 : frequency === 'Quarterly' ? 4 : frequency === 'Semi-Annual' ? 2 : 1);
 
     const latestDpsFromDb = Number(divSummary?.latest_dps);
-    const estimatedDPS = (sched.confirmedDPS && sched.isConfirmed)
-      ? Number(sched.confirmedDPS.toFixed(4))
-      : (divYield === 0 || divYield === null ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : (effectivePrice > 0 ? Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)) : 0)));
+    let estimatedDPS: number | null = null;
+    if (sched.confirmedDPS && sched.isConfirmed) {
+      estimatedDPS = Number(sched.confirmedDPS.toFixed(4));
+    } else if (divYield === 0) {
+      estimatedDPS = 0;
+    } else if (divYield === null) {
+      estimatedDPS = null;
+    } else if (latestDpsFromDb > 0) {
+      estimatedDPS = latestDpsFromDb;
+    } else if (effectivePrice !== null && effectivePrice > 0) {
+      estimatedDPS = Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4));
+    }
 
-    const annualPayout = isHeld
-      ? (divYield !== null && effectivePrice > 0 ? Number(((shares * effectivePrice * divYield) / 100).toFixed(2)) : 0)
-      : (divYield === 0 || divYield === null ? 0 : Number((100 * estimatedDPS * freqDiv).toFixed(2)));
-    const monthlyPayout = Number((annualPayout / 12).toFixed(2));
-    const estimatedNextPayout = isHeld
-      ? Number((shares * estimatedDPS).toFixed(2))
-      : (divYield === 0 || divYield === null ? 0 : Number((100 * estimatedDPS).toFixed(2)));
+    let annualPayout: number | null = null;
+    let monthlyPayout: number | null = null;
+    let estimatedNextPayout: number | null = null;
+
+    if (divYield === 0) {
+      annualPayout = 0;
+      monthlyPayout = 0;
+      estimatedNextPayout = 0;
+    } else if (divYield === null) {
+      annualPayout = null;
+      monthlyPayout = null;
+      estimatedNextPayout = null;
+    } else if (isHeld) {
+      if (effectivePrice !== null && effectivePrice > 0) {
+        annualPayout = Number(((shares * effectivePrice * divYield) / 100).toFixed(2));
+        monthlyPayout = Number((annualPayout / 12).toFixed(2));
+      }
+      if (estimatedDPS !== null) {
+        estimatedNextPayout = Number((shares * estimatedDPS).toFixed(2));
+      }
+    } else {
+      if (estimatedDPS !== null) {
+        annualPayout = Number((100 * estimatedDPS * freqDiv).toFixed(2));
+        monthlyPayout = Number((annualPayout / 12).toFixed(2));
+        estimatedNextPayout = Number((100 * estimatedDPS).toFixed(2));
+      }
+    }
 
     const displayName = profile?.name || divSummary?.name || held?.name || (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym);
     const safetyRating = (profile?.safetyGrade?.charAt(0) || 'A') as 'A' | 'B' | 'C';

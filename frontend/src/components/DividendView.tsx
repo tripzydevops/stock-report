@@ -129,7 +129,8 @@ export default function DividendView({
 
   // Portfolio KPIs
   const totalAnnualTRY = dividendAssets.reduce((acc, item) => {
-    return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
+    const payout = item.annualPayout || 0;
+    return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
   }, 0);
 
   const totalMonthlyTRY = totalAnnualTRY / 12;
@@ -146,12 +147,14 @@ export default function DividendView({
   
   // Weighted current yield for portfolio
   const totalValTRY = dividendAssets.reduce((acc, item) => {
-    const val = item.shares * item.currentPrice;
+    const price = item.currentPrice || 0;
+    const val = item.shares * price;
     return acc + (item.currency === 'USD' ? val * usdTryRate : val);
   }, 0);
   const avgCurrentYield = totalValTRY > 0 ? (totalAnnualTRY / totalValTRY) * 100 : 0;
 
-  const formatCurr = (val: number, curr?: string) => {
+  const formatCurr = (val: number | null | undefined, curr?: string) => {
+    if (val === null || val === undefined) return '—';
     const c = curr || currencyMode;
     const symbol = c === 'USD' ? '$' : '₺';
     return `${symbol}${val.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -251,7 +254,7 @@ export default function DividendView({
       }
       const grp = groupsMap.get(key)!;
       grp.assets.push(asset);
-      const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
+      const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (asset.dividendYield || 0) / 100);
       const estPayout = asset.estimatedNextPayout || (asset.shares * dps);
       const estPayoutTRY = asset.currency === 'USD' ? estPayout * usdTryRate : estPayout;
       grp.totalExpectedPayoutTRY += estPayoutTRY;
@@ -648,7 +651,7 @@ export default function DividendView({
                   {/* Grid of Cards within this Month */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {group.assets.map((asset, idx) => {
-                      const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
+                      const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (asset.dividendYield || 0) / 100);
                       const estPayout = asset.estimatedNextPayout || (asset.shares * dps);
                       const payoutDisplay = currencyMode === 'USD' ? (estPayout / usdTryRate) : estPayout;
                       const isHeld = Boolean(asset.isHeld || asset.shares > 0);
@@ -719,11 +722,11 @@ export default function DividendView({
                                 </div>
                               </div>
                               <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                                {isHeld ? `+${formatCurr(payoutDisplay)}` : `${currSym}${dps.toFixed(3)}`}
+                                {isHeld ? (payoutDisplay > 0 ? `+${formatCurr(payoutDisplay)}` : '—') : (dps > 0 ? `${currSym}${dps.toFixed(3)}` : '—')}
                               </div>
                               <div className="text-[11px] text-gray-500 mt-1 flex justify-between items-center">
-                                <span>{t.dividend.estDPS}: <span className="font-bold text-gray-700 dark:text-gray-300">{currSym}{dps.toFixed(3)}</span> / {language === 'tr' ? 'hisse' : 'share'}</span>
-                                <span>Fiyat: {currSym}{asset.currentPrice.toFixed(2)}</span>
+                                <span>{t.dividend.estDPS}: <span className="font-bold text-gray-700 dark:text-gray-300">{dps > 0 ? `${currSym}${dps.toFixed(3)}` : '—'}</span> / {language === 'tr' ? 'hisse' : 'share'}</span>
+                                <span>Fiyat: {asset.currentPrice !== null && asset.currentPrice !== undefined ? `${currSym}${asset.currentPrice.toFixed(2)}` : '—'}</span>
                               </div>
                             </div>
 
@@ -731,11 +734,11 @@ export default function DividendView({
                             <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-300 pt-1">
                               <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
                                 <span className="text-gray-500">{language === 'tr' ? 'Hak Kullanım (Ex-Date):' : 'Ex-Dividend Date:'}</span>
-                                <span className="font-bold text-gray-900 dark:text-white font-mono">{asset.nextExDate || '2027'}</span>
+                                <span className="font-bold text-gray-900 dark:text-white font-mono">{asset.nextExDate || '—'}</span>
                               </div>
                               <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
                                 <span className="text-gray-500">{language === 'tr' ? 'Hesaba Geçiş Tarihi:' : 'Payment Date:'}</span>
-                                <span className="font-semibold text-gray-800 dark:text-gray-200 font-mono">{asset.nextPaymentDate || '2027'}</span>
+                                <span className="font-semibold text-gray-800 dark:text-gray-200 font-mono">{asset.nextPaymentDate || '—'}</span>
                               </div>
                               <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-750">
                                 <span className="text-gray-500">{t.dividend.frequency}:</span>
@@ -779,7 +782,7 @@ export default function DividendView({
                                     name: asset.name,
                                     market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
                                     shares: 100,
-                                    price: asset.currentPrice,
+                                    price: asset.currentPrice || 0,
                                     isDividend: true
                                   })}
                                   className="px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
@@ -842,7 +845,7 @@ export default function DividendView({
               {group.assets.map((asset, idx) => {
                 const isHeld = Boolean(asset.isHeld || asset.shares > 0);
                 const currSym = asset.currency === 'USD' ? '$' : '₺';
-                const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
+                const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (asset.dividendYield || 0) / 100);
                 const countdown = getExDateCountdown(asset.nextExDate, language);
 
                 return (
@@ -892,7 +895,7 @@ export default function DividendView({
                     <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-gray-400 font-semibold uppercase">DPS</div>
-                        <div className="font-bold text-gray-900 dark:text-white mt-0.5">{currSym}{dps.toFixed(2)}</div>
+                        <div className="font-bold text-gray-900 dark:text-white mt-0.5">{dps > 0 ? `${currSym}${dps.toFixed(2)}` : '—'}</div>
                       </div>
                       <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                         <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase">Verim</div>
@@ -924,7 +927,7 @@ export default function DividendView({
                               name: asset.name,
                               market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
                               shares: 100,
-                              price: asset.currentPrice,
+                              price: asset.currentPrice || 0,
                               isDividend: true
                             })}
                             className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
@@ -987,7 +990,7 @@ export default function DividendView({
                   {/* Company Rows within this Month */}
                   {group.assets.map((asset, idx) => {
                     const isHeld = Boolean(asset.isHeld || asset.shares > 0);
-                    const dps = asset.estimatedNextDPS || (asset.currentPrice * (asset.dividendYield || 0) / 100);
+                    const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (asset.dividendYield || 0) / 100);
                     const countdown = getExDateCountdown(asset.nextExDate, language);
 
                     return (
@@ -1042,7 +1045,7 @@ export default function DividendView({
                         </td>
 
                         <td className="px-5 py-3.5 text-right font-mono font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                          {formatCurr(dps, asset.currency)}
+                          {formatCurr(dps > 0 ? dps : null, asset.currency)}
                         </td>
 
                         <td className="px-5 py-3.5 text-center font-mono font-semibold text-gray-900 dark:text-white whitespace-nowrap">
@@ -1077,7 +1080,7 @@ export default function DividendView({
                                   name: asset.name,
                                   market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
                                   shares: 100,
-                                  price: asset.currentPrice,
+                                  price: asset.currentPrice || 0,
                                   isDividend: true
                                 })}
                                 className="px-2.5 py-1 text-xs font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 rounded-md border border-blue-200 dark:border-blue-800 cursor-pointer"

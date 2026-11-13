@@ -67,7 +67,8 @@ export default function DividendForecastView({
       return acc + (item.currency === 'USD' ? c * usdTryRate : c);
     }, 0);
     const totalAnnualTRY = userDividendAssets.reduce((acc, item) => {
-      return acc + (item.currency === 'USD' ? item.annualPayout * usdTryRate : item.annualPayout);
+      const payout = item.annualPayout || 0;
+      return acc + (item.currency === 'USD' ? payout * usdTryRate : payout);
     }, 0);
     const weightedYield = totalCostTRY > 0 ? (totalAnnualTRY / totalCostTRY) * 100 : 7.82;
     return {
@@ -1056,8 +1057,42 @@ export default function DividendForecastView({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
               {activeComparatorAssets.map(a => {
-                // Approximate 5-year compounding
-                const annualDivYear1 = comparatorBaseAmount * ((a.dividendYield || 0) / 100);
+                const isYieldUnavailable = a.dividendYield === null || a.dividendYield === undefined;
+
+                if (isYieldUnavailable) {
+                  return (
+                    <div key={a.symbol} className="p-4 rounded-xl border border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-base font-black text-gray-900 dark:text-white">
+                          {a.symbol}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                          {language === 'tr' ? 'Verim Bekleniyor' : 'Yield Pending'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] uppercase font-bold text-gray-400">
+                          {language === 'tr' ? '5 Yılda Toplanan Temettü' : '5-Yr Total Dividends'}
+                        </span>
+                        <div className="text-sm font-bold text-amber-700 dark:text-amber-400 font-sans">
+                          {language === 'tr' ? 'Projeksiyon Yapılamaz' : 'Projection Unavailable'}
+                        </div>
+                        <p className="text-[11px] text-gray-500">
+                          {language === 'tr' ? 'Temettü verimi açıklanmadığı için bileşik nakit akışı hesaplanmadı.' : 'No declared dividend yield available to calculate compounding.'}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between text-xs">
+                        <span className="text-gray-500">{language === 'tr' ? 'Yıllık Nakit (5. Yıl):' : 'Yr 5 Annual Cash:'}</span>
+                        <span className="font-bold text-gray-400 font-mono">—</span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Normal 5-year compounding calculation with declared yield
+                const annualDivYear1 = comparatorBaseAmount * (a.dividendYield / 100);
                 const total5YrDividends = Array.from({ length: 5 }).reduce((acc: number, _, i) => {
                   return acc + annualDivYear1 * Math.pow(1 + a.historical3YrCagr / 100 * 0.4, i);
                 }, 0);
