@@ -982,8 +982,12 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setGeminiApiKey(localStorage.getItem('gemini_api_key') || '');
-      const hash = window.location.hash.replace('#', '') as TabId;
-      if (VALID_TABS.includes(hash)) {
+      const params = new URLSearchParams(window.location.search);
+      const queryTab = params.get('tab')?.trim().toLowerCase() as TabId;
+      const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
+      if (VALID_TABS.includes(queryTab)) {
+        setActiveTab(queryTab);
+      } else if (VALID_TABS.includes(hash)) {
         setActiveTab(hash);
       } else {
         const savedTab = localStorage.getItem('market_pulse_active_tab') as TabId;
@@ -1046,10 +1050,12 @@ export default function Home() {
   const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
 
   const totalPortfolioValueTRY = useMemo(() => {
-    const stockVal = portfolio.reduce((acc, item) => {
-      return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
+    const validHoldings = (portfolio || []).filter(item => item && Number(item.shares) > 0 && Number(item.currentValue) > 0);
+    const stockVal = validHoldings.reduce((acc, item) => {
+      const val = Number(item.currentValue);
+      return acc + (item.currency === 'USD' ? val * usdTryRate : val);
     }, 0);
-    return stockVal + cashBalance;
+    return stockVal + (cashBalance > 0 ? cashBalance : 0);
   }, [portfolio, usdTryRate, cashBalance]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2178,22 +2184,6 @@ export default function Home() {
       }
     }
 
-    // 1. Restore persistent active tab from URL hash, query param, or localStorage
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
-      const params = new URLSearchParams(window.location.search);
-      const queryTab = params.get('tab')?.trim().toLowerCase() as TabId;
-      const savedTab = localStorage.getItem('market_pulse_active_tab')?.trim().toLowerCase() as TabId;
-
-      const targetTab = (VALID_TABS.includes(hash) ? hash : null) ||
-                        (VALID_TABS.includes(queryTab) ? queryTab : null) ||
-                        (VALID_TABS.includes(savedTab) ? savedTab : null);
-
-      if (targetTab) {
-        setActiveTab(targetTab);
-        window.history.replaceState(null, '', `#${targetTab}`);
-      }
-
       // Restore saved date filter
       try {
         const savedPreset = localStorage.getItem('market_pulse_date_preset') as any;
@@ -2205,7 +2195,6 @@ export default function Home() {
       } catch (e) {
         // Ignore
       }
-    }
 
     loadData();
 
@@ -2234,21 +2223,6 @@ export default function Home() {
       });
     };
 
-    // Listen to browser Back/Forward or manual hash changes
-    const handleHashChange = () => {
-      if (typeof window !== 'undefined') {
-        const currentHash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
-        if (VALID_TABS.includes(currentHash)) {
-          setActiveTab(currentHash);
-          try {
-            localStorage.setItem('market_pulse_active_tab', currentHash);
-          } catch (e) {
-            // Ignore
-          }
-        }
-      }
-    };
-
     // Auto-sync polling every 45s while user is viewing the app
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -2260,14 +2234,12 @@ export default function Home() {
     window.addEventListener('focus', handleVisibilityOrFocus);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    window.addEventListener('hashchange', handleHashChange);
 
     return () => {
       window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('hashchange', handleHashChange);
       clearInterval(interval);
     };
   }, [user?.id, isDemoMode]);

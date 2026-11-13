@@ -69,7 +69,7 @@ export interface AssetGrowthProfile {
     optimistic: number;
   };
   predictedPriceAppreciation: number;
-  payoutFrequency: 'Monthly' | 'Quarterly' | 'Semi-Annual' | 'Annual';
+  payoutFrequency: 'Monthly' | 'Quarterly' | 'Semi-Annual' | 'Annual' | 'None';
   payoutRatio: number;
   safetyGrade: 'AAA' | 'AA' | 'A+' | 'A' | 'B+' | 'B' | 'C';
   aiRationaleTr: string;
@@ -593,16 +593,16 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 19.80,
-    currentYield: 3.00,
-    historical3YrDivCagr: 30.0,
-    historical3YrPriceCagr: 20.0,
-    predictedGrowth: { conservative: 8.0, realistic: 14.0, optimistic: 20.0 },
+    currentYield: 0.0,
+    historical3YrDivCagr: 0.0,
+    historical3YrPriceCagr: 15.0,
+    predictedGrowth: { conservative: 0.0, realistic: 0.0, optimistic: 0.0 },
     predictedPriceAppreciation: 12.0,
-    payoutFrequency: 'Annual',
-    payoutRatio: 40.0,
-    safetyGrade: 'B',
-    aiRationaleTr: 'SOCAR entegrasyonu ile Türkiye petrokimya pazarı lideri.',
-    aiRationaleEn: 'Domestic petrochemical monopoly with Star Refinery integration.',
+    payoutFrequency: 'None',
+    payoutRatio: 0.0,
+    safetyGrade: 'C',
+    aiRationaleTr: 'Petkim petrokimya döngüsü ve yatırımlar sebebiyle son yıllarda nakit kâr payı dağıtmamaktadır.',
+    aiRationaleEn: 'Domestic petrochemical producer. Has not distributed cash dividends in recent years.',
   },
   AEFES: {
     symbol: 'AEFES',
@@ -712,16 +712,16 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 22.40,
-    currentYield: 3.50,
-    historical3YrDivCagr: 30.0,
+    currentYield: 0.0,
+    historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 24.0,
-    predictedGrowth: { conservative: 8.0, realistic: 14.0, optimistic: 20.0 },
+    predictedGrowth: { conservative: 0.0, realistic: 0.0, optimistic: 0.0 },
     predictedPriceAppreciation: 14.0,
-    payoutFrequency: 'Annual',
-    payoutRatio: 25.0,
-    safetyGrade: 'B',
-    aiRationaleTr: 'KOBİ finansmanının lider kamu bankası; düzenli kâr payı dağıtımı.',
-    aiRationaleEn: 'State lender specialized in SME business loans.',
+    payoutFrequency: 'None',
+    payoutRatio: 0.0,
+    safetyGrade: 'C',
+    aiRationaleTr: 'KOBİ finansmanının lider kamu bankası. BDDK sermaye koruma kuralları çerçevesinde kâr bünyede tutulmakta olup nakit kâr payı dağıtımı yapılmamaktadır.',
+    aiRationaleEn: 'State SME lender retaining earnings for capital adequacy under banking regulations.',
   },
   VAKBN: {
     symbol: 'VAKBN',
@@ -729,16 +729,16 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 24.80,
-    currentYield: 3.50,
-    historical3YrDivCagr: 30.0,
+    currentYield: 0.0,
+    historical3YrDivCagr: 0.0,
     historical3YrPriceCagr: 25.0,
-    predictedGrowth: { conservative: 8.0, realistic: 14.0, optimistic: 20.0 },
+    predictedGrowth: { conservative: 0.0, realistic: 0.0, optimistic: 0.0 },
     predictedPriceAppreciation: 14.0,
-    payoutFrequency: 'Annual',
-    payoutRatio: 25.0,
-    safetyGrade: 'B',
-    aiRationaleTr: 'Kamu bankacılığı alanında güçlü bilanço büyümesi ve kâr payı.',
-    aiRationaleEn: 'Major public sector bank with strong balance sheet expansion.',
+    payoutFrequency: 'None',
+    payoutRatio: 0.0,
+    safetyGrade: 'C',
+    aiRationaleTr: 'Kamu bankacılığı alanında güçlü bilanço büyümesi. Sermaye yeterlilik oranlarını korumak amacıyla nakit temettü yerine kâr yedeklere aktarılmaktadır.',
+    aiRationaleEn: 'Major public sector bank retaining profits to bolster Tier 1 regulatory capital.',
   },
   KRDMD: {
     symbol: 'KRDMD',
@@ -746,16 +746,16 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 28.60,
-    currentYield: 3.20,
-    historical3YrDivCagr: 32.0,
-    historical3YrPriceCagr: 22.0,
-    predictedGrowth: { conservative: 8.0, realistic: 14.0, optimistic: 20.0 },
-    predictedPriceAppreciation: 14.0,
-    payoutFrequency: 'Annual',
-    payoutRatio: 35.0,
-    safetyGrade: 'B',
-    aiRationaleTr: 'Demiryolu rayı ve ağır sanayi profilleri üreticisi entegre demir-çelik tesisi.',
-    aiRationaleEn: 'Integrated long steel producer and sole domestic rail manufacturer.',
+    currentYield: 0.0,
+    historical3YrDivCagr: 0.0,
+    historical3YrPriceCagr: 15.0,
+    predictedGrowth: { conservative: 0.0, realistic: 0.0, optimistic: 0.0 },
+    predictedPriceAppreciation: 12.0,
+    payoutFrequency: 'None',
+    payoutRatio: 0.0,
+    safetyGrade: 'C',
+    aiRationaleTr: 'Ağır sanayi ve demiryolu rayı üreticisi entegre demir-çelik tesisi. Son dönem genel kurul kararları gereği kâr payı dağıtımı yapılmamaktadır.',
+    aiRationaleEn: 'Integrated long steel producer. No cash dividend distribution decided in recent fiscal years by General Assembly.',
   },
   JEPQ: {
     symbol: 'JEPQ',
@@ -906,16 +906,12 @@ export const KNOWN_DIVIDEND_SCHEDULES: Record<string, { exDate: string; payDate:
   KCHOL: { exDate: '2027-04-24', payDate: '2027-04-28', month: 'April 2027' },
   SAHOL: { exDate: '2027-04-28', payDate: '2027-05-02', month: 'April / May 2027' },
   SISE: { exDate: '2027-05-30', payDate: '2027-06-03', month: 'May / June 2027' },
-  PETKM: { exDate: '2027-06-05', payDate: '2027-06-09', month: 'June 2027' },
   AEFES: { exDate: '2027-05-24', payDate: '2027-05-28', month: 'May 2027' },
   AGHOL: { exDate: '2027-05-28', payDate: '2027-06-01', month: 'May / June 2027' },
   BRSAN: { exDate: '2027-04-22', payDate: '2027-04-26', month: 'April 2027' },
   GARAN: { exDate: '2027-03-27', payDate: '2027-03-31', month: 'March 2027' },
   ISCTR: { exDate: '2027-03-30', payDate: '2027-04-03', month: 'March / April 2027' },
   YKBNK: { exDate: '2027-03-29', payDate: '2027-04-02', month: 'March / April 2027' },
-  HALKB: { exDate: '2027-04-10', payDate: '2027-04-14', month: 'April 2027' },
-  VAKBN: { exDate: '2027-04-12', payDate: '2027-04-16', month: 'April 2027' },
-  KRDMD: { exDate: '2026-11-26', payDate: '2026-11-28', month: 'Kasım 2026 (2. Taksit)' },
   AKBNK: { exDate: '2027-03-26', payDate: '2027-03-30', month: 'March 2027' },
   O: { exDate: '2026-10-30', payDate: '2026-11-13', month: 'Monthly' },
   JEPI: { exDate: '2026-10-31', payDate: '2026-11-06', month: 'Monthly' },
@@ -954,12 +950,6 @@ export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
     monthLabels: ['Haziran (1. Taksit)', 'Aralık (2. Taksit)'],
     dates: ['2027-06-25', '2026-12-11'],
     ratios: [0.5, 0.5]
-  },
-  KRDMD: {
-    months: [5, 10], // June (5), November (10)
-    monthLabels: ['Haziran (1. Taksit)', 'Kasım (2. Taksit)'],
-    dates: ['2027-06-20', '2026-11-28'],
-    ratios: [0.5, 0.5]
   }
 };
 
@@ -989,9 +979,23 @@ export function resolveDividendSchedule(symbol: string): {
   const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
   const live = LIVE_DIVIDEND_RECORDS[cleanSym];
   const staticSched = KNOWN_DIVIDEND_SCHEDULES[cleanSym];
+  const profile = MASTER_GROWTH_PROFILES[cleanSym];
 
   const isConfirmed = Boolean(live?.isConfirmed);
   const status: 'Estimated' | 'Confirmed' = isConfirmed ? 'Confirmed' : 'Estimated';
+
+  // If asset is a known non-payer and has no confirmed upcoming dividend, do not fabricate an exDate
+  const isNonPayer = (profile?.payoutFrequency === 'None' || profile?.currentYield === 0) && !isConfirmed;
+  if (isNonPayer && !staticSched) {
+    return {
+      exDate: '',
+      payDate: '',
+      month: 'Belirlenmedi (Dağıtım Yok)',
+      isConfirmed: false,
+      status: 'Estimated',
+      confirmedDPS: undefined,
+    };
+  }
 
   let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '2027-04-15');
   let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate);
@@ -1483,17 +1487,20 @@ export function deriveDividendsFromPortfolio(
     const hasLiveDividends = Boolean(
       divSummary && (
         Number(divSummary.trailing_yield_pct) > 0 ||
-        Number(divSummary.last_365d_dividend) > 0 ||
-        Number(divSummary.total_dividend_events) > 0
+        Number(divSummary.last_365d_dividend) > 0
       )
     );
 
+    const isExplicitNonPayer = growthProfile?.payoutFrequency === 'None' || growthProfile?.currentYield === 0;
+
     const isDivAsset = Boolean(
-      pos.isDividend === true ||
-      pos.strategyType === 'CORE_DIVIDEND' ||
-      existing ||
-      hasLiveDividends ||
-      (growthProfile && growthProfile.currentYield > 0)
+      !isExplicitNonPayer && (
+        pos.isDividend === true ||
+        pos.strategyType === 'CORE_DIVIDEND' ||
+        existing ||
+        hasLiveDividends ||
+        (growthProfile && growthProfile.currentYield > 0)
+      )
     );
 
     if (!isDivAsset) continue;
@@ -1504,7 +1511,9 @@ export function deriveDividendsFromPortfolio(
       : (pos.entryPrice > 0 ? pos.entryPrice : (liveDbPrice > 0 ? liveDbPrice : (growthProfile?.currentPrice || 50)));
 
     const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
-    const divYield = liveYield > 0 ? liveYield : (growthProfile?.currentYield || existing?.dividendYield || 5.0);
+    const divYield = liveYield > 0 
+      ? liveYield 
+      : (growthProfile?.currentYield !== undefined ? growthProfile.currentYield : (existing?.dividendYield ?? (pos.market === 'US' ? 3.5 : 5.0)));
     const yoc = pos.entryPrice > 0 ? (effectivePrice * divYield) / pos.entryPrice : divYield;
     const annualPayout = (pos.shares * effectivePrice * divYield) / 100;
     const monthlyPayout = annualPayout / 12;
@@ -1522,14 +1531,14 @@ export function deriveDividendsFromPortfolio(
     const estimatedDPS = existing?.estimatedNextDPS || (
       sched.confirmedDPS && sched.isConfirmed 
         ? Number(sched.confirmedDPS.toFixed(4)) 
-        : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)))
+        : (divYield === 0 ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4))))
     );
     const estimatedNextPayout = Number((pos.shares * estimatedDPS).toFixed(2));
 
-    const nextExDate = sched.exDate || divSummary?.latest_ex_date || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15');
-    const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20');
-    const payoutMonth = sched.month || existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'April 2027');
-    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (existing?.paymentStatus || 'Estimated');
+    const nextExDate = sched.exDate || (divYield > 0 ? (divSummary?.latest_ex_date || existing?.nextExDate || (pos.market === 'US' ? '2026-11-15' : '2027-04-15')) : '');
+    const nextPaymentDate = sched.payDate || (divYield > 0 ? (existing?.nextPaymentDate || (pos.market === 'US' ? '2026-11-30' : '2027-04-20')) : '');
+    const payoutMonth = sched.month || (divYield > 0 ? (existing?.payoutMonth || (pos.market === 'US' ? 'November 2026' : 'April 2027')) : 'Belirlenmedi');
+    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 ? 'Estimated' : (existing?.paymentStatus || 'Estimated'));
 
     const displayName = growthProfile?.name || divSummary?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
 
@@ -1621,7 +1630,7 @@ export function deriveAllMarketDividends(
     const effectivePrice = livePrice || liveDbPrice || held?.currentPrice || profile?.currentPrice || (market === 'US' ? 65.0 : 45.0);
 
     const liveYield = Number(divSummary?.trailing_yield_pct) || 0;
-    const divYield = liveYield > 0 ? liveYield : (profile?.currentYield || (market === 'US' ? 3.5 : 6.0));
+    const divYield = liveYield > 0 ? liveYield : (profile?.currentYield !== undefined ? profile.currentYield : (market === 'US' ? 3.5 : 6.0));
 
     const shares = isHeld && held ? held.shares : 0;
     const entryPrice = isHeld && held ? held.entryPrice : effectivePrice;
@@ -1634,22 +1643,22 @@ export function deriveAllMarketDividends(
     const latestDpsFromDb = Number(divSummary?.latest_dps);
     const estimatedDPS = (sched.confirmedDPS && sched.isConfirmed)
       ? Number(sched.confirmedDPS.toFixed(4))
-      : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4)));
+      : (divYield === 0 ? 0 : (latestDpsFromDb > 0 ? latestDpsFromDb : Number(((effectivePrice * (divYield / 100)) / freqDiv).toFixed(4))));
 
     const annualPayout = isHeld
       ? Number(((shares * effectivePrice * divYield) / 100).toFixed(2))
-      : Number((100 * estimatedDPS * freqDiv).toFixed(2));
+      : (divYield === 0 ? 0 : Number((100 * estimatedDPS * freqDiv).toFixed(2)));
     const monthlyPayout = Number((annualPayout / 12).toFixed(2));
     const estimatedNextPayout = isHeld
       ? Number((shares * estimatedDPS).toFixed(2))
-      : Number((100 * estimatedDPS).toFixed(2));
+      : (divYield === 0 ? 0 : Number((100 * estimatedDPS).toFixed(2)));
 
     const displayName = profile?.name || divSummary?.name || held?.name || (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym);
     const safetyRating = (profile?.safetyGrade?.charAt(0) || 'A') as 'A' | 'B' | 'C';
     const payoutRatio = profile?.payoutRatio || 50;
 
-    const nextExDate = sched.exDate || divSummary?.latest_ex_date;
-    const nextPayDate = sched.payDate || nextExDate;
+    const nextExDate = divYield > 0 ? (sched.exDate || divSummary?.latest_ex_date || '') : '';
+    const nextPayDate = divYield > 0 ? (sched.payDate || nextExDate) : '';
 
     result.push({
       symbol: cleanSym,
@@ -1750,16 +1759,6 @@ export function generateMarketDividendCatalysts(): MarketCatalyst[] {
       exDate: '2026-10-30',
       dps: 0.272,
       yieldPct: 5.40
-    },
-    {
-      symbol: 'KRDMD',
-      market: 'BIST' as const,
-      title: 'Kardemir D (KRDMD) 2. Taksit Kâr Payı Dağıtım Takvimi',
-      details: 'KAP duyurusuna göre pay başına net ₺0.1096 nakit temettü dağıtımı 26 Kasım 2026 hak kullanım tarihiyle hesaplara aktarılacaktır.',
-      aiTakeaway: 'Sanayi üreticisinde nakit kâr dağıtımı devam ediyor.',
-      exDate: '2026-11-26',
-      dps: 0.11,
-      yieldPct: 0.40
     },
     {
       symbol: 'AKBNK',

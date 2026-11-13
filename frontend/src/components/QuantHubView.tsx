@@ -253,12 +253,14 @@ export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHub
   const [accountSize, setAccountSize] = useState<number>(() => {
     return portfolioValueTRY && portfolioValueTRY > 0 ? Math.round(portfolioValueTRY) : 100000.0;
   });
+  const [isAccountSizeManuallyEdited, setIsAccountSizeManuallyEdited] = useState<boolean>(false);
 
+  // Preserve user manual input: only sync if user hasn't explicitly edited account size
   useEffect(() => {
-    if (portfolioValueTRY && portfolioValueTRY > 0) {
+    if (!isAccountSizeManuallyEdited && portfolioValueTRY && portfolioValueTRY > 0) {
       setAccountSize(Math.round(portfolioValueTRY));
     }
-  }, [portfolioValueTRY]);
+  }, [portfolioValueTRY, isAccountSizeManuallyEdited]);
 
   useEffect(() => {
     async function fetchQuantData() {
@@ -1136,7 +1138,7 @@ export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHub
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-gray-50 dark:bg-gray-900/60 rounded-xl border border-gray-200 dark:border-gray-700">
             <div>
               <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 block mb-1">
                 {language === 'tr' ? 'Giriş Fiyatı (₺)' : 'Entry Price (₺)'}
@@ -1178,6 +1180,34 @@ export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHub
                 type="number"
                 value={fixedCapital}
                 onChange={(e) => setFixedCapital(Math.max(100, Number(e.target.value)))}
+                className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 truncate">
+                  {language === 'tr' ? 'Hesap Büyüklüğü (₺)' : 'Account Size (₺)'}
+                </label>
+                {portfolioValueTRY && portfolioValueTRY > 0 && isAccountSizeManuallyEdited && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountSize(Math.round(portfolioValueTRY));
+                      setIsAccountSizeManuallyEdited(false);
+                    }}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer shrink-0 ml-1"
+                  >
+                    {language === 'tr' ? 'Canlı Portföy' : 'Live Size'}
+                  </button>
+                )}
+              </div>
+              <input
+                type="number"
+                value={accountSize}
+                onChange={(e) => {
+                  setAccountSize(Math.max(100, Number(e.target.value)));
+                  setIsAccountSizeManuallyEdited(true);
+                }}
                 className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-gray-900 dark:text-white"
               />
             </div>

@@ -605,15 +605,31 @@ export default function PortfolioView({
               </button>
             </div>
             <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-blue-600 dark:text-blue-400 truncate">
-              {formatCurr(cashDisplay)}
+              {ledgerCash.isLedgerEmpty ? (
+                <span className="text-xs sm:text-sm font-semibold text-slate-400">
+                  {language === 'tr' ? 'Nakit Kaydı Yok' : 'No Cash History'}
+                </span>
+              ) : (
+                formatCurr(cashDisplay)
+              )}
             </div>
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
-            <span>
-              {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(0) : 0}% {language === 'tr' ? 'likit' : 'liquid'}
-            </span>
+            {ledgerCash.isLedgerEmpty ? (
+              <span className="text-[10px] text-amber-500/90 font-medium">
+                {language === 'tr' ? 'Nakit transferi ekleyin' : 'Add cash transfer'}
+              </span>
+            ) : !ledgerCash.hasRecordHistory ? (
+              <span className="text-[10px] text-amber-500/90 font-medium" title={language === 'tr' ? 'Nakit transfer geçmişi bulunmadığı için emirlerden türetildi' : 'Inferred from executed orders'}>
+                {language === 'tr' ? '⚠️ Emirlerden Türetildi' : '⚠️ Inferred From Orders'}
+              </span>
+            ) : (
+              <span>
+                {totalValTRY > 0 ? ((cashValTRY / totalValTRY) * 100).toFixed(0) : 0}% {language === 'tr' ? 'likit' : 'liquid'}
+              </span>
+            )}
             <span className="text-[9px] text-gray-400 font-mono">
-              ₺1.09k
+              {ledgerCash.isLedgerEmpty ? '—' : formatCurr(cashDisplay)}
             </span>
           </div>
         </div>

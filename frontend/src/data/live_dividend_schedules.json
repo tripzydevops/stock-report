@@ -57,11 +57,11 @@
   "HALKB": {
     "symbol": "HALKB",
     "ticker": "HALKB.IS",
-    "exDate": "2018-08-15",
+    "exDate": null,
     "payDate": null,
-    "lastDPS": 0.149018,
+    "lastDPS": 0,
     "lastDivDate": "2018-08-15",
-    "paymentStatus": "Estimated",
+    "paymentStatus": "None",
     "isConfirmed": false,
     "updatedAt": "2026-10-24T14:44:25.457723"
   },
@@ -90,11 +90,11 @@
   "VAKBN": {
     "symbol": "VAKBN",
     "ticker": "VAKBN.IS",
-    "exDate": "2018-08-16",
+    "exDate": null,
     "payDate": null,
-    "lastDPS": 0.05,
+    "lastDPS": 0,
     "lastDivDate": "2018-08-16",
-    "paymentStatus": "Estimated",
+    "paymentStatus": "None",
     "isConfirmed": false,
     "updatedAt": "2026-10-24T14:44:26.779124"
   },
@@ -112,22 +112,22 @@
   "PETKM": {
     "symbol": "PETKM",
     "ticker": "PETKM.IS",
-    "exDate": "2018-05-03",
+    "exDate": null,
     "payDate": null,
-    "lastDPS": 0.213068,
+    "lastDPS": 0,
     "lastDivDate": "2018-05-03",
-    "paymentStatus": "Estimated",
+    "paymentStatus": "None",
     "isConfirmed": false,
     "updatedAt": "2026-10-24T14:44:27.578036"
   },
   "KRDMD": {
     "symbol": "KRDMD",
     "ticker": "KRDMD.IS",
-    "exDate": "2023-11-28",
+    "exDate": null,
     "payDate": null,
-    "lastDPS": 0.109649,
+    "lastDPS": 0,
     "lastDivDate": "2023-11-28",
-    "paymentStatus": "Estimated",
+    "paymentStatus": "None",
     "isConfirmed": false,
     "updatedAt": "2026-10-24T14:44:28.022699"
   },

@@ -260,9 +260,9 @@ export default function DividendView({
     return Array.from(groupsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
   }, [sortedUpcoming, language, usdTryRate]);
 
-  const totalMarketCount = allMarketDividends && allMarketDividends.length > 0
+  const totalMarketCount: number | null = (allMarketDividends && allMarketDividends.length > 0)
     ? allMarketDividends.length
-    : dividendAssets.length;
+    : null;
 
   return (
     <div className="space-y-6 pb-20 sm:pb-8">
@@ -299,10 +299,22 @@ export default function DividendView({
             {language === 'tr' ? 'Piyasa Kapsamı' : 'Market Coverage'}
           </span>
           <div className="mt-2 text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400">
-            {totalMarketCount} {language === 'tr' ? 'Hisse' : 'Stocks'}
+            {totalMarketCount !== null ? (
+              `${totalMarketCount} ${language === 'tr' ? 'Hisse' : 'Stocks'}`
+            ) : (
+              `${dividendAssets.length} ${language === 'tr' ? 'Portföy Hissesi' : 'Portfolio Stocks'}`
+            )}
           </div>
           <div className="text-[11px] text-gray-500 mt-1">
-            {language === 'tr' ? `${dividendAssets.length} portföyde, ${totalMarketCount - dividendAssets.length} piyasada takipte` : `${dividendAssets.length} in portfolio, ${totalMarketCount - dividendAssets.length} on radar`}
+            {totalMarketCount !== null ? (
+              language === 'tr'
+                ? `${dividendAssets.length} portföyde, ${Math.max(0, totalMarketCount - dividendAssets.length)} piyasada takipte`
+                : `${dividendAssets.length} in portfolio, ${Math.max(0, totalMarketCount - dividendAssets.length)} on radar`
+            ) : (
+              language === 'tr'
+                ? 'Piyasa geneli temettü veritabanı taranıyor...'
+                : 'Market-wide dividend database scanning...'
+            )}
           </div>
         </div>
 
@@ -362,7 +374,7 @@ export default function DividendView({
                 }`}
               >
                 <span>🌐</span>
-                <span>{language === 'tr' ? `Tüm Piyasa (${totalMarketCount} Varlık)` : `All Market (${totalMarketCount} Stocks)`}</span>
+                <span>{language === 'tr' ? `Tüm Piyasa${totalMarketCount !== null ? ` (${totalMarketCount} Varlık)` : ''}` : `All Market${totalMarketCount !== null ? ` (${totalMarketCount} Stocks)` : ''}`}</span>
               </button>
               <button
                 onClick={() => setScope('PORTFOLIO_ONLY')}
@@ -598,7 +610,7 @@ export default function DividendView({
                 : `Chronologically grouped ${sortedUpcoming.length} upcoming dividend distributions`}
             </span>
             <span className="font-semibold text-blue-600 dark:text-blue-400">
-              {scope === 'ALL_MARKET' ? (language === 'tr' ? `Tüm Piyasa (${totalMarketCount} Varlık)` : `Market-Wide (${totalMarketCount} Assets)`) : (language === 'tr' ? 'Sadece Portföyüm' : 'Portfolio Only')}
+              {scope === 'ALL_MARKET' ? (language === 'tr' ? `Tüm Piyasa${totalMarketCount !== null ? ` (${totalMarketCount} Varlık)` : ''}` : `Market-Wide${totalMarketCount !== null ? ` (${totalMarketCount} Assets)` : ''}`) : (language === 'tr' ? 'Sadece Portföyüm' : 'Portfolio Only')}
             </span>
           </div>
 

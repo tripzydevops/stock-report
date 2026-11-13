@@ -110,16 +110,16 @@ export default function MarketCorrectionBanner({
                 <h3 className="text-sm sm:text-base font-black text-amber-900 dark:text-amber-200">
                   {activeMarketTab === 'US'
                     ? (language === 'tr'
-                        ? '🇺🇸 ABD Borsası (S&P 500 / NASDAQ) Düzeltme Dalgasında'
-                        : '🇺🇸 US Markets (S&P 500 / NASDAQ) in Correction Wave')
+                        ? `🇺🇸 ABD Borsası (S&P 500 / NASDAQ) ${usRegime?.status === 'Bearish' ? 'Düzeltme Modunda' : 'Piyasa Görünümü'}`
+                        : `🇺🇸 US Markets (S&P 500 / NASDAQ) ${usRegime?.status === 'Bearish' ? 'in Pullback' : 'Regime Outlook'}`)
                     : (language === 'tr'
-                        ? '🇹🇷 BIST 100 Dengeleme & Taban Arayışı Sürecinde'
-                        : '🇹🇷 BIST 100 Consolidation & Floor Search')}
+                        ? `🇹🇷 BIST 100 ${bistRegime?.status === 'Bearish' ? 'Düzeltme Modunda' : 'Piyasa Görünümü'}`
+                        : `🇹🇷 BIST 100 ${bistRegime?.status === 'Bearish' ? 'in Pullback' : 'Regime Outlook'}`)}
                 </h3>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40">
                   {activeMarketTab === 'US'
-                    ? (language === 'tr' ? '1 HAFTALIK DÜZELTME' : '1-WEEK CORRECTION')
-                    : (language === 'tr' ? 'TEPKİ & DENGE' : 'REBOUND & FLOOR')}
+                    ? (usRegime?.status ? (language === 'tr' ? `${usRegime.status.toUpperCase()} REJİMİ` : `${usRegime.status.toUpperCase()} REGIME`) : (language === 'tr' ? 'REJİM BİLGİSİ' : 'REGIME DATA'))
+                    : (bistRegime?.status ? (language === 'tr' ? `${bistRegime.status.toUpperCase()} REJİMİ` : `${bistRegime.status.toUpperCase()} REGIME`) : (language === 'tr' ? 'REJİM BİLGİSİ' : 'REGIME DATA'))}
                 </span>
               </div>
 
@@ -127,11 +127,11 @@ export default function MarketCorrectionBanner({
               <p className="text-xs text-amber-800/90 dark:text-amber-300/80 mt-1 leading-relaxed max-w-4xl">
                 {activeMarketTab === 'US'
                   ? (language === 'tr'
-                      ? (usRegime?.descriptionTr || 'ABD borsalarında (S&P 500 & Nasdaq) son 1 haftadır tahvil faizlerindeki tırmanış (%4.45 üzeri) ve Mag-7/yarıiletken teknoloji hisselerindeki kâr realizasyonları nedeniyle sert bir düzeltme dalgası yaşanıyor. BIST 100 ise 9.000-9.200 destek bandından başlattığı tepki alımlarıyla dengelenme sürecindedir.')
-                      : (usRegime?.descriptionEn || 'US equities (S&P 500 & Nasdaq) are experiencing a sharp 1-week pullback driven by rising 10Y Treasury yields (>4.45%) and valuation de-risking in mega-cap tech. Meanwhile, BIST 100 is finding equilibrium above its 9,000–9,200 floor.'))
+                      ? (usRegime?.descriptionTr || 'ABD piyasası rejim analizi güncelleniyor. Canlı teknik göstergeler ve EMA trendleri işlenmektedir.')
+                      : (usRegime?.descriptionEn || 'US market regime analysis is updating. Live indicators and EMA trends are processing.'))
                   : (language === 'tr'
-                      ? (bistRegime?.descriptionTr || 'BIST 100 endeksi önceki aylarda yaşadığı derin düzeltmenin ardından 9.000-9.200 ana desteği üzerinde taban oluşturmaktadır. Panik satışları geride kalmış olup, kurumsal yabancı ve sigorta/bankacılık alımlarıyla tepki yükselişleri görülmektedir.')
-                      : (bistRegime?.descriptionEn || 'BIST 100 is establishing a structural floor above the 9,000–9,200 support zone following previous pullbacks. Panic selling has subsided, transitioning into an institutional relief rebound.'))}
+                      ? (bistRegime?.descriptionTr || 'BIST 100 rejim analizi güncelleniyor. Canlı teknik göstergeler ve EMA trendleri işlenmektedir.')
+                      : (bistRegime?.descriptionEn || 'BIST 100 regime analysis is updating. Live indicators and EMA trends are processing.'))}
               </p>
 
               {/* Market Tab Selector */}
@@ -238,7 +238,7 @@ export default function MarketCorrectionBanner({
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-base">📈</span>
                   <span className="text-xs font-black text-slate-900 dark:text-white">
-                    {language === 'tr' ? '1. 9.000 Desteği Korunuyor' : '1. 9,000 Structural Floor Intact'}
+                    {language === 'tr' ? '1. Ana Destek Seviyesi Korunuyor' : '1. Key Structural Support Floor'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">

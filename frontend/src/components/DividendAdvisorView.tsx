@@ -30,7 +30,7 @@ export interface SectorStockComparison {
   yieldPercent: number;
   divCagr3Yr: number;
   payoutRatio: number;
-  safetyGrade: 'AAA' | 'AA' | 'A+' | 'A' | 'B+' | 'B';
+  safetyGrade: 'AAA' | 'AA' | 'A+' | 'A' | 'B+' | 'B' | 'C';
   frequency: string;
   suitability: 'Best-in-Class' | 'Solid Core' | 'Defensive' | 'Cyclical' | 'Avoid';
   moat: string;
@@ -570,15 +570,15 @@ export default function DividendAdvisorView({
             market: 'BIST',
             currency: 'TRY',
             currentPrice: 28.60,
-            yieldPercent: 3.20,
-            divCagr3Yr: 32.0,
-            payoutRatio: 35.0,
-            safetyGrade: 'B',
-            frequency: 'Yılda 2 Taksit (Haz/Kas)',
+            yieldPercent: 0.00,
+            divCagr3Yr: 0.0,
+            payoutRatio: 0.0,
+            safetyGrade: 'C',
+            frequency: 'Belirlenmedi (Dağıtım Yok)',
             suitability: 'Cyclical',
             moat: 'Demiryolu rayı tek üreticisi, uzun çelik profil tesisi',
-            advisorVerdictTr: 'Yılda 2 taksitle öder (Kasım 2026 taksiti yaklaşıyor). Verimi sanayi devlerine göre daha mütevazıdır.',
-            advisorVerdictEn: '2-tranche payer with upcoming November distribution, but lower yield than automotive peers.',
+            advisorVerdictTr: 'Kardemir son dönemlerde kâr payı dağıtmamaktadır (genel kurul kararlarıyla kâr dağıtımı yapılmamıştır). Aktif nakit temettü arayan portföyler için uygun değildir.',
+            advisorVerdictEn: 'Kardemir has not distributed dividends in recent fiscal years due to capital preservation and cyclical downturn. Not suitable for cash income portfolios.',
             userShares: userHoldingMap.get('KRDMD')?.shares || 0,
           },
           {

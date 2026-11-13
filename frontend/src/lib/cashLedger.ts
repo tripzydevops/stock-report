@@ -5,6 +5,8 @@ export interface LedgerCashResult {
   totalDepositsTRY: number;
   totalBuysTRY: number;
   totalSellsTRY: number;
+  hasRecordHistory: boolean;
+  isLedgerEmpty: boolean;
 }
 
 export function parseOrderTimestamp(order: ExecutedOrder): number {
@@ -121,10 +123,15 @@ export function calculateLedgerCash(
     }
   }
 
+  const isLedgerEmpty = orders.length === 0 && transfers.length === 0 && initialBaseDepositTRY === 0;
+  const hasRecordHistory = transfers.length > 0;
+
   return {
     availableCashTRY: Number(runningCashTRY.toFixed(2)),
     totalDepositsTRY: Number(totalDepositsTRY.toFixed(2)),
     totalBuysTRY: Number(totalBuysTRY.toFixed(2)),
-    totalSellsTRY: Number(totalSellsTRY.toFixed(2))
+    totalSellsTRY: Number(totalSellsTRY.toFixed(2)),
+    hasRecordHistory,
+    isLedgerEmpty
   };
 }
