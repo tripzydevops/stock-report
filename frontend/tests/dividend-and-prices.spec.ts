@@ -576,48 +576,66 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
 
     const authHeaders = { Authorization: `Bearer ${token}` };
 
-    // C. Missing / Zero price returns 400
+    // C. Missing order status on live order returns 400
+    const resNoStatus = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'BIST' }
+    });
+    expect(resNoStatus.status()).toBe(400);
+    const noStatusJson = await resNoStatus.json();
+    expect(noStatusJson.error).toMatch(/Order status is required for live orders/i);
+
+    // D. Missing / Zero price returns 400
     const resZeroPrice = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
-      data: { symbol: 'THYAO', shares: 10, price: 0, market: 'BIST' }
+      data: { symbol: 'THYAO', shares: 10, price: 0, market: 'BIST', status: 'Filled' }
     });
     expect(resZeroPrice.status()).toBe(400);
     const zeroJson = await resZeroPrice.json();
     expect(zeroJson.error).toMatch(/Invalid price/i);
 
-    // D. Negative price returns 400
+    // E. Negative price returns 400
     const resNegativePrice = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
-      data: { symbol: 'THYAO', shares: 10, price: -50.0, market: 'BIST' }
+      data: { symbol: 'THYAO', shares: 10, price: -50.0, market: 'BIST', status: 'Filled' }
     });
     expect(resNegativePrice.status()).toBe(400);
 
-    // E. Zero / Negative shares returns 400
+    // F. Zero / Negative shares returns 400
     const resZeroShares = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
-      data: { symbol: 'THYAO', shares: 0, price: 250.0, market: 'BIST' }
+      data: { symbol: 'THYAO', shares: 0, price: 250.0, market: 'BIST', status: 'Filled' }
     });
     expect(resZeroShares.status()).toBe(400);
     const zeroSharesJson = await resZeroShares.json();
     expect(zeroSharesJson.error).toMatch(/Invalid shares/i);
 
-    // F. Invalid market returns 400
+    // G. Invalid market returns 400
     const resInvalidMarket = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
-      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'INVALID_MKT' }
+      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'INVALID_MKT', status: 'Filled' }
     });
     expect(resInvalidMarket.status()).toBe(400);
     const invalidMarketJson = await resInvalidMarket.json();
     expect(invalidMarketJson.error).toMatch(/Invalid market/i);
 
-    // G. Missing symbol returns 400
+    // H. Missing symbol returns 400
     const resNoSymbol = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
-      data: { shares: 10, price: 100.0, market: 'BIST' }
+      data: { shares: 10, price: 100.0, market: 'BIST', status: 'Filled' }
     });
     expect(resNoSymbol.status()).toBe(400);
 
-    // H. Invalid order status returns 400
+    // I. Invalid order side returns 400
+    const resInvalidSide = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'BIST', side: 'SHORT', status: 'Filled' }
+    });
+    expect(resInvalidSide.status()).toBe(400);
+    const invalidSideJson = await resInvalidSide.json();
+    expect(invalidSideJson.error).toMatch(/Invalid side/i);
+
+    // J. Invalid order status returns 400
     const resInvalidStatus = await request.post('/api/portfolio/positions', {
       headers: authHeaders,
       data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'BIST', status: 'MALICIOUS_STATUS' }
@@ -625,6 +643,16 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(resInvalidStatus.status()).toBe(400);
     const invalidStatusJson = await resInvalidStatus.json();
     expect(invalidStatusJson.error).toMatch(/Invalid status/i);
+
+    // K. Historical import allows omitting status (defaults to Filled internally)
+    const resHistoricalOmitStatus = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 0, price: 250.0, market: 'BIST', isHistoricalImport: true }
+    });
+    // Should get 400 because shares = 0, NOT because of missing status
+    expect(resHistoricalOmitStatus.status()).toBe(400);
+    const histJson = await resHistoricalOmitStatus.json();
+    expect(histJson.error).toMatch(/Invalid shares/i);
   });
 
   test('14. Frontend Portfolio View displays DCA lot transparency and cost averaging disclosure', async ({ page }) => {

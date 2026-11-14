@@ -10,17 +10,20 @@ type AllowedMarket = typeof ALLOWED_MARKETS[number];
 const ALLOWED_ORDER_STATUSES = ['Filled', 'Pending', 'Cancelled', 'Rejected'] as const;
 type AllowedOrderStatus = typeof ALLOWED_ORDER_STATUSES[number];
 
+const ALLOWED_SIDES = ['BUY', 'SELL'] as const;
+type AllowedSide = typeof ALLOWED_SIDES[number];
+
 /**
- * Server-side validated, genuinely transactional portfolio position & order creation.
+ * Server-side validated, genuinely transactional portfolio position & order creation/execution.
  * Strict Architecture Guarantees:
  * 1. Immediate Session Authentication check at the very top (HTTP 401 on unauthenticated).
  * 2. User ownership strictly derived inside PostgreSQL RPC via auth.uid() (zero client-side spoofing).
  * 3. Enforces Row Level Security via request-scoped authenticated client (authSupabase).
  * 4. Exact symbol matching only (no fuzzy name matching).
  * 5. Atomic ledger integrity via PostgreSQL transaction function (execute_portfolio_holding_and_order).
- * 6. DCA Position Merging: If an open position exists for the asset, merges quantity and recomputes weighted entry price.
- * 7. Atomic cash auto-deposit executed in the exact same DB transaction if shortfall exists.
- * 8. Status and Market allowlist checks enforced on server and in DB.
+ * 6. Server-Side Cash Shortfall Calculation: Database computes required deposit from user's live ledger; client-injected amounts are ignored.
+ * 7. Dual Side Support: Atomically handles BUY (DCA position merge) and SELL (balance validation, exit/reduction, cost netting).
+ * 8. Explicit Order Status: Requires explicit status for live orders; defaults to 'Filled' only when isHistoricalImport is true.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await authSupabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: 'Authentication required. Please log in to add or import portfolio holdings.' },
+        { error: 'Authentication required. Please log in to add, sell, or import portfolio holdings.' },
         { status: 401 }
       );
     }
@@ -44,6 +47,7 @@ export async function POST(request: NextRequest) {
       quantity,
       price,
       entryPrice,
+      side = 'BUY',
       stopLoss,
       targetPrice,
       market = 'BIST',
@@ -54,8 +58,11 @@ export async function POST(request: NextRequest) {
       entryDate,
       orderDate,
       orderType = 'Limit',
-      status = 'Filled',
-      autoDepositAmount,
+      status,
+      isHistoricalImport,
+      autoFund = true,
+      reduceCostBasis = false,
+      costBasis,
     } = body;
 
     // Strict Symbol Validation
@@ -77,11 +84,34 @@ export async function POST(request: NextRequest) {
     }
     const resolvedMarket = marketUpper as AllowedMarket;
 
-    // Strict Status Validation
-    const resolvedStatus = (typeof status === 'string' && status.trim()) ? status.trim() : 'Filled';
+    // Strict Side Validation
+    const sideUpper = String(side).trim().toUpperCase();
+    if (!ALLOWED_SIDES.includes(sideUpper as AllowedSide)) {
+      return NextResponse.json(
+        { error: `Invalid side '${side}'. Allowed sides: ${ALLOWED_SIDES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+    const resolvedSide = sideUpper as AllowedSide;
+
+    // Strict Order Status Validation:
+    // Live orders must explicitly declare status (e.g. 'Filled' or 'Pending').
+    // Only historical imports default to 'Filled' if omitted.
+    let resolvedStatus: string;
+    if (status && typeof status === 'string' && status.trim()) {
+      resolvedStatus = status.trim();
+    } else if (isHistoricalImport === true) {
+      resolvedStatus = 'Filled';
+    } else {
+      return NextResponse.json(
+        { error: 'Order status is required for live orders (e.g. Filled, Pending).' },
+        { status: 400 }
+      );
+    }
+
     if (!ALLOWED_ORDER_STATUSES.includes(resolvedStatus as AllowedOrderStatus)) {
       return NextResponse.json(
-        { error: `Invalid status '${status}'. Allowed statuses: ${ALLOWED_ORDER_STATUSES.join(', ')}` },
+        { error: `Invalid status '${resolvedStatus}'. Allowed statuses: ${ALLOWED_ORDER_STATUSES.join(', ')}` },
         { status: 400 }
       );
     }
@@ -97,7 +127,7 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         {
-          error: 'Invalid price: entry price must be a finite, strictly positive number (> 0). Zero, negative, and missing prices are rejected.',
+          error: 'Invalid price: price must be a finite, strictly positive number (> 0). Zero, negative, and missing prices are rejected.',
           receivedPrice: rawPrice,
         },
         { status: 400 }
@@ -121,11 +151,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    // Auto Deposit Validation
-    const depositAmount = (typeof autoDepositAmount === 'number' && Number.isFinite(autoDepositAmount) && autoDepositAmount > 0)
-      ? Number(autoDepositAmount.toFixed(4))
-      : 0;
 
     // 3. Exact Symbol Matching Catalog Lookup (No fuzzy name matching)
     const isSymbol = `${cleanSym}.IS`;
@@ -175,10 +200,11 @@ export async function POST(request: NextRequest) {
     const resolvedStop = stopLoss && Number.isFinite(stopLoss) && stopLoss > 0 ? Number(stopLoss) : null;
     const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
     const resolvedCurrency = currency || (resolvedMarket === 'US' ? 'USD' : 'TRY');
+    const resolvedCostBasis = typeof costBasis === 'number' && Number.isFinite(costBasis) && costBasis > 0 ? Number(costBasis) : null;
 
     // 5. Genuinely Atomic Transaction: Call PostgreSQL RPC Function
-    // Inserts or merges position, records executed order, and optionally inserts auto-deposit transfer
-    // in a single ACID transaction. Identity derived via auth.uid() on the database side.
+    // Inserts or merges position, records executed order, and calculates required auto-funding
+    // entirely server-side in a single ACID transaction. Identity derived via auth.uid().
     const { data: rpcResult, error: rpcError } = await authSupabase.rpc(
       'execute_portfolio_holding_and_order',
       {
@@ -186,17 +212,19 @@ export async function POST(request: NextRequest) {
         p_symbol: cleanSym,
         p_quantity: rawShares,
         p_price: rawPrice,
-        p_side: 'BUY',
+        p_side: resolvedSide,
         p_order_type: orderType || 'Limit',
         p_currency: resolvedCurrency,
         p_entry_date: executionDateStr,
         p_executed_at: executionIso,
         p_stop_loss: resolvedStop,
         p_target_price: resolvedTarget,
-        p_notes: notes || (isDividend ? 'Strategy: CORE_DIVIDEND' : 'Active holding'),
+        p_notes: notes || (isDividend ? 'Strategy: CORE_DIVIDEND' : `${resolvedSide} order`),
         p_order_ref: orderRef,
         p_status: resolvedStatus,
-        p_auto_deposit_amount: depositAmount,
+        p_auto_fund: autoFund !== false,
+        p_reduce_cost_basis: Boolean(reduceCostBasis),
+        p_cost_basis: resolvedCostBasis,
       }
     );
 
@@ -214,9 +242,12 @@ export async function POST(request: NextRequest) {
         position: rpcResult?.position,
         order: rpcResult?.order,
         transfer: rpcResult?.transfer,
+        realizedPnl: rpcResult?.realized_pnl,
+        shortfallDepositedTRY: rpcResult?.shortfall_deposited_try,
         symbol: cleanSym,
         shares: rawShares,
         entryPrice: rawPrice,
+        side: resolvedSide,
       },
       { status: 201 }
     );

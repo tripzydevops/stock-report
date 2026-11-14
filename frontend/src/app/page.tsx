@@ -2552,7 +2552,7 @@ export default function Home() {
             orderDate: orderDateStr,
             orderType: 'Limit',
             status: 'Filled',
-            autoDepositAmount: shortfall > 0 ? shortfall : 0,
+            isHistoricalImport: true,
           }),
         });
 
@@ -2701,7 +2701,7 @@ export default function Home() {
     const additionalCostTRY = target?.currency === 'USD' ? totalVal * usdTryRate : totalVal;
     const shortfall = Math.max(0, additionalCostTRY - cashBalance);
 
-    // 1. If user is authenticated, call server transactional API (with atomic DCA position merge & auto-deposit)
+    // 1. If user is authenticated, call server transactional API (with atomic DCA position merge & server-calculated auto-deposit)
     if (!isDemoMode && user) {
       try {
         const apiRes = await fetch('/api/portfolio/positions', {
@@ -2711,6 +2711,7 @@ export default function Home() {
             symbol: cleanSymUpper,
             shares: additionalShares,
             price: buyPrice,
+            side: 'BUY',
             market: target?.market || 'BIST',
             name: target?.name || cleanSymUpper,
             currency: target?.currency || 'TRY',
@@ -2719,7 +2720,6 @@ export default function Home() {
             orderDate: orderDateStr,
             orderType: 'Limit',
             status: 'Filled',
-            autoDepositAmount: shortfall > 0 ? shortfall : 0,
           }),
         });
 
@@ -2890,6 +2890,13 @@ export default function Home() {
       newAvgEntryPrice = Number((remainingTotalCost / remainingShares).toFixed(4));
     }
 
+    const costReductionNote = (reduceCostBasis && realizedPnl > 0 && remainingShares > 0)
+      ? ` (Kalan ${remainingShares} hissenin maliyeti ₺${newAvgEntryPrice.toFixed(4)} seviyesine çekildi)`
+      : '';
+    const orderNote = isTrancheMatched
+      ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
+      : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`;
+
     // Record realized trade with execution discipline analytics
     const cleanSym = target.symbol.replace('.IS', '').toUpperCase();
     const matchedAsset = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === cleanSym);
@@ -2961,6 +2968,49 @@ export default function Home() {
       return updated;
     });
 
+    // 1. If user is authenticated, route SELL through transactional API
+    if (!isDemoMode && user) {
+      try {
+        const apiRes = await fetch('/api/portfolio/positions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbol: cleanSymUpper,
+            shares: actualSold,
+            price: sellPrice,
+            side: 'SELL',
+            market: target.market || 'BIST',
+            name: target.name || cleanSymUpper,
+            currency: target.currency || 'TRY',
+            notes: orderNote,
+            entryDate: chosenCloseDate,
+            orderDate: chosenCloseDate,
+            orderType: 'Limit',
+            status: 'Filled',
+            reduceCostBasis: Boolean(reduceCostBasis),
+            costBasis: costBasis,
+          }),
+        });
+
+        if (!apiRes.ok) {
+          const errJson = await apiRes.json().catch(() => ({}));
+          const errorMsg = errJson.error || 'Satış emri kaydedilemedi.';
+          console.error('Server SELL validation failed:', errorMsg);
+          if (typeof window !== 'undefined') alert(`İşlem başarısız: ${errorMsg}`);
+          return;
+        }
+
+        // Reconcile and reload complete database state from server truth
+        await loadData(false);
+        return;
+      } catch (err: any) {
+        console.error('Network error executing SELL holding:', err);
+        if (typeof window !== 'undefined') alert(`Sunucuya bağlanılamadı: ${err.message || 'Lütfen internet bağlantınızı kontrol ediniz.'}`);
+        return;
+      }
+    }
+
+    // 2. Guest / Demo Mode: Local calculation & cache only
     if (actualSold >= target.shares) {
       // Full exit
       setPortfolio(prev => {
@@ -3017,100 +3067,42 @@ export default function Home() {
       });
     }
 
-    // Persist to Supabase
-    try {
-      const cleanSym = symbol.replace('.IS', '');
-      const isSymbol = `${cleanSym}.IS`;
-      const { data: assetData } = await supabase
-        .from('assets')
-        .select('id')
-        .or(`symbol.eq.${cleanSym},symbol.eq.${isSymbol}`)
-        .limit(1);
+    const totalVal = actualSold * sellPrice;
+    const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+    const executionIso = tradeDate
+      ? new Date(tradeDate + 'T10:00:00Z').toISOString()
+      : new Date().toISOString();
+    const displayDateTime = tradeDate
+      ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
+      : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-      // Log sell order to portfolio_orders
-      const totalVal = actualSold * sellPrice;
-      const refCode = `#000${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-      const executionIso = tradeDate
-        ? new Date(tradeDate + 'T10:00:00Z').toISOString()
-        : new Date().toISOString();
-      const displayDateTime = tradeDate
-        ? `${tradeDate.split('-').reverse().join('.')} - 10:00`
-        : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
-
-      const costReductionNote = (reduceCostBasis && realizedPnl > 0 && remainingShares > 0)
-        ? ` (Kalan ${remainingShares} hissenin maliyeti ₺${newAvgEntryPrice.toFixed(4)} seviyesine çekildi)`
-        : '';
-      const orderNote = isTrancheMatched
-        ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
-        : `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)}. Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`;
-
-      if (assetData && assetData.length > 0 && !isDemoMode && user) {
-        let posMutQuery = supabase.from('portfolio_positions');
-        if (actualSold >= target.shares) {
-          await posMutQuery
-            .delete()
-            .eq('asset_id', assetData[0].id)
-            .eq('user_id', user.id);
-        } else {
-          await posMutQuery
-            .update({ 
-              quantity: remainingShares,
-              avg_entry_price: newAvgEntryPrice 
-            })
-            .eq('asset_id', assetData[0].id)
-            .eq('is_open', true)
-            .eq('user_id', user.id);
-        }
-
-        try {
-          await supabase.from('portfolio_orders').insert([{
-            user_id: user.id,
-            order_ref: refCode,
-            symbol: cleanSym,
-            side: 'SELL',
-            order_type: 'Limit',
-            quantity: actualSold,
-            price: sellPrice,
-            total_amount: totalVal,
-            currency: target.currency || 'TRY',
-            executed_at: executionIso,
-            status: 'Filled',
-            notes: orderNote
-          }]);
-        } catch (ordErr) {
-          console.warn('Could not save sell order to Supabase:', ordErr);
-        }
-      }
-
-      const newSellOrder: ExecutedOrder = {
-        id: `ord-${Date.now()}`,
-        ref: refCode,
-        symbol: cleanSym,
-        name: target.name || cleanSym,
-        market: (target.market || 'BIST') as any,
-        side: 'SELL',
-        orderType: 'Limit',
-        quantity: actualSold,
-        price: sellPrice,
-        totalValue: totalVal,
-        currency: target.currency || 'TRY',
-        dateTime: displayDateTime,
-        executedAt: executionIso,
-        status: 'Filled',
-        dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})${costReductionNote}`
-      };
-      const updatedOrders = [newSellOrder, ...executedOrders];
-      setExecutedOrders(updatedOrders);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
-        } catch (e) {}
-      }
-      const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate).availableCashTRY;
-      setCashBalance(updatedCash);
-    } catch (err) {
-      console.warn('Error updating sold shares in Supabase:', err);
+    const newSellOrder: ExecutedOrder = {
+      id: `ord-${Date.now()}`,
+      ref: refCode,
+      symbol: cleanSym,
+      name: target.name || cleanSym,
+      market: (target.market || 'BIST') as any,
+      side: 'SELL',
+      orderType: 'Limit',
+      quantity: actualSold,
+      price: sellPrice,
+      totalValue: totalVal,
+      currency: target.currency || 'TRY',
+      dateTime: displayDateTime,
+      executedAt: executionIso,
+      status: 'Filled',
+      dcaNote: `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (P&L: ${realizedPnl >= 0 ? '+' : ''}₺${realizedPnl.toFixed(2)})${costReductionNote}`
+    };
+    const updatedOrders = [newSellOrder, ...executedOrders];
+    setExecutedOrders(updatedOrders);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
+      } catch (e) {}
     }
+
+    const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate).availableCashTRY;
+    setCashBalance(updatedCash);
   };
 
   const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
