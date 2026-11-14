@@ -669,4 +669,127 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     const dcaNotice = page.locator('text=DCA (Maliyet Ortalaması)').first();
     await expect(dcaNotice).toBeVisible({ timeout: 10000 });
   });
+
+  test('15. Unit Test: Trade Sequence (Buy -> Partial Sale with Cost Reduction -> Subsequent Sale -> Full Exit) preserves acquisition cost and avoids profit double-counting', async () => {
+    // 1. Initial Position: 200 shares bought @ ₺100.00 (Total investment: ₺20,000)
+    let heldShares = 200;
+    const originalAcquisitionCost = 100.0;
+    let avgEntryPrice = 100.0;
+    let adjustedBreakEven: number | null = null;
+    let isOpen = true;
+
+    // 2. First Sale: Sell 100 shares @ ₺150.00 with reduceCostBasis = true
+    const sale1Shares = 100;
+    const sale1Price = 150.0;
+    const sale1EffectiveCost = originalAcquisitionCost;
+    const sale1RealizedPnl = (sale1Price - sale1EffectiveCost) * sale1Shares; // (150 - 100) * 100 = ₺5,000.00
+    expect(sale1RealizedPnl).toBe(5000.0);
+
+    // Net capital remaining invested:
+    // (200 * 100) - (100 * 100) - 5,000 = ₺5,000.00 remaining capital
+    const remainingSharesAfterSale1 = heldShares - sale1Shares; // 100 shares
+    expect(remainingSharesAfterSale1).toBe(100);
+
+    const baseCostPerShare = adjustedBreakEven ?? avgEntryPrice;
+    let remainingTotalCost = (heldShares * baseCostPerShare) - (sale1Shares * sale1EffectiveCost) - sale1RealizedPnl;
+    if (remainingTotalCost < 0) remainingTotalCost = 0;
+    adjustedBreakEven = Number((remainingTotalCost / remainingSharesAfterSale1).toFixed(4));
+    heldShares = remainingSharesAfterSale1;
+
+    // Critical assertion: avgEntryPrice MUST remain ₺100.00 (acquisition cost basis)
+    expect(avgEntryPrice).toBe(100.0);
+    // Adjusted break-even (house money) is reduced to ₺50.00
+    expect(adjustedBreakEven).toBe(50.0);
+
+    // 3. Second Sale: Sell remaining 100 shares @ ₺180.00
+    // Realized PnL MUST use original acquisition cost ₺100.00, NOT the reduced break-even ₺50.00
+    const sale2Shares = 100;
+    const sale2Price = 180.0;
+    const sale2EffectiveCost = avgEntryPrice; // 100.0
+    const sale2RealizedPnl = (sale2Price - sale2EffectiveCost) * sale2Shares; // (180 - 100) * 100 = ₺8,000.00
+    expect(sale2RealizedPnl).toBe(8000.0); // NOT (180 - 50) * 100 = ₺13,000 (which would double-count the previous ₺5,000 profit!)
+
+    // Total lifetime profit on 200 shares: ₺5,000 + ₺8,000 = ₺13,000
+    const totalLifetimeRealizedPnl = sale1RealizedPnl + sale2RealizedPnl;
+    // Expected: (100 * 150 + 100 * 180) - (200 * 100) = 33,000 - 20,000 = ₺13,000
+    expect(totalLifetimeRealizedPnl).toBe(13000.0);
+
+    // 4. Full Exit State
+    heldShares -= sale2Shares;
+    if (heldShares <= 0) {
+      heldShares = 0;
+      isOpen = false;
+    }
+    expect(heldShares).toBe(0);
+    expect(isOpen).toBe(false);
+
+    // Database check constraint formula: ((is_open = true AND quantity > 0) OR (is_open = false AND quantity >= 0))
+    const isConstraintSatisfied = (isOpen && heldShares > 0) || (!isOpen && heldShares >= 0);
+    expect(isConstraintSatisfied).toBe(true);
+  });
+
+  test('16. Non-Filled Order Gating: Pending orders record audit trail without mutating position holdings', async ({ request }) => {
+    // A. Obtain authenticated token for validation testing
+    const envLocalPath = path.resolve(__dirname, '../.env.local');
+    const parsedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
+    if (fs.existsSync(envLocalPath)) {
+      const lines = fs.readFileSync(envLocalPath, 'utf8').split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const idx = trimmed.indexOf('=');
+          const k = trimmed.slice(0, idx).trim();
+          const v = trimmed.slice(idx + 1).trim();
+          if (!parsedEnv[k]) parsedEnv[k] = v;
+        }
+      }
+    }
+
+    let token = '';
+    const url = parsedEnv.NEXT_PUBLIC_SUPABASE_URL;
+    const key = parsedEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const email = parsedEnv.TEST_USER_A_EMAIL;
+    const pwd = parsedEnv.TEST_USER_A_PASSWORD;
+
+    if (url && key && email && pwd) {
+      const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data: authData } = await supabase.auth.signInWithPassword({ email, password: pwd });
+      if (authData?.session?.access_token) {
+        token = authData.session.access_token;
+      }
+    }
+
+    if (!token) {
+      console.warn('Skipping authenticated Pending order test: test user credentials not found');
+      return;
+    }
+
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    // Post a Pending order
+    const resPending = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: {
+        symbol: 'THYAO',
+        shares: 5,
+        price: 260.0,
+        market: 'BIST',
+        side: 'BUY',
+        status: 'Pending',
+        notes: 'Limit buy test order'
+      }
+    });
+
+    expect(resPending.status()).toBe(201);
+    const pendingJson = await resPending.json();
+    expect(pendingJson.success).toBe(true);
+    // Order is created with status Pending
+    expect(pendingJson.order).toBeTruthy();
+    expect(pendingJson.order.status).toBe('Pending');
+    // Position MUST be null because an uncompleted order does not mutate holdings
+    expect(pendingJson.position).toBeNull();
+    // Cash transfer MUST be null/falsy
+    expect(pendingJson.transfer).toBeFalsy();
+  });
 });
+

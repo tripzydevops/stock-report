@@ -138,6 +138,7 @@ export interface PortfolioItem {
   market: string;
   shares: number;
   entryPrice: number;
+  adjustedBreakEven?: number;
   currentPrice: number;
   currency: string;
   totalCost: number;

@@ -2084,7 +2084,8 @@ export default function Home() {
               dcaZone: dcaZone,
               dcaRationale: dcaRationale,
               entryDate: entryDate,
-              strategyType: strategyType
+              strategyType: strategyType,
+              adjustedBreakEven: pos.adjusted_break_even !== null && pos.adjusted_break_even !== undefined ? Number(pos.adjusted_break_even) : undefined
             };
           });
 
@@ -2878,20 +2879,19 @@ export default function Home() {
 
     // Compute remaining shares and restored/netted cost basis (Maliyet Düşürme Modu)
     const remainingShares = Math.max(0, target.shares - actualSold);
-    let newAvgEntryPrice = target.entryPrice;
+    const originalAvgEntryPrice = target.entryPrice;
+    let newAdjustedBreakEven = target.adjustedBreakEven;
     if (remainingShares > 0) {
-      let remainingTotalCost = (target.shares * target.entryPrice) - (actualSold * costBasis);
-      if (remainingTotalCost < 0) remainingTotalCost = 0;
-
-      // When Maliyet Düşürme is enabled, deduct the swing profit from remaining capital
       if (reduceCostBasis && realizedPnl > 0) {
-        remainingTotalCost = Math.max(0, remainingTotalCost - realizedPnl);
+        const baseCostPerShare = target.adjustedBreakEven ?? target.entryPrice;
+        let remainingTotalCost = (target.shares * baseCostPerShare) - (actualSold * costBasis) - realizedPnl;
+        if (remainingTotalCost < 0) remainingTotalCost = 0;
+        newAdjustedBreakEven = Number((remainingTotalCost / remainingShares).toFixed(4));
       }
-      newAvgEntryPrice = Number((remainingTotalCost / remainingShares).toFixed(4));
     }
 
-    const costReductionNote = (reduceCostBasis && realizedPnl > 0 && remainingShares > 0)
-      ? ` (Kalan ${remainingShares} hissenin maliyeti ₺${newAvgEntryPrice.toFixed(4)} seviyesine çekildi)`
+    const costReductionNote = (reduceCostBasis && realizedPnl > 0 && remainingShares > 0 && newAdjustedBreakEven !== undefined)
+      ? ` (Kalan ${remainingShares} hissenin net başabaş maliyeti ₺${newAdjustedBreakEven.toFixed(4)} seviyesine çekildi)`
       : '';
     const orderNote = isTrancheMatched
       ? `Sold ${actualSold} shares @ ₺${sellPrice.toFixed(2)} (Tranche Buy: ${actualSold} @ ₺${costBasis.toFixed(2)}). Realized P&L: ₺${realizedPnl >= 0 ? '+' : ''}${realizedPnl.toFixed(2)}${costReductionNote}`
@@ -2958,15 +2958,17 @@ export default function Home() {
       aiTargetNote: aiNote
     };
 
-    setRealizedTrades(prev => {
-      const updated = [newRealized, ...prev];
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('market_pulse_cached_realized', JSON.stringify(updated));
-        } catch (e) {}
-      }
-      return updated;
-    });
+    const recordRealizedTradeLocally = () => {
+      setRealizedTrades(prev => {
+        const updated = [newRealized, ...prev];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('market_pulse_cached_realized', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+    };
 
     // 1. If user is authenticated, route SELL through transactional API
     if (!isDemoMode && user) {
@@ -3000,6 +3002,9 @@ export default function Home() {
           return;
         }
 
+        // Record realized trade analytics only after verified server persistence
+        recordRealizedTradeLocally();
+
         // Reconcile and reload complete database state from server truth
         await loadData(false);
         return;
@@ -3011,6 +3016,8 @@ export default function Home() {
     }
 
     // 2. Guest / Demo Mode: Local calculation & cache only
+    recordRealizedTradeLocally();
+
     if (actualSold >= target.shares) {
       // Full exit
       setPortfolio(prev => {
@@ -3029,7 +3036,7 @@ export default function Home() {
       setPortfolio(prev => {
         const updated = prev.map(item => {
           if (item.symbol !== symbol) return item;
-          const newTotalCost = remainingShares * newAvgEntryPrice;
+          const newTotalCost = remainingShares * originalAvgEntryPrice;
           const newCurrentValue = remainingShares * item.currentPrice;
           const newPnlAmount = newCurrentValue - newTotalCost;
           const newPnlPercent = newTotalCost > 0 ? (newPnlAmount / newTotalCost) * 100 : 0;
@@ -3037,7 +3044,8 @@ export default function Home() {
           return {
             ...item,
             shares: remainingShares,
-            entryPrice: newAvgEntryPrice,
+            entryPrice: originalAvgEntryPrice,
+            adjustedBreakEven: newAdjustedBreakEven,
             totalCost: newTotalCost,
             currentValue: newCurrentValue,
             pnlAmount: newPnlAmount,

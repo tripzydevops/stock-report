@@ -1009,7 +1009,12 @@ export default function PortfolioView({
                     </div>
                     <div className="text-[11px] text-gray-500 flex items-center gap-1 flex-wrap">
                       <span>Mal: {formatCurr(item.entryPrice, item.currency)}</span>
-                      {symbolSwingGains > 0 && (
+                      {item.adjustedBreakEven !== undefined && item.adjustedBreakEven !== null && item.adjustedBreakEven < item.entryPrice && (
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400" title="Düzeltilmiş Net Başabaş">
+                          (Net: {formatCurr(item.adjustedBreakEven, item.currency)})
+                        </span>
+                      )}
+                      {symbolSwingGains > 0 && (item.adjustedBreakEven === undefined || item.adjustedBreakEven === null) && (
                         <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
                           (-{formatCurr(symbolSwingGains, item.currency)})
                         </span>
@@ -1432,9 +1437,14 @@ export default function PortfolioView({
                             <div className="font-bold text-gray-900 dark:text-white font-mono">
                               {formatCurr(item.currentPrice, item.currency)}
                             </div>
-                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono flex items-center justify-end gap-1">
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono flex items-center justify-end gap-1 flex-wrap">
                               <span>Mal: {formatCurr(item.entryPrice, item.currency)}</span>
-                              {symbolSwingGains > 0 && (
+                              {item.adjustedBreakEven !== undefined && item.adjustedBreakEven !== null && item.adjustedBreakEven < item.entryPrice && (
+                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400" title="Düzeltilmiş Net Başabaş">
+                                  (Net: {formatCurr(item.adjustedBreakEven, item.currency)})
+                                </span>
+                              )}
+                              {symbolSwingGains > 0 && (item.adjustedBreakEven === undefined || item.adjustedBreakEven === null) && (
                                 <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
                                   (-{formatCurr(symbolSwingGains, item.currency)})
                                 </span>
@@ -1722,7 +1732,12 @@ export default function PortfolioView({
                             {item.shares.toLocaleString()}
                           </td>
                           <td className="px-5 py-4 text-right text-gray-600 dark:text-gray-400">
-                            {formatCurr(item.entryPrice, item.currency)}
+                            <div>{formatCurr(item.entryPrice, item.currency)}</div>
+                            {item.adjustedBreakEven !== undefined && item.adjustedBreakEven !== null && item.adjustedBreakEven < item.entryPrice && (
+                              <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400" title={language === 'tr' ? 'Kâr İndirimi ile Düzeltilmiş Başabaş' : 'Adjusted Breakeven'}>
+                                Net: {formatCurr(item.adjustedBreakEven, item.currency)}
+                              </div>
+                            )}
                           </td>
                           <td className="px-5 py-4 text-right font-bold text-gray-900 dark:text-white">
                             {formatCurr(item.currentPrice, item.currency)}
