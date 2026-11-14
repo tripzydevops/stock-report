@@ -791,5 +791,105 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // Cash transfer MUST be null/falsy
     expect(pendingJson.transfer).toBeFalsy();
   });
+
+  test('17. Unit Test: Dual-Currency Segregated Wallets (TRY & USD) and Conditional Visibility', () => {
+    // 1. Initial State: BIST Only (Zero US stocks/ETFs, Zero USD cash)
+    const bistOnlyPortfolio: any[] = [
+      { symbol: 'THYAO', market: 'BIST', currency: 'TRY', shares: 100, entryPrice: 250.0, currentPrice: 260.0 }
+    ];
+    const tryOnlyTransfers: CapitalTransfer[] = [
+      { id: 't-try', transferType: 'DEPOSIT', amount: 50000.0, currency: 'TRY', transferDate: '2026-09-01' }
+    ];
+    const tryOnlyOrders: ExecutedOrder[] = [
+      {
+        id: 'o-try',
+        ref: 'ORD-TRY-1',
+        symbol: 'THYAO',
+        name: 'Türk Hava Yolları',
+        market: 'BIST',
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: 100,
+        price: 250.0,
+        totalValue: 25000.0,
+        currency: 'TRY',
+        dateTime: '02.09.2026 - 10:00',
+        executedAt: '2026-09-02T10:00:00Z',
+        status: 'Filled'
+      }
+    ];
+
+    const tryResult = calculateLedgerCash(tryOnlyOrders, tryOnlyTransfers, 50.0, 0);
+    expect(tryResult.availableCashTRY).toBe(25000.0);
+    expect(tryResult.availableCashUSD).toBe(0.0);
+    expect(tryResult.hasUsdActivity).toBe(false);
+
+    // Conditional visibility rule: If no US stocks and no USD cash activity, USD wallet MUST NOT be shown
+    const isUsdWalletVisibleBistOnly = bistOnlyPortfolio.some(p => p.market === 'US' || p.currency === 'USD') || tryResult.availableCashUSD > 0 || tryResult.hasUsdActivity;
+    expect(isUsdWalletVisibleBistOnly).toBe(false);
+
+    // 2. Introduce US Stock Activity (AAPL) with native USD deposit and trades
+    const dualTransfers: CapitalTransfer[] = [
+      ...tryOnlyTransfers,
+      { id: 't-usd', transferType: 'DEPOSIT', amount: 1000.0, currency: 'USD', transferDate: '2026-09-03' }
+    ];
+    const dualOrders: ExecutedOrder[] = [
+      ...tryOnlyOrders,
+      {
+        id: 'o-usd-buy',
+        ref: 'ORD-USD-1',
+        symbol: 'AAPL',
+        name: 'Apple Inc.',
+        market: 'US',
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: 5,
+        price: 150.0,
+        totalValue: 750.0,
+        currency: 'USD',
+        dateTime: '05.09.2026 - 14:30',
+        executedAt: '2026-09-05T14:30:00Z',
+        status: 'Filled'
+      },
+      {
+        id: 'o-usd-sell',
+        ref: 'ORD-USD-2',
+        symbol: 'AAPL',
+        name: 'Apple Inc.',
+        market: 'US',
+        side: 'SELL',
+        orderType: 'Limit',
+        quantity: 2,
+        price: 180.0,
+        totalValue: 360.0,
+        currency: 'USD',
+        dateTime: '12.09.2026 - 15:00',
+        executedAt: '2026-09-12T15:00:00Z',
+        status: 'Filled'
+      }
+    ];
+
+    const dualResult = calculateLedgerCash(dualOrders, dualTransfers, 50.0, 0);
+
+    // TRY Wallet: 50,000 - 25,000 = ₺25,000.00 (Untouched by USD trades!)
+    expect(dualResult.availableCashTRY).toBe(25000.0);
+
+    // USD Wallet: 1,000 - 750 + 360 = $610.00 (Native USD settlement without FX dilution!)
+    expect(dualResult.availableCashUSD).toBe(610.0);
+    expect(dualResult.totalBuysUSD).toBe(750.0);
+    expect(dualResult.totalSellsUSD).toBe(360.0);
+    expect(dualResult.hasUsdActivity).toBe(true);
+
+    // Consolidated Liquid Cash in TRY: 25,000 + (610 * 50) = ₺55,500.00
+    expect(dualResult.consolidatedCashTRY).toBe(55500.0);
+
+    // Conditional visibility rule: With US activity, USD wallet MUST be revealed
+    const dualPortfolio = [
+      ...bistOnlyPortfolio,
+      { symbol: 'AAPL', market: 'US', currency: 'USD', shares: 3, entryPrice: 150.0, currentPrice: 180.0 }
+    ];
+    const isUsdWalletVisibleDual = dualPortfolio.some(p => p.market === 'US' || p.currency === 'USD') || dualResult.availableCashUSD > 0 || dualResult.hasUsdActivity;
+    expect(isUsdWalletVisibleDual).toBe(true);
+  });
 });
 

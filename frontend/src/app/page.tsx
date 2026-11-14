@@ -1054,6 +1054,7 @@ export default function Home() {
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
   const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
   const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
+  const [cashBalanceUSD, setCashBalanceUSD] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashUSD);
 
   const totalPortfolioValueTRY = useMemo(() => {
     const validHoldings = (portfolio || []).filter(item => item && Number(item.shares) > 0 && Number(item.currentValue) > 0);
@@ -1061,8 +1062,9 @@ export default function Home() {
       const val = Number(item.currentValue);
       return acc + (item.currency === 'USD' ? val * usdTryRate : val);
     }, 0);
-    return stockVal + (cashBalance > 0 ? cashBalance : 0);
-  }, [portfolio, usdTryRate, cashBalance]);
+    const totalLiquidCash = (cashBalance > 0 ? cashBalance : 0) + ((cashBalanceUSD > 0 ? cashBalanceUSD : 0) * usdTryRate);
+    return stockVal + totalLiquidCash;
+  }, [portfolio, usdTryRate, cashBalance, cashBalanceUSD]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
@@ -1998,6 +2000,7 @@ export default function Home() {
         // User Rule: Compute cash strictly as: (All Deposits + All Sells - All Buys)
         const dynamicLedger = calculateLedgerCash(loadedOrders, loadedTrans, usdTryRate);
         setCashBalance(dynamicLedger.availableCashTRY);
+        setCashBalanceUSD(dynamicLedger.availableCashUSD);
 
         // 6. Fetch Active Portfolio Positions from Supabase (Scoped to logged-in user or Model Portfolio)
         let positionsQuery = supabase
@@ -2412,8 +2415,9 @@ export default function Home() {
   const handleAddTransfer = async (newTransfer: CapitalTransfer) => {
     const updatedTrans = [newTransfer, ...transfers];
     setTransfers(updatedTrans);
-    const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate).availableCashTRY;
-    setCashBalance(updatedCash);
+    const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate);
+    setCashBalance(updatedCash.availableCashTRY);
+    setCashBalanceUSD(updatedCash.availableCashUSD);
 
     if (typeof window !== 'undefined') {
       try {
@@ -2677,8 +2681,9 @@ export default function Home() {
         } catch (e) {}
       }
     }
-    const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
-    setCashBalance(updatedCash);
+    const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate);
+    setCashBalance(updatedCash.availableCashTRY);
+    setCashBalanceUSD(updatedCash.availableCashUSD);
   };
 
   const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {
@@ -2837,8 +2842,9 @@ export default function Home() {
         } catch (e) {}
       }
     }
-    const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate).availableCashTRY;
-    setCashBalance(updatedCash);
+    const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate);
+    setCashBalance(updatedCash.availableCashTRY);
+    setCashBalanceUSD(updatedCash.availableCashUSD);
   };
 
   const handleSellHolding = async (
@@ -3109,8 +3115,9 @@ export default function Home() {
       } catch (e) {}
     }
 
-    const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate).availableCashTRY;
-    setCashBalance(updatedCash);
+    const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate);
+    setCashBalance(updatedCash.availableCashTRY);
+    setCashBalanceUSD(updatedCash.availableCashUSD);
   };
 
   const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
@@ -4458,6 +4465,7 @@ export default function Home() {
             transfers={transfers}
             usdTryRate={usdTryRate}
             cashBalanceTRY={cashBalance}
+            cashBalanceUSD={cashBalanceUSD}
             dateFilter={dateFilter}
             isSimpleMode={isSimpleMode}
             onRemoveHolding={handleRemoveHolding}

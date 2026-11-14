@@ -23,6 +23,7 @@ interface PortfolioViewProps {
   transfers?: CapitalTransfer[];
   usdTryRate: number;
   cashBalanceTRY?: number;
+  cashBalanceUSD?: number;
   dateFilter?: DateRangeFilter;
   orbItems?: OpeningDirectionItem[];
   onRemoveHolding?: (symbol: string) => void;
@@ -45,7 +46,8 @@ export default function PortfolioView({
   orders = [],
   transfers = [],
   usdTryRate,
-  cashBalanceTRY = 0,
+  cashBalanceTRY,
+  cashBalanceUSD,
   dateFilter,
   orbItems = [],
   portfolioDividends,
@@ -302,6 +304,7 @@ export default function PortfolioView({
   const [modalAmount, setModalAmount] = useState('');
   const [modalDate, setModalDate] = useState(new Date().toISOString().slice(0, 10));
   const [modalNotes, setModalNotes] = useState('');
+  const [modalCurrency, setModalCurrency] = useState<'TRY' | 'USD'>('TRY');
 
   // Active portfolio calculations
   const totalCostTRY = portfolio.reduce((acc, item) => {
@@ -318,8 +321,18 @@ export default function PortfolioView({
   }, [orders, transfers, usdTryRate]);
 
   const totalDepositedTRY = ledgerCash.totalDepositsTRY;
-  const cashValTRY = ledgerCash.availableCashTRY;
-  const totalValTRY = totalStockValTRY + cashValTRY;
+  const cashValTRY = cashBalanceTRY !== undefined ? cashBalanceTRY : ledgerCash.availableCashTRY;
+  const cashValUSD = cashBalanceUSD !== undefined ? cashBalanceUSD : ledgerCash.availableCashUSD;
+  const totalValTRY = totalStockValTRY + (cashValTRY + (cashValUSD * usdTryRate));
+
+  // Conditional USD Visibility: Only reveal USD Wallet when user holds US stocks/ETFs or has USD cash activity
+  const hasUsAssets = React.useMemo(() => {
+    return (
+      portfolio.some(p => p.market === 'US' || p.currency === 'USD') ||
+      cashValUSD > 0 ||
+      ledgerCash.hasUsdActivity
+    );
+  }, [portfolio, cashValUSD, ledgerCash.hasUsdActivity]);
 
   const recordedDepositsTRY = React.useMemo(() => {
     return transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
@@ -482,7 +495,7 @@ export default function PortfolioView({
       id: `trans-${Date.now()}`,
       transferType: modalTransferType,
       amount: parsed,
-      currency: 'TRY',
+      currency: modalCurrency,
       transferDate: modalDate,
       notes: modalNotes || (modalTransferType === 'DEPOSIT' ? 'Brokerage capital deposit' : 'Brokerage capital withdrawal')
     };
@@ -633,6 +646,16 @@ export default function PortfolioView({
                 formatCurr(cashDisplay)
               )}
             </div>
+            {hasUsAssets && (
+              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
+                <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="TRY Cüzdanı">
+                  🇹🇷 ₺{cashValTRY.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold" title="USD Cüzdanı">
+                  🇺🇸 ${cashValUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
             {ledgerCash.isLedgerEmpty ? (
@@ -3132,12 +3155,42 @@ export default function PortfolioView({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Amount (₺ TRY)</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Cüzdan / Currency</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalCurrency('TRY')}
+                    className={`py-1.5 text-xs font-bold rounded-xl transition-all border ${
+                      modalCurrency === 'TRY'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                    }`}
+                  >
+                    🇹🇷 ₺ TRY
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalCurrency('USD')}
+                    className={`py-1.5 text-xs font-bold rounded-xl transition-all border ${
+                      modalCurrency === 'USD'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                    }`}
+                  >
+                    🇺🇸 $ USD
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Amount ({modalCurrency === 'USD' ? '$ USD' : '₺ TRY'})
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   required
-                  placeholder="e.g. 5000.00"
+                  placeholder={modalCurrency === 'USD' ? 'e.g. 500.00' : 'e.g. 5000.00'}
                   value={modalAmount}
                   onChange={(e) => setModalAmount(e.target.value)}
                   className="w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
