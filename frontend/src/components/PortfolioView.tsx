@@ -862,6 +862,18 @@ export default function PortfolioView({
           </div>
         </div>
 
+        {/* DCA Transparency & Lot History Notice */}
+        <div className="px-4 py-2.5 bg-blue-50/70 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">ℹ️</span>
+            <span>
+              {language === 'tr'
+                ? 'DCA (Maliyet Ortalaması): Aynı hisseye yapılan kademeli alımlar tek bir açık pozisyonda ağırlıklı ortalama maliyetle konsolide edilir; tüm münferit işlem emirleri ise aşağıdaki "İşlem Geçmişi (Executed Orders)" tablosunda bağımsız lotlar olarak saklanır.'
+                : 'DCA (Cost Averaging): Additional buys for the same asset automatically merge into a single average-cost position, while original execution lots are preserved under "Executed Orders & DCA Accumulation Log".'}
+            </span>
+          </div>
+        </div>
+
         {/* Mobile View: Dedicated Card List (< 768px, eliminates horizontal scroll completely) */}
         <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
           {portfolio.map((item, idx) => {
@@ -2732,7 +2744,11 @@ export default function PortfolioView({
                 {effectiveOrders.length} Executed
               </span>
             </h3>
-            <p className="text-xs text-gray-500">Live synchronization with your brokerage executed orders, showing fills, timestamps, ref IDs, and DCA tranches.</p>
+            <p className="text-xs text-gray-500">
+              {language === 'tr'
+                ? 'Aracı kurum standartlarında canlı işlem kaydı: Açık pozisyonlar ağırlıklı ortalama ile birleştirilirken, tüm münferit kademeli alım ve satım lotları fill saatleri, fiyatları ve referans kodlarıyla burada bağımsız olarak saklanır.'
+                : 'Live synchronization with your brokerage executed orders, showing individual fills, timestamps, ref IDs, and DCA lot history.'}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

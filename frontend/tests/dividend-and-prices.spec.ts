@@ -616,5 +616,29 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
       data: { shares: 10, price: 100.0, market: 'BIST' }
     });
     expect(resNoSymbol.status()).toBe(400);
+
+    // H. Invalid order status returns 400
+    const resInvalidStatus = await request.post('/api/portfolio/positions', {
+      headers: authHeaders,
+      data: { symbol: 'THYAO', shares: 10, price: 250.0, market: 'BIST', status: 'MALICIOUS_STATUS' }
+    });
+    expect(resInvalidStatus.status()).toBe(400);
+    const invalidStatusJson = await resInvalidStatus.json();
+    expect(invalidStatusJson.error).toMatch(/Invalid status/i);
+  });
+
+  test('14. Frontend Portfolio View displays DCA lot transparency and cost averaging disclosure', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Switch to Portfolio tab
+    const portTabBtn = page.locator('aside button[title*="Portföy"], aside button:has-text("Portföyüm & Takip")').first();
+    await expect(portTabBtn).toBeVisible({ timeout: 10000 });
+    await portTabBtn.click();
+    await page.waitForTimeout(500);
+
+    // Verify DCA cost averaging disclosure notice is visible
+    const dcaNotice = page.locator('text=DCA (Maliyet Ortalaması)').first();
+    await expect(dcaNotice).toBeVisible({ timeout: 10000 });
   });
 });

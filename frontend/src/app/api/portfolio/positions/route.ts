@@ -7,16 +7,20 @@ export const dynamic = 'force-dynamic';
 const ALLOWED_MARKETS = ['BIST', 'US', 'TEFAS'] as const;
 type AllowedMarket = typeof ALLOWED_MARKETS[number];
 
+const ALLOWED_ORDER_STATUSES = ['Filled', 'Pending', 'Cancelled', 'Rejected'] as const;
+type AllowedOrderStatus = typeof ALLOWED_ORDER_STATUSES[number];
+
 /**
  * Server-side validated, genuinely transactional portfolio position & order creation.
  * Strict Architecture Guarantees:
  * 1. Immediate Session Authentication check at the very top (HTTP 401 on unauthenticated).
- * 2. User ownership strictly bound to verified user.id (no body userId spoofing, no admin fallback).
+ * 2. User ownership strictly derived inside PostgreSQL RPC via auth.uid() (zero client-side spoofing).
  * 3. Enforces Row Level Security via request-scoped authenticated client (authSupabase).
  * 4. Exact symbol matching only (no fuzzy name matching).
  * 5. Atomic ledger integrity via PostgreSQL transaction function (execute_portfolio_holding_and_order).
  * 6. DCA Position Merging: If an open position exists for the asset, merges quantity and recomputes weighted entry price.
- * 7. Preserves execution date and order status (distinguishing historical imports from live orders).
+ * 7. Atomic cash auto-deposit executed in the exact same DB transaction if shortfall exists.
+ * 8. Status and Market allowlist checks enforced on server and in DB.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +35,6 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    const effectiveUserId = user.id;
 
     // 2. Parse & Validate Payload
     const body = await request.json().catch(() => ({}));
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest) {
       orderDate,
       orderType = 'Limit',
       status = 'Filled',
+      autoDepositAmount,
     } = body;
 
     // Strict Symbol Validation
@@ -72,6 +76,15 @@ export async function POST(request: NextRequest) {
       );
     }
     const resolvedMarket = marketUpper as AllowedMarket;
+
+    // Strict Status Validation
+    const resolvedStatus = (typeof status === 'string' && status.trim()) ? status.trim() : 'Filled';
+    if (!ALLOWED_ORDER_STATUSES.includes(resolvedStatus as AllowedOrderStatus)) {
+      return NextResponse.json(
+        { error: `Invalid status '${status}'. Allowed statuses: ${ALLOWED_ORDER_STATUSES.join(', ')}` },
+        { status: 400 }
+      );
+    }
 
     // Strict Entry Price Validation
     const rawPrice = price ?? entryPrice;
@@ -108,6 +121,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Auto Deposit Validation
+    const depositAmount = (typeof autoDepositAmount === 'number' && Number.isFinite(autoDepositAmount) && autoDepositAmount > 0)
+      ? Number(autoDepositAmount.toFixed(4))
+      : 0;
 
     // 3. Exact Symbol Matching Catalog Lookup (No fuzzy name matching)
     const isSymbol = `${cleanSym}.IS`;
@@ -159,11 +177,11 @@ export async function POST(request: NextRequest) {
     const resolvedCurrency = currency || (resolvedMarket === 'US' ? 'USD' : 'TRY');
 
     // 5. Genuinely Atomic Transaction: Call PostgreSQL RPC Function
-    // Inserts or merges position and records executed order in a single ACID transaction
+    // Inserts or merges position, records executed order, and optionally inserts auto-deposit transfer
+    // in a single ACID transaction. Identity derived via auth.uid() on the database side.
     const { data: rpcResult, error: rpcError } = await authSupabase.rpc(
       'execute_portfolio_holding_and_order',
       {
-        p_user_id: effectiveUserId,
         p_asset_id: assetId,
         p_symbol: cleanSym,
         p_quantity: rawShares,
@@ -177,7 +195,8 @@ export async function POST(request: NextRequest) {
         p_target_price: resolvedTarget,
         p_notes: notes || (isDividend ? 'Strategy: CORE_DIVIDEND' : 'Active holding'),
         p_order_ref: orderRef,
-        p_status: status || 'Filled',
+        p_status: resolvedStatus,
+        p_auto_deposit_amount: depositAmount,
       }
     );
 
@@ -194,6 +213,7 @@ export async function POST(request: NextRequest) {
         success: true,
         position: rpcResult?.position,
         order: rpcResult?.order,
+        transfer: rpcResult?.transfer,
         symbol: cleanSym,
         shares: rawShares,
         entryPrice: rawPrice,

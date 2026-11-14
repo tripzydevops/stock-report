@@ -297,54 +297,71 @@ export default function TradeHoldingModal({
                   const oldReqBreakevenPct = holding.currentPrice > 0 ? ((holding.entryPrice - holding.currentPrice) / holding.currentPrice) * 100 : 0;
 
                   return (
-                    <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 space-y-2.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-600 dark:text-gray-400">{language === 'tr' ? 'Yeni Toplam Adet:' : 'New Total Position:'}</span>
-                        <span className="font-bold text-gray-900 dark:text-white font-mono">{newTotalShares.toLocaleString()} {t.common.shares}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-600 dark:text-gray-400">{language === 'tr' ? 'Yatırılacak Tutar:' : 'Injected Capital:'}</span>
-                        <span className="font-semibold text-gray-900 dark:text-white font-mono">{currencySymbol}{additionalCost.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      </div>
-                      
-                      <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
-                        <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">{t.tradeModal.newBlendedCost}:</span>
-                        <div className="text-right">
-                          <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                            {currencySymbol}{newBlendedCost.toFixed(2)}
-                          </span>
-                          <span className={`text-[11px] block font-semibold ${costDiff <= 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
-                            {costDiff <= 0 
-                              ? (language === 'tr' ? `(Maliyet ₺${Math.abs(costDiff).toFixed(2)} aşağı çekildi)` : `(${currencySymbol}${Math.abs(costDiff).toFixed(2)} lower cost)`) 
-                              : `(+${currencySymbol}${costDiff.toFixed(2)})`}
-                          </span>
+                    <>
+                      <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 space-y-2.5">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">{language === 'tr' ? 'Yeni Toplam Adet:' : 'New Total Position:'}</span>
+                          <span className="font-bold text-gray-900 dark:text-white font-mono">{newTotalShares.toLocaleString()} {t.common.shares}</span>
                         </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">{language === 'tr' ? 'Yatırılacak Tutar:' : 'Injected Capital:'}</span>
+                          <span className="font-semibold text-gray-900 dark:text-white font-mono">{currencySymbol}{additionalCost.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        
+                        <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800 flex justify-between items-center">
+                          <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">{t.tradeModal.newBlendedCost}:</span>
+                          <div className="text-right">
+                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                              {currencySymbol}{newBlendedCost.toFixed(2)}
+                            </span>
+                            <span className={`text-[11px] block font-semibold ${costDiff <= 0 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                              {costDiff <= 0 
+                                ? (language === 'tr' ? `(Maliyet ₺${Math.abs(costDiff).toFixed(2)} aşağı çekildi)` : `(${currencySymbol}${Math.abs(costDiff).toFixed(2)} lower cost)`) 
+                                : `(+${currencySymbol}${costDiff.toFixed(2)})`}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Breakeven & Loss Reduction Simulator */}
+                        {buyAdditionalShares > 0 && holding.pnlPercent < 0 && (
+                          <div className="mt-2 pt-2 border-t border-emerald-200/80 dark:border-emerald-800/80 grid grid-cols-2 gap-2 text-center text-xs">
+                            <div className="bg-white/80 dark:bg-gray-850 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                              <span className="text-[10px] text-gray-500 block">{language === 'tr' ? 'Yeni Zarar Oranı' : 'New Loss %'}</span>
+                              <span className="font-bold text-rose-600 font-mono">
+                                {newTotalPnlPct.toFixed(2)}%
+                              </span>
+                              <span className="text-[9px] text-gray-400 block line-through">
+                                {holding.pnlPercent.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="bg-white/80 dark:bg-gray-850 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                              <span className="text-[10px] text-gray-500 block">{language === 'tr' ? 'Başa Baş İçin Gereken' : 'Needed for Breakeven'}</span>
+                              <span className="font-bold text-emerald-600 font-mono">
+                                +%{Math.max(0, reqBreakevenPct).toFixed(2)}
+                              </span>
+                              <span className="text-[9px] text-gray-400 block line-through">
+                                +%{Math.max(0, oldReqBreakevenPct).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Breakeven & Loss Reduction Simulator */}
-                      {buyAdditionalShares > 0 && holding.pnlPercent < 0 && (
-                        <div className="mt-2 pt-2 border-t border-emerald-200/80 dark:border-emerald-800/80 grid grid-cols-2 gap-2 text-center text-xs">
-                          <div className="bg-white/80 dark:bg-gray-850 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                            <span className="text-[10px] text-gray-500 block">{language === 'tr' ? 'Yeni Zarar Oranı' : 'New Loss %'}</span>
-                            <span className="font-bold text-rose-600 font-mono">
-                              {newTotalPnlPct.toFixed(2)}%
-                            </span>
-                            <span className="text-[9px] text-gray-400 block line-through">
-                              {holding.pnlPercent.toFixed(2)}%
-                            </span>
-                          </div>
-                          <div className="bg-white/80 dark:bg-gray-850 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                            <span className="text-[10px] text-gray-500 block">{language === 'tr' ? 'Başa Baş İçin Gereken' : 'Needed for Breakeven'}</span>
-                            <span className="font-bold text-emerald-600 font-mono">
-                              +%{Math.max(0, reqBreakevenPct).toFixed(2)}
-                            </span>
-                            <span className="text-[9px] text-gray-400 block line-through">
-                              +%{Math.max(0, oldReqBreakevenPct).toFixed(2)}
-                            </span>
-                          </div>
+                      {/* DCA Lot History & Merging Disclosure */}
+                      <div className="p-3 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-200/80 dark:border-blue-900/50 text-[11px] text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">ℹ️</span>
+                        <div>
+                          <span className="font-bold block">
+                            {language === 'tr' ? 'DCA Birleştirme & Lot Şeffaflığı' : 'DCA Merging & Lot Transparency'}
+                          </span>
+                          <span>
+                            {language === 'tr'
+                              ? 'Bu işlem mevcut açık pozisyonunuza eklenerek yeni ağırlıklı ortalama maliyetiniz güncellenir. Aynı zamanda bağımsız bir emir lotu olarak işlem geçmişinde saklanır.'
+                              : 'This tranche merges into your open position to update blended cost basis, while preserving the individual executed order lot with its fill timestamp and price.'}
+                          </span>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    </>
                   );
                 })()}
               </>

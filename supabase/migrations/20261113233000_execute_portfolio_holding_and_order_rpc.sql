@@ -1,9 +1,21 @@
 -- Migration: 20261113233000_execute_portfolio_holding_and_order_rpc.sql
--- Description: Transactional Postgres RPC for atomic portfolio position & order creation,
---              handling DCA position merging and enforcing user authorization.
+-- Description: Transactional Postgres RPC for atomic portfolio position, order creation & auto-funding,
+--              handling DCA position merging, strict auth.uid() identity derivation, and check constraints.
 
+-- 1. Order status check constraint
+ALTER TABLE public.portfolio_orders
+    DROP CONSTRAINT IF EXISTS portfolio_orders_status_check;
+
+ALTER TABLE public.portfolio_orders
+    ADD CONSTRAINT portfolio_orders_status_check
+    CHECK (status IN ('Filled', 'Pending', 'Cancelled', 'Rejected'));
+
+-- 2. Drop older variants to avoid ambiguity
+DROP FUNCTION IF EXISTS public.execute_portfolio_holding_and_order(UUID, UUID, VARCHAR, NUMERIC, NUMERIC, VARCHAR, VARCHAR, VARCHAR, DATE, TIMESTAMPTZ, NUMERIC, NUMERIC, TEXT, VARCHAR, VARCHAR);
+DROP FUNCTION IF EXISTS public.execute_portfolio_holding_and_order(UUID, VARCHAR, NUMERIC, NUMERIC, VARCHAR, VARCHAR, VARCHAR, DATE, TIMESTAMPTZ, NUMERIC, NUMERIC, TEXT, VARCHAR, VARCHAR, NUMERIC);
+
+-- 3. Hardened RPC: Derives user_id exclusively from auth.uid() (no client-supplied userId)
 CREATE OR REPLACE FUNCTION public.execute_portfolio_holding_and_order(
-    p_user_id UUID,
     p_asset_id UUID,
     p_symbol VARCHAR(20),
     p_quantity NUMERIC(18,6),
@@ -17,7 +29,8 @@ CREATE OR REPLACE FUNCTION public.execute_portfolio_holding_and_order(
     p_target_price NUMERIC(18,6) DEFAULT NULL,
     p_notes TEXT DEFAULT NULL,
     p_order_ref VARCHAR(50) DEFAULT NULL,
-    p_status VARCHAR(20) DEFAULT 'Filled'
+    p_status VARCHAR(20) DEFAULT 'Filled',
+    p_auto_deposit_amount NUMERIC(18,6) DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -25,6 +38,7 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
+    v_user_id UUID;
     v_pos_id UUID;
     v_existing_quantity NUMERIC(18,6);
     v_existing_price NUMERIC(18,6);
@@ -33,13 +47,19 @@ DECLARE
     v_order_ref VARCHAR(50);
     v_pos_record RECORD;
     v_order_record RECORD;
+    v_transfer_record RECORD;
 BEGIN
-    -- 1. Security Assertion: caller must match p_user_id unless superuser or internal service
-    IF auth.uid() IS NOT NULL AND auth.uid() <> p_user_id THEN
-        RAISE EXCEPTION 'Authorization violation: Cannot write holding for another user';
+    -- 1. Security Assertion: Caller must be authenticated; identity derived solely from auth.uid()
+    v_user_id := auth.uid();
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Authentication required: auth.uid() is null';
     END IF;
 
     -- 2. Strict Input Validation
+    IF p_status NOT IN ('Filled', 'Pending', 'Cancelled', 'Rejected') THEN
+        RAISE EXCEPTION 'Invalid order status. Allowed: Filled, Pending, Cancelled, Rejected';
+    END IF;
+
     IF p_quantity IS NULL OR p_quantity <= 0 THEN
         RAISE EXCEPTION 'Invalid quantity: Must be strictly positive (> 0)';
     END IF;
@@ -52,18 +72,38 @@ BEGIN
         RAISE EXCEPTION 'Invalid symbol: Symbol string is required';
     END IF;
 
-    -- 3. Deterministic / Secure Order Reference
+    -- 3. Atomic Auto-Deposit (if required to cover cash shortfall)
+    IF p_auto_deposit_amount IS NOT NULL AND p_auto_deposit_amount > 0 THEN
+        INSERT INTO public.portfolio_transfers (
+            user_id,
+            transfer_type,
+            amount,
+            currency,
+            transfer_date,
+            notes
+        ) VALUES (
+            v_user_id,
+            'DEPOSIT',
+            p_auto_deposit_amount,
+            p_currency,
+            COALESCE(p_entry_date, CURRENT_DATE),
+            'Auto-deposit: Funded position ' || trim(upper(p_symbol))
+        )
+        RETURNING * INTO v_transfer_record;
+    END IF;
+
+    -- 4. Deterministic / Secure Order Reference
     IF p_order_ref IS NULL OR length(trim(p_order_ref)) = 0 THEN
         v_order_ref := 'ORD-' || to_char(COALESCE(p_executed_at, NOW()), 'YYYYMMDD') || '-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 8));
     ELSE
         v_order_ref := trim(p_order_ref);
     END IF;
 
-    -- 4. Check for existing open position for this user and asset (DCA merging)
+    -- 5. Check for existing open position for this user and asset (DCA merging)
     SELECT id, quantity, avg_entry_price
     INTO v_pos_id, v_existing_quantity, v_existing_price
     FROM public.portfolio_positions
-    WHERE user_id = p_user_id AND asset_id = p_asset_id AND is_open = TRUE
+    WHERE user_id = v_user_id AND asset_id = p_asset_id AND is_open = TRUE
     FOR UPDATE;
 
     IF FOUND THEN
@@ -113,7 +153,7 @@ BEGIN
             notes,
             is_open
         ) VALUES (
-            p_user_id,
+            v_user_id,
             p_asset_id,
             p_quantity,
             p_price,
@@ -126,7 +166,7 @@ BEGIN
         RETURNING * INTO v_pos_record;
     END IF;
 
-    -- 5. Insert corresponding executed order within the same atomic transaction
+    -- 6. Insert corresponding executed order within the same atomic transaction
     INSERT INTO public.portfolio_orders (
         user_id,
         order_ref,
@@ -141,7 +181,7 @@ BEGIN
         status,
         notes
     ) VALUES (
-        p_user_id,
+        v_user_id,
         v_order_ref,
         trim(upper(p_symbol)),
         p_side,
@@ -156,14 +196,16 @@ BEGIN
     )
     RETURNING * INTO v_order_record;
 
-    -- 6. Return combined record
+    -- 7. Return combined record
     RETURN jsonb_build_object(
         'success', TRUE,
         'position', to_jsonb(v_pos_record),
-        'order', to_jsonb(v_order_record)
+        'order', to_jsonb(v_order_record),
+        'transfer', CASE WHEN v_transfer_record IS NOT NULL THEN to_jsonb(v_transfer_record) ELSE NULL END
     );
 END;
 $$;
 
--- Grant execution to authenticated users
+-- Grant execution to authenticated users and service_role
 GRANT EXECUTE ON FUNCTION public.execute_portfolio_holding_and_order TO authenticated;
+GRANT EXECUTE ON FUNCTION public.execute_portfolio_holding_and_order TO service_role;
