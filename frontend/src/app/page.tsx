@@ -2525,8 +2525,9 @@ export default function Home() {
       ? `${orderDateStr.split('-').reverse().join('.')} - 10:00`
       : new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -');
 
-    const purchaseCostTRY = newHolding.currency === 'USD' ? totalVal * usdTryRate : totalVal;
-    const shortfall = Math.max(0, purchaseCostTRY - cashBalance);
+    const isUSD = (newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY')) === 'USD';
+    const targetCash = isUSD ? cashBalanceUSD : cashBalance;
+    const shortfall = Math.max(0, totalVal - targetCash);
 
     // 1. If user is authenticated, call server transactional API (with atomic auto-deposit if shortfall exists)
     if (!isDemoMode && user) {
@@ -2668,10 +2669,10 @@ export default function Home() {
       const autoTransfer: CapitalTransfer = {
         id: `trans-${Date.now()}`,
         transferType: 'DEPOSIT',
-        amount: shortfall,
-        currency: 'TRY',
+        amount: Number(shortfall.toFixed(2)),
+        currency: isUSD ? 'USD' : 'TRY',
         transferDate: orderDateStr,
-        notes: `Auto-deposit: Funded position ${cleanSymUpper} (${newHolding.shares} shares @ ₺${newHolding.entryPrice.toFixed(2)})`
+        notes: `Auto-deposit (${isUSD ? 'USD' : 'TRY'}): Funded position ${cleanSymUpper} (${newHolding.shares} shares @ ${isUSD ? '$' : '₺'}${newHolding.entryPrice.toFixed(2)})`
       };
       updatedTransfersList = [autoTransfer, ...transfers];
       setTransfers(updatedTransfersList);
@@ -2704,8 +2705,9 @@ export default function Home() {
 
     const orderDateStr = tradeDate || new Date().toISOString().slice(0, 10);
     const totalVal = additionalShares * buyPrice;
-    const additionalCostTRY = target?.currency === 'USD' ? totalVal * usdTryRate : totalVal;
-    const shortfall = Math.max(0, additionalCostTRY - cashBalance);
+    const isUSD = (target?.currency || (target?.market === 'US' ? 'USD' : 'TRY')) === 'USD';
+    const targetCash = isUSD ? cashBalanceUSD : cashBalance;
+    const shortfall = Math.max(0, totalVal - targetCash);
 
     // 1. If user is authenticated, call server transactional API (with atomic DCA position merge & server-calculated auto-deposit)
     if (!isDemoMode && user) {
@@ -2829,10 +2831,10 @@ export default function Home() {
       const autoTransfer: CapitalTransfer = {
         id: `trans-${Date.now()}`,
         transferType: 'DEPOSIT',
-        amount: shortfall,
-        currency: 'TRY',
+        amount: Number(shortfall.toFixed(2)),
+        currency: isUSD ? 'USD' : 'TRY',
         transferDate: orderDateStr,
-        notes: `Auto-deposit: DCA tranche for ${cleanSymUpper} (+${additionalShares} shares @ ₺${buyPrice.toFixed(2)})`
+        notes: `Auto-deposit (${isUSD ? 'USD' : 'TRY'}): DCA tranche for ${cleanSymUpper} (+${additionalShares} shares @ ${isUSD ? '$' : '₺'}${buyPrice.toFixed(2)})`
       };
       updatedTransfersList = [autoTransfer, ...transfers];
       setTransfers(updatedTransfersList);
@@ -3042,7 +3044,17 @@ export default function Home() {
       setPortfolio(prev => {
         const updated = prev.map(item => {
           if (item.symbol !== symbol) return item;
-          const newTotalCost = remainingShares * originalAvgEntryPrice;
+
+          // If a specific tranche was sold (and differs from avg entry), reflect remaining lots in avg_entry_price
+          let updatedAvgEntryPrice = originalAvgEntryPrice;
+          if (isTrancheMatched && costBasis !== originalAvgEntryPrice && remainingShares > 0) {
+            const remainingOriginalCost = (item.shares * originalAvgEntryPrice) - (actualSold * costBasis);
+            if (remainingOriginalCost > 0) {
+              updatedAvgEntryPrice = Number((remainingOriginalCost / remainingShares).toFixed(4));
+            }
+          }
+
+          const newTotalCost = remainingShares * updatedAvgEntryPrice;
           const newCurrentValue = remainingShares * item.currentPrice;
           const newPnlAmount = newCurrentValue - newTotalCost;
           const newPnlPercent = newTotalCost > 0 ? (newPnlAmount / newTotalCost) * 100 : 0;
@@ -3050,7 +3062,7 @@ export default function Home() {
           return {
             ...item,
             shares: remainingShares,
-            entryPrice: originalAvgEntryPrice,
+            entryPrice: updatedAvgEntryPrice,
             adjustedBreakEven: newAdjustedBreakEven,
             totalCost: newTotalCost,
             currentValue: newCurrentValue,

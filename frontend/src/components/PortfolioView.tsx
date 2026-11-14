@@ -321,6 +321,7 @@ export default function PortfolioView({
   }, [orders, transfers, usdTryRate]);
 
   const totalDepositedTRY = ledgerCash.totalDepositsTRY;
+  const totalDepositedUSD = ledgerCash.totalDepositsUSD;
   const cashValTRY = cashBalanceTRY !== undefined ? cashBalanceTRY : ledgerCash.availableCashTRY;
   const cashValUSD = cashBalanceUSD !== undefined ? cashBalanceUSD : ledgerCash.availableCashUSD;
   const totalValTRY = totalStockValTRY + (cashValTRY + (cashValUSD * usdTryRate));
@@ -335,9 +336,22 @@ export default function PortfolioView({
   }, [portfolio, cashValUSD, ledgerCash.hasUsdActivity]);
 
   const recordedDepositsTRY = React.useMemo(() => {
-    return transfers.reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
+    return transfers
+      .filter(t => t.currency?.toUpperCase() !== 'USD')
+      .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
   }, [transfers]);
+
+  const recordedDepositsUSD = React.useMemo(() => {
+    return transfers
+      .filter(t => t.currency?.toUpperCase() === 'USD')
+      .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
+  }, [transfers]);
+
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
+  const autoInjectedCapitalUSD = Math.max(0, totalDepositedUSD - recordedDepositsUSD);
+
+  const consolidatedTotalDepositedTRY = totalDepositedTRY + (totalDepositedUSD * usdTryRate);
+  const consolidatedAutoInjectedTRY = autoInjectedCapitalTRY + (autoInjectedCapitalUSD * usdTryRate);
 
   // Active Portfolio Dividend Stream & Annual Income Run-Rate
   const dividendAssets = React.useMemo(() => {
@@ -378,17 +392,17 @@ export default function PortfolioView({
   const totalPnlTRY = totalStockValTRY - totalCostTRY;
   const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
 
-  // True Lifetime Return: Total Account Value vs Total Money Put In (Total Deposited)
+  // True Lifetime Return: Total Account Value vs Total Money Put In (Consolidated Total Deposited)
   // Reflects real market gains on invested principal without distorting new stock additions as profit
-  const trueRoiAmountTRY = totalValTRY - totalDepositedTRY;
-  const trueRoiPercent = totalDepositedTRY > 0 ? (trueRoiAmountTRY / totalDepositedTRY) * 100 : 0;
+  const trueRoiAmountTRY = totalValTRY - consolidatedTotalDepositedTRY;
+  const trueRoiPercent = consolidatedTotalDepositedTRY > 0 ? (trueRoiAmountTRY / consolidatedTotalDepositedTRY) * 100 : 0;
 
   const totalValDisplay = currencyMode === 'USD' ? (totalValTRY / usdTryRate) : totalValTRY;
   const totalStockDisplay = currencyMode === 'USD' ? (totalStockValTRY / usdTryRate) : totalStockValTRY;
   const totalCostDisplay = currencyMode === 'USD' ? (totalCostTRY / usdTryRate) : totalCostTRY;
   const totalRealizedDisplay = currencyMode === 'USD' ? (totalRealizedPnlTRY / usdTryRate) : totalRealizedPnlTRY;
   const cashDisplay = currencyMode === 'USD' ? (cashValTRY / usdTryRate) : cashValTRY;
-  const totalDepositedDisplay = currencyMode === 'USD' ? (totalDepositedTRY / usdTryRate) : totalDepositedTRY;
+  const totalDepositedDisplay = currencyMode === 'USD' ? (consolidatedTotalDepositedTRY / usdTryRate) : consolidatedTotalDepositedTRY;
   const trueRoiDisplay = currencyMode === 'USD' ? (trueRoiAmountTRY / usdTryRate) : trueRoiAmountTRY;
 
   // Date-filtered collections
@@ -590,8 +604,8 @@ export default function PortfolioView({
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
             <span className="truncate">
-              {autoInjectedCapitalTRY > 0 
-                ? (language === 'tr' ? `+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)}` : `+${formatCurr(currencyMode === 'USD' ? autoInjectedCapitalTRY / usdTryRate : autoInjectedCapitalTRY)}`)
+              {consolidatedAutoInjectedTRY > 0 
+                ? (language === 'tr' ? `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}` : `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`)
                 : (language === 'tr' ? 'Net Ana Para' : 'Capital')}
             </span>
             <button

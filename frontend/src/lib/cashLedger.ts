@@ -87,8 +87,12 @@ export function calculateLedgerCash(
     });
   }
 
-  // 2. Process Executed Orders
-  for (const o of orders) {
+  // 2. Process Executed Orders (Strictly filter for filled orders so Pending/Cancelled/Rejected orders do not mutate cash)
+  const filledOrders = orders.filter(
+    (order) => !order.status || order.status.trim().toLowerCase() === 'filled'
+  );
+
+  for (const o of filledOrders) {
     const ts = parseOrderTimestamp(o);
     const val = Number(o.totalValue) || (Number(o.quantity) * Number(o.price)) || 0;
     const curr: 'TRY' | 'USD' = o.currency?.toUpperCase() === 'USD' ? 'USD' : 'TRY';
@@ -168,7 +172,7 @@ export function calculateLedgerCash(
     }
   }
 
-  const isLedgerEmpty = orders.length === 0 && transfers.length === 0 && initialBaseDepositTRY === 0;
+  const isLedgerEmpty = filledOrders.length === 0 && transfers.length === 0 && initialBaseDepositTRY === 0;
   const hasRecordHistory = transfers.length > 0;
   const hasUsdActivity = runningCashUSD > 0 || totalDepositsUSD > 0 || totalBuysUSD > 0 || totalSellsUSD > 0;
 

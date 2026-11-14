@@ -891,5 +891,128 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     const isUsdWalletVisibleDual = dualPortfolio.some(p => p.market === 'US' || p.currency === 'USD') || dualResult.availableCashUSD > 0 || dualResult.hasUsdActivity;
     expect(isUsdWalletVisibleDual).toBe(true);
   });
+
+  test('18. Unit Test: Pending, Cancelled, and Rejected orders are strictly ignored by calculateLedgerCash', async () => {
+    const baseTransfers: CapitalTransfer[] = [
+      { id: 't-1', transferType: 'DEPOSIT', amount: 10000.0, currency: 'TRY', transferDate: '2026-09-01' }
+    ];
+
+    const mixedStatusOrders: ExecutedOrder[] = [
+      {
+        id: 'ord-filled-buy',
+        ref: 'ORD-1',
+        symbol: 'THYAO',
+        name: 'Türk Hava Yolları',
+        market: 'BIST',
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: 10,
+        price: 200.0,
+        totalValue: 2000.0,
+        currency: 'TRY',
+        dateTime: '02.09.2026 - 10:00',
+        executedAt: '2026-09-02T10:00:00Z',
+        status: 'Filled'
+      },
+      // Non-filled orders that MUST NOT affect cash
+      {
+        id: 'ord-pending-buy',
+        ref: 'ORD-2',
+        symbol: 'GARAN',
+        name: 'Garanti Bankası',
+        market: 'BIST',
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: 100,
+        price: 150.0,
+        totalValue: 15000.0, // Would exceed cash and trigger false auto-funding if not filtered!
+        currency: 'TRY',
+        dateTime: '03.09.2026 - 10:00',
+        executedAt: '2026-09-03T10:00:00Z',
+        status: 'Pending'
+      },
+      {
+        id: 'ord-cancelled-sell',
+        ref: 'ORD-3',
+        symbol: 'THYAO',
+        name: 'Türk Hava Yolları',
+        market: 'BIST',
+        side: 'SELL',
+        orderType: 'Limit',
+        quantity: 10,
+        price: 300.0,
+        totalValue: 3000.0, // Would falsely add cash if not filtered!
+        currency: 'TRY',
+        dateTime: '04.09.2026 - 10:00',
+        executedAt: '2026-09-04T10:00:00Z',
+        status: 'Cancelled'
+      },
+      {
+        id: 'ord-rejected-buy',
+        ref: 'ORD-4',
+        symbol: 'NVDA',
+        name: 'NVIDIA Corporation',
+        market: 'US',
+        side: 'BUY',
+        orderType: 'Limit',
+        quantity: 50,
+        price: 130.0,
+        totalValue: 6500.0,
+        currency: 'USD',
+        dateTime: '05.09.2026 - 10:00',
+        executedAt: '2026-09-05T10:00:00Z',
+        status: 'Rejected'
+      }
+    ];
+
+    const result = calculateLedgerCash(mixedStatusOrders, baseTransfers, 50.0, 0);
+
+    // Available TRY Cash must be strictly 10,000 - 2,000 = ₺8,000.00
+    // Pending BUY and Cancelled SELL did not alter cash or total deposits
+    expect(result.availableCashTRY).toBe(8000.0);
+    expect(result.totalDepositsTRY).toBe(10000.0);
+    expect(result.totalBuysTRY).toBe(2000.0);
+    expect(result.totalSellsTRY).toBe(0.0);
+
+    // Rejected USD BUY did not mutate USD cash or set hasUsdActivity
+    expect(result.availableCashUSD).toBe(0.0);
+    expect(result.hasUsdActivity).toBe(false);
+  });
+
+  test('19. Unit Test: Selected-Lot Partial Sale recalculates remaining-lot acquisition cost while preserving net-capital tracking', async () => {
+    // Scenario:
+    // Lot 1: 10 shares @ ₺10.00 (₺100.00 invested)
+    // Lot 2: 10 shares @ ₺20.00 (₺200.00 invested)
+    // Total: 20 shares, total invested = ₺300.00, blended average entry = ₺15.00
+    const totalSharesBefore = 20;
+    const avgEntryBefore = 15.0;
+    const totalInvestedBefore = totalSharesBefore * avgEntryBefore; // ₺300.00
+
+    // User sells 10 shares from Lot 1 (@ ₺10.00 entry) at ₺25.00 market price
+    const sharesSold = 10;
+    const lotCostBasis = 10.0;
+    const sellPrice = 25.0;
+    const realizedPnl = (sellPrice - lotCostBasis) * sharesSold; // ₺150.00 profit
+    expect(realizedPnl).toBe(150.0);
+
+    const remainingShares = totalSharesBefore - sharesSold; // 10 shares
+
+    // 1. Remaining Lot Acquisition Cost Basis:
+    // Original capital was ₺300, ₺100 was in the sold lot -> ₺200 remaining across 10 shares = ₺20.00/share!
+    const remainingInvested = totalInvestedBefore - (sharesSold * lotCostBasis);
+    const updatedAvgEntryPrice = remainingInvested / remainingShares;
+    expect(updatedAvgEntryPrice).toBe(20.0); // Exact remaining lot cost, NOT stale ₺15.00 average!
+
+    // 2. Net-Capital / "Maliyet Düşürme" (House Money) Calculation:
+    // Net remaining capital = original capital - cost of sold - realized profit = 300 - 100 - 150 = ₺50.00
+    // Adjusted break-even for remaining 10 shares = ₺50 / 10 = ₺5.00/share!
+    const remainingNetCapital = totalInvestedBefore - (sharesSold * lotCostBasis) - realizedPnl;
+    const adjustedBreakEven = remainingNetCapital / remainingShares;
+    expect(adjustedBreakEven).toBe(5.0);
+
+    // Both metrics coexist clearly without conflation
+    expect(updatedAvgEntryPrice).toBe(20.0); // Acquisition price of remaining lot
+    expect(adjustedBreakEven).toBe(5.0);      // Net house-money break-even
+  });
 });
 

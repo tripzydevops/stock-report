@@ -236,7 +236,7 @@ export interface ExecutedOrder {
   currency: string;
   dateTime: string;
   executedAt?: string;
-  status: 'Filled';
+  status: 'Filled' | 'Pending' | 'Cancelled' | 'Rejected' | string;
   dcaNote?: string;
 }
 
