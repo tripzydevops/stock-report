@@ -1,4 +1,4 @@
-const CACHE_NAME = 'marketpulse-cache-v4';
+const CACHE_NAME = 'marketpulse-cache-v5';
 const PRECACHE_URLS = [
   '/',
   '/manifest.json',

@@ -326,14 +326,13 @@ export default function PortfolioView({
   const cashValUSD = cashBalanceUSD !== undefined ? cashBalanceUSD : ledgerCash.availableCashUSD;
   const totalValTRY = totalStockValTRY + (cashValTRY + (cashValUSD * usdTryRate));
 
-  // Conditional USD Visibility: Only reveal USD Wallet when user holds US stocks/ETFs or has USD cash activity
+  // Conditional USD Visibility: Only reveal USD Wallet when user currently holds US stocks/ETFs (shares > 0) or has positive USD cash
   const hasUsAssets = React.useMemo(() => {
-    return (
-      portfolio.some(p => p.market === 'US' || p.currency === 'USD') ||
-      cashValUSD > 0 ||
-      ledgerCash.hasUsdActivity
+    const hasUsHoldings = portfolio.some(
+      p => (p.market === 'US' || p.currency === 'USD') && Number(p.shares) > 0
     );
-  }, [portfolio, cashValUSD, ledgerCash.hasUsdActivity]);
+    return hasUsHoldings || cashValUSD > 0;
+  }, [portfolio, cashValUSD]);
 
   const recordedDepositsTRY = React.useMemo(() => {
     return transfers

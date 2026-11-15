@@ -824,8 +824,8 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(tryResult.availableCashUSD).toBe(0.0);
     expect(tryResult.hasUsdActivity).toBe(false);
 
-    // Conditional visibility rule: If no US stocks and no USD cash activity, USD wallet MUST NOT be shown
-    const isUsdWalletVisibleBistOnly = bistOnlyPortfolio.some(p => p.market === 'US' || p.currency === 'USD') || tryResult.availableCashUSD > 0 || tryResult.hasUsdActivity;
+    // Conditional visibility rule: If no US stocks and no USD cash, USD wallet MUST NOT be shown
+    const isUsdWalletVisibleBistOnly = bistOnlyPortfolio.some(p => (p.market === 'US' || p.currency === 'USD') && Number(p.shares) > 0) || tryResult.availableCashUSD > 0;
     expect(isUsdWalletVisibleBistOnly).toBe(false);
 
     // 2. Introduce US Stock Activity (AAPL) with native USD deposit and trades
@@ -883,13 +883,32 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // Consolidated Liquid Cash in TRY: 25,000 + (610 * 50) = ₺55,500.00
     expect(dualResult.consolidatedCashTRY).toBe(55500.0);
 
-    // Conditional visibility rule: With US activity, USD wallet MUST be revealed
+    // Helper matching PortfolioView conditional USD wallet visibility logic:
+    const checkUsdWalletVisible = (portfolioList: any[], usdCash: number) => {
+      const hasUsHoldings = portfolioList.some(
+        p => (p.market === 'US' || p.currency === 'USD') && Number(p.shares) > 0
+      );
+      return hasUsHoldings || usdCash > 0;
+    };
+
+    // Scenario 1: Current US stock/ETF holding (shares > 0) -> SHOW
     const dualPortfolio = [
       ...bistOnlyPortfolio,
       { symbol: 'AAPL', market: 'US', currency: 'USD', shares: 3, entryPrice: 150.0, currentPrice: 180.0 }
     ];
-    const isUsdWalletVisibleDual = dualPortfolio.some(p => p.market === 'US' || p.currency === 'USD') || dualResult.availableCashUSD > 0 || dualResult.hasUsdActivity;
-    expect(isUsdWalletVisibleDual).toBe(true);
+    expect(checkUsdWalletVisible(dualPortfolio, dualResult.availableCashUSD)).toBe(true);
+
+    // Scenario 2: All US assets sold, USD cash remains ($610.00 > 0) -> SHOW
+    const noUsHoldingsPortfolio = bistOnlyPortfolio;
+    expect(checkUsdWalletVisible(noUsHoldingsPortfolio, 610.0)).toBe(true);
+
+    // Scenario 3: No US holdings, USD cash zero, historical USD activity exists -> HIDE
+    // (Historical activity alone must NEVER keep the wallet visible!)
+    expect(dualResult.hasUsdActivity).toBe(true);
+    expect(checkUsdWalletVisible(noUsHoldingsPortfolio, 0.0)).toBe(false);
+
+    // Scenario 4: No US holdings, no USD cash, no USD activity -> HIDE
+    expect(checkUsdWalletVisible(bistOnlyPortfolio, tryResult.availableCashUSD)).toBe(false);
   });
 
   test('18. Unit Test: Pending, Cancelled, and Rejected orders are strictly ignored by calculateLedgerCash', async () => {
