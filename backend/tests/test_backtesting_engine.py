@@ -162,3 +162,75 @@ def test_max_open_positions_constraint():
         # Initial cash 100k, each position uses some cash
         pass
     assert len(signals) == 10
+
+
+def test_backtest_opening_gap_down_stop_loss():
+    # Day 1: Signal at 100.0, Stop at 95.0, Target at 110.0
+    # Day 2: Opens at 88.0 (gapped below stop 95.0)
+    dates = pd.date_range(start="2026-01-01", periods=3, freq="D")
+    df = pd.DataFrame({
+        "open": [100.0, 100.0, 88.0],
+        "high": [101.0, 101.0, 89.0],
+        "low": [99.0, 99.0, 85.0],
+        "close": [100.0, 100.0, 86.0],
+        "volume": [10000.0] * 3,
+    }, index=dates)
+
+    history = {"GAP_SYM": df}
+    signals = [{
+        "symbol": "GAP_SYM",
+        "strategy": "trend_pullback",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 95.0,
+        "target_1": 110.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0, slippage_bps=0.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    # Exit price MUST reflect the opening gap print (88.0), NOT the theoretical stop (95.0)!
+    assert trade.exit_price == 88.0
+    assert trade.exit_reason == "STOPPED_OUT_GAP"
+    assert trade.outcome == "LOSS"
+
+
+def test_backtest_outcome_driven_by_net_pnl_after_fees():
+    # Trade barely touches target by 0.5%, but 100 bps commission + 50 bps slippage makes net P&L negative
+    dates = pd.date_range(start="2026-01-01", periods=3, freq="D")
+    df = pd.DataFrame({
+        "open": [100.0, 100.0, 100.2],
+        "high": [100.5, 100.5, 100.6],  # Touches 100.5 target
+        "low": [99.5, 99.5, 99.8],
+        "close": [100.0, 100.2, 100.5],
+        "volume": [10000.0] * 3,
+    }, index=dates)
+
+    history = {"FEE_SYM": df}
+    signals = [{
+        "symbol": "FEE_SYM",
+        "strategy": "mean_reversion",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 90.0,
+        "target_1": 100.5, # Small 0.5% target
+    }]
+
+    # High commission (1.0% in + 1.0% out = 2.0% fees)
+    config = BacktestConfig(initial_capital=50000.0, commission_bps=100.0, slippage_bps=50.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    assert trade.exit_reason == "TARGET_HIT"
+    # Even though target was touched, net PnL is negative due to fees/slippage
+    assert trade.pnl < 0
+    # Financial outcome MUST be LOSS, not falsely reported as a WIN!
+    assert trade.outcome == "LOSS"
+    assert res.winning_trades == 0
+    assert res.losing_trades == 1
+

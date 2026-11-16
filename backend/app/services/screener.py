@@ -1,3 +1,11 @@
+"""
+Institutional Quantitative Screener & Strategy Engine.
+
+Note on Setup Quality / Confidence Scores:
+The `confidence_score` returned by individual strategies represents rule-based technical confluence
+and checklist completeness (conviction weighting). It is NOT an empirical or statistical win probability.
+Historical and live win rates must be evaluated using the trade evaluator and backtesting engine.
+"""
 import pandas as pd
 from typing import Dict, List, Optional
 import numpy as np
@@ -591,7 +599,7 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str, market: str = "BIST
 
 def screen_fund_momentum(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
     """
-    For funds/ETFs: 1-month return in top decile, positive 3-month return, max drawdown < limit.
+    For funds/ETFs: 1-month return exceeds threshold (> profile.fund_mom_1m_min), positive 3-month return, max drawdown < limit.
     """
     if len(df) < 63:
         return None

@@ -106,6 +106,7 @@ class InstitutionalBacktestEngine:
                 if isinstance(bar, pd.DataFrame):
                     bar = bar.iloc[-1]
 
+                bar_open = float(bar.get("open", bar["close"]))
                 high = float(bar.get("high", bar["close"]))
                 low = float(bar.get("low", bar["close"]))
                 close = float(bar["close"])
@@ -124,28 +125,33 @@ class InstitutionalBacktestEngine:
 
                 closed = False
                 exit_price = close
-                outcome = "OPEN"
                 exit_reason = "ACTIVE"
 
-                if hit_stop and hit_target:
+                # 1. Opening Gap Evaluation (Gap down through stop or gap up through target)
+                if stop is not None and bar_open <= stop:
+                    exit_price = max(0.01, bar_open * (1.0 - slip_rate))
+                    exit_reason = "STOPPED_OUT_GAP"
+                    closed = True
+                elif target is not None and bar_open >= target:
+                    exit_price = bar_open * (1.0 - slip_rate)
+                    exit_reason = "TARGET_HIT_GAP"
+                    closed = True
+                # 2. Intraday Checks
+                elif hit_stop and hit_target:
                     # Conservative tie-breaker: assumed stopped out
                     exit_price = max(0.01, stop * (1.0 - slip_rate))
-                    outcome = "LOSS"
                     exit_reason = "STOPPED_OUT"
                     closed = True
                 elif hit_target:
                     exit_price = target * (1.0 - slip_rate)
-                    outcome = "WIN"
                     exit_reason = "TARGET_HIT"
                     closed = True
                 elif hit_stop:
                     exit_price = max(0.01, stop * (1.0 - slip_rate))
-                    outcome = "LOSS"
                     exit_reason = "STOPPED_OUT"
                     closed = True
                 elif expired:
                     exit_price = close * (1.0 - slip_rate)
-                    outcome = "WIN" if exit_price > entry else "LOSS"
                     exit_reason = "EXPIRED"
                     closed = True
 
@@ -158,6 +164,9 @@ class InstitutionalBacktestEngine:
                     pnl = net_proceeds - pos["total_cost"]
                     pnl_pct = (pnl / pos["total_cost"]) * 100.0 if pos["total_cost"] > 0 else 0.0
                     total_fees = pos["entry_commission"] + exit_commission
+
+                    # Strict financial outcome derived from net P&L after friction
+                    outcome = "WIN" if pnl > 0 else "LOSS"
 
                     completed_trades.append(
                         BacktestTradeLog(
@@ -201,8 +210,18 @@ class InstitutionalBacktestEngine:
                     if raw_entry <= 0 or not raw_stop or raw_stop >= raw_entry:
                         continue
 
+                    # Determine next available open print (institutional execution reality)
+                    sym_df = clean_history.get(sym)
+                    if sym_df is not None and current_date in sym_df.index:
+                        c_bar = sym_df.loc[current_date]
+                        if isinstance(c_bar, pd.DataFrame):
+                            c_bar = c_bar.iloc[-1]
+                        bar_open = float(c_bar.get("open", raw_entry))
+                    else:
+                        bar_open = raw_entry
+
                     # Apply entry slippage
-                    effective_entry = raw_entry * (1.0 + slip_rate)
+                    effective_entry = bar_open * (1.0 + slip_rate)
 
                     # Position sizing based on fixed fractional risk
                     current_port_equity = cash + sum(
@@ -309,10 +328,10 @@ class InstitutionalBacktestEngine:
 
         calmar = (cagr_pct / abs(max_dd_pct)) if abs(max_dd_pct) > 0.1 else (cagr_pct if cagr_pct > 0 else 0.0)
 
-        # Trade metrics
+        # Trade metrics (Strictly driven by net financial PnL after friction)
         total_trades = len(completed_trades)
-        wins = [t for t in completed_trades if t.outcome == "WIN"]
-        losses = [t for t in completed_trades if t.outcome == "LOSS"]
+        wins = [t for t in completed_trades if t.pnl > 0]
+        losses = [t for t in completed_trades if t.pnl <= 0]
 
         win_count = len(wins)
         loss_count = len(losses)
@@ -320,7 +339,7 @@ class InstitutionalBacktestEngine:
 
         gross_profit = sum(t.pnl for t in wins)
         gross_loss = abs(sum(t.pnl for t in losses))
-        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0.0)
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (999.99 if gross_profit > 0 else 0.0)
 
         avg_win_pct = (sum(t.pnl_pct for t in wins) / win_count) if win_count > 0 else 0.0
         avg_loss_pct = abs(sum(t.pnl_pct for t in losses) / loss_count) if loss_count > 0 else 0.0
