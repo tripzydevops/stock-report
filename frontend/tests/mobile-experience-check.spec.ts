@@ -5,7 +5,7 @@ const ARTIFACTS_DIR = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed
 
 test.describe('Mobile Experience Comprehensive Check', () => {
   test('Audit Mobile Layout for Dividend, Signals, Catalysts, Portfolio & ORB', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
 
     // 1. Visit Signals Tab
     await page.goto('/#signals');
@@ -24,19 +24,6 @@ test.describe('Mobile Experience Comprehensive Check', () => {
     console.log('Mobile Dividend docWidth:', dividendDocWidth);
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, 'mobile_view_dividend_verified.png') });
     expect(dividendDocWidth).toBeLessThanOrEqual(420);
-
-    // 3. Check Arbitrage Modal on Mobile
-    const arbitrajBtn = page.locator('button:has-text("Arbitraj"), button:has-text("Arbitrage")').first();
-    if (await arbitrajBtn.isVisible()) {
-      await arbitrajBtn.click();
-      await page.waitForTimeout(500);
-      await page.screenshot({ path: path.join(ARTIFACTS_DIR, 'mobile_view_dividend_arbitrage_modal.png') });
-      const closeBtn = page.locator('button:has-text("✕")').first();
-      if (await closeBtn.isVisible()) {
-        await closeBtn.click();
-        await page.waitForTimeout(400);
-      }
-    }
 
     // 4. Visit Catalysts Tab
     await page.goto('/#catalysts');

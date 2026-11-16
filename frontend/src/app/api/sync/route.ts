@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAdminSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
+import { getAdminSupabase, getAuthenticatedSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
 import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch, getBistTradingSessionDate } from '@/lib/tradingViewScanner';
 
 const supabase = getAdminSupabase();
@@ -184,13 +184,51 @@ async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R
   return Promise.all(results);
 }
 
+async function isAuthorizedSyncRequest(request: Request): Promise<boolean> {
+  // 1. Cron secret authorization (Vercel Cron / GitHub Actions)
+  if (verifyCronAuthorization(request)) {
+    return true;
+  }
+
+  // 2. Same-origin browser request from the application frontend
+  const secFetchSite = request.headers.get('sec-fetch-site');
+  if (secFetchSite === 'same-origin') {
+    return true;
+  }
+
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+  if (origin && host) {
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.host === host) {
+        return true;
+      }
+    } catch {
+      // ignore URL parsing error
+    }
+  }
+
+  // 3. Authenticated Supabase session
+  try {
+    const authClient = getAuthenticatedSupabase(request);
+    const { data: { user } } = await authClient.auth.getUser();
+    if (user) return true;
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
 export async function GET(request: Request) {
   return POST(request);
 }
 
 export async function POST(request: Request) {
   try {
-    if (!verifyCronAuthorization(request)) {
+    const isAuthorized = await isAuthorizedSyncRequest(request);
+    if (!isAuthorized) {
       return NextResponse.json(
         { error: 'Unauthorized: invalid or missing cron secret' },
         { status: 401 }
@@ -242,51 +280,69 @@ export async function POST(request: Request) {
       }
     }
 
-    // Distinguish TEFAS funds from Yahoo Finance symbols
+    // Separate symbols into fast BIST scanner batch, TEFAS funds, and US/macro assets
     const rawSymbols = Array.from(symbolSet);
-    const yahooSymbolsToSync: string[] = [];
+    const bistSymbolsToSync: string[] = [];
     const tefasSymbolsToSync: string[] = [];
+    const usMacroSymbolsToSync: string[] = [];
 
     for (const sym of rawSymbols) {
-      if (sym === 'TRY=X' || sym === 'XU100.IS' || sym.endsWith('.IS')) {
-        yahooSymbolsToSync.push(sym);
+      if (sym === 'XU100.IS' || sym.endsWith('.IS')) {
+        bistSymbolsToSync.push(sym);
+      } else if (sym === 'TRY=X' || sym === 'SPY' || sym === 'QQQ' || sym === 'VOO' || sym === 'GLD' || sym === 'TLT') {
+        usMacroSymbolsToSync.push(sym);
       } else {
         const matched = dbAssets?.find(a => a.symbol.toUpperCase() === sym.toUpperCase() || a.symbol.replace('.IS', '').toUpperCase() === sym.toUpperCase());
         if (matched && matched.market === 'TEFAS') {
           tefasSymbolsToSync.push(sym.toUpperCase());
-        } else if (matched && matched.market === 'BIST' && !sym.endsWith('.IS')) {
-          yahooSymbolsToSync.push(`${sym}.IS`);
+        } else if (matched && matched.market === 'BIST') {
+          bistSymbolsToSync.push(sym.endsWith('.IS') ? sym : `${sym}.IS`);
+        } else if (matched && matched.market === 'US') {
+          usMacroSymbolsToSync.push(sym);
         } else {
-          yahooSymbolsToSync.push(sym);
+          bistSymbolsToSync.push(sym.endsWith('.IS') ? sym : `${sym}.IS`);
         }
       }
     }
 
-    const uniqueYahoo = Array.from(new Set(yahooSymbolsToSync));
+    const uniqueBist = Array.from(new Set(bistSymbolsToSync));
     const uniqueTefas = Array.from(new Set(tefasSymbolsToSync));
+    const uniqueUsMacro = Array.from(new Set(usMacroSymbolsToSync));
 
-    // 5. Fetch live quotes with bounded concurrency
-    const [yahooResults, tefasResults] = await Promise.all([
-      fetchWithConcurrency(uniqueYahoo, fetchLiveQuote, 15),
+    // 5. Fetch quotes: Batch BIST in 1 ultra-fast request (~350ms), concurrently with TEFAS & US
+    const [tvBistMap, tefasResults, usMacroResults] = await Promise.all([
+      fetchTradingViewBistQuotesBatch(uniqueBist),
       fetchWithConcurrency(uniqueTefas, fetchTefasQuote, 10),
+      fetchWithConcurrency(uniqueUsMacro, fetchLiveQuote, 5),
     ]);
 
-    const quotes = [...yahooResults, ...tefasResults].filter((q): q is QuoteResult => q !== null);
+    const quotes: QuoteResult[] = [
+      ...tefasResults.filter((q): q is QuoteResult => q !== null),
+      ...usMacroResults.filter((q): q is QuoteResult => q !== null),
+    ];
 
-    // Secondary safety sweep: If any BIST symbols returned null from primary fetch, sweep them via TradingView Scanner
-    const resolvedSymbols = new Set(quotes.map(q => q.symbol.toUpperCase()));
-    const unpricedBist = uniqueYahoo.filter(sym => (sym.endsWith('.IS') || sym === 'XU100.IS') && !resolvedSymbols.has(sym.toUpperCase()));
+    const unpricedBist: string[] = [];
+    for (const sym of uniqueBist) {
+      const clean = sym.replace('.IS', '').toUpperCase();
+      const tvQuote = tvBistMap.get(clean) || tvBistMap.get(`${clean}.IS`);
+      if (tvQuote && tvQuote.price > 0) {
+        quotes.push(tvQuote);
+      } else {
+        unpricedBist.push(sym);
+      }
+    }
+
+    // Safety sweep: Fallback to Yahoo Finance ONLY for any unpriced BIST tickers that TradingView didn't return
     if (unpricedBist.length > 0) {
       try {
-        const tvBatch = await fetchTradingViewBistQuotesBatch(unpricedBist);
-        for (const [, q] of tvBatch.entries()) {
-          if (q && q.price > 0 && !resolvedSymbols.has(q.symbol.toUpperCase())) {
+        const fallbackResults = await fetchWithConcurrency(unpricedBist, fetchLiveQuote, 5);
+        for (const q of fallbackResults) {
+          if (q && q.price > 0) {
             quotes.push(q);
-            resolvedSymbols.add(q.symbol.toUpperCase());
           }
         }
-      } catch (tvErr) {
-        console.warn('TradingView batch secondary sweep failed:', tvErr);
+      } catch (fallbackErr) {
+        console.warn('Fallback Yahoo BIST quotes fetch error:', fallbackErr);
       }
     }
 
@@ -409,21 +465,19 @@ export async function POST(request: Request) {
       });
     }
 
-    // 8. Batch upsert price_history in chunks of 80
-    for (let i = 0; i < priceRows.length; i += 80) {
-      const chunk = priceRows.slice(i, i + 80);
-      await supabase
-        .from('price_history')
-        .upsert(chunk, { onConflict: 'asset_id,date' });
+    // 8. Parallel batch upsert price_history in chunks of 250
+    const priceChunks: any[][] = [];
+    for (let i = 0; i < priceRows.length; i += 250) {
+      priceChunks.push(priceRows.slice(i, i + 250));
     }
+    await Promise.all(priceChunks.map(chunk => supabase.from('price_history').upsert(chunk, { onConflict: 'asset_id,date' })));
 
-    // 9. Batch upsert opening_direction in chunks of 80
-    for (let i = 0; i < orbRows.length; i += 80) {
-      const chunk = orbRows.slice(i, i + 80);
-      await supabase
-        .from('opening_direction')
-        .upsert(chunk, { onConflict: 'symbol,date' });
+    // 9. Parallel batch upsert opening_direction in chunks of 250
+    const orbChunks: any[][] = [];
+    for (let i = 0; i < orbRows.length; i += 250) {
+      orbChunks.push(orbRows.slice(i, i + 250));
     }
+    await Promise.all(orbChunks.map(chunk => supabase.from('opening_direction').upsert(chunk, { onConflict: 'symbol,date' })));
 
     // 10. Update FX Rates
     if (updatedFxRate) {

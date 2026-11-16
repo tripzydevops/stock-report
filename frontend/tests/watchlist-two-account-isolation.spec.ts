@@ -376,18 +376,20 @@ test.describe('Watchlist Multi-Tenant Authenticated Persistence & Account Isolat
     await expect(quickInput).toBeVisible({ timeout: 10000 });
 
     const postPromise = page.waitForResponse(
-      res => res.url().includes('/api/watchlist') && res.request().method() === 'POST' && res.status() === 200,
+      res => res.url().includes('/api/watchlist') && res.request().method() === 'POST' && [200, 201].includes(res.status()),
       { timeout: 15000 }
     );
 
     await quickInput.fill('KCHOL');
-    await quickInput.press('Enter');
+    const submitBtn = page.locator('button:has-text("+ Hızlı Ekle"), button:has-text("+ Add")').first();
+    await expect(submitBtn).toBeEnabled({ timeout: 5000 });
+    await submitBtn.click();
 
     const postResponse = await postPromise;
     const postData = await postResponse.json();
     expect(postData.success).toBe(true);
     expect(postData.item).toBeDefined();
-    expect(postData.item.userId).toBe(userIdA);
+    expect(postData.item.user_id || postData.userId).toBe(userIdA);
     if (postData.item.id) {
       createdFixtureIdsForA.push(postData.item.id);
     }

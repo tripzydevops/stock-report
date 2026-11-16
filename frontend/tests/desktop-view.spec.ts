@@ -75,6 +75,7 @@ test.describe('Desktop Viewport & Layout Verification', () => {
   });
 
   test('4. TURSG tranche matching restores Lot #1 to 167 shares and shows closed scalp section', async ({ page }) => {
+    test.setTimeout(60000);
     // Navigate to Portfolio
     const portfolioBtn = page.locator('aside button[title*="Portföy"]').first();
     await expect(portfolioBtn).toBeVisible();

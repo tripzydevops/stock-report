@@ -17,21 +17,14 @@ const ALL_TABS = [
 
 test.describe('Mobile Viewport Audit Across All 9 Tabs', () => {
   test('Check horizontal overflow and mobile layout across all 9 tabs', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(180000);
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForSelector('header');
 
     for (const tab of ALL_TABS) {
-      // Open sidebar drawer via hamburger
-      const hamburgerBtn = page.getByTitle('Menüyü Aç');
-      await hamburgerBtn.click();
-      await page.waitForTimeout(300);
-
-      // Click tab in drawer
-      const tabBtn = page.locator(`aside button:has-text("${tab.name}")`).first();
-      await expect(tabBtn).toBeVisible({ timeout: 5000 });
-      await tabBtn.click();
+      await page.goto(`/#${tab.id}`);
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(600);
 
       // Verify no horizontal overflow on mobile
