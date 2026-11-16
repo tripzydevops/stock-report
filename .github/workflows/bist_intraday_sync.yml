@@ -27,14 +27,30 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-          cache-dependency-path: 'backend/requirements.txt'
+          cache-dependency-path: 'backend/requirements-sync.txt'
 
       - name: Install Lightweight Sync Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install httpx supabase python-dotenv
+          pip install -r backend/requirements-sync.txt
 
-      - name: Execute BIST Intraday 30m Sync & Catalyst Ingestion
+      - name: Verify Sync Import Chain
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -c "from app.core.database import get_supabase_client; from app.services.bist_calendar import get_bist_trading_session_date; print('[OK] Sync import chain verified successfully')"
+
+      - name: Execute BIST Intraday 30m Price Sync
+        env:
+          PYTHONIOENCODING: utf-8
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python backend/scripts/sync_bist_intraday.py
+
+      - name: Execute Live Catalyst Ingestion
+        if: always()
         env:
           PYTHONIOENCODING: utf-8
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -42,5 +58,4 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python backend/scripts/sync_bist_intraday.py
           python backend/scripts/sync_live_catalysts.py

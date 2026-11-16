@@ -32,6 +32,7 @@ if env_path.exists():
     from dotenv import load_dotenv
     load_dotenv(env_path)
 
+import time
 import httpx
 from datetime import timedelta
 from app.core.database import get_supabase_client, upsert_rows
@@ -46,9 +47,10 @@ from app.services.bist_calendar import (
     get_bist_trading_session_date
 )
 
-def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
+def fetch_tradingview_bist_batch(symbols: list[str], max_retries: int = 3) -> dict[str, dict]:
     """
-    Fetches delayed BIST OHLCV quotes in a single batch POST request.
+    Fetches delayed BIST OHLCV quotes in a single batch POST request with bounded retries.
+    Raises RuntimeError if provider returns zero valid quotes when symbols were requested.
     """
     results = {}
     if not symbols:
@@ -68,52 +70,73 @@ def fetch_tradingview_bist_batch(symbols: list[str]) -> dict[str, dict]:
         "Accept": "application/json"
     }
 
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.post(url, json=payload, headers=headers)
-            if resp.status_code == 200:
+    last_err: Exception | None = None
+    data = []
+    for attempt in range(1, max_retries + 1):
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
                 data = resp.json().get("data", [])
-                session_date_str = get_bist_trading_session_date().strftime("%Y-%m-%d")
-                now_iso = datetime.now(timezone.utc).isoformat()
+                if data:
+                    break
+                else:
+                    print(f"⚠️ TradingView batch returned empty data (attempt {attempt}/{max_retries})")
+        except Exception as e:
+            last_err = e
+            print(f"⚠️ TradingView batch request attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(2 ** (attempt - 1))
 
-                for item in data:
-                    ticker = item.get("s", "").replace("BIST:", "").upper()
-                    vals = item.get("d", [])
-                    if not ticker or not isinstance(vals, list) or len(vals) < 5:
-                        continue
-                    close = vals[0]
-                    if not isinstance(close, (int, float)) or close <= 0:
-                        continue
-                    close_val = float(close)
-                    open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else None
-                    high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else None
-                    low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else None
-                    vol = int(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else None
-                    change_pct = float(vals[5]) if len(vals) > 5 and isinstance(vals[5], (int, float)) else None
-                    change_abs = float(vals[6]) if len(vals) > 6 and isinstance(vals[6], (int, float)) else None
+    if not data:
+        raise RuntimeError(f"TradingView scanner returned zero data for {len(symbols)} requested tickers. Last error: {last_err}")
 
-                    prev_close = None
-                    if change_abs is not None:
-                        prev_close = round(close_val - change_abs, 2)
-                    elif change_pct is not None and (1 + change_pct / 100) > 0:
-                        prev_close = round(close_val / (1 + change_pct / 100), 2)
+    session_date_str = get_bist_trading_session_date().strftime("%Y-%m-%d")
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-                    orig_sym = clean_map.get(ticker, f"{ticker}.IS")
-                    results[orig_sym] = {
-                        "symbol": orig_sym,
-                        "ticker": ticker,
-                        "close": close_val,
-                        "open": open_p,
-                        "high": high_p,
-                        "low": low_p,
-                        "volume": vol,
-                        "prev_close": float(prev_close) if prev_close else None,
-                        "change_pct": change_pct,
-                        "session_date": session_date_str,
-                        "observed_at": now_iso
-                    }
-    except Exception as e:
-        print(f"⚠️ TradingView batch request failed: {e}")
+    for item in data:
+        ticker = item.get("s", "").replace("BIST:", "").upper()
+        vals = item.get("d", [])
+        if not ticker or not isinstance(vals, list) or len(vals) < 5:
+            continue
+        close = vals[0]
+        if not isinstance(close, (int, float)) or close <= 0:
+            continue
+        close_val = float(close)
+        open_p = float(vals[1]) if isinstance(vals[1], (int, float)) and vals[1] > 0 else None
+        high_p = float(vals[2]) if isinstance(vals[2], (int, float)) and vals[2] > 0 else None
+        low_p = float(vals[3]) if isinstance(vals[3], (int, float)) and vals[3] > 0 else None
+        vol = int(vals[4]) if isinstance(vals[4], (int, float)) and vals[4] >= 0 else None
+        change_pct = float(vals[5]) if len(vals) > 5 and isinstance(vals[5], (int, float)) else None
+        change_abs = float(vals[6]) if len(vals) > 6 and isinstance(vals[6], (int, float)) else None
+
+        prev_close = None
+        if change_abs is not None:
+            prev_close = round(close_val - change_abs, 2)
+        elif change_pct is not None and (1 + change_pct / 100) > 0:
+            prev_close = round(close_val / (1 + change_pct / 100), 2)
+
+        orig_sym = clean_map.get(ticker, f"{ticker}.IS")
+        results[orig_sym] = {
+            "symbol": orig_sym,
+            "ticker": ticker,
+            "close": close_val,
+            "open": open_p,
+            "high": high_p,
+            "low": low_p,
+            "volume": vol,
+            "prev_close": float(prev_close) if prev_close else None,
+            "change_pct": change_pct,
+            "session_date": session_date_str,
+            "observed_at": now_iso
+        }
+
+    if len(results) == 0:
+        raise RuntimeError(f"TradingView scanner returned {len(data)} items but 0 valid parsed quotes.")
+
+    unpriced_count = len(symbols) - len(results)
+    if unpriced_count > 0:
+        print(f"ℹ️ Coverage: {len(results)}/{len(symbols)} quotes retrieved ({unpriced_count} unpriced).")
 
     return results
 
@@ -257,26 +280,39 @@ def main():
         })
 
     # 5. Upsert price_history in chunks of 100
+    attempted_prices = len(price_rows)
+    persisted_prices = 0
+    failed_price_chunks: list[tuple[int, Exception]] = []
+
     if price_rows:
         for i in range(0, len(price_rows), 100):
             chunk = price_rows[i:i + 100]
             try:
                 upsert_rows("price_history", chunk, on_conflict="asset_id,date")
+                persisted_prices += len(chunk)
             except Exception as e:
-                print(f"⚠️ Error upserting price_history chunk {i}: {e}")
-        print(f"✓ Upserted {len(price_rows)} price_history records for {today_str}.")
+                failed_price_chunks.append((i, e))
+                print(f"❌ Error upserting price_history chunk {i}-{i+len(chunk)}: {e}")
+        print(f"📊 price_history: {persisted_prices}/{attempted_prices} records persisted ({len(failed_price_chunks)} failed chunks).")
 
     # 6. Upsert opening_direction in chunks of 100
+    attempted_orbs = len(orb_rows)
+    persisted_orbs = 0
+    failed_orb_chunks: list[tuple[int, Exception]] = []
+
     if orb_rows:
         for i in range(0, len(orb_rows), 100):
             chunk = orb_rows[i:i + 100]
             try:
                 upsert_rows("opening_direction", chunk, on_conflict="symbol,date")
+                persisted_orbs += len(chunk)
             except Exception as e:
-                print(f"⚠️ Error upserting opening_direction chunk {i}: {e}")
-        print(f"✓ Upserted {len(orb_rows)} opening_direction records for {today_str}.")
+                failed_orb_chunks.append((i, e))
+                print(f"❌ Error upserting opening_direction chunk {i}-{i+len(chunk)}: {e}")
+        print(f"📊 opening_direction: {persisted_orbs}/{attempted_orbs} records persisted ({len(failed_orb_chunks)} failed chunks).")
 
     # 7. Update BIST Market Regime if XU100 is available
+    regime_updated = False
     if xu100_close:
         try:
             upsert_rows("market_regime", [{
@@ -286,6 +322,7 @@ def main():
                 "regime": "bullish" if xu100_close > 11500 else "neutral",
                 "notes": f"Intraday 30m sync at {datetime.now().strftime('%H:%M:%S')} TRT via TradingView"
             }], on_conflict="market,date")
+            regime_updated = True
             print(f"✓ Updated BIST Market Regime: XU100 at {xu100_close:.2f}")
         except Exception as e:
             print(f"⚠️ Error updating market_regime: {e}")
@@ -325,6 +362,11 @@ def main():
                 print(f"   🎉 {sym}: Current price ₺{curr:.2f} reached Target Price ₺{tp:.2f}!")
     except Exception as e:
         print(f"⚠️ Portfolio alert check encountered error: {e}")
+
+    # 9. Verify operational integrity & enforce truthful non-zero exit on critical persistence failures
+    if failed_price_chunks or (attempted_prices > 0 and persisted_prices == 0):
+        print(f"\n❌ CRITICAL SYNC FAILURE: {len(failed_price_chunks)} price chunk(s) failed to persist ({persisted_prices}/{attempted_prices} saved). Exiting with error code 1.\n")
+        sys.exit(1)
 
     print(f"🏁 Intraday sync finished successfully at {datetime.now().strftime('%H:%M:%S')}.\n")
 
