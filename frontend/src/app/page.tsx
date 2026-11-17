@@ -319,6 +319,14 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     stopLoss: 0, targetPrice: undefined, distanceToStop: 0, isDividend: false,
     dcaZone: 'HOLD', dcaRationale: 'Cash yield money market liquidity preservation.',
     entryDate: '2026-10-01', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'CCOLA', name: 'Coca-Cola İçecek', market: 'BIST',
+    shares: 68, entryPrice: 74.76, currentPrice: 79.00, currency: 'TRY',
+    totalCost: 5083.80, currentValue: 5372.00, pnlAmount: 288.20, pnlPercent: 5.67,
+    stopLoss: 0, targetPrice: 92.83, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Coca-Cola İçecek prime consumer defensive compounder.',
+    entryDate: '2026-11-17', strategyType: 'CORE_DIVIDEND'
   }
 ];
 
@@ -1087,7 +1095,7 @@ function checkIsGuestCustomized(): boolean {
         const canonicalModelSymbols = new Set([
           'TKFEN', 'ISMEN', 'TURSG', 'AKBNK', 'AEFES', 'AGHOL', 'ASELS', 'BIMAS', 'HALKB',
           'KCHOL', 'KRDMD', 'PETKM', 'TCELL', 'TUPRS', 'VAKBN', 'ZBJ', 'TRGYO', 'THYAO',
-          'FROTO', 'SISE', 'EREGL', 'YKBNK', 'SAHOL', 'ENKAI'
+          'FROTO', 'SISE', 'EREGL', 'YKBNK', 'SAHOL', 'ENKAI', 'CCOLA'
         ]);
         const hasCustomHolding = parsed.some((p: any) => {
           const sym = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
@@ -1109,6 +1117,16 @@ function markGuestCustomized(): void {
       localStorage.setItem(GUEST_CUSTOMIZED_KEY, 'true');
     } catch {}
   }
+}
+
+function sanitizeTransfers(transfersList: any[]): any[] {
+  if (!Array.isArray(transfersList)) return [];
+  return transfersList.filter((t: any) => {
+    if (!t) return false;
+    if (t.id === '6f01774d-c3cc-46bc-aef9-de6bbc33af95') return false;
+    if (Math.abs(Number(t.amount) - 20323.14) < 0.05) return false;
+    return true;
+  });
 }
 
 export default function Home() {
@@ -1218,7 +1236,14 @@ export default function Home() {
         if (rawTrans) {
           const parsed = JSON.parse(rawTrans);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setTransfers(parsed);
+            const clean = sanitizeTransfers(parsed);
+            setTransfers(clean);
+            if (clean.length !== parsed.length) {
+              try {
+                localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(clean));
+                localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(clean));
+              } catch (e) {}
+            }
           }
         }
         const rawReal = localStorage.getItem(GUEST_REALIZED_KEY) || localStorage.getItem('market_pulse_cached_realized');
@@ -2056,8 +2081,9 @@ export default function Home() {
               if (rawTrans) {
                 const parsedTrans = JSON.parse(rawTrans);
                 if (Array.isArray(parsedTrans) && parsedTrans.length > 0) {
-                  loadedTrans = parsedTrans;
-                  setTransfers(parsedTrans);
+                  const cleanTrans = sanitizeTransfers(parsedTrans);
+                  loadedTrans = cleanTrans;
+                  setTransfers(cleanTrans);
                 }
               }
 
@@ -2284,22 +2310,27 @@ export default function Home() {
           const { data: transData } = await transQuery;
 
           if (transData && transData.length > 0) {
-            loadedTrans = transData.map((t: any) => ({
+            loadedTrans = sanitizeTransfers(transData.map((t: any) => ({
               id: t.id,
               transferType: t.transfer_type,
               amount: Number(t.amount),
               currency: t.currency || 'TRY',
               transferDate: t.transfer_date,
               notes: t.notes
-            }));
+            })));
             setTransfers(loadedTrans);
-            if (typeof window !== 'undefined' && !user) {
+            if (typeof window !== 'undefined') {
               try {
                 localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(loadedTrans));
               } catch (e) {}
             }
           } else {
             setTransfers([]);
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('marketpulse_cached_transfers', JSON.stringify([]));
+              } catch (e) {}
+            }
           }
 
           // Compute cash strictly as: (All Deposits + All Sells - All Buys)
@@ -2534,7 +2565,7 @@ export default function Home() {
         const cachedTransfers = localStorage.getItem('marketpulse_cached_transfers');
         if (cachedTransfers) {
           const parsed = JSON.parse(cachedTransfers);
-          if (Array.isArray(parsed) && parsed.length > 0) setTransfers(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) setTransfers(sanitizeTransfers(parsed));
         }
 
         const cachedRegimes = localStorage.getItem('market_pulse_cached_regimes');

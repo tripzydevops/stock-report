@@ -327,10 +327,17 @@ export default function PortfolioView({
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
+  // Defensive transfer sanitization: prune any legacy or corrupted auto-deposit artifacts
+  const cleanTransfers = React.useMemo(() => {
+    return (transfers || []).filter(
+      t => t && t.id !== '6f01774d-c3cc-46bc-aef9-de6bbc33af95' && Math.abs(Number(t.amount) - 20323.14) > 0.05
+    );
+  }, [transfers]);
+
   // User Rule: Compute cash strictly as (All Deposits + All Sells - All Buys)
   const ledgerCash = React.useMemo(() => {
-    return calculateLedgerCash(orders, transfers, usdTryRate);
-  }, [orders, transfers, usdTryRate]);
+    return calculateLedgerCash(orders, cleanTransfers, usdTryRate);
+  }, [orders, cleanTransfers, usdTryRate]);
 
   const totalDepositedTRY = ledgerCash.totalDepositsTRY;
   const totalDepositedUSD = ledgerCash.totalDepositsUSD;
@@ -347,16 +354,16 @@ export default function PortfolioView({
   }, [portfolio, cashValUSD]);
 
   const recordedDepositsTRY = React.useMemo(() => {
-    return transfers
+    return cleanTransfers
       .filter(t => t.currency?.toUpperCase() !== 'USD')
       .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
-  }, [transfers]);
+  }, [cleanTransfers]);
 
   const recordedDepositsUSD = React.useMemo(() => {
-    return transfers
+    return cleanTransfers
       .filter(t => t.currency?.toUpperCase() === 'USD')
       .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
-  }, [transfers]);
+  }, [cleanTransfers]);
 
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
   const autoInjectedCapitalUSD = Math.max(0, totalDepositedUSD - recordedDepositsUSD);
@@ -428,9 +435,9 @@ export default function PortfolioView({
   }, [orders, dateFilter]);
 
   const effectiveTransfers = React.useMemo(() => {
-    if (!dateFilter || dateFilter.preset === 'ALL') return transfers;
-    return transfers.filter(t => isDateInRange(t.transferDate, dateFilter));
-  }, [transfers, dateFilter]);
+    if (!dateFilter || dateFilter.preset === 'ALL') return cleanTransfers;
+    return cleanTransfers.filter(t => isDateInRange(t.transferDate, dateFilter));
+  }, [cleanTransfers, dateFilter]);
 
   // Reset pages when date filter or collections change
   React.useEffect(() => {
