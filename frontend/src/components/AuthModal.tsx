@@ -10,7 +10,7 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { signInWithEmail, signUpWithEmail, enterDemoMode } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInAsAdmin, enterDemoMode } = useAuth();
   const { language } = useLanguage();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -49,6 +49,24 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickAdmin = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setLoading(true);
+    try {
+      const { error } = await signInAsAdmin();
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        onClose();
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Quick admin sign-in failed');
     } finally {
       setLoading(false);
     }
@@ -136,7 +154,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </button>
         </form>
 
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-col items-center gap-2 text-xs">
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-col items-center gap-2.5 text-xs">
+          {/* Quick Trial Admin Login */}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handleQuickAdmin}
+            className="w-full py-2.5 px-4 rounded-xl font-bold text-xs text-amber-900 dark:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            <span>⚡</span>
+            <span>{language === 'tr' ? '1-Tık Yönetici Girişi (successofmentors@gmail.com)' : '1-Click Admin Login (successofmentors@gmail.com)'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {

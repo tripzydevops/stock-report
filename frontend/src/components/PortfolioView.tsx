@@ -42,6 +42,7 @@ interface PortfolioViewProps {
   isGuestCustomized?: boolean;
   onOpenAuthModal?: () => void;
   onResetToModelPortfolio?: () => void;
+  onQuickAdminLogin?: () => void;
 }
 
 export default function PortfolioView({
@@ -71,6 +72,7 @@ export default function PortfolioView({
   isGuestCustomized = false,
   onOpenAuthModal,
   onResetToModelPortfolio,
+  onQuickAdminLogin,
 }: PortfolioViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
@@ -561,6 +563,17 @@ export default function PortfolioView({
               </div>
             </div>
             <div className="flex items-center gap-2 ml-auto sm:ml-0">
+              {onQuickAdminLogin && (
+                <button
+                  type="button"
+                  onClick={onQuickAdminLogin}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Tek tıkla yönetici hesabına bağlan ve portföyünü buluta kaydet"
+                >
+                  <span>⚡</span>
+                  <span>{language === 'tr' ? '1-Tık Yönetici Girişi' : '1-Tap Admin'}</span>
+                </button>
+              )}
               {onOpenAuthModal && (
                 <button
                   type="button"
@@ -596,15 +609,28 @@ export default function PortfolioView({
                 </span>
               </div>
             </div>
-            {onOpenAuthModal && (
-              <button
-                type="button"
-                onClick={onOpenAuthModal}
-                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer ml-auto sm:ml-0"
-              >
-                {language === 'tr' ? 'Giriş Yap / Kaydol' : 'Sign In / Register'}
-              </button>
-            )}
+            <div className="flex items-center gap-2 ml-auto sm:ml-0">
+              {onQuickAdminLogin && (
+                <button
+                  type="button"
+                  onClick={onQuickAdminLogin}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Yönetici hesabıyla bağlan"
+                >
+                  <span>⚡</span>
+                  <span>{language === 'tr' ? '1-Tık Yönetici Girişi' : '1-Tap Admin'}</span>
+                </button>
+              )}
+              {onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
+                >
+                  {language === 'tr' ? 'Giriş Yap / Kaydol' : 'Sign In / Register'}
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

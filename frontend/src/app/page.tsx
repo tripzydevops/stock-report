@@ -1015,10 +1015,88 @@ function markGuestCustomized(): void {
 
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
-  const { user, session, isDemoMode, signOut } = useAuth();
+  const { user, session, isDemoMode, signOut, signInAsAdmin } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [geminiApiKey, setGeminiApiKey] = useState('');
+
+  // Automatic migration: Sync locally saved guest holdings to Supabase when user/admin signs in
+  useEffect(() => {
+    if (!user || isDemoMode || !session?.access_token) return;
+
+    const autoMigrateGuestHoldings = async () => {
+      try {
+        const rawGuest = localStorage.getItem(GUEST_PORTFOLIO_KEY) || localStorage.getItem('market_pulse_cached_portfolio');
+        if (!rawGuest) return;
+
+        const parsed: PortfolioItem[] = JSON.parse(rawGuest);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        // Fetch current user positions to prevent duplicates
+        const { data: existingPositions } = await supabase
+          .from('portfolio_positions')
+          .select('asset_id, assets(symbol)')
+          .eq('user_id', user.id)
+          .eq('is_open', true);
+
+        const existingSymbols = new Set(
+          (existingPositions || []).map((p: any) => (p.assets?.symbol || '').replace('.IS', '').trim().toUpperCase())
+        );
+
+        const itemsToMigrate = parsed.filter(item => {
+          const sym = (item.symbol || '').replace('.IS', '').trim().toUpperCase();
+          if (!sym) return false;
+          if (existingSymbols.has(sym)) return false;
+          if (!item.shares || item.shares <= 0 || !item.entryPrice || item.entryPrice <= 0) return false;
+          return true;
+        });
+
+        if (itemsToMigrate.length === 0) {
+          localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+          return;
+        }
+
+        console.log(`Auto-migrating ${itemsToMigrate.length} guest holding(s) to cloud for ${user.email}:`, itemsToMigrate.map(i => i.symbol));
+
+        for (const item of itemsToMigrate) {
+          const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
+          await fetch('/api/portfolio/positions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({
+              symbol: cleanSym,
+              shares: item.shares,
+              price: item.entryPrice,
+              stopLoss: item.stopLoss || null,
+              targetPrice: item.targetPrice || null,
+              market: item.market || 'BIST',
+              name: item.name || cleanSym,
+              currency: item.currency || 'TRY',
+              notes: item.dcaRationale || 'Auto-migrated from local guest device',
+              isDividend: Boolean(item.isDividend),
+              status: 'Filled',
+              isHistoricalImport: true,
+              autoFund: true
+            })
+          });
+        }
+
+        localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+        localStorage.removeItem(GUEST_PORTFOLIO_KEY);
+        localStorage.removeItem(GUEST_ORDERS_KEY);
+        localStorage.removeItem(GUEST_TRANSFERS_KEY);
+
+        await loadData(false);
+      } catch (e) {
+        console.warn('Auto-migration error:', e);
+      }
+    };
+
+    autoMigrateGuestHoldings();
+  }, [user?.id, session?.access_token, isDemoMode]);
 
   // Immediate early rehydration for guest customized portfolios to prevent initial flicker or data loss
   useEffect(() => {
@@ -4665,6 +4743,7 @@ export default function Home() {
             isGuestCustomized={checkIsGuestCustomized()}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
             onResetToModelPortfolio={handleResetToModelPortfolio}
+            onQuickAdminLogin={signInAsAdmin}
           />
         )}
 
