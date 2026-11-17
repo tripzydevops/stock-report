@@ -6,7 +6,7 @@ and computes hedge-fund grade performance analytics (Win Rate, Profit Factor, Ex
 import pandas as pd
 import numpy as np
 from datetime import datetime, date, timedelta
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 
 from app.services.market_profiles import US_GROWTH_MOMENTUM_UNIVERSE, MarketType, get_market_profile
 from app.services.screener import (
