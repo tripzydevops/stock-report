@@ -5,6 +5,10 @@ export interface LedgerCashResult {
   availableCashUSD: number;
   totalDepositsTRY: number;
   totalDepositsUSD: number;
+  totalWithdrawalsTRY: number;
+  totalWithdrawalsUSD: number;
+  netDepositsTRY: number;
+  netDepositsUSD: number;
   totalBuysTRY: number;
   totalBuysUSD: number;
   totalSellsTRY: number;
@@ -14,6 +18,14 @@ export interface LedgerCashResult {
   hasRecordHistory: boolean;
   isLedgerEmpty: boolean;
   hasUsdActivity: boolean;
+}
+
+export function isValidTransfer(t: CapitalTransfer | any): boolean {
+  if (!t) return false;
+  const amt = Number(t.amount);
+  if (!Number.isFinite(amt) || amt <= 0) return false;
+  const type = (t.transferType || t.transfer_type)?.toUpperCase();
+  return type === 'DEPOSIT' || type === 'WITHDRAWAL';
 }
 
 export function parseOrderTimestamp(order: ExecutedOrder): number {
@@ -37,11 +49,12 @@ export function parseOrderTimestamp(order: ExecutedOrder): number {
 
 /**
  * Computes native segregated cash ledgers:
- * - TRY Wallet: (All TRY Deposits + All TRY Sells - All TRY Buys)
- * - USD Wallet: (All USD Deposits + All USD Sells - All USD Buys)
+ * - TRY Wallet: (All TRY Deposits + All TRY Sells - All TRY Buys - All TRY Withdrawals)
+ * - USD Wallet: (All USD Deposits + All USD Sells - All USD Buys - All USD Withdrawals)
  * 
  * Follows chronological event execution. When a buy order exceeds available native cash,
  * the shortfall is funded via new capital injection in that native currency (no arbitrary cross-FX distortion).
+ * Withdrawals decrease available cash but do not reduce gross lifetime deposited capital.
  */
 export function calculateLedgerCash(
   orders: ExecutedOrder[] = [],
@@ -61,10 +74,8 @@ export function calculateLedgerCash(
 
   const events: TimelineEvent[] = [];
 
-  // 1. Process Transfers (defensively sanitize out any corrupted/bogus auto-deposit artifacts)
-  const cleanTransfers = (transfers || []).filter(
-    t => t && t.id !== '6f01774d-c3cc-46bc-aef9-de6bbc33af95' && Math.abs(Number(t.amount) - 20323.14) > 0.05
-  );
+  // 1. Process Transfers (defensively validate positive finite amount and valid transfer type)
+  const cleanTransfers = (transfers || []).filter(isValidTransfer);
 
   if (cleanTransfers.length > 0) {
     for (const t of cleanTransfers) {
@@ -118,6 +129,8 @@ export function calculateLedgerCash(
   let runningCashUSD = 0;
   let totalDepositsTRY = 0;
   let totalDepositsUSD = 0;
+  let totalWithdrawalsTRY = 0;
+  let totalWithdrawalsUSD = 0;
   let totalBuysTRY = 0;
   let totalBuysUSD = 0;
   let totalSellsTRY = 0;
@@ -129,9 +142,9 @@ export function calculateLedgerCash(
         if (ev.transferType === 'DEPOSIT') {
           runningCashUSD += ev.amount;
           totalDepositsUSD += ev.amount;
-        } else {
+        } else if (ev.transferType === 'WITHDRAWAL') {
           runningCashUSD = Math.max(0, runningCashUSD - ev.amount);
-          totalDepositsUSD = Math.max(0, totalDepositsUSD - ev.amount);
+          totalWithdrawalsUSD += ev.amount;
         }
       } else if (ev.type === 'ORDER') {
         if (ev.side === 'SELL') {
@@ -154,9 +167,9 @@ export function calculateLedgerCash(
         if (ev.transferType === 'DEPOSIT') {
           runningCashTRY += ev.amount;
           totalDepositsTRY += ev.amount;
-        } else {
+        } else if (ev.transferType === 'WITHDRAWAL') {
           runningCashTRY = Math.max(0, runningCashTRY - ev.amount);
-          totalDepositsTRY = Math.max(0, totalDepositsTRY - ev.amount);
+          totalWithdrawalsTRY += ev.amount;
         }
       } else if (ev.type === 'ORDER') {
         if (ev.side === 'SELL') {
@@ -184,11 +197,18 @@ export function calculateLedgerCash(
   const consolidatedCashTRY = Number((runningCashTRY + (runningCashUSD * validFxRate)).toFixed(2));
   const consolidatedCashUSD = Number(((runningCashTRY / validFxRate) + runningCashUSD).toFixed(2));
 
+  const netDepositsTRY = Math.max(0, totalDepositsTRY - totalWithdrawalsTRY);
+  const netDepositsUSD = Math.max(0, totalDepositsUSD - totalWithdrawalsUSD);
+
   return {
     availableCashTRY: Number(runningCashTRY.toFixed(2)),
     availableCashUSD: Number(runningCashUSD.toFixed(2)),
     totalDepositsTRY: Number(totalDepositsTRY.toFixed(2)),
     totalDepositsUSD: Number(totalDepositsUSD.toFixed(2)),
+    totalWithdrawalsTRY: Number(totalWithdrawalsTRY.toFixed(2)),
+    totalWithdrawalsUSD: Number(totalWithdrawalsUSD.toFixed(2)),
+    netDepositsTRY: Number(netDepositsTRY.toFixed(2)),
+    netDepositsUSD: Number(netDepositsUSD.toFixed(2)),
     totalBuysTRY: Number(totalBuysTRY.toFixed(2)),
     totalBuysUSD: Number(totalBuysUSD.toFixed(2)),
     totalSellsTRY: Number(totalSellsTRY.toFixed(2)),

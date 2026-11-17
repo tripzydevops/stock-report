@@ -11,7 +11,7 @@ import { DateRangeFilter, isDateInRange, formatFilterDisplay } from '../lib/date
 import DcaOffsetEngine from './DcaOffsetEngine';
 import PortfolioBriefModal from './PortfolioBriefModal';
 import TradePlaybookModal from './TradePlaybookModal';
-import { calculateLedgerCash } from '../lib/cashLedger';
+import { calculateLedgerCash, isValidTransfer } from '../lib/cashLedger';
 import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
 import Pagination from './Pagination';
 
@@ -327,11 +327,9 @@ export default function PortfolioView({
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
-  // Defensive transfer sanitization: prune any legacy or corrupted auto-deposit artifacts
+  // Defensive transfer sanitization: validate positive amount and valid transfer type
   const cleanTransfers = React.useMemo(() => {
-    return (transfers || []).filter(
-      t => t && t.id !== '6f01774d-c3cc-46bc-aef9-de6bbc33af95' && Math.abs(Number(t.amount) - 20323.14) > 0.05
-    );
+    return (transfers || []).filter(isValidTransfer);
   }, [transfers]);
 
   // User Rule: Compute cash strictly as (All Deposits + All Sells - All Buys)
@@ -348,7 +346,7 @@ export default function PortfolioView({
   // Conditional USD Visibility: Only reveal USD Wallet when user currently holds US stocks/ETFs (shares > 0) or has positive USD cash
   const hasUsAssets = React.useMemo(() => {
     const hasUsHoldings = portfolio.some(
-      p => (p.market === 'US' || p.currency === 'USD') && Number(p.shares) > 0
+      p => p.market === 'US' && Number(p.shares) > 0
     );
     return hasUsHoldings || cashValUSD > 0;
   }, [portfolio, cashValUSD]);

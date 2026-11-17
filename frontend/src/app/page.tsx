@@ -51,7 +51,7 @@ import {
   MASTER_GROWTH_PROFILES,
   KNOWN_DIVIDEND_LIST
 } from '../lib/dividendForecastMath';
-import { calculateLedgerCash } from '../lib/cashLedger';
+import { calculateLedgerCash, isValidTransfer } from '../lib/cashLedger';
 import { calculateExitDate } from '../lib/tradeTiming';
 
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
@@ -319,14 +319,6 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     stopLoss: 0, targetPrice: undefined, distanceToStop: 0, isDividend: false,
     dcaZone: 'HOLD', dcaRationale: 'Cash yield money market liquidity preservation.',
     entryDate: '2026-10-01', strategyType: 'CORE_DIVIDEND'
-  },
-  {
-    symbol: 'CCOLA', name: 'Coca-Cola İçecek', market: 'BIST',
-    shares: 68, entryPrice: 74.76, currentPrice: 79.00, currency: 'TRY',
-    totalCost: 5083.80, currentValue: 5372.00, pnlAmount: 288.20, pnlPercent: 5.67,
-    stopLoss: 0, targetPrice: 92.83, distanceToStop: 0, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'Coca-Cola İçecek prime consumer defensive compounder.',
-    entryDate: '2026-11-17', strategyType: 'CORE_DIVIDEND'
   }
 ];
 
@@ -1121,12 +1113,7 @@ function markGuestCustomized(): void {
 
 function sanitizeTransfers(transfersList: any[]): any[] {
   if (!Array.isArray(transfersList)) return [];
-  return transfersList.filter((t: any) => {
-    if (!t) return false;
-    if (t.id === '6f01774d-c3cc-46bc-aef9-de6bbc33af95') return false;
-    if (Math.abs(Number(t.amount) - 20323.14) < 0.05) return false;
-    return true;
-  });
+  return transfersList.filter(isValidTransfer);
 }
 
 export default function Home() {
