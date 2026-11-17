@@ -972,12 +972,91 @@ const INITIAL_SCANNED_SIGNALS: ScannedTradeSignal[] = [
 
 const VALID_TABS: TabId[] = ['signals', 'assistant', 'watchlist', 'portfolio', 'dividend', 'forecast', 'scorecard', 'orb', 'catalysts', 'quant', 'help'];
 
+const GUEST_CUSTOMIZED_KEY = 'marketpulse_guest_customized';
+const GUEST_PORTFOLIO_KEY = 'marketpulse_guest_portfolio';
+const GUEST_ORDERS_KEY = 'marketpulse_guest_orders';
+const GUEST_TRANSFERS_KEY = 'marketpulse_guest_transfers';
+const GUEST_REALIZED_KEY = 'marketpulse_guest_realized';
+
+function checkIsGuestCustomized(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem(GUEST_CUSTOMIZED_KEY) === 'true') {
+      return true;
+    }
+    const saved = localStorage.getItem(GUEST_PORTFOLIO_KEY) || localStorage.getItem('market_pulse_cached_portfolio');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const canonicalModelSymbols = new Set([
+          'ISMEN', 'TURSG', 'AKBNK', 'TRGYO', 'THYAO', 'FROTO', 'BIMAS', 'SISE', 'EREGL', 'TUPRS', 'KCHOL', 'ASELS', 'YKBNK', 'SAHOL', 'ENKAI'
+        ]);
+        const hasCustomHolding = parsed.some((p: any) => {
+          const sym = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
+          return sym && !canonicalModelSymbols.has(sym);
+        });
+        if (hasCustomHolding) {
+          localStorage.setItem(GUEST_CUSTOMIZED_KEY, 'true');
+          return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
+}
+
+function markGuestCustomized(): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(GUEST_CUSTOMIZED_KEY, 'true');
+    } catch {}
+  }
+}
+
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
-  const { user, isDemoMode, signOut } = useAuth();
+  const { user, session, isDemoMode, signOut } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [geminiApiKey, setGeminiApiKey] = useState('');
+
+  // Immediate early rehydration for guest customized portfolios to prevent initial flicker or data loss
+  useEffect(() => {
+    if (typeof window !== 'undefined' && checkIsGuestCustomized()) {
+      try {
+        const rawPort = localStorage.getItem(GUEST_PORTFOLIO_KEY) || localStorage.getItem('market_pulse_cached_portfolio');
+        if (rawPort) {
+          const parsed = JSON.parse(rawPort);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPortfolio(parsed);
+          }
+        }
+        const rawOrd = localStorage.getItem(GUEST_ORDERS_KEY) || localStorage.getItem('market_pulse_cached_orders');
+        if (rawOrd) {
+          const parsed = JSON.parse(rawOrd);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setExecutedOrders(parsed);
+          }
+        }
+        const rawTrans = localStorage.getItem(GUEST_TRANSFERS_KEY) || localStorage.getItem('marketpulse_cached_transfers');
+        if (rawTrans) {
+          const parsed = JSON.parse(rawTrans);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTransfers(parsed);
+          }
+        }
+        const rawReal = localStorage.getItem(GUEST_REALIZED_KEY) || localStorage.getItem('market_pulse_cached_realized');
+        if (rawReal) {
+          const parsed = JSON.parse(rawReal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRealizedTrades(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Early guest rehydration error:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1763,381 +1842,405 @@ export default function Home() {
           console.warn('Error fetching opening direction:', e);
         }
 
-        // 4. Fetch Executed Orders from Supabase (Scoped to logged-in user or Model Portfolio)
-        const effectiveUserId = user?.id || ADMIN_USER_ID;
-        let ordersQuery = supabase
-          .from('portfolio_orders')
-          .select('*')
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`)
-          .order('executed_at', { ascending: false });
-
-        const { data: ordersData } = await ordersQuery;
+        // 4. Scoped Data Loading: Guest Customized vs Database (User or Model Portfolio)
+        const isGuest = !user || isDemoMode;
+        const guestCustomized = isGuest && checkIsGuestCustomized();
 
         let loadedOrders: ExecutedOrder[] = [];
-        if (ordersData && ordersData.length > 0) {
-          const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => {
-            const clean = o.symbol?.replace('.IS', '').toUpperCase();
-            const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
-            const friendlyName = matched?.name || (
-              clean === 'ISMEN' ? 'İş Yatırım Menkul Değerler' :
-              clean === 'TURSG' ? 'Türkiye Sigorta' :
-              clean === 'AKBNK' ? 'Akbank T.A.Ş.' :
-              clean === 'HALKB' ? 'Halkbank' :
-              clean === 'SOKM' ? 'Şok Marketler' : clean
-            );
+        let loadedTrans: CapitalTransfer[] = [];
 
-            return {
-              id: o.id,
-              ref: o.order_ref,
-              symbol: clean,
-              name: friendlyName,
-              market: (matched?.market || (o.symbol?.endsWith('.IS') ? 'BIST' : 'BIST')) as any,
-              side: o.side,
-              orderType: o.order_type || 'Limit',
-              quantity: Number(o.quantity),
-              price: Number(o.price),
-              totalValue: Number(o.total_amount),
-              currency: o.currency || 'TRY',
-              dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
-              executedAt: o.executed_at,
-              status: o.status || 'Filled',
-              dcaNote: o.notes
-            };
-          });
-          loadedOrders = mappedOrders;
-          setExecutedOrders(mappedOrders);
-
-          // Reconstruct all Realized Trades dynamically from database SELL orders
-          const reconstructedRealized: RealizedTrade[] = [];
-          const sellOrders = ordersData.filter((o: any) => o.side === 'SELL');
-          sellOrders.forEach((so: any) => {
-            const clean = so.symbol?.replace('.IS', '').toUpperCase();
-            const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
-            const friendlyName = matched?.name || (clean === 'KRDMD' ? 'Kardemir D' : clean);
-
-            const qty = Number(so.quantity);
-            const exitPr = Number(so.price);
-            const sellTime = so.executed_at ? new Date(so.executed_at).getTime() : Date.now();
-
-            // Find matching buy order(s) for that symbol that executed ON OR BEFORE this sell order
-            const priorBuyOrders = ordersData.filter((b: any) => 
-              b.side === 'BUY' && 
-              b.symbol?.replace('.IS', '').toUpperCase() === clean &&
-              (b.executed_at ? new Date(b.executed_at).getTime() : 0) <= sellTime
-            );
-
-            // Sort chronological ascending (oldest first for FIFO)
-            priorBuyOrders.sort((a: any, b: any) => new Date(a.executed_at).getTime() - new Date(b.executed_at).getTime());
-
-            // Match exact quantity tranche if available, else nearest prior buy order
-            const matchingBuy = priorBuyOrders.find((b: any) => Math.abs(Number(b.quantity) - qty) < 0.01) ||
-                                (priorBuyOrders.length > 0 ? priorBuyOrders[priorBuyOrders.length - 1] : null);
-
-            let avgEntry = matchingBuy ? Number(matchingBuy.price) : exitPr;
-            let calcPnl = (exitPr - avgEntry) * qty;
-
-            // Also check if notes contains verified P&L or cost basis (e.g. "Full swing profit taking (+₺376.38 / +7.56%)" or "Realized P&L: ₺+32.56")
-            const notePnlMatch = so.notes?.match(/Realized P&L:\s*₺?([+-]?[\d,.]+)/i) || 
-                                 so.notes?.match(/\(\+?₺?([+-]?[\d,.]+)\s*\/\s*([+-]?[\d,.]+)%\)/i);
-
-            if (notePnlMatch && notePnlMatch[1]) {
-              const parsedNotePnl = parseFloat(notePnlMatch[1].replace(',', ''));
-              if (!isNaN(parsedNotePnl) && parsedNotePnl !== 0) {
-                calcPnl = parsedNotePnl;
-                avgEntry = Number(((exitPr * qty - calcPnl) / qty).toFixed(2));
-              }
-            }
-
-            const calcPnlPct = avgEntry > 0 ? ((exitPr - avgEntry) / avgEntry) * 100 : 0;
-            const cDate = so.executed_at ? so.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
-            const currSymbol = so.currency === 'USD' ? '$' : '₺';
-
-            // Execution Discipline & Counterfactual Target Analysis
-            const matchedSig = allSignalsRegistry.find(s => 
-              s.symbol.replace('.IS', '').toUpperCase() === clean
-            );
-            const livePrice = matched?.price || exitPr;
-
-            let recommendedTarget = matchedSig?.targetPrice && matchedSig.targetPrice > 0
-              ? matchedSig.targetPrice
-              : (avgEntry > 0 ? Number((avgEntry * 1.12).toFixed(2)) : exitPr);
-
-            const targetPnl = (recommendedTarget - avgEntry) * qty;
-            const targetPnlPercent = avgEntry > 0 ? ((recommendedTarget - avgEntry) / avgEntry) * 100 : 0;
-
-            let verdict: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' | 'STOPPED_OUT' | 'NO_SIGNAL' = 'RUNNING';
-            let leftOnTable = 0;
-            let aiNote = '';
-
-            if (livePrice >= recommendedTarget) {
-              verdict = 'TARGET_HIT';
-              leftOnTable = targetPnl - calcPnl;
-              aiNote = `Hedef (${currSymbol}${recommendedTarget.toFixed(2)}) vuruldu! Erken çıkış nedeniyle masada kâr bırakıldı.`;
-            } else if (livePrice > exitPr) {
-              verdict = 'RUNNING';
-              leftOnTable = (livePrice - exitPr) * qty;
-              aiNote = `Fiyat satışın üzerinde (${currSymbol}${livePrice.toFixed(2)}). Hedefe doğru ralli sürüyor.`;
-            } else if (livePrice < exitPr) {
-              verdict = 'PULLBACK_PROTECTED';
-              leftOnTable = -((exitPr - livePrice) * qty); // negative means capital/profit protected
-              aiNote = `Zamanlama başarılı! Satış sonrası fiyat ${currSymbol}${livePrice.toFixed(2)} seviyesine çekildi, kâr korundu.`;
-            } else {
-              verdict = 'RUNNING';
-              leftOnTable = 0;
-              aiNote = `Fiyat satış seviyesinde yatay seyrediyor (${currSymbol}${livePrice.toFixed(2)}).`;
-            }
-
-            let disciplineCapture = 100;
-            if (targetPnl > 0) {
-              disciplineCapture = Math.max(0, Number(((calcPnl / targetPnl) * 100).toFixed(1)));
-            } else if (calcPnl < 0) {
-              disciplineCapture = 0;
-            }
-
-            reconstructedRealized.push({
-              id: `realized-${so.id || so.order_ref}`,
-              symbol: clean,
-              name: friendlyName,
-              market: (matched?.market || (clean.endsWith('.IS') || so.currency === 'TRY' ? 'BIST' : 'US')) as any,
-              currency: so.currency || 'TRY',
-              sharesSold: qty,
-              entryPrice: avgEntry,
-              exitPrice: exitPr,
-              realizedPnl: calcPnl,
-              realizedPnlPercent: calcPnlPct,
-              closeDate: cDate,
-              recommendedTargetPrice: recommendedTarget,
-              targetPnl: targetPnl,
-              targetPnlPercent: targetPnlPercent,
-              currentPrice: livePrice,
-              leftOnTableAmount: leftOnTable,
-              disciplineCapturePct: disciplineCapture,
-              executionVerdict: verdict,
-              aiTargetNote: aiNote
-            });
-          });
-
-          setRealizedTrades(reconstructedRealized);
+        if (guestCustomized) {
+          // =========================================================================
+          // GUEST CUSTOMIZED MODE: Exclusively rehydrate user-curated local device data.
+          // NEVER clobber or overwrite with Supabase Model Portfolio rows!
+          // =========================================================================
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('market_pulse_cached_orders', JSON.stringify(loadedOrders));
-              localStorage.setItem('market_pulse_cached_realized', JSON.stringify(reconstructedRealized));
-            } catch (e) {}
-          }
-        } else {
-          let hasLocalCache = false;
-          if (typeof window !== 'undefined') {
-            try {
-              const cachedOrd = localStorage.getItem('market_pulse_cached_orders');
-              const cachedReal = localStorage.getItem('market_pulse_cached_realized');
-              if (cachedOrd) {
-                const parsedOrd = JSON.parse(cachedOrd);
+              // 1. Rehydrate Guest Orders
+              const rawOrders = localStorage.getItem(GUEST_ORDERS_KEY) || localStorage.getItem('market_pulse_cached_orders');
+              if (rawOrders) {
+                const parsedOrd = JSON.parse(rawOrders);
                 if (Array.isArray(parsedOrd) && parsedOrd.length > 0) {
-                  setExecutedOrders(parsedOrd);
                   loadedOrders = parsedOrd;
-                  hasLocalCache = true;
+                  setExecutedOrders(parsedOrd);
                 }
               }
-              if (cachedReal) {
-                const parsedReal = JSON.parse(cachedReal);
+
+              // 2. Rehydrate Guest Realized Trades
+              const rawRealized = localStorage.getItem(GUEST_REALIZED_KEY) || localStorage.getItem('market_pulse_cached_realized');
+              if (rawRealized) {
+                const parsedReal = JSON.parse(rawRealized);
                 if (Array.isArray(parsedReal) && parsedReal.length > 0) {
                   setRealizedTrades(parsedReal);
                 }
               }
-            } catch (e) {}
-          }
-          if (!hasLocalCache) {
-            setExecutedOrders([]);
-            setRealizedTrades([]);
-          }
-        }
 
-        // 5. Fetch Capital Transfers from Supabase (Scoped to logged-in user or Model Portfolio)
-        let transQuery = supabase
-          .from('portfolio_transfers')
-          .select('*')
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`)
-          .order('transfer_date', { ascending: false });
-
-        const { data: transData } = await transQuery;
-
-        let loadedTrans: CapitalTransfer[] = [];
-        if (transData && transData.length > 0) {
-          loadedTrans = transData.map((t: any) => ({
-            id: t.id,
-            transferType: t.transfer_type,
-            amount: Number(t.amount),
-            currency: t.currency || 'TRY',
-            transferDate: t.transfer_date,
-            notes: t.notes
-          }));
-          setTransfers(loadedTrans);
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(loadedTrans));
-            } catch (e) {}
-          }
-        } else {
-          let hasLocalTrans = false;
-          if (typeof window !== 'undefined') {
-            try {
-              const cachedTr = localStorage.getItem('marketpulse_cached_transfers');
-              if (cachedTr) {
-                const parsed = JSON.parse(cachedTr);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setTransfers(parsed);
-                  loadedTrans = parsed;
-                  hasLocalTrans = true;
+              // 3. Rehydrate Guest Transfers
+              const rawTrans = localStorage.getItem(GUEST_TRANSFERS_KEY) || localStorage.getItem('marketpulse_cached_transfers');
+              if (rawTrans) {
+                const parsedTrans = JSON.parse(rawTrans);
+                if (Array.isArray(parsedTrans) && parsedTrans.length > 0) {
+                  loadedTrans = parsedTrans;
+                  setTransfers(parsedTrans);
                 }
               }
-            } catch (e) {}
-          }
-          if (!hasLocalTrans) {
-            setTransfers([]);
-          }
-        }
 
-        // User Rule: Compute cash strictly as: (All Deposits + All Sells - All Buys)
-        const dynamicLedger = calculateLedgerCash(loadedOrders, loadedTrans, usdTryRate);
-        setCashBalance(dynamicLedger.availableCashTRY);
-        setCashBalanceUSD(dynamicLedger.availableCashUSD);
+              // 4. Compute Dynamic Ledger Cash for Guest
+              const dynamicLedger = calculateLedgerCash(loadedOrders, loadedTrans, usdTryRate);
+              setCashBalance(dynamicLedger.availableCashTRY);
+              setCashBalanceUSD(dynamicLedger.availableCashUSD);
 
-        // 6. Fetch Active Portfolio Positions from Supabase (Scoped to logged-in user or Model Portfolio)
-        let positionsQuery = supabase
-          .from('portfolio_positions')
-          .select('*, assets(symbol, name, market)')
-          .eq('is_open', true)
-          .or(`user_id.eq.${effectiveUserId},user_id.is.null`)
-          .order('created_at', { ascending: true });
-
-        let { data: positionsData } = await positionsQuery;
-
-        if (positionsData && positionsData.length > 0) {
-          const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
-            const rawSym = pos.assets?.symbol || 'UNKNOWN';
-            const cleanSym = rawSym.replace('.IS', '');
-            const matchedAsset = loadedAssets.find((a: AssetData) => a.id === pos.asset_id || a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
-            const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
-            const shares = Number(pos.quantity);
-            const entryPrice = Number(pos.avg_entry_price);
-            const storedOverrides = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('portfolio_strategy_overrides') || '{}') : {};
-            const cleanUpper = cleanSym.toUpperCase();
-            const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
-            const isCoreDiv = overrideStrategy 
-              ? (overrideStrategy === 'CORE_DIVIDEND') 
-              : Boolean(
-                  MASTER_GROWTH_PROFILES[cleanUpper] || 
-                  KNOWN_DIVIDEND_LIST.includes(cleanUpper) ||
-                  pos.notes?.toLowerCase().includes('dividend') ||
-                  pos.notes?.toLowerCase().includes('core') ||
-                  pos.notes?.toLowerCase().includes('dca')
-                );
-            const matchedSig = signals?.find((s: TradeSignal) => s.symbol.replace('.IS', '').toUpperCase() === cleanUpper);
-            const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
-            const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
-
-            // Technical Signal Inherited Levels (Structural Support & Resistance)
-            const structuralStop = matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : Number((entryPrice * 0.95).toFixed(2));
-            const structuralTarget = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : Number((entryPrice * 1.10).toFixed(2));
-
-            const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
-              ? Number(pos.stop_loss)
-              : (isCoreDiv ? 0 : structuralStop);
-
-            const targetPrice = pos.target_price !== null && pos.target_price !== undefined && Number(pos.target_price) > 0
-              ? Number(pos.target_price)
-              : (isCoreDiv ? undefined : (
-                  matchedSig && matchedSig.targetPrice > 0 && matchedSig.targetPrice > entryPrice
-                    ? matchedSig.targetPrice
-                    : (stopLoss > 0 && entryPrice > stopLoss
-                        ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
-                        : structuralTarget)
-                ));
-            const totalCost = shares * entryPrice;
-            const currentValue = shares * currPrice;
-            const pnlAmount = currentValue - totalCost;
-            const pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
-            const distanceToStop = stopLoss > 0 && currPrice > 0 ? ((currPrice - stopLoss) / currPrice) * 100 : 0;
-
-            const dcaZone: 'BUY' | 'PAUSE' | 'HOLD' = currPrice <= entryPrice * 0.97 ? 'BUY' : 'HOLD';
-            const dcaRationale = pos.notes || (currPrice <= entryPrice * 0.97 
-              ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
-              : 'Holding core position; maintain disciplined trailing stops.');
-
-            const resolvedName = (pos.assets?.name && pos.assets.name !== cleanSym)
-              ? pos.assets.name
-              : (cleanUpper === 'TRGYO' ? 'Torunlar GYO' : (MASTER_GROWTH_PROFILES[cleanUpper]?.name || cleanSym));
-
-            return {
-              symbol: cleanSym,
-              name: resolvedName,
-              market: (pos.assets?.market || (rawSym.endsWith('.IS') ? 'BIST' : 'US')) as any,
-              shares: shares,
-              entryPrice: entryPrice,
-              currentPrice: currPrice,
-              totalCost: totalCost,
-              currentValue: currentValue,
-              pnlAmount: pnlAmount,
-              pnlPercent: pnlPercent,
-              currency: (pos.assets?.market === 'US' ? 'USD' : 'TRY'),
-              stopLoss: stopLoss,
-              targetPrice: targetPrice,
-              distanceToStop: distanceToStop,
-              isDividend: isCoreDiv,
-              dcaZone: dcaZone,
-              dcaRationale: dcaRationale,
-              entryDate: entryDate,
-              strategyType: strategyType,
-              adjustedBreakEven: pos.adjusted_break_even !== null && pos.adjusted_break_even !== undefined ? Number(pos.adjusted_break_even) : undefined
-            };
-          });
-
-          setPortfolio(mappedPortfolio);
-          const activeDivMap = new Map<string, any>();
-          (divSummaryData || []).forEach((d: any) => {
-            const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
-            if (sym) {
-              activeDivMap.set(sym, d);
-              activeDivMap.set(`${sym}.IS`, d);
-            }
-          });
-          setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
-          try {
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
-              localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(mappedPortfolio));
-            }
-          } catch (e) {}
-        } else {
-          // Offline fallback from local cache if Supabase query returned no rows
-          if (typeof window !== 'undefined') {
-            try {
-              const savedGuest = localStorage.getItem('marketpulse_guest_portfolio') || localStorage.getItem('market_pulse_cached_portfolio');
-              if (savedGuest) {
-                const parsed = JSON.parse(savedGuest);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  const rehydrated = parsed.map((p: PortfolioItem) => {
-                    const cleanP = p.symbol.replace('.IS', '').toUpperCase();
-                    const live = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === cleanP);
+              // 5. Rehydrate Guest Portfolio & Reprice with live quotes from loadedAssets
+              const rawPortfolio = localStorage.getItem(GUEST_PORTFOLIO_KEY) || localStorage.getItem('market_pulse_cached_portfolio');
+              if (rawPortfolio) {
+                const parsedPort = JSON.parse(rawPortfolio);
+                if (Array.isArray(parsedPort) && parsedPort.length > 0) {
+                  const rehydratedPortfolio: PortfolioItem[] = parsedPort.map((p: PortfolioItem) => {
+                    const cleanP = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
+                    const live = loadedAssets.find((a: AssetData) => (a.symbol || '').replace('.IS', '').trim().toUpperCase() === cleanP);
                     const curPrice = live && live.price > 0 ? live.price : p.currentPrice;
                     const curVal = p.shares * curPrice;
                     const pnl = curVal - p.totalCost;
                     const pnlPct = p.totalCost > 0 ? (pnl / p.totalCost) * 100 : 0;
+                    const distToStop = p.stopLoss > 0 && curPrice > 0 ? ((curPrice - p.stopLoss) / curPrice) * 100 : 0;
                     return {
                       ...p,
                       currentPrice: curPrice,
                       currentValue: curVal,
                       pnlAmount: pnl,
                       pnlPercent: pnlPct,
+                      distanceToStop: distToStop,
                     };
                   });
-                  setPortfolio(rehydrated);
-                  setDividends(prevDivs => deriveDividendsFromPortfolio(rehydrated, prevDivs, dividendSummaryMap));
+
+                  setPortfolio(rehydratedPortfolio);
+
+                  const activeDivMap = new Map<string, any>();
+                  (divSummaryData || []).forEach((d: any) => {
+                    const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+                    if (sym) {
+                      activeDivMap.set(sym, d);
+                      activeDivMap.set(`${sym}.IS`, d);
+                    }
+                  });
+                  setDividends(prev => deriveDividendsFromPortfolio(rehydratedPortfolio, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
+
+                  localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(rehydratedPortfolio));
+                  localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(rehydratedPortfolio));
                 }
               }
             } catch (e) {
-              console.warn('Could not read cached portfolio fallback:', e);
+              console.warn('Error rehydrating guest customized portfolio:', e);
             }
+          }
+        } else {
+          // =========================================================================
+          // DATABASE SCOPED MODE: Authenticated User OR Sample Model Portfolio Demo
+          // =========================================================================
+          const effectiveUserId = user ? user.id : ADMIN_USER_ID;
+
+          // 4. Fetch Executed Orders from Supabase
+          let ordersQuery = supabase
+            .from('portfolio_orders')
+            .select('*')
+            .eq('user_id', effectiveUserId)
+            .order('executed_at', { ascending: false });
+
+          const { data: ordersData } = await ordersQuery;
+
+          if (ordersData && ordersData.length > 0) {
+            const mappedOrders: ExecutedOrder[] = ordersData.map((o: any) => {
+              const clean = o.symbol?.replace('.IS', '').toUpperCase();
+              const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
+              const friendlyName = matched?.name || (
+                clean === 'ISMEN' ? 'İş Yatırım Menkul Değerler' :
+                clean === 'TURSG' ? 'Türkiye Sigorta' :
+                clean === 'AKBNK' ? 'Akbank T.A.Ş.' :
+                clean === 'HALKB' ? 'Halkbank' :
+                clean === 'SOKM' ? 'Şok Marketler' : clean
+              );
+
+              return {
+                id: o.id,
+                ref: o.order_ref,
+                symbol: clean,
+                name: friendlyName,
+                market: (matched?.market || (o.symbol?.endsWith('.IS') ? 'BIST' : 'BIST')) as any,
+                side: o.side,
+                orderType: o.order_type || 'Limit',
+                quantity: Number(o.quantity),
+                price: Number(o.price),
+                totalValue: Number(o.total_amount),
+                currency: o.currency || 'TRY',
+                dateTime: new Date(o.executed_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', ' -'),
+                executedAt: o.executed_at,
+                status: o.status || 'Filled',
+                dcaNote: o.notes
+              };
+            });
+            loadedOrders = mappedOrders;
+            setExecutedOrders(mappedOrders);
+
+            // Reconstruct all Realized Trades dynamically from database SELL orders
+            const reconstructedRealized: RealizedTrade[] = [];
+            const sellOrders = ordersData.filter((o: any) => o.side === 'SELL');
+            sellOrders.forEach((so: any) => {
+              const clean = so.symbol?.replace('.IS', '').toUpperCase();
+              const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
+              const friendlyName = matched?.name || (clean === 'KRDMD' ? 'Kardemir D' : clean);
+
+              const qty = Number(so.quantity);
+              const exitPr = Number(so.price);
+              const sellTime = so.executed_at ? new Date(so.executed_at).getTime() : Date.now();
+
+              const priorBuyOrders = ordersData.filter((b: any) => 
+                b.side === 'BUY' && 
+                b.symbol?.replace('.IS', '').toUpperCase() === clean &&
+                (b.executed_at ? new Date(b.executed_at).getTime() : 0) <= sellTime
+              );
+
+              priorBuyOrders.sort((a: any, b: any) => new Date(a.executed_at).getTime() - new Date(b.executed_at).getTime());
+
+              const matchingBuy = priorBuyOrders.find((b: any) => Math.abs(Number(b.quantity) - qty) < 0.01) ||
+                                  (priorBuyOrders.length > 0 ? priorBuyOrders[priorBuyOrders.length - 1] : null);
+
+              let avgEntry = matchingBuy ? Number(matchingBuy.price) : exitPr;
+              let calcPnl = (exitPr - avgEntry) * qty;
+
+              const notePnlMatch = so.notes?.match(/Realized P&L:\s*₺?([+-]?[\d,.]+)/i) || 
+                                   so.notes?.match(/\(\+?₺?([+-]?[\d,.]+)\s*\/\s*([+-]?[\d,.]+)%\)/i);
+
+              if (notePnlMatch && notePnlMatch[1]) {
+                const parsedNotePnl = parseFloat(notePnlMatch[1].replace(',', ''));
+                if (!isNaN(parsedNotePnl) && parsedNotePnl !== 0) {
+                  calcPnl = parsedNotePnl;
+                  avgEntry = Number(((exitPr * qty - calcPnl) / qty).toFixed(2));
+                }
+              }
+
+              const calcPnlPct = avgEntry > 0 ? ((exitPr - avgEntry) / avgEntry) * 100 : 0;
+              const cDate = so.executed_at ? so.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10);
+              const currSymbol = so.currency === 'USD' ? '$' : '₺';
+
+              const matchedSig = allSignalsRegistry.find(s => 
+                s.symbol.replace('.IS', '').toUpperCase() === clean
+              );
+              const livePrice = matched?.price || exitPr;
+
+              let recommendedTarget = matchedSig?.targetPrice && matchedSig.targetPrice > 0
+                ? matchedSig.targetPrice
+                : (avgEntry > 0 ? Number((avgEntry * 1.12).toFixed(2)) : exitPr);
+
+              const targetPnl = (recommendedTarget - avgEntry) * qty;
+              const targetPnlPercent = avgEntry > 0 ? ((recommendedTarget - avgEntry) / avgEntry) * 100 : 0;
+
+              let verdict: 'TARGET_HIT' | 'PULLBACK_PROTECTED' | 'RUNNING' | 'STOPPED_OUT' | 'NO_SIGNAL' = 'RUNNING';
+              let leftOnTable = 0;
+              let aiNote = '';
+
+              if (livePrice >= recommendedTarget) {
+                verdict = 'TARGET_HIT';
+                leftOnTable = targetPnl - calcPnl;
+                aiNote = `Hedef (${currSymbol}${recommendedTarget.toFixed(2)}) vuruldu! Erken çıkış nedeniyle masada kâr bırakıldı.`;
+              } else if (livePrice > exitPr) {
+                verdict = 'RUNNING';
+                leftOnTable = (livePrice - exitPr) * qty;
+                aiNote = `Fiyat satışın üzerinde (${currSymbol}${livePrice.toFixed(2)}). Hedefe doğru ralli sürüyor.`;
+              } else if (livePrice < exitPr) {
+                verdict = 'PULLBACK_PROTECTED';
+                leftOnTable = -((exitPr - livePrice) * qty);
+                aiNote = `Zamanlama başarılı! Satış sonrası fiyat ${currSymbol}${livePrice.toFixed(2)} seviyesine çekildi, kâr korundu.`;
+              } else {
+                verdict = 'RUNNING';
+                leftOnTable = 0;
+                aiNote = `Fiyat satış seviyesinde yatay seyrediyor (${currSymbol}${livePrice.toFixed(2)}).`;
+              }
+
+              let disciplineCapture = 100;
+              if (targetPnl > 0) {
+                disciplineCapture = Math.max(0, Number(((calcPnl / targetPnl) * 100).toFixed(1)));
+              } else if (calcPnl < 0) {
+                disciplineCapture = 0;
+              }
+
+              reconstructedRealized.push({
+                id: `realized-${so.id || so.order_ref}`,
+                symbol: clean,
+                name: friendlyName,
+                market: (matched?.market || (clean.endsWith('.IS') || so.currency === 'TRY' ? 'BIST' : 'US')) as any,
+                currency: so.currency || 'TRY',
+                sharesSold: qty,
+                entryPrice: avgEntry,
+                exitPrice: exitPr,
+                realizedPnl: calcPnl,
+                realizedPnlPercent: calcPnlPct,
+                closeDate: cDate,
+                recommendedTargetPrice: recommendedTarget,
+                targetPnl: targetPnl,
+                targetPnlPercent: targetPnlPercent,
+                currentPrice: livePrice,
+                leftOnTableAmount: leftOnTable,
+                disciplineCapturePct: disciplineCapture,
+                executionVerdict: verdict,
+                aiTargetNote: aiNote
+              });
+            });
+
+            setRealizedTrades(reconstructedRealized);
+            if (typeof window !== 'undefined' && !user) {
+              try {
+                localStorage.setItem('market_pulse_cached_orders', JSON.stringify(loadedOrders));
+                localStorage.setItem('market_pulse_cached_realized', JSON.stringify(reconstructedRealized));
+              } catch (e) {}
+            }
+          } else {
+            setExecutedOrders([]);
+            setRealizedTrades([]);
+          }
+
+          // 5. Fetch Capital Transfers from Supabase
+          let transQuery = supabase
+            .from('portfolio_transfers')
+            .select('*')
+            .eq('user_id', effectiveUserId)
+            .order('transfer_date', { ascending: false });
+
+          const { data: transData } = await transQuery;
+
+          if (transData && transData.length > 0) {
+            loadedTrans = transData.map((t: any) => ({
+              id: t.id,
+              transferType: t.transfer_type,
+              amount: Number(t.amount),
+              currency: t.currency || 'TRY',
+              transferDate: t.transfer_date,
+              notes: t.notes
+            }));
+            setTransfers(loadedTrans);
+            if (typeof window !== 'undefined' && !user) {
+              try {
+                localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(loadedTrans));
+              } catch (e) {}
+            }
+          } else {
+            setTransfers([]);
+          }
+
+          // Compute cash strictly as: (All Deposits + All Sells - All Buys)
+          const dynamicLedger = calculateLedgerCash(loadedOrders, loadedTrans, usdTryRate);
+          setCashBalance(dynamicLedger.availableCashTRY);
+          setCashBalanceUSD(dynamicLedger.availableCashUSD);
+
+          // 6. Fetch Active Portfolio Positions from Supabase
+          let positionsQuery = supabase
+            .from('portfolio_positions')
+            .select('*, assets(symbol, name, market)')
+            .eq('is_open', true)
+            .eq('user_id', effectiveUserId)
+            .order('created_at', { ascending: true });
+
+          let { data: positionsData } = await positionsQuery;
+
+          if (positionsData && positionsData.length > 0) {
+            const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
+              const rawSym = pos.assets?.symbol || 'UNKNOWN';
+              const cleanSym = rawSym.replace('.IS', '');
+              const matchedAsset = loadedAssets.find((a: AssetData) => a.id === pos.asset_id || a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
+              const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
+              const shares = Number(pos.quantity);
+              const entryPrice = Number(pos.avg_entry_price);
+              const storedOverrides = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('portfolio_strategy_overrides') || '{}') : {};
+              const cleanUpper = cleanSym.toUpperCase();
+              const overrideStrategy = storedOverrides[cleanUpper] || (pos.notes?.includes('Strategy: SWING') ? 'SWING' : pos.notes?.includes('Strategy: CORE_DIVIDEND') ? 'CORE_DIVIDEND' : null);
+              const isCoreDiv = overrideStrategy 
+                ? (overrideStrategy === 'CORE_DIVIDEND') 
+                : Boolean(
+                    MASTER_GROWTH_PROFILES[cleanUpper] || 
+                    KNOWN_DIVIDEND_LIST.includes(cleanUpper) ||
+                    pos.notes?.toLowerCase().includes('dividend') ||
+                    pos.notes?.toLowerCase().includes('core') ||
+                    pos.notes?.toLowerCase().includes('dca')
+                  );
+              const matchedSig = signals?.find((s: TradeSignal) => s.symbol.replace('.IS', '').toUpperCase() === cleanUpper);
+              const entryDate = pos.entry_date || (pos.created_at ? pos.created_at.slice(0, 10) : '2026-09-24');
+              const strategyType = isCoreDiv ? 'CORE_DIVIDEND' : 'SWING';
+
+              const structuralStop = matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : Number((entryPrice * 0.95).toFixed(2));
+              const structuralTarget = matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : Number((entryPrice * 1.10).toFixed(2));
+
+              const stopLoss = pos.stop_loss !== null && pos.stop_loss !== undefined && Number(pos.stop_loss) > 0
+                ? Number(pos.stop_loss)
+                : (isCoreDiv ? 0 : structuralStop);
+
+              const targetPrice = pos.target_price !== null && pos.target_price !== undefined && Number(pos.target_price) > 0
+                ? Number(pos.target_price)
+                : (isCoreDiv ? undefined : (
+                    matchedSig && matchedSig.targetPrice > 0 && matchedSig.targetPrice > entryPrice
+                      ? matchedSig.targetPrice
+                      : (stopLoss > 0 && entryPrice > stopLoss
+                          ? Number((entryPrice + 2 * (entryPrice - stopLoss)).toFixed(2))
+                          : structuralTarget)
+                  ));
+              const totalCost = shares * entryPrice;
+              const currentValue = shares * currPrice;
+              const pnlAmount = currentValue - totalCost;
+              const pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
+              const distanceToStop = stopLoss > 0 && currPrice > 0 ? ((currPrice - stopLoss) / currPrice) * 100 : 0;
+
+              const dcaZone: 'BUY' | 'PAUSE' | 'HOLD' = currPrice <= entryPrice * 0.97 ? 'BUY' : 'HOLD';
+              const dcaRationale = pos.notes || (currPrice <= entryPrice * 0.97 
+                ? 'Pullback to accumulation zone; DCA accumulation opportunity.'
+                : 'Holding core position; maintain disciplined trailing stops.');
+
+              const resolvedName = (pos.assets?.name && pos.assets.name !== cleanSym)
+                ? pos.assets.name
+                : (cleanUpper === 'TRGYO' ? 'Torunlar GYO' : (MASTER_GROWTH_PROFILES[cleanUpper]?.name || cleanSym));
+
+              return {
+                symbol: cleanSym,
+                name: resolvedName,
+                market: (pos.assets?.market || (rawSym.endsWith('.IS') ? 'BIST' : 'US')) as any,
+                shares: shares,
+                entryPrice: entryPrice,
+                currentPrice: currPrice,
+                totalCost: totalCost,
+                currentValue: currentValue,
+                pnlAmount: pnlAmount,
+                pnlPercent: pnlPercent,
+                currency: (pos.assets?.market === 'US' ? 'USD' : 'TRY'),
+                stopLoss: stopLoss,
+                targetPrice: targetPrice,
+                distanceToStop: distanceToStop,
+                isDividend: isCoreDiv,
+                dcaZone: dcaZone,
+                dcaRationale: dcaRationale,
+                entryDate: entryDate,
+                strategyType: strategyType,
+                adjustedBreakEven: pos.adjusted_break_even !== null && pos.adjusted_break_even !== undefined ? Number(pos.adjusted_break_even) : undefined
+              };
+            });
+
+            setPortfolio(mappedPortfolio);
+            const activeDivMap = new Map<string, any>();
+            (divSummaryData || []).forEach((d: any) => {
+              const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+              if (sym) {
+                activeDivMap.set(sym, d);
+                activeDivMap.set(`${sym}.IS`, d);
+              }
+            });
+            setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
+
+            // Only cache in market_pulse_cached_portfolio if unauthenticated model demo
+            if (typeof window !== 'undefined' && !user) {
+              try {
+                localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
+              } catch (e) {}
+            }
+          } else {
+            // No positions found in database
+            setPortfolio([]);
+            setDividends([]);
           }
         }
 
@@ -2370,6 +2473,29 @@ export default function Home() {
     }
   };
 
+  const handleResetToModelPortfolio = async () => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(
+        language === 'tr'
+          ? 'Özel portföyünüz ve emirleriniz bu cihazdan temizlenip varsayılan Model Portföy yüklenecektir. Emin misiniz?'
+          : 'Your custom positions and orders on this device will be cleared and the default Model Portfolio loaded. Are you sure?'
+      );
+      if (!confirmed) return;
+      try {
+        localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+        localStorage.removeItem(GUEST_PORTFOLIO_KEY);
+        localStorage.removeItem(GUEST_ORDERS_KEY);
+        localStorage.removeItem(GUEST_TRANSFERS_KEY);
+        localStorage.removeItem(GUEST_REALIZED_KEY);
+        localStorage.removeItem('market_pulse_cached_portfolio');
+        localStorage.removeItem('market_pulse_cached_orders');
+        localStorage.removeItem('marketpulse_cached_transfers');
+        localStorage.removeItem('market_pulse_cached_realized');
+      } catch (e) {}
+      await loadData(false);
+    }
+  };
+
   const handleRemoveHolding = async (symbol: string) => {
     const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
 
@@ -2378,8 +2504,11 @@ export default function Home() {
       const updated = prev.filter(item => item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
+          if (!user || isDemoMode) {
+            markGuestCustomized();
+          }
         } catch (e) {
           console.warn('Could not update guest portfolio on remove:', e);
         }
@@ -2421,7 +2550,11 @@ export default function Home() {
 
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(updatedTrans));
         localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTrans));
+        if (!user || isDemoMode) {
+          markGuestCustomized();
+        }
       } catch (e) {}
     }
 
@@ -2542,7 +2675,10 @@ export default function Home() {
 
         const apiRes = await fetch('/api/portfolio/positions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          },
           body: JSON.stringify({
             symbol: cleanSymUpper,
             shares: newHolding.shares,
@@ -2617,7 +2753,7 @@ export default function Home() {
       setDividends(prevDivs => deriveDividendsFromPortfolio(updated, prevDivs, dividendSummaryMap));
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
         } catch (e) {
           console.warn('Failed to save cached portfolio:', e);
@@ -2659,6 +2795,7 @@ export default function Home() {
     setExecutedOrders(updatedOrders);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem(GUEST_ORDERS_KEY, JSON.stringify(updatedOrders));
         localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
       } catch (e) {}
     }
@@ -2678,6 +2815,7 @@ export default function Home() {
       setTransfers(updatedTransfersList);
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(updatedTransfersList));
           localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
         } catch (e) {}
       }
@@ -2685,6 +2823,9 @@ export default function Home() {
     const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate);
     setCashBalance(updatedCash.availableCashTRY);
     setCashBalanceUSD(updatedCash.availableCashUSD);
+
+    // Explicitly flag that guest has customized their portfolio so it is never overwritten on reload
+    markGuestCustomized();
   };
 
   const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {
@@ -2714,7 +2855,10 @@ export default function Home() {
       try {
         const apiRes = await fetch('/api/portfolio/positions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          },
           body: JSON.stringify({
             symbol: cleanSymUpper,
             shares: additionalShares,
@@ -2784,8 +2928,8 @@ export default function Home() {
 
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
         } catch (e) {}
       }
 
@@ -2822,6 +2966,7 @@ export default function Home() {
     setExecutedOrders(updatedOrders);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem(GUEST_ORDERS_KEY, JSON.stringify(updatedOrders));
         localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
       } catch (e) {}
     }
@@ -2840,6 +2985,7 @@ export default function Home() {
       setTransfers(updatedTransfersList);
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(updatedTransfersList));
           localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(updatedTransfersList));
         } catch (e) {}
       }
@@ -2847,6 +2993,9 @@ export default function Home() {
     const updatedCash = calculateLedgerCash(updatedOrders, updatedTransfersList, usdTryRate);
     setCashBalance(updatedCash.availableCashTRY);
     setCashBalanceUSD(updatedCash.availableCashUSD);
+
+    // Flag guest customized
+    markGuestCustomized();
   };
 
   const handleSellHolding = async (
@@ -2971,6 +3120,7 @@ export default function Home() {
         const updated = [newRealized, ...prev];
         if (typeof window !== 'undefined') {
           try {
+            localStorage.setItem(GUEST_REALIZED_KEY, JSON.stringify(updated));
             localStorage.setItem('market_pulse_cached_realized', JSON.stringify(updated));
           } catch (e) {}
         }
@@ -2983,7 +3133,10 @@ export default function Home() {
       try {
         const apiRes = await fetch('/api/portfolio/positions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+          },
           body: JSON.stringify({
             symbol: cleanSymUpper,
             shares: actualSold,
@@ -3032,8 +3185,8 @@ export default function Home() {
         const updated = prev.filter(p => p.symbol !== symbol);
         if (typeof window !== 'undefined') {
           try {
+            localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
             localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
           } catch (e) {}
         }
         return updated;
@@ -3073,8 +3226,8 @@ export default function Home() {
 
         if (typeof window !== 'undefined') {
           try {
+            localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
             localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-            localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
           } catch (e) {}
         }
         return updated;
@@ -3123,6 +3276,7 @@ export default function Home() {
     setExecutedOrders(updatedOrders);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem(GUEST_ORDERS_KEY, JSON.stringify(updatedOrders));
         localStorage.setItem('market_pulse_cached_orders', JSON.stringify(updatedOrders));
       } catch (e) {}
     }
@@ -3130,6 +3284,9 @@ export default function Home() {
     const updatedCash = calculateLedgerCash(updatedOrders, transfers, usdTryRate);
     setCashBalance(updatedCash.availableCashTRY);
     setCashBalanceUSD(updatedCash.availableCashUSD);
+
+    // Flag guest customized
+    markGuestCustomized();
   };
 
   const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
@@ -3147,8 +3304,11 @@ export default function Home() {
 
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          if (!user || isDemoMode) {
+            markGuestCustomized();
+          }
         } catch (e) {}
       }
       return updated;
@@ -3188,8 +3348,11 @@ export default function Home() {
 
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          if (!user || isDemoMode) {
+            markGuestCustomized();
+          }
         } catch (e) {}
       }
       return updated;
@@ -3243,8 +3406,11 @@ export default function Home() {
 
       if (typeof window !== 'undefined') {
         try {
+          localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
           localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(updated));
-          localStorage.setItem('marketpulse_guest_portfolio', JSON.stringify(updated));
+          if (!user || isDemoMode) {
+            markGuestCustomized();
+          }
         } catch (e) {}
       }
       return updated;
@@ -4494,6 +4660,11 @@ export default function Home() {
             onSelectTicker={handleSelectTicker}
             portfolioDividends={dividends}
             orbItems={orbItems}
+            isGuest={!user || isDemoMode}
+            userEmail={user?.email}
+            isGuestCustomized={checkIsGuestCustomized()}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onResetToModelPortfolio={handleResetToModelPortfolio}
           />
         )}
 
