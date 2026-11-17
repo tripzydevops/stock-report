@@ -73,6 +73,12 @@ export async function POST(request: NextRequest) {
       );
     }
     const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
+    if (['UNKNOWN', 'UNDEFINED', 'NULL', 'NONE'].includes(cleanSym)) {
+      return NextResponse.json(
+        { error: `Invalid symbol '${symbol}'. Placeholders are not allowed.` },
+        { status: 400 }
+      );
+    }
 
     // Strict Market Allowlist Validation
     const marketUpper = String(market).trim().toUpperCase();

@@ -1045,7 +1045,7 @@ export default function Home() {
 
         const itemsToMigrate = parsed.filter(item => {
           const sym = (item.symbol || '').replace('.IS', '').trim().toUpperCase();
-          if (!sym) return false;
+          if (!sym || ['UNKNOWN', 'UNDEFINED', 'NULL', 'NONE'].includes(sym)) return false;
           if (existingSymbols.has(sym)) return false;
           if (!item.shares || item.shares <= 0 || !item.entryPrice || item.entryPrice <= 0) return false;
           return true;
