@@ -193,6 +193,30 @@ const INITIAL_SIGNALS: TradeSignal[] = [
 
 const INITIAL_PORTFOLIO: PortfolioItem[] = [
   {
+    symbol: 'TKFEN', name: 'Tekfen Holding', market: 'BIST',
+    shares: 6, entryPrice: 187.90, currentPrice: 189.10, currency: 'TRY',
+    totalCost: 1127.40, currentValue: 1134.60, pnlAmount: 7.20, pnlPercent: 0.64,
+    stopLoss: 178.51, targetPrice: 216.09, distanceToStop: 5.60, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Tekfen Holding - Eklenen Pozisyon (Trial Admin)',
+    entryDate: '2026-11-17', strategyType: 'SWING'
+  },
+  {
+    symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
+    shares: 258, entryPrice: 30.71, currentPrice: 28.78, currency: 'TRY',
+    totalCost: 7923.18, currentValue: 7425.24, pnlAmount: -497.94, pnlPercent: -6.28,
+    stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'BUY', dcaRationale: 'Flash discount below ₺29.00; Forward dividend yield surges to 8.55%. Prime DCA accumulation tranche.',
+    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
+    shares: 2821, entryPrice: 4.94, currentPrice: 5.15, currency: 'TRY',
+    totalCost: 13935.74, currentValue: 14528.15, pnlAmount: 592.41, pnlPercent: 4.25,
+    stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'BUY', dcaRationale: 'Prime DCA accumulation tranche; high forward yield.',
+    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
+  },
+  {
     symbol: 'AKBNK', name: 'Akbank T.A.Ş.', market: 'BIST',
     shares: 35, entryPrice: 71.20, currentPrice: 66.90, currency: 'TRY',
     totalCost: 2492.00, currentValue: 2341.50, pnlAmount: -150.50, pnlPercent: -6.04,
@@ -201,28 +225,100 @@ const INITIAL_PORTFOLIO: PortfolioItem[] = [
     entryDate: '2026-09-24', strategyType: 'SWING'
   },
   {
-    symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
-    shares: 215, entryPrice: 31.09, currentPrice: 28.78, currency: 'TRY',
-    totalCost: 6684.68, currentValue: 6187.70, pnlAmount: -496.98, pnlPercent: -7.43,
-    stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Flash discount below ₺29.00; Forward dividend yield surges to 8.55%. Prime DCA accumulation tranche.',
-    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
+    symbol: 'AEFES', name: 'Anadolu Efes', market: 'BIST',
+    shares: 53, entryPrice: 18.43, currentPrice: 18.50, currency: 'TRY',
+    totalCost: 976.79, currentValue: 980.50, pnlAmount: 3.71, pnlPercent: 0.38,
+    stopLoss: 17.50, targetPrice: 22.00, distanceToStop: 5.4, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Holding swing accumulation tranche.',
+    entryDate: '2026-10-15', strategyType: 'SWING'
   },
   {
-    symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
-    shares: 1771, entryPrice: 5.62, currentPrice: 5.15, currency: 'TRY',
-    totalCost: 9951.53, currentValue: 9120.65, pnlAmount: -830.88, pnlPercent: -8.35,
-    stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
-    dcaZone: 'BUY', dcaRationale: 'Deep index dip to ₺5.15; Net forward dividend yield jumps to 7.09%. Prime DCA accumulation tranche.',
-    entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
+    symbol: 'AGHOL', name: 'AG Anadolu Grubu Holding', market: 'BIST',
+    shares: 31, entryPrice: 32.16, currentPrice: 32.50, currency: 'TRY',
+    totalCost: 996.96, currentValue: 1007.50, pnlAmount: 10.54, pnlPercent: 1.06,
+    stopLoss: 30.50, targetPrice: 38.00, distanceToStop: 6.2, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Holding core conglomerate position.',
+    entryDate: '2026-10-15', strategyType: 'SWING'
   },
   {
-    symbol: 'TRGYO', name: 'Torunlar GYO', market: 'BIST',
-    shares: 15, entryPrice: 84.50, currentPrice: 86.70, currency: 'TRY',
-    totalCost: 1267.50, currentValue: 1300.50, pnlAmount: 33.00, pnlPercent: 2.60,
-    stopLoss: 0, targetPrice: undefined, distanceToStop: 0, isDividend: true,
-    dcaZone: 'HOLD', dcaRationale: 'Torunlar GYO Prime Core Dividend Compounder; high rental cash generation.',
-    entryDate: '2026-10-22', strategyType: 'CORE_DIVIDEND'
+    symbol: 'ASELS', name: 'Aselsan', market: 'BIST',
+    shares: 3, entryPrice: 338.25, currentPrice: 345.00, currency: 'TRY',
+    totalCost: 1014.75, currentValue: 1035.00, pnlAmount: 20.25, pnlPercent: 2.00,
+    stopLoss: 320.00, targetPrice: 390.00, distanceToStop: 7.2, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Defense electronics momentum holding.',
+    entryDate: '2026-10-20', strategyType: 'SWING'
+  },
+  {
+    symbol: 'BIMAS', name: 'BİM Mağazalar', market: 'BIST',
+    shares: 6, entryPrice: 392.38, currentPrice: 395.00, currency: 'TRY',
+    totalCost: 2354.28, currentValue: 2370.00, pnlAmount: 15.72, pnlPercent: 0.67,
+    stopLoss: 0, targetPrice: 460.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Prime retail dividend compounder.',
+    entryDate: '2026-10-10', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'HALKB', name: 'Halkbank', market: 'BIST',
+    shares: 21, entryPrice: 45.44, currentPrice: 45.50, currency: 'TRY',
+    totalCost: 954.24, currentValue: 955.50, pnlAmount: 1.26, pnlPercent: 0.13,
+    stopLoss: 42.00, targetPrice: 54.00, distanceToStop: 7.7, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Banking swing tranche.',
+    entryDate: '2026-10-18', strategyType: 'SWING'
+  },
+  {
+    symbol: 'KCHOL', name: 'Koç Holding', market: 'BIST',
+    shares: 4, entryPrice: 212.00, currentPrice: 215.00, currency: 'TRY',
+    totalCost: 848.00, currentValue: 860.00, pnlAmount: 12.00, pnlPercent: 1.42,
+    stopLoss: 0, targetPrice: 260.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Prime holding conglomerate dividend compounder.',
+    entryDate: '2026-10-10', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'KRDMD', name: 'Kardemir D', market: 'BIST',
+    shares: 22, entryPrice: 43.52, currentPrice: 43.80, currency: 'TRY',
+    totalCost: 957.44, currentValue: 963.60, pnlAmount: 6.16, pnlPercent: 0.64,
+    stopLoss: 40.50, targetPrice: 52.00, distanceToStop: 7.5, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Steel cyclical swing tranche.',
+    entryDate: '2026-10-25', strategyType: 'SWING'
+  },
+  {
+    symbol: 'PETKM', name: 'Petkim', market: 'BIST',
+    shares: 108, entryPrice: 18.22, currentPrice: 18.30, currency: 'TRY',
+    totalCost: 1967.76, currentValue: 1976.40, pnlAmount: 8.64, pnlPercent: 0.44,
+    stopLoss: 17.00, targetPrice: 22.50, distanceToStop: 7.1, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Petrochemical turnaround swing tranche.',
+    entryDate: '2026-10-22', strategyType: 'SWING'
+  },
+  {
+    symbol: 'TCELL', name: 'Turkcell', market: 'BIST',
+    shares: 11, entryPrice: 98.30, currentPrice: 99.00, currency: 'TRY',
+    totalCost: 1081.30, currentValue: 1089.00, pnlAmount: 7.70, pnlPercent: 0.71,
+    stopLoss: 0, targetPrice: 125.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Telecom cash generator compounder.',
+    entryDate: '2026-10-12', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'TUPRS', name: 'Tüpraş', market: 'BIST',
+    shares: 4, entryPrice: 334.00, currentPrice: 335.00, currency: 'TRY',
+    totalCost: 1336.00, currentValue: 1340.00, pnlAmount: 4.00, pnlPercent: 0.30,
+    stopLoss: 0, targetPrice: 410.00, distanceToStop: 0, isDividend: true,
+    dcaZone: 'HOLD', dcaRationale: 'Refinery prime dividend cash generator.',
+    entryDate: '2026-10-08', strategyType: 'CORE_DIVIDEND'
+  },
+  {
+    symbol: 'VAKBN', name: 'Vakıfbank', market: 'BIST',
+    shares: 29, entryPrice: 33.70, currentPrice: 33.90, currency: 'TRY',
+    totalCost: 977.30, currentValue: 983.10, pnlAmount: 5.80, pnlPercent: 0.59,
+    stopLoss: 31.00, targetPrice: 42.00, distanceToStop: 8.5, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Public banking swing tranche.',
+    entryDate: '2026-10-18', strategyType: 'SWING'
+  },
+  {
+    symbol: 'ZBJ', name: 'Ziraat Portföy Başak Para Piyasası Fonu', market: 'TEFAS',
+    shares: 1252, entryPrice: 5.59, currentPrice: 5.60, currency: 'TRY',
+    totalCost: 6998.68, currentValue: 7011.20, pnlAmount: 12.52, pnlPercent: 0.18,
+    stopLoss: 0, targetPrice: undefined, distanceToStop: 0, isDividend: false,
+    dcaZone: 'HOLD', dcaRationale: 'Cash yield money market liquidity preservation.',
+    entryDate: '2026-10-01', strategyType: 'CORE_DIVIDEND'
   }
 ];
 
@@ -989,7 +1085,9 @@ function checkIsGuestCustomized(): boolean {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const canonicalModelSymbols = new Set([
-          'ISMEN', 'TURSG', 'AKBNK', 'TRGYO', 'THYAO', 'FROTO', 'BIMAS', 'SISE', 'EREGL', 'TUPRS', 'KCHOL', 'ASELS', 'YKBNK', 'SAHOL', 'ENKAI'
+          'TKFEN', 'ISMEN', 'TURSG', 'AKBNK', 'AEFES', 'AGHOL', 'ASELS', 'BIMAS', 'HALKB',
+          'KCHOL', 'KRDMD', 'PETKM', 'TCELL', 'TUPRS', 'VAKBN', 'ZBJ', 'TRGYO', 'THYAO',
+          'FROTO', 'SISE', 'EREGL', 'YKBNK', 'SAHOL', 'ENKAI'
         ]);
         const hasCustomHolding = parsed.some((p: any) => {
           const sym = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
@@ -2411,7 +2509,14 @@ export default function Home() {
         const cachedPortfolio = localStorage.getItem('market_pulse_cached_portfolio');
         if (cachedPortfolio) {
           const parsed = JSON.parse(cachedPortfolio);
-          if (Array.isArray(parsed) && parsed.length > 0) setPortfolio(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const hasTkfen = parsed.some((p: any) => (p.symbol || '').replace('.IS', '').toUpperCase() === 'TKFEN');
+            if (!hasTkfen) {
+              const tkfenInitial = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
+              if (tkfenInitial) parsed.unshift(tkfenInitial);
+            }
+            setPortfolio(parsed);
+          }
         }
 
         const cachedOrders = localStorage.getItem('market_pulse_cached_orders');

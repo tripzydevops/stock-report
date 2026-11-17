@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabaseServer';
 
-const supabase = getAdminSupabase();
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = getAdminSupabase();
     const { id } = await params;
 
     const { data, error } = await supabase

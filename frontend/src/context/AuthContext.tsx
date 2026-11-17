@@ -50,11 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           urlParams.get('admin') === 'pulse' ||
           urlParams.get('login') === 'admin'
         );
-        const localTrialAdmin = typeof window !== 'undefined' && localStorage.getItem('marketpulse_trial_admin_enabled') === 'true';
+        const explicitLogout = typeof window !== 'undefined' && localStorage.getItem('marketpulse_explicit_logout') === 'true';
 
-        if (urlAdminTrigger || localTrialAdmin) {
+        // Trial period policy: Assume admin account successofmentors@gmail.com is logged in always unless explicit signout
+        if (urlAdminTrigger || !explicitLogout) {
           if (typeof window !== 'undefined' && urlAdminTrigger) {
             localStorage.setItem('marketpulse_trial_admin_enabled', 'true');
+            localStorage.removeItem('marketpulse_explicit_logout');
             // Clean up the URL query param without full page reload
             const cleanUrl = window.location.pathname + window.location.hash;
             window.history.replaceState(null, '', cleanUrl);
@@ -99,10 +101,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    if (!error && typeof window !== 'undefined') {
+      localStorage.removeItem('marketpulse_explicit_logout');
+    }
     setIsLoading(false);
     return { error: error as Error | null };
   };
@@ -113,6 +118,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
+    if (!error && typeof window !== 'undefined') {
+      localStorage.removeItem('marketpulse_explicit_logout');
+    }
     setIsLoading(false);
     return { error: error as Error | null };
   };
@@ -129,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsDemoMode(false);
       if (typeof window !== 'undefined') {
         localStorage.setItem('marketpulse_trial_admin_enabled', 'true');
+        localStorage.removeItem('marketpulse_explicit_logout');
       }
     }
     setIsLoading(false);
@@ -138,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setIsLoading(true);
     if (typeof window !== 'undefined') {
+      localStorage.setItem('marketpulse_explicit_logout', 'true');
       localStorage.removeItem('marketpulse_trial_admin_enabled');
     }
     await supabase.auth.signOut();

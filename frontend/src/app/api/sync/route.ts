@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase, getAuthenticatedSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
 import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch, getBistTradingSessionDate } from '@/lib/tradingViewScanner';
 
-const supabase = getAdminSupabase();
-
 const HIGH_PRIORITY_MACRO = [
   'SPY', 'QQQ', 'VOO', 'GLD', 'TLT', 'TRY=X', 'XU100.IS'
 ];
@@ -184,38 +182,36 @@ async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R
   return Promise.all(results);
 }
 
+/**
+ * Validates request authorization for /api/sync.
+ * Strictly limited to:
+ * 1. Verified cron secret (Vercel Cron, GitHub Actions, automation runners)
+ * 2. Authenticated administrative user (successofmentors@gmail.com, designated admin ID, or admin role)
+ * Unauthenticated same-origin or regular user sessions are blocked.
+ */
 async function isAuthorizedSyncRequest(request: Request): Promise<boolean> {
-  // 1. Cron secret authorization (Vercel Cron / GitHub Actions)
+  // 1. Cron secret authorization
   if (verifyCronAuthorization(request)) {
     return true;
   }
 
-  // 2. Same-origin browser request from the application frontend
-  const secFetchSite = request.headers.get('sec-fetch-site');
-  if (secFetchSite === 'same-origin') {
-    return true;
-  }
-
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host');
-  if (origin && host) {
-    try {
-      const originUrl = new URL(origin);
-      if (originUrl.host === host) {
-        return true;
-      }
-    } catch {
-      // ignore URL parsing error
-    }
-  }
-
-  // 3. Authenticated Supabase session
+  // 2. Authenticated Admin Session
   try {
     const authClient = getAuthenticatedSupabase(request);
-    const { data: { user } } = await authClient.auth.getUser();
-    if (user) return true;
-  } catch {
-    // ignore
+    const { data: { user }, error } = await authClient.auth.getUser();
+    if (!error && user) {
+      const email = user.email?.toLowerCase();
+      const role = user.app_metadata?.role || user.user_metadata?.role;
+      if (
+        user.id === 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb' ||
+        email === 'successofmentors@gmail.com' ||
+        role === 'admin'
+      ) {
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn('Admin authorization check failed in /api/sync:', err);
   }
 
   return false;
@@ -230,18 +226,29 @@ export async function POST(request: Request) {
     const isAuthorized = await isAuthorizedSyncRequest(request);
     if (!isAuthorized) {
       return NextResponse.json(
-        { error: 'Unauthorized: invalid or missing cron secret' },
+        { error: 'Unauthorized: valid cron secret or admin user session required' },
         { status: 401 }
       );
     }
+
+    // Privileged admin Supabase client (throws hard error if SUPABASE_SERVICE_ROLE_KEY is absent)
+    const supabase = getAdminSupabase();
 
     const body = await request.json().catch(() => ({ action: 'refresh' }));
     const today = new Date().toISOString().slice(0, 10);
 
     // 1. Fetch all assets from database catalog
-    const { data: dbAssets } = await supabase
+    const { data: dbAssets, error: dbAssetsErr } = await supabase
       .from('assets')
       .select('id, symbol, market, is_active');
+
+    if (dbAssetsErr) {
+      console.error('Failed to load asset catalog from database:', dbAssetsErr);
+      return NextResponse.json(
+        { success: false, error: `Database catalog fetch failed: ${dbAssetsErr.message}` },
+        { status: 500 }
+      );
+    }
 
     // 2. Fetch open portfolio positions
     const { data: openPos } = await supabase
@@ -286,21 +293,38 @@ export async function POST(request: Request) {
     const tefasSymbolsToSync: string[] = [];
     const usMacroSymbolsToSync: string[] = [];
 
+    const BIST_PATTERN = /^[A-Z0-9]{3,7}$/;
+    const US_PATTERN = /^[A-Z]{1,5}$/;
+
     for (const sym of rawSymbols) {
       if (sym === 'XU100.IS' || sym.endsWith('.IS')) {
         bistSymbolsToSync.push(sym);
-      } else if (sym === 'TRY=X' || sym === 'SPY' || sym === 'QQQ' || sym === 'VOO' || sym === 'GLD' || sym === 'TLT') {
+      } else if (sym === 'TRY=X' || HIGH_PRIORITY_MACRO.includes(sym)) {
         usMacroSymbolsToSync.push(sym);
       } else {
-        const matched = dbAssets?.find(a => a.symbol.toUpperCase() === sym.toUpperCase() || a.symbol.replace('.IS', '').toUpperCase() === sym.toUpperCase());
-        if (matched && matched.market === 'TEFAS') {
-          tefasSymbolsToSync.push(sym.toUpperCase());
-        } else if (matched && matched.market === 'BIST') {
-          bistSymbolsToSync.push(sym.endsWith('.IS') ? sym : `${sym}.IS`);
-        } else if (matched && matched.market === 'US') {
-          usMacroSymbolsToSync.push(sym);
+        const clean = sym.replace('.IS', '').toUpperCase();
+        const matched = dbAssets?.find(a => 
+          a.symbol.toUpperCase() === sym.toUpperCase() || 
+          a.symbol.replace('.IS', '').toUpperCase() === clean
+        );
+        if (matched) {
+          if (matched.market === 'TEFAS') {
+            tefasSymbolsToSync.push(clean);
+          } else if (matched.market === 'BIST') {
+            bistSymbolsToSync.push(`${clean}.IS`);
+          } else if (matched.market === 'US') {
+            usMacroSymbolsToSync.push(clean);
+          } else {
+            bistSymbolsToSync.push(`${clean}.IS`);
+          }
         } else {
-          bistSymbolsToSync.push(sym.endsWith('.IS') ? sym : `${sym}.IS`);
+          // Unknown symbol: Do not default blindly to BIST (.IS).
+          // Classify by pattern, prioritizing known US/macro or rejecting invalid format.
+          if (US_PATTERN.test(clean) && clean.length <= 4 && !clean.includes('0') && !clean.includes('1')) {
+            usMacroSymbolsToSync.push(clean);
+          } else if (BIST_PATTERN.test(clean)) {
+            bistSymbolsToSync.push(`${clean}.IS`);
+          }
         }
       }
     }
@@ -309,7 +333,7 @@ export async function POST(request: Request) {
     const uniqueTefas = Array.from(new Set(tefasSymbolsToSync));
     const uniqueUsMacro = Array.from(new Set(usMacroSymbolsToSync));
 
-    // 5. Fetch quotes: Batch BIST in 1 ultra-fast request (~350ms), concurrently with TEFAS & US
+    // 5. Fetch quotes: Primary BIST via TradingView batch scanner, concurrently with TEFAS & US
     const [tvBistMap, tefasResults, usMacroResults] = await Promise.all([
       fetchTradingViewBistQuotesBatch(uniqueBist),
       fetchWithConcurrency(uniqueTefas, fetchTefasQuote, 10),
@@ -332,13 +356,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // Safety sweep: Fallback to Yahoo Finance ONLY for any unpriced BIST tickers that TradingView didn't return
+    // Safety fallback: Query Yahoo Finance ONLY for unpriced BIST tickers where TradingView returned no quote
     if (unpricedBist.length > 0) {
       try {
         const fallbackResults = await fetchWithConcurrency(unpricedBist, fetchLiveQuote, 5);
         for (const q of fallbackResults) {
           if (q && q.price > 0) {
-            quotes.push(q);
+            quotes.push({ ...q, source: 'yahoo_fallback' });
           }
         }
       } catch (fallbackErr) {
@@ -348,11 +372,12 @@ export async function POST(request: Request) {
 
     if (quotes.length === 0) {
       return NextResponse.json({
-        success: true,
+        success: false,
         dispatched: false,
-        message: 'No external quotes returned, refreshing from database cache.',
-        updatedCount: 0
-      });
+        error: 'No quotes returned from upstream market data providers (TradingView, Yahoo, TEFAS). Sync aborted.',
+        updatedCount: 0,
+        timestamp: new Date().toISOString()
+      }, { status: 502 });
     }
 
     // 6. Map asset IDs
@@ -367,7 +392,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 7. Prepare price_history & opening_direction rows
+    // 7. Prepare price_history & opening_direction rows with unified sessionDate
     const priceRows: any[] = [];
     const orbRows: any[] = [];
     let updatedFxRate: number | null = null;
@@ -389,11 +414,13 @@ export async function POST(request: Request) {
 
       const cleanSym = q.symbol.replace('.IS', '').toUpperCase();
       const assetId = assetMap.get(q.symbol.toUpperCase()) || assetMap.get(cleanSym);
+      // Aligned session date between price_history and opening_direction
+      const recordDate = q.sessionDate || today;
 
       if (assetId) {
         priceRows.push({
           asset_id: assetId,
-          date: q.sessionDate || today,
+          date: recordDate,
           close: q.price,
           open: q.open ?? null,
           high: q.high ?? null,
@@ -452,7 +479,7 @@ export async function POST(request: Request) {
         asset_id: assetId || null,
         symbol: cleanSym,
         market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
-        date: today,
+        date: recordDate,
         prev_close: prevClose,
         open_price: openPrice,
         current_price: currPrice,
@@ -465,30 +492,58 @@ export async function POST(request: Request) {
       });
     }
 
-    // 8. Parallel batch upsert price_history in chunks of 250
+    // 8. Batch upsert price_history in chunks of 250 with verified results
+    let priceUpsertSuccessCount = 0;
+    let orbUpsertSuccessCount = 0;
+    const writeErrors: string[] = [];
+
     const priceChunks: any[][] = [];
     for (let i = 0; i < priceRows.length; i += 250) {
       priceChunks.push(priceRows.slice(i, i + 250));
     }
-    await Promise.all(priceChunks.map(chunk => supabase.from('price_history').upsert(chunk, { onConflict: 'asset_id,date' })));
+    for (const chunk of priceChunks) {
+      const { error } = await supabase
+        .from('price_history')
+        .upsert(chunk, { onConflict: 'asset_id,date' });
+      if (error) {
+        console.error('Failed to upsert price_history chunk:', error);
+        writeErrors.push(`price_history (${chunk.length} rows): ${error.message} [code: ${error.code || 'unknown'}]`);
+      } else {
+        priceUpsertSuccessCount += chunk.length;
+      }
+    }
 
-    // 9. Parallel batch upsert opening_direction in chunks of 250
+    // 9. Batch upsert opening_direction in chunks of 250 with verified results
     const orbChunks: any[][] = [];
     for (let i = 0; i < orbRows.length; i += 250) {
       orbChunks.push(orbRows.slice(i, i + 250));
     }
-    await Promise.all(orbChunks.map(chunk => supabase.from('opening_direction').upsert(chunk, { onConflict: 'symbol,date' })));
-
-    // 10. Update FX Rates
-    if (updatedFxRate) {
-      await supabase
-        .from('fx_rates')
-        .upsert([{ pair: 'USDTRY', rate: updatedFxRate, date: today }], { onConflict: 'pair,date' });
+    for (const chunk of orbChunks) {
+      const { error } = await supabase
+        .from('opening_direction')
+        .upsert(chunk, { onConflict: 'symbol,date' });
+      if (error) {
+        console.error('Failed to upsert opening_direction chunk:', error);
+        writeErrors.push(`opening_direction (${chunk.length} rows): ${error.message} [code: ${error.code || 'unknown'}]`);
+      } else {
+        orbUpsertSuccessCount += chunk.length;
+      }
     }
 
-    // 11. Update Market Regimes
+    // 10. Update FX Rates with error verification
+    if (updatedFxRate) {
+      const { error } = await supabase
+        .from('fx_rates')
+        .upsert([{ pair: 'USDTRY', rate: updatedFxRate, date: today }], { onConflict: 'pair,date' });
+      if (error) {
+        console.error('Failed to upsert fx_rates:', error);
+        writeErrors.push(`fx_rates: ${error.message}`);
+      }
+    }
+
+    // 11. Update Market Regimes with error verification
     if (updatedBistClose) {
-      await supabase
+      const { error } = await supabase
         .from('market_regime')
         .upsert([{
           market: 'BIST',
@@ -497,6 +552,10 @@ export async function POST(request: Request) {
           regime: 'neutral',
           notes: `Live synced at ${new Date().toLocaleTimeString('tr-TR')}`
         }], { onConflict: 'market,date' });
+      if (error) {
+        console.error('Failed to upsert market_regime:', error);
+        writeErrors.push(`market_regime: ${error.message}`);
+      }
     }
 
     // 12. Background Corporate Dividend Calendar Sync (Non-blocking)
@@ -513,11 +572,33 @@ export async function POST(request: Request) {
       }
     }
 
+    if (writeErrors.length > 0) {
+      if (priceUpsertSuccessCount === 0 && orbUpsertSuccessCount === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'All database upsert writes failed',
+          details: writeErrors,
+          updatedCount: 0,
+          timestamp: new Date().toISOString()
+        }, { status: 502 });
+      }
+      return NextResponse.json({
+        success: true,
+        partial: true,
+        warning: `${writeErrors.length} database chunk(s) encountered errors`,
+        writeErrors,
+        updatedCount: priceUpsertSuccessCount,
+        orbCount: orbUpsertSuccessCount,
+        timestamp: new Date().toISOString()
+      }, { status: 207 });
+    }
+
     return NextResponse.json({
       success: true,
       dispatched: true,
-      message: `Live Market Data Synced! Updated ${priceRows.length} assets + FX (₺${updatedFxRate?.toFixed(2) || '49.96'}) & BIST 100 (${updatedBistClose?.toFixed(0) || '10710'}).`,
-      updatedCount: priceRows.length,
+      message: `Live Market Data Synced! Updated ${priceUpsertSuccessCount} prices, ${orbUpsertSuccessCount} ORB records + FX (₺${updatedFxRate?.toFixed(2) || '49.96'}) & BIST 100 (${updatedBistClose?.toFixed(0) || '10710'}).`,
+      updatedCount: priceUpsertSuccessCount,
+      orbCount: orbUpsertSuccessCount,
       timestamp: new Date().toISOString()
     });
   } catch (err: any) {

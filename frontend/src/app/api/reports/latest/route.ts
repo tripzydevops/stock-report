@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabaseServer';
 
-const supabase = getAdminSupabase();
-
 export async function GET(request: Request) {
   try {
+    const supabase = getAdminSupabase();
     const { searchParams } = new URL(request.url);
     const reportType = searchParams.get('report_type') || 'marketpulse_daily';
 

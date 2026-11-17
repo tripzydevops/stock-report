@@ -71,15 +71,17 @@ export function getAuthenticatedSupabase(request: Request): SupabaseClient {
  * Privileged administrative Supabase client.
  * Uses SUPABASE_SERVICE_ROLE_KEY to bypass RLS for administrative operations
  * (e.g., generating signed storage download URLs, internal sync routines).
- * If service role key is absent, safely falls back to standard server client.
+ * If service role key is absent, throws an explicit error to prevent silent RLS failures.
  */
 export function getAdminSupabase(): SupabaseClient {
+  if (!serviceRoleKey) {
+    throw new Error(
+      'SUPABASE_SERVICE_ROLE_KEY environment variable is missing. ' +
+      'Administrative operations require a valid service role key to bypass PostgreSQL RLS.'
+    );
+  }
   if (!adminClient) {
-    const key = serviceRoleKey || supabaseAnonKey;
-    if (!serviceRoleKey && process.env.NODE_ENV === 'production') {
-      console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY is not set in production; falling back to anon key.');
-    }
-    adminClient = createClient(supabaseUrl, key, {
+    adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,

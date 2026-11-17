@@ -65,21 +65,6 @@ export async function POST(request: NextRequest) {
       costBasis,
     } = body;
 
-    // Strict Symbol Validation
-    if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
-      return NextResponse.json(
-        { error: 'Valid symbol string is required' },
-        { status: 400 }
-      );
-    }
-    const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
-    if (['UNKNOWN', 'UNDEFINED', 'NULL', 'NONE'].includes(cleanSym)) {
-      return NextResponse.json(
-        { error: `Invalid symbol '${symbol}'. Placeholders are not allowed.` },
-        { status: 400 }
-      );
-    }
-
     // Strict Market Allowlist Validation
     const marketUpper = String(market).trim().toUpperCase();
     if (!ALLOWED_MARKETS.includes(marketUpper as AllowedMarket)) {
@@ -89,6 +74,47 @@ export async function POST(request: NextRequest) {
       );
     }
     const resolvedMarket = marketUpper as AllowedMarket;
+
+    // Strict Symbol Validation
+    if (!symbol || typeof symbol !== 'string' || !symbol.trim()) {
+      return NextResponse.json(
+        { error: 'Valid symbol string is required' },
+        { status: 400 }
+      );
+    }
+    const cleanSym = symbol.replace(/\.IS$/i, '').trim().toUpperCase();
+    const DISALLOWED_SYMBOLS = new Set([
+      'UNKNOWN', 'UNDEFINED', 'NULL', 'NONE', 'N/A', 'NA', 'TBD', 'TEST', 'STOCK', 'EMPTY', 'INVALID'
+    ]);
+    if (DISALLOWED_SYMBOLS.has(cleanSym)) {
+      return NextResponse.json(
+        { error: `Invalid symbol '${symbol}'. Placeholders and generic labels are not allowed.` },
+        { status: 400 }
+      );
+    }
+
+    if (resolvedMarket === 'BIST') {
+      if (!/^[A-Z0-9]{3,7}$/.test(cleanSym)) {
+        return NextResponse.json(
+          { error: `Invalid BIST symbol format '${symbol}'. Expected 3-7 alphanumeric characters (e.g., THYAO, TKFEN, ISMEN).` },
+          { status: 400 }
+        );
+      }
+    } else if (resolvedMarket === 'US') {
+      if (!/^[A-Z]{1,5}$/.test(cleanSym)) {
+        return NextResponse.json(
+          { error: `Invalid US symbol format '${symbol}'. Expected 1-5 letters (e.g., AAPL, NVDA, SPY).` },
+          { status: 400 }
+        );
+      }
+    } else if (resolvedMarket === 'TEFAS') {
+      if (!/^[A-Z0-9]{3,5}$/.test(cleanSym)) {
+        return NextResponse.json(
+          { error: `Invalid TEFAS fund code format '${symbol}'. Expected 3-5 alphanumeric characters (e.g., ZBJ, TI2).` },
+          { status: 400 }
+        );
+      }
+    }
 
     // Strict Side Validation
     const sideUpper = String(side).trim().toUpperCase();
