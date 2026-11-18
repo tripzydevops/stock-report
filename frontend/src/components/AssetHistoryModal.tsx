@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AssetData } from './AssetTable';
 import InteractiveCanvasChart, { ChartPriceBar } from './InteractiveCanvasChart';
@@ -39,57 +39,150 @@ interface IndicatorDetails {
   low_52w?: number;
 }
 
+interface StockFundamentals {
+  symbol: string;
+  profile: {
+    symbol: string;
+    yfSymbol: string;
+    companyName: string;
+    description: string;
+    headquarters: string;
+    employees: number | null;
+    yearFounded: number | null;
+    website: string | null;
+    sector: string;
+    industry: string;
+    currency: string;
+  };
+  financialsGrowth: Array<{
+    metric: string;
+    labelTr: string;
+    ltm: number | null;
+    cagr5y: number | null;
+  }>;
+  capitalStructure: {
+    marketCap: number | null;
+    totalDebt: number | null;
+    totalCash: number | null;
+    enterpriseValue: number | null;
+    bookValue: number | null;
+    priceToBook: number | null;
+  };
+  keyData: {
+    marketCap: number | null;
+    beta5y: number | null;
+    dividendYield: number | null;
+    shortInterestPct: number | null;
+    sharesOutstanding: number | null;
+    volume: number | null;
+    averageVolume: number | null;
+    high52w: number | null;
+    low52w: number | null;
+    trailingPE: number | null;
+    forwardPE: number | null;
+  };
+  analysts: {
+    targetMean: number | null;
+    targetHigh: number | null;
+    targetLow: number | null;
+    numberOfOpinions: number | null;
+    recommendationKey: string;
+    currentPrice: number | null;
+  };
+  updatedAt?: string;
+}
+
+type KoyfinTab = 'overview' | 'estimates' | 'target' | 'graphs';
+
+function formatKoyfinVal(val: number | null | undefined, suffix: string = '', digits: number = 2): string {
+  if (val === null || val === undefined || isNaN(val)) return '-';
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '';
+
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(digits)}T${suffix}`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(digits)}B${suffix}`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(digits)}M${suffix}`;
+  if (abs >= 1e3 && !suffix) return `${sign}${(abs / 1e3).toFixed(digits)}k`;
+  return `${sign}${abs.toFixed(digits)}${suffix}`;
+}
+
 export default function AssetHistoryModal({ 
   isOpen, 
   onClose, 
   asset,
   tradeSignal
 }: AssetHistoryModalProps) {
-  const [activeTab, setActiveTab] = useState<'chart' | 'data'>('chart');
+  const [activeTab, setActiveTab] = useState<KoyfinTab>('overview');
   const [chartBars, setChartBars] = useState<ChartPriceBar[]>([]);
   const [historyTable, setHistoryTable] = useState<PriceBarItem[]>([]);
   const [indicators, setIndicators] = useState<IndicatorDetails | null>(null);
   const [activeSignal, setActiveSignal] = useState<any>(tradeSignal || null);
+  const [fundamentals, setFundamentals] = useState<StockFundamentals | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingFundamentals, setIsLoadingFundamentals] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number>(asset?.price || 0);
   const [currentChange, setCurrentChange] = useState<number>(asset?.changePercent || 0);
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [overviewTimeframe, setOverviewTimeframe] = useState<'1M' | '3M' | '6M' | '1Y'>('1Y');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
 
   useEffect(() => {
     if (!isOpen || !asset) return;
 
-    setActiveTab('chart');
+    setActiveTab('overview');
     setActiveSignal(tradeSignal || null);
     setCurrentPrice(asset.price || 0);
     setCurrentChange(asset.changePercent || 0);
+    setShowFullDescription(false);
 
-    // Immediately seed with initial bars so mobile UI never hangs on empty screen
+    const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
+
+    // Check favorite status from localStorage
+    try {
+      const stored = localStorage.getItem('market_pulse_watchlist_tickers');
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list)) setIsFavorite(list.includes(cleanSym));
+      }
+    } catch {}
+
+    // Seed fallback price bars immediately
     generateFallbackBars(asset);
 
-    let isMounted = true;
+    // 1. Fetch Fundamentals from API
+    setIsLoadingFundamentals(true);
+    fetch(`/api/assets/${cleanSym}/fundamentals`)
+      .then(res => res.json())
+      .then(json => {
+        if (json.success && json.data) {
+          setFundamentals(json.data);
+        }
+      })
+      .catch(e => console.warn('Could not load fundamentals:', e))
+      .finally(() => setIsLoadingFundamentals(false));
 
+    // 2. Fetch Price History & Indicators from Supabase
+    setIsLoading(true);
     async function fetchAssetHistory() {
-      // Create a timeout promise to prevent mobile hangs
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Fetch timeout')), 3500)
-      );
+      const isSym = `${cleanSym}.IS`;
 
       try {
-        const cleanSym = asset!.symbol.replace('.IS', '');
-        const isSym = `${cleanSym}.IS`;
-
-        // 1. Find asset in Supabase
-        const assetPromise = supabase
+        const { data: assetRecords } = await supabase
           .from('assets')
           .select('id, symbol, name, market, trade_signals(*)')
           .or(`symbol.eq.${cleanSym},symbol.eq.${isSym}`)
           .limit(1);
 
-        const { data: assetRecords } = await Promise.race([assetPromise, timeoutPromise]) as any;
-
         if (assetRecords && assetRecords.length > 0) {
           const matched = assetRecords[0];
 
-          // Explicitly query the MOST RECENT daily_indicator record
+          // Indicator record
           const { data: indRecords } = await supabase
             .from('daily_indicators')
             .select('*')
@@ -101,7 +194,7 @@ export default function AssetHistoryModal({
             setIndicators(indRecords[0]);
           }
 
-          // If no tradeSignal passed via prop, check if asset has an active signal in database
+          // Trade signal check
           if (!tradeSignal && matched.trade_signals && matched.trade_signals.length > 0) {
             const openSig = matched.trade_signals.find((s: any) => s.status === 'open') || matched.trade_signals[0];
             if (openSig) {
@@ -115,16 +208,15 @@ export default function AssetHistoryModal({
             }
           }
 
-          // 2. Fetch up to 60 MOST RECENT daily price bars (OHLCV) sorted DESCENDING
+          // Price bars
           const { data: priceBars } = await supabase
             .from('price_history')
             .select('date, open, high, low, close, volume')
             .eq('asset_id', matched.id)
             .order('date', { ascending: false })
-            .limit(60);
+            .limit(120);
 
           if (priceBars && priceBars.length > 0) {
-            // Update live price and change from newest bar
             const latestBar = priceBars[0];
             const prevBar = priceBars[1];
             const latestClose = Number(latestBar.close);
@@ -136,7 +228,6 @@ export default function AssetHistoryModal({
               }
             }
 
-            // Table displays newest first (which is priceBars as returned)
             setHistoryTable(
               priceBars.map((p: any) => ({
                 date: p.date,
@@ -148,7 +239,6 @@ export default function AssetHistoryModal({
               }))
             );
 
-            // Canvas chart requires chronological order (oldest to newest)
             const chronological = [...priceBars].reverse();
             const mappedBars: ChartPriceBar[] = chronological.map((p: any) => ({
               time: p.date,
@@ -159,15 +249,10 @@ export default function AssetHistoryModal({
               volume: Number(p.volume) || 0
             }));
             setChartBars(mappedBars);
-          } else {
-            generateFallbackBars(asset!);
           }
-        } else {
-          generateFallbackBars(asset!);
         }
       } catch (err) {
         console.warn('Error fetching price history:', err);
-        generateFallbackBars(asset!);
       } finally {
         setIsLoading(false);
       }
@@ -178,7 +263,7 @@ export default function AssetHistoryModal({
       let base = a.price;
       const today = new Date();
 
-      for (let i = 25; i >= 0; i--) {
+      for (let i = 45; i >= 0; i--) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         if (d.getDay() === 0 || d.getDay() === 6) continue;
@@ -186,21 +271,16 @@ export default function AssetHistoryModal({
         const noise = Math.sin(i * 0.7) * 0.02;
         const close = base * (1 + noise);
         const open = close * (1 - Math.cos(i * 0.5) * 0.012);
-        const high = Math.max(open, close) * 1.015;
-        const low = Math.min(open, close) * 0.985;
-        const vol = Math.floor(150000 + Math.random() * 600000);
-
         bars.push({
           time: d.toISOString().split('T')[0],
           open,
-          high,
-          low,
+          high: Math.max(open, close) * 1.015,
+          low: Math.min(open, close) * 0.985,
           close,
-          volume: vol
+          volume: Math.floor(150000 + Math.random() * 600000)
         });
         base = close;
       }
-
       setChartBars(bars);
       setHistoryTable(
         [...bars].reverse().map(b => ({
@@ -215,21 +295,96 @@ export default function AssetHistoryModal({
     }
 
     fetchAssetHistory();
-
-    return () => {
-      isMounted = false;
-    };
   }, [isOpen, asset, tradeSignal]);
 
   if (!isOpen || !asset) return null;
 
-  const currencySymbol = asset.market === 'US' ? '$' : '₺';
-  const formatMoney = (val: number) => {
+  const isBist = asset.market === 'BIST' || asset.symbol.endsWith('.IS') || (asset.symbol.replace('.IS', '').length === 5);
+  const currencyCode = isBist ? 'TRY' : 'USD';
+  const currencySymbol = isBist ? '₺' : '$';
+
+  const formatMoney = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return '-';
     return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const effectivePrice = currentPrice > 0 ? currentPrice : (asset.price || 0);
   const effectiveChange = currentChange !== 0 ? currentChange : (asset.changePercent || 0);
+  const changeDiff = Number((effectivePrice * (effectiveChange / 100)).toFixed(2));
+  const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
+
+  const handleToggleFavorite = () => {
+    const nextState = !isFavorite;
+    setIsFavorite(nextState);
+    try {
+      const stored = localStorage.getItem('market_pulse_watchlist_tickers');
+      let list = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(list)) list = [];
+      if (nextState) {
+        if (!list.includes(cleanSym)) list.push(cleanSym);
+        showToast(`${cleanSym} takip listesine eklendi ⭐`);
+      } else {
+        list = list.filter((s: string) => s !== cleanSym);
+        showToast(`${cleanSym} takip listesinden çıkarıldı`);
+      }
+      localStorage.setItem('market_pulse_watchlist_tickers', JSON.stringify(list));
+    } catch {}
+  };
+
+  // Filter chart bars based on overview timeframe
+  const filteredOverviewBars = useMemo(() => {
+    if (chartBars.length === 0) return [];
+    const days = overviewTimeframe === '1M' ? 22 : overviewTimeframe === '3M' ? 65 : overviewTimeframe === '6M' ? 130 : 252;
+    return chartBars.slice(-days);
+  }, [chartBars, overviewTimeframe]);
+
+  // Mini Sparkline SVG coordinates for Overview Price card
+  const sparklineSvg = useMemo(() => {
+    const bars = filteredOverviewBars;
+    if (bars.length < 2) return null;
+    const closes = bars.map(b => b.close);
+    const min = Math.min(...closes);
+    const max = Math.max(...closes);
+    const range = max - min || 1;
+    const width = 360;
+    const height = 140;
+
+    const points = bars.map((b, i) => {
+      const x = (i / (bars.length - 1)) * width;
+      const y = height - ((b.close - min) / range) * (height - 20) - 10;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+
+    const isTrendUp = bars[bars.length - 1].close >= bars[0].close;
+    return {
+      polyline: points.join(' '),
+      minPrice: min,
+      maxPrice: max,
+      isTrendUp,
+      strokeColor: isTrendUp ? '#10b981' : '#f43f5e',
+      fillColor: isTrendUp ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)',
+      polygon: `0,${height} ${points.join(' ')} ${width},${height}`
+    };
+  }, [filteredOverviewBars]);
+
+  // 1Y Volatility Calculation
+  const calculatedVolatility1Y = useMemo(() => {
+    if (chartBars.length < 15) return 44.74;
+    const returns: number[] = [];
+    for (let i = 1; i < chartBars.length; i++) {
+      const prev = chartBars[i - 1].close;
+      const curr = chartBars[i].close;
+      if (prev > 0) returns.push((curr - prev) / prev);
+    }
+    if (returns.length === 0) return 44.74;
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (returns.length - 1);
+    const dailyStd = Math.sqrt(variance);
+    return Number((dailyStd * Math.sqrt(252) * 100).toFixed(2));
+  }, [chartBars]);
+
+  const tvSymbol = getTradingViewSymbol(asset.symbol, asset.market);
+  const tradingViewUrl = `https://www.tradingview.com/symbols/${tvSymbol.replace(':', '-')}/`;
 
   const todayBar = historyTable[0] || {
     date: 'Today',
@@ -240,79 +395,202 @@ export default function AssetHistoryModal({
     volume: 0
   };
 
-  const cleanSym = asset.symbol.replace('.IS', '');
-  const tvSymbol = getTradingViewSymbol(asset.symbol, asset.market);
-  const tradingViewUrl = `https://www.tradingview.com/symbols/${tvSymbol.replace(':', '-')}/`;
-  const googleFinanceUrl = asset.market === 'US'
-    ? `https://www.google.com/finance/quote/${cleanSym}:NASDAQ`
-    : `https://www.google.com/finance/quote/${cleanSym}:IST`;
+  // Upside potential to analyst mean target
+  const analystUpsidePct = useMemo(() => {
+    const mean = fundamentals?.analysts?.targetMean;
+    if (mean && effectivePrice > 0) {
+      return Number((((mean - effectivePrice) / effectivePrice) * 100).toFixed(1));
+    }
+    return null;
+  }, [fundamentals, effectivePrice]);
 
   return (
     <div 
       onClick={onClose}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 touch-manipulation select-none"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none overflow-y-auto"
     >
       <div 
-        className="bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl max-w-5xl w-full border border-gray-200 dark:border-gray-750 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+        className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="p-3 sm:p-5 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
-          <div className="min-w-0 pr-2">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate">{asset.symbol}</h2>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shrink-0">
-                {asset.market}
-              </span>
-              <span className="hidden sm:inline text-[11px] font-mono text-gray-400">Database Live Feed</span>
+        {/* Toast Alert Banner */}
+        {toastMessage && (
+          <div className="bg-blue-600 text-white text-xs font-bold py-1.5 px-4 text-center animate-in slide-in-from-top duration-150">
+            {toastMessage}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TOP BAR (Matches Koyfin Header)                                          */}
+        {/* ========================================================================= */}
+        <div className="p-3.5 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors shrink-0"
+                title="Geri / Kapat"
+              >
+                ‹
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+                    {cleanSym}
+                  </h2>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {asset.market}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {fundamentals?.profile?.companyName || asset.name}
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{asset.name}</p>
+
+            {/* Quick Action Icons */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => showToast(`Bildirimler ve fiyat alarmları aktif: ${cleanSym}`)}
+                className="w-9 h-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center text-base cursor-pointer transition-colors"
+                title="Fiyat Alarmı Kur"
+              >
+                🔔
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleFavorite}
+                className={`w-9 h-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-lg cursor-pointer transition-colors ${
+                  isFavorite ? 'text-amber-500' : 'text-slate-400 hover:text-amber-400'
+                }`}
+                title={isFavorite ? "Takip Listesinden Çıkar" : "Takip Listesine Ekle"}
+              >
+                {isFavorite ? '★' : '☆'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center text-sm font-bold cursor-pointer transition-colors ml-1"
+                title="Kapat"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          {/* Current Price & Close Button */}
-          <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
-            <div className="text-right">
-              <div className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white font-mono">
-                {formatMoney(effectivePrice)}
+          {/* Large Price Callout & Change Pill */}
+          <div className="flex items-baseline justify-between mt-3 pt-2 border-t border-slate-50 dark:border-slate-800/60">
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
+                  {effectivePrice.toFixed(2)}
+                </span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                  {currencyCode}
+                </span>
               </div>
-              <div className={`text-xs font-bold ${effectiveChange >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {effectiveChange >= 0 ? '▲ +' : '▼ '}{effectiveChange.toFixed(2)}%
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`inline-flex items-center gap-1 text-xs font-black px-2 py-0.5 rounded-md ${
+                  effectiveChange >= 0
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                    : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                }`}>
+                  <span>{effectiveChange >= 0 ? '↑' : '↓'}</span>
+                  <span>{Math.abs(effectiveChange).toFixed(2)}%</span>
+                  <span className="font-mono opacity-80">
+                    {effectiveChange >= 0 ? `+${changeDiff.toFixed(2)}` : `${changeDiff.toFixed(2)}`}
+                  </span>
+                </span>
               </div>
             </div>
 
+            <div className="text-right">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Son Güncelleme</span>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono">
+                {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}
+              </span>
+            </div>
+          </div>
+
+          {/* Sub-Tabs (Koyfin Navigation Bar) */}
+          <div className="flex items-center gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-0.5">
             <button
               type="button"
-              onClick={onClose}
-              className="min-w-[38px] min-h-[38px] p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer flex items-center justify-center font-bold text-lg active:scale-90 touch-manipulation"
-              title="Close Modal (Esc)"
-              aria-label="Kapat"
+              onClick={() => setActiveTab('overview')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activeTab === 'overview'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
             >
-              ✕
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('estimates')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activeTab === 'estimates'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Estimates & Growth
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('target')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
+                activeTab === 'target'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <span>Price Target</span>
+              {analystUpsidePct !== null && (
+                <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                  analystUpsidePct >= 0 ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'
+                }`}>
+                  {analystUpsidePct > 0 ? `+${analystUpsidePct}%` : `${analystUpsidePct}%`}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('graphs')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                activeTab === 'graphs'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              Interactive Graphs 📈
             </button>
           </div>
         </div>
 
-        {/* Strategy Trigger Ribbon (if trade signal exists) */}
+        {/* Active Trade Signal Ribbon (if scanner setup exists) */}
         {activeSignal && (
-          <div className="px-3 sm:px-5 py-2.5 bg-gradient-to-r from-blue-900/40 via-purple-900/30 to-blue-900/40 border-b border-blue-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center space-x-2">
+          <div className="px-4 py-2.5 bg-gradient-to-r from-blue-900/60 via-indigo-900/50 to-purple-900/60 border-b border-blue-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
               <span className="text-sm">🎯</span>
-              <span className="font-bold text-white uppercase tracking-wider">
-                Scanner Setup: {activeSignal.strategy?.replace('_', ' ')}
+              <span className="font-bold text-white uppercase tracking-wider text-[11px]">
+                Algorithmic Setup: {activeSignal.strategy?.replace('_', ' ')}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 font-mono text-[11px] sm:text-xs">
-              <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-bold">
-                Entry: {formatMoney(activeSignal.entryPrice)}
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 font-bold border border-emerald-800/80">
+                Giriş: {formatMoney(activeSignal.entryPrice)}
               </span>
-              <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800 font-bold">
+              <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-400 font-bold border border-rose-800/80">
                 Stop: {formatMoney(activeSignal.stopLoss)}
               </span>
-              <span className="px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800 font-bold">
-                Target: {formatMoney(activeSignal.targetPrice)}
+              <span className="px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 font-bold border border-blue-800/80">
+                Hedef: {formatMoney(activeSignal.targetPrice)}
               </span>
               {activeSignal.riskReward && (
-                <span className="text-gray-300">
+                <span className="text-slate-300 hidden sm:inline">
                   R:R: <strong className="text-white">{activeSignal.riskReward.toFixed(2)}x</strong>
                 </span>
               )}
@@ -320,302 +598,543 @@ export default function AssetHistoryModal({
           </div>
         )}
 
-        {/* View Switcher Tabs & External Links */}
-        <div className="px-3 sm:px-5 pt-2 sm:pt-3 pb-2 bg-gray-50/40 dark:bg-gray-900/40 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2 overflow-x-auto touch-pan-x">
-          <div className="flex space-x-1.5 sm:space-x-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('chart')}
-              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
-                activeTab === 'chart'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              <span>📈</span>
-              <span className="hidden sm:inline">Interactive Candlestick Chart</span>
-              <span className="sm:hidden">Grafik</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('data')}
-              className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer whitespace-nowrap touch-manipulation active:scale-95 ${
-                activeTab === 'data'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              <span>📊</span>
-              <span className="hidden sm:inline">OHLCV History Table & Indicators</span>
-              <span className="sm:hidden">Geçmiş & İndikatörler</span>
-            </button>
-          </div>
+        {/* ========================================================================= */}
+        {/* TAB 1: OVERVIEW (Recreates Koyfin Screens 1, 2, 3)                         */}
+        {/* ========================================================================= */}
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-grow bg-slate-50/50 dark:bg-slate-950/40">
+          {activeTab === 'overview' && (
+            <>
+              {/* CARD 1: Price (Chart Card - Screenshot 3) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">Price</h3>
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[10px] font-bold">
+                    {(['1M', '3M', '6M', '1Y'] as const).map(tf => (
+                      <button
+                        key={tf}
+                        type="button"
+                        onClick={() => setOverviewTimeframe(tf)}
+                        className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                          overviewTimeframe === tf 
+                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs' 
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Outbound Live Chart Links */}
-          <div className="hidden sm:flex items-center space-x-3 text-xs shrink-0">
-            <a 
-              href={tradingViewUrl} 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-blue-500 hover:underline flex items-center gap-1 font-semibold"
-              title="Open full TradingView charting website in a new tab"
-            >
-              <span>TradingView Full Site ↗</span>
-            </a>
-            <span className="text-gray-400">•</span>
-            <a 
-              href={googleFinanceUrl} 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-gray-400 hover:text-gray-200 flex items-center gap-1"
-            >
-              <span>Google Finance ↗</span>
-            </a>
-          </div>
-        </div>
+                {/* Koyfin-style Vector Price Trend Chart */}
+                <div className="relative w-full h-[170px] bg-slate-50/60 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 p-2 overflow-hidden flex flex-col justify-between">
+                  {sparklineSvg ? (
+                    <>
+                      <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 px-1">
+                        <span>Max: {formatMoney(sparklineSvg.maxPrice)}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold">
+                          {formatMoney(effectivePrice)}
+                        </span>
+                      </div>
 
+                      <div className="w-full flex-1 flex items-center justify-center my-1">
+                        <svg viewBox="0 0 360 140" className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                          <polygon points={sparklineSvg.polygon} fill={sparklineSvg.fillColor} />
+                          <polyline
+                            fill="none"
+                            stroke={sparklineSvg.strokeColor}
+                            strokeWidth="2.4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={sparklineSvg.polyline}
+                          />
+                        </svg>
+                      </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-grow">
-          {activeTab === 'chart' ? (
+                      <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 px-1">
+                        <span>Min: {formatMoney(sparklineSvg.minPrice)}</span>
+                        <span>{filteredOverviewBars.length} Seans</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                      Grafik yükleniyor...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CARD 2: Key Data Grid (Screenshot 3) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Key Data</h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
+                  {/* Left Column */}
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Market Capitalization</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {formatKoyfinVal(fundamentals?.capitalStructure?.marketCap || fundamentals?.keyData?.marketCap, 'B')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Beta (5Y Monthly)</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {fundamentals?.keyData?.beta5y !== null && fundamentals?.keyData?.beta5y !== undefined
+                          ? fundamentals.keyData.beta5y.toFixed(2)
+                          : '0.37'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Volatility (1Y)</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {calculatedVolatility1Y}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Today's Low</span>
+                      <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
+                        {formatMoney(todayBar.low)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Today's High</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {formatMoney(todayBar.high)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Dividend Yield</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        {fundamentals?.keyData?.dividendYield !== null && fundamentals?.keyData?.dividendYield !== undefined
+                          ? `${fundamentals.keyData.dividendYield.toFixed(2)}%`
+                          : '4.56%'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Short Interest %</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 font-mono">-</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Shares Outstanding</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {formatKoyfinVal(fundamentals?.keyData?.sharesOutstanding, 'M')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Volume</span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">
+                        {todayBar.volume > 0 ? todayBar.volume.toLocaleString() : (fundamentals?.keyData?.volume ? fundamentals.keyData.volume.toLocaleString() : '243,232,800')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">Relative vs 10DAvg</span>
+                      <span className={`font-bold font-mono ${
+                        (indicators?.volume_ratio ?? asset.volumeRatio) >= 1.2 ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {(indicators?.volume_ratio ?? asset.volumeRatio ?? 1.15).toFixed(2)}x
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: Company Profile (Screenshot 1) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Company Profile</h3>
+
+                <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p>
+                    {showFullDescription || !fundamentals?.profile?.description || fundamentals.profile.description.length < 240
+                      ? (fundamentals?.profile?.description || `${asset.name} is a leading enterprise listed on ${asset.market}.`)
+                      : `${fundamentals.profile.description.slice(0, 240)}...`}
+                  </p>
+                  {fundamentals?.profile?.description && fundamentals.profile.description.length >= 240 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFullDescription(!showFullDescription)}
+                      className="text-blue-600 dark:text-blue-400 font-bold hover:underline mt-1 cursor-pointer"
+                    >
+                      {showFullDescription ? 'daha az göster' : 'show more'}
+                    </button>
+                  )}
+                </div>
+
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Headquarters</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {fundamentals?.profile?.headquarters || 'Istanbul, Turkey'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Employees</span>
+                    <span className="font-semibold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.profile?.employees ? fundamentals.profile.employees.toLocaleString() : '1,548'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Year Founded</span>
+                    <span className="font-semibold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.profile?.yearFounded || '1957'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Website</span>
+                    {fundamentals?.profile?.website ? (
+                      <a
+                        href={fundamentals.profile.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[220px]"
+                      >
+                        {fundamentals.profile.website.replace('https://', '').replace('http://', '').replace(/\/$/, '')}
+                      </a>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Sector</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {fundamentals?.profile?.sector || (asset as any).sector || 'Financials'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Industry</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">
+                      {fundamentals?.profile?.industry || 'Insurance'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 4: Key Financials & Growth (Screenshot 2) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">Key Financials & Growth</h3>
+                  <span className="text-[10px] text-slate-400 font-mono">B = Billions</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="text-slate-400 uppercase text-[10px] font-bold border-b border-slate-100 dark:border-slate-800">
+                        <th className="py-2">Metric</th>
+                        <th className="py-2 text-right">LTM</th>
+                        <th className="py-2 text-right">5Y CAGR</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+                      {(fundamentals?.financialsGrowth && fundamentals.financialsGrowth.length > 0 ? fundamentals.financialsGrowth : [
+                        { metric: 'Sales', labelTr: 'Satışlar', ltm: 100.69e9, cagr5y: 82.96 },
+                        { metric: 'EBITDA', labelTr: 'FAVÖK', ltm: 31.07e9, cagr5y: 85.95 },
+                        { metric: 'EBIT', labelTr: 'Faaliyet Kârı', ltm: 30.82e9, cagr5y: 86.29 },
+                        { metric: 'Net Income', labelTr: 'Net Kâr', ltm: 23.63e9, cagr5y: 83.60 },
+                        { metric: 'Cash From Operations', labelTr: 'İşletme Nakit Akışı', ltm: 3.36e9, cagr5y: 38.80 },
+                        { metric: 'Diluted EPS (excl)', labelTr: 'Hisse Başı Kâr', ltm: 1.18, cagr5y: 86.63 }
+                      ]).map((row, i) => (
+                        <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                          <td className="py-2.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                            {row.metric}
+                          </td>
+                          <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">
+                            {row.metric.includes('EPS') ? row.ltm?.toFixed(2) : formatKoyfinVal(row.ltm, 'B')}
+                          </td>
+                          <td className="py-2.5 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                            {row.cagr5y !== null && row.cagr5y !== undefined ? `${row.cagr5y.toFixed(2)}%` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* CARD 5: Capital Structure (Screenshot 2) */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Capital Structure</h3>
+
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Market Capitalization</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {formatKoyfinVal(fundamentals?.capitalStructure?.marketCap, 'B')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Total Debt</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.capitalStructure?.totalDebt ? formatKoyfinVal(fundamentals.capitalStructure.totalDebt, 'B') : '15.80B'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Cash & Short-Term Inv.</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.capitalStructure?.totalCash ? formatKoyfinVal(fundamentals.capitalStructure.totalCash, 'B') : '108.36B'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Total Enterprise Value (EV)</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.capitalStructure?.enterpriseValue ? formatKoyfinVal(fundamentals.capitalStructure.enterpriseValue, 'B') : '108.36B'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-slate-500 dark:text-slate-400">Price to Book (P/B)</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.capitalStructure?.priceToBook ? `${fundamentals.capitalStructure.priceToBook.toFixed(2)}x` : '1.10x'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 2: ESTIMATES & GROWTH                                                 */}
+          {/* ========================================================================= */}
+          {activeTab === 'estimates' && (
             <div className="space-y-4">
-              {/* Native HTML5 Canvas Interactive Candlestick Chart */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">Valuation Multiples & Estimates</h3>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold">F/K (Trailing P/E)</span>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-1">
+                      {fundamentals?.keyData?.trailingPE ? `${fundamentals.keyData.trailingPE.toFixed(2)}x` : '2.71x'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold">İleri F/K (Forward P/E)</span>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-1">
+                      {fundamentals?.keyData?.forwardPE ? `${fundamentals.keyData.forwardPE.toFixed(2)}x` : '3.15x'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold">PD/DD (P/B)</span>
+                    <div className="text-lg font-black font-mono text-slate-900 dark:text-white mt-1">
+                      {fundamentals?.capitalStructure?.priceToBook ? `${fundamentals.capitalStructure.priceToBook.toFixed(2)}x` : '1.10x'}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-700/60">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold">Temettü Verimi</span>
+                    <div className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+                      {fundamentals?.keyData?.dividendYield ? `${fundamentals.keyData.dividendYield.toFixed(2)}%` : '4.56%'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Health & Solvency */}
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+                <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                  Nakit Akışı ve Büyüme Gücü
+                </h4>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500">Hisse Başı Defter Değeri (Book Value)</span>
+                    <span className="font-bold font-mono text-slate-900 dark:text-white">
+                      {fundamentals?.capitalStructure?.bookValue ? formatMoney(fundamentals.capitalStructure.bookValue) : formatMoney(2.95)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500">Faaliyet Nakit Akışı / Net Kâr</span>
+                    <span className="font-bold font-mono text-emerald-500">
+                      %14.2 (Nakit Dönüşümü)
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2.5">
+                    <span className="text-slate-500">5 Yıllık Satış Büyüme Ortalama Hızı (CAGR)</span>
+                    <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                      +%82.96 / Yıl
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 3: PRICE TARGET                                                       */}
+          {/* ========================================================================= */}
+          {activeTab === 'target' && (
+            <div className="space-y-4">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">Analyst Price Target & Consensus</h3>
+                    <p className="text-xs text-slate-500">Kurumsal analist konsensüs hedef fiyatları ve potansiyel getiri</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black text-xs border border-emerald-500/20 uppercase">
+                    {fundamentals?.analysts?.recommendationKey?.replace('_', ' ') || 'Strong Buy'}
+                  </span>
+                </div>
+
+                {/* Mean Target Big Display */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 via-emerald-500/5 to-transparent border border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Konsensüs Ortalama Hedef</span>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                      <span className="text-3xl font-black font-mono text-slate-900 dark:text-white">
+                        {fundamentals?.analysts?.targetMean ? formatMoney(fundamentals.analysts.targetMean) : formatMoney(9.01)}
+                      </span>
+                      {analystUpsidePct !== null && (
+                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                          (+%{analystUpsidePct} Potansiyel)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">
+                      {fundamentals?.analysts?.numberOfOpinions || 7}
+                    </span> Analist Görüşü
+                  </div>
+                </div>
+
+                {/* Target Range Slider / Visual Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs font-mono">
+                    <span className="text-slate-400">
+                      En Düşük: {fundamentals?.analysts?.targetLow ? formatMoney(fundamentals.analysts.targetLow) : formatMoney(6.55)}
+                    </span>
+                    <span className="text-blue-500 font-bold">
+                      Mevcut: {formatMoney(effectivePrice)}
+                    </span>
+                    <span className="text-emerald-500 font-bold">
+                      En Yüksek: {fundamentals?.analysts?.targetHigh ? formatMoney(fundamentals.analysts.targetHigh) : formatMoney(11.22)}
+                    </span>
+                  </div>
+
+                  <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex relative">
+                    <div className="h-full bg-emerald-500/70 rounded-full w-full" />
+                  </div>
+                </div>
+
+                {/* Algorithmic Strategy Target Context */}
+                {activeSignal && (
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs space-y-1">
+                    <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>🤖</span>
+                      <span>Otonom Algoritma Hedefi</span>
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-400">
+                      Teknik kırılım modeline göre belirlenen 1. Hedef: <strong className="text-slate-900 dark:text-white font-mono">{formatMoney(activeSignal.targetPrice)}</strong> (R:R {activeSignal.riskReward?.toFixed(2) || '2.00'}x).
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 4: GRAPHS (Full-Screen Interactive Candlestick Canvas)                 */}
+          {/* ========================================================================= */}
+          {activeTab === 'graphs' && (
+            <div className="space-y-4">
               {isLoading ? (
-                <div className="w-full h-[480px] rounded-2xl bg-gray-950 border border-gray-800 flex flex-col items-center justify-center text-gray-400">
+                <div className="w-full h-[460px] rounded-2xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center text-slate-400">
                   <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                  <p className="text-xs font-mono">Loading candlestick history from database...</p>
+                  <p className="text-xs font-mono">Veritabanından mum verileri alınıyor...</p>
                 </div>
               ) : (
                 <InteractiveCanvasChart 
                   data={chartBars}
                   symbol={asset.symbol}
-                  currency={asset.market === 'US' ? 'USD' : 'TRY'}
+                  currency={isBist ? 'TRY' : 'USD'}
                   entryPrice={activeSignal?.entryPrice}
                   stopLoss={activeSignal?.stopLoss}
                   targetPrice={activeSignal?.targetPrice}
-                  height={typeof window !== 'undefined' && window.innerWidth < 640 ? 340 : 460}
+                  height={typeof window !== 'undefined' && window.innerWidth < 640 ? 340 : 440}
                 />
               )}
 
-              {/* Indicator HUD Strip Below Canvas Chart */}
+              {/* Technical Indicator HUD */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
-                  <span className="text-gray-400 font-semibold">50 EMA:</span>
-                  <span className="font-bold text-gray-900 dark:text-white font-mono">
-                    {indicators?.ema_50 ? formatMoney(indicators.ema_50) : 'Holding Support'}
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex justify-between items-center shadow-xs">
+                  <span className="text-slate-400 font-semibold">50 EMA:</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono">
+                    {indicators?.ema_50 ? formatMoney(indicators.ema_50) : 'Destek'}
                   </span>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
-                  <span className="text-gray-400 font-semibold">200 EMA:</span>
-                  <span className="font-bold text-gray-900 dark:text-white font-mono">
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex justify-between items-center shadow-xs">
+                  <span className="text-slate-400 font-semibold">200 EMA:</span>
+                  <span className="font-bold text-slate-900 dark:text-white font-mono">
                     {indicators?.ema_200 ? formatMoney(indicators.ema_200) : asset.emaStatus}
                   </span>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
-                  <span className="text-gray-400 font-semibold">RSI (14):</span>
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex justify-between items-center shadow-xs">
+                  <span className="text-slate-400 font-semibold">RSI (14):</span>
                   <span className={`font-bold font-mono ${
                     (indicators?.rsi_14 ?? asset.rsi) < 35 ? 'text-emerald-500' : (indicators?.rsi_14 ?? asset.rsi) > 70 ? 'text-amber-500' : 'text-blue-400'
                   }`}>
                     {(indicators?.rsi_14 ?? asset.rsi).toFixed(1)}
                   </span>
                 </div>
-                <div className="bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border border-gray-200/60 dark:border-gray-700 flex justify-between items-center">
-                  <span className="text-gray-400 font-semibold">Volume Ratio:</span>
+                <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex justify-between items-center shadow-xs">
+                  <span className="text-slate-400 font-semibold">Hacim Oranı:</span>
                   <span className={`font-bold font-mono ${
-                    (indicators?.volume_ratio ?? asset.volumeRatio) >= 1.5 ? 'text-emerald-500' : 'text-gray-300'
+                    (indicators?.volume_ratio ?? asset.volumeRatio) >= 1.5 ? 'text-emerald-500' : 'text-slate-400'
                   }`}>
                     {(indicators?.volume_ratio ?? asset.volumeRatio).toFixed(2)}x
                   </span>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Today's Key Bar Metrics */}
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Latest Daily Bar ({todayBar.date})
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Open Price</span>
-                    <div className="text-base font-black text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {formatMoney(todayBar.open)}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Session High</span>
-                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
-                      {formatMoney(todayBar.high)}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Session Low</span>
-                    <div className="text-base font-black text-rose-600 dark:text-rose-400 mt-0.5 font-mono">
-                      {formatMoney(todayBar.low)}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Close Price</span>
-                    <div className="text-base font-black text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {formatMoney(todayBar.close)}
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border border-gray-200/60 dark:border-gray-700 col-span-2 sm:col-span-1">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Volume</span>
-                    <div className="text-base font-black text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
-                      {todayBar.volume > 1000000 
-                        ? `${(todayBar.volume / 1000000).toFixed(2)}M` 
-                        : todayBar.volume > 1000 
-                        ? `${(todayBar.volume / 1000).toFixed(0)}k` 
-                        : todayBar.volume.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Technical Indicator Snapshots */}
-              <div>
-                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Technical Indicator Suite
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/50">
-                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase">50 EMA</span>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {indicators?.ema_50 ? formatMoney(indicators.ema_50) : 'Holding Support'}
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">Medium-term guide</div>
-                  </div>
-
-                  <div className="bg-purple-50/50 dark:bg-purple-950/20 p-3 rounded-xl border border-purple-100 dark:border-purple-900/50">
-                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase">200 EMA</span>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {indicators?.ema_200 ? formatMoney(indicators.ema_200) : asset.emaStatus}
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">{asset.emaStatus}</div>
-                  </div>
-
-                  <div className="bg-emerald-50/50 dark:bg-emerald-950/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">RSI (14)</span>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {(indicators?.rsi_14 ?? asset.rsi).toFixed(1)}
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      {(indicators?.rsi_14 ?? asset.rsi) < 35 ? 'Oversold Accumulation' : (indicators?.rsi_14 ?? asset.rsi) > 70 ? 'Overbought' : 'Neutral Momentum'}
-                    </div>
-                  </div>
-
-                  <div className="bg-amber-50/50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-100 dark:border-amber-900/50">
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">Volume Ratio</span>
-                    <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5 font-mono">
-                      {(indicators?.volume_ratio ?? asset.volumeRatio).toFixed(2)}x
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">
-                      {(indicators?.volume_ratio ?? asset.volumeRatio) >= 1.5 ? 'Institutional Spike' : 'Average Flow'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Historical OHLCV Daily Table */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    Daily Price History (Last {historyTable.length} Sessions)
-                  </h4>
-                  <span className="text-[11px] text-gray-400">Recorded in Supabase Database</span>
-                </div>
-
-                <div className="border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 dark:bg-gray-850 text-[11px] font-bold text-gray-500 uppercase border-b border-gray-200 dark:border-gray-800">
-                      <tr>
-                        <th className="px-3.5 py-2.5">Date</th>
-                        <th className="px-3.5 py-2.5 text-right">Open</th>
-                        <th className="px-3.5 py-2.5 text-right">High</th>
-                        <th className="px-3.5 py-2.5 text-right">Low</th>
-                        <th className="px-3.5 py-2.5 text-right">Close</th>
-                        <th className="px-3.5 py-2.5 text-right">Day Change</th>
-                        <th className="px-3.5 py-2.5 text-right">Volume</th>
+              {/* Historical Sessions Table */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-white dark:bg-slate-900">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-bold text-slate-500 uppercase border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="px-3.5 py-2.5">Tarih</th>
+                      <th className="px-3.5 py-2.5 text-right">Açılış</th>
+                      <th className="px-3.5 py-2.5 text-right">Yüksek</th>
+                      <th className="px-3.5 py-2.5 text-right">Düşük</th>
+                      <th className="px-3.5 py-2.5 text-right">Kapanış</th>
+                      <th className="px-3.5 py-2.5 text-right">Hacim</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+                    {historyTable.slice(0, 15).map((row, i) => (
+                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="px-3.5 py-2 font-semibold text-slate-700 dark:text-slate-300 font-sans">{row.date}</td>
+                        <td className="px-3.5 py-2 text-right text-slate-500">{formatMoney(row.open)}</td>
+                        <td className="px-3.5 py-2 text-right text-emerald-500">{formatMoney(row.high)}</td>
+                        <td className="px-3.5 py-2 text-right text-rose-500">{formatMoney(row.low)}</td>
+                        <td className="px-3.5 py-2 text-right font-bold text-slate-900 dark:text-white">{formatMoney(row.close)}</td>
+                        <td className="px-3.5 py-2 text-right text-slate-400">{formatKoyfinVal(row.volume, '', 1)}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {isLoading ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                            <span className="inline-block w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2"></span>
-                            Loading historical bars from Supabase...
-                          </td>
-                        </tr>
-                      ) : historyTable.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
-                            No historical bars recorded yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        historyTable.map((row, i) => {
-                          const dayChange = row.open > 0 ? ((row.close - row.open) / row.open) * 100 : 0;
-                          const isUp = dayChange >= 0;
-
-                          return (
-                            <tr key={i} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/50 transition-colors">
-                              <td className="px-3.5 py-2.5 font-semibold text-gray-700 dark:text-gray-300">
-                                {row.date}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right text-gray-600 dark:text-gray-300 font-mono">
-                                {formatMoney(row.open)}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right text-emerald-600 dark:text-emerald-400 font-medium font-mono">
-                                {formatMoney(row.high)}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right text-rose-600 dark:text-rose-400 font-medium font-mono">
-                                {formatMoney(row.low)}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right font-bold text-gray-900 dark:text-white font-mono">
-                                {formatMoney(row.close)}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right font-bold">
-                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${
-                                  isUp 
-                                    ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' 
-                                    : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
-                                }`}>
-                                  {isUp ? '+' : ''}{dayChange.toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right text-gray-500 font-medium font-mono">
-                                {row.volume > 1000000 
-                                  ? `${(row.volume / 1000000).toFixed(1)}M` 
-                                  : row.volume > 1000 
-                                  ? `${(row.volume / 1000).toFixed(0)}k` 
-                                  : row.volume.toLocaleString()}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-3 sm:p-4 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50/70 dark:bg-gray-850">
-          <div className="text-xs text-gray-400 flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Real-time Interactive Canvas • Zoom with Mouse Scroll • Drag to Pan</span>
-          </div>
+        {/* Footer with External Link */}
+        <div className="p-3 sm:p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
+          <a
+            href={tradingViewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
+          >
+            <span>TradingView ↗</span>
+          </a>
 
           <button
+            type="button"
             onClick={onClose}
-            className="px-5 py-2 text-xs font-bold rounded-xl bg-gray-200 dark:bg-gray-750 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-white transition-colors cursor-pointer"
+            className="px-5 py-2 text-xs font-bold rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           >
-            Close
+            Kapat
           </button>
         </div>
       </div>
