@@ -71,7 +71,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       headers['Authorization'] = `Bearer ${session.access_token}`;
     }
     return headers;
-  }, [session?.access_token]);
+  }, [session]);
 
   const [items, setItems] = useState<WatchlistItemData[]>([]);
   const [catalog, setCatalog] = useState<CatalogAsset[]>([]);
@@ -222,7 +222,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     } finally {
       setLoading(false);
     }
-  }, [isGuest, user?.id, getAuthHeaders, loadGuestItems, saveGuestItems]);
+  }, [isGuest, user, getAuthHeaders, loadGuestItems, saveGuestItems]);
 
   useEffect(() => {
     fetchData();

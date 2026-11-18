@@ -67,8 +67,6 @@ export default function AddHoldingModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  if (!isOpen) return null;
-
   // Prepare searchable catalog from availableAssets
   const searchableCatalog = useMemo(() => {
     return availableAssets.map(a => ({
@@ -178,6 +176,8 @@ export default function AddHoldingModal({
   };
 
   const currencySymbol = market === 'US' ? '$' : '₺';
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">

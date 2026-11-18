@@ -25,19 +25,27 @@ export default function AiAssistantView() {
   const { user } = useAuth();
   const isEn = language === 'en';
 
-  // Multi-user identification: logged in user ID or device-persistent guest ID
-  const activeUserId = useMemo(() => {
-    if (user?.id) return user.id;
+  const [guestId, setGuestId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      let guestId = localStorage.getItem('marketpulse_guest_user_id');
-      if (!guestId) {
-        guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
-        localStorage.setItem('marketpulse_guest_user_id', guestId);
-      }
-      return guestId;
+      return localStorage.getItem('marketpulse_guest_user_id') || 'default_user';
     }
     return 'default_user';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !user?.id) {
+      let stored = localStorage.getItem('marketpulse_guest_user_id');
+      if (!stored) {
+        stored = 'guest_' + Math.random().toString(36).substring(2, 9);
+        try {
+          localStorage.setItem('marketpulse_guest_user_id', stored);
+        } catch {}
+      }
+      setGuestId(stored);
+    }
   }, [user?.id]);
+
+  const activeUserId = user?.id || guestId;
 
   const storageKey = `marketpulse_ai_chat_messages_${activeUserId}`;
   const draftKey = `marketpulse_ai_chat_draft_${activeUserId}`;

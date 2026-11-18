@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useId } from 'react';
 
 interface TradingViewChartProps {
   symbol: string;
@@ -41,8 +41,9 @@ export default function TradingViewChart({
 }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const reactId = useId();
   const tvSymbol = getTradingViewSymbol(symbol, market);
-  const containerId = `tv_chart_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}_${Math.random().toString(36).substring(2, 7)}`;
+  const containerId = `tv_chart_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}_${reactId.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
   useEffect(() => {
     let scriptElement: HTMLScriptElement | null = null;

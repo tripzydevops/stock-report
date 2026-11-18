@@ -1136,6 +1136,116 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
+  const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
+    status: 'Bearish', close: 766.81, trend: 'down'
+  });
+  const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
+    status: 'Neutral', close: 11591.54, trend: 'up'
+  });
+  const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
+  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
+  const [selectedStrategyFilter, setSelectedStrategyFilter] = useState<string>('ALL');
+  const [assets, setAssets] = useState<AssetData[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
+  const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
+  const [dividendSummaries, setDividendSummaries] = useState<any[]>([]);
+
+  const dividendSummaryMap = useMemo(() => {
+    const map = new Map<string, any>();
+    dividendSummaries.forEach(d => {
+      const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+      if (sym) {
+        map.set(sym, d);
+        map.set(`${sym}.IS`, d);
+      }
+    });
+    return map;
+  }, [dividendSummaries]);
+  const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
+  const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
+  const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
+  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
+  const [cashBalanceUSD, setCashBalanceUSD] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashUSD);
+
+  const totalPortfolioValueTRY = useMemo(() => {
+    const validHoldings = (portfolio || []).filter(item => item && Number(item.shares) > 0 && Number(item.currentValue) > 0);
+    const stockVal = validHoldings.reduce((acc, item) => {
+      const val = Number(item.currentValue);
+      return acc + (item.currency === 'USD' ? val * usdTryRate : val);
+    }, 0);
+    const totalLiquidCash = (cashBalance > 0 ? cashBalance : 0) + ((cashBalanceUSD > 0 ? cashBalanceUSD : 0) * usdTryRate);
+    return stockVal + totalLiquidCash;
+  }, [portfolio, usdTryRate, cashBalance, cashBalanceUSD]);
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
+  const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfileContext | null>(null);
+  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
+  const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
+  const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
+  const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
+  const [catalysts, setCatalysts] = useState<MarketCatalyst[]>(() => generateMarketDividendCatalysts());
+  const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
+  const [isCalcModalOpen, setIsCalcModalOpen] = useState<boolean>(false);
+  const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [pipelineHealth, setPipelineHealth] = useState<{
+    status: 'OPTIMAL' | 'NEEDS_ATTENTION' | 'CRITICAL' | 'CHECKING';
+    isHealthy: boolean;
+    openSignalsCount: number;
+    totalSignalsCount: number;
+    latestSignalDate: string | null;
+    hoursSinceLastSignal: number | null;
+    latestPriceDate: string | null;
+    latestReportDate: string | null;
+    activeAssetsCount: number;
+    issues: string[];
+    diagnostics?: {
+      databaseConnected: boolean;
+      hasActiveAssets: boolean;
+      hasPriceHistory: boolean;
+      hasOpenSignals: boolean;
+      isMarketOpenToday: boolean;
+    };
+    checkedAt?: string;
+  } | null>(null);
+  const [isHealingPipeline, setIsHealingPipeline] = useState<boolean>(false);
+  const [isOffline, setIsOffline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !navigator.onLine;
+    }
+    return false;
+  });
+  const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
+  const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
+  const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
+  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
+  const [isReportsModalOpen, setIsReportsModalOpen] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [isSimpleMode, setIsSimpleMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('marketpulse_simple_mode');
+      return saved !== null ? saved === 'true' : true; // Default to true for beginners
+    }
+    return true;
+  });
+
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('marketpulse_right_panel_open');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
   // Automatic migration: Sync locally saved guest holdings to Supabase when user/admin signs in
   useEffect(() => {
     if (!user || isDemoMode || !session?.access_token) return;
@@ -1341,116 +1451,6 @@ export default function Home() {
       } catch {}
     }
   }, []);
-
-  const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bearish', close: 766.81, trend: 'down'
-  });
-  const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Neutral', close: 11591.54, trend: 'up'
-  });
-  const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
-  const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
-  const [selectedStrategyFilter, setSelectedStrategyFilter] = useState<string>('ALL');
-  const [assets, setAssets] = useState<AssetData[]>([]);
-  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(INITIAL_PORTFOLIO);
-  const [dividends, setDividends] = useState<DividendAsset[]>(INITIAL_DIVIDENDS);
-  const [dividendSummaries, setDividendSummaries] = useState<any[]>([]);
-
-  const dividendSummaryMap = useMemo(() => {
-    const map = new Map<string, any>();
-    dividendSummaries.forEach(d => {
-      const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
-      if (sym) {
-        map.set(sym, d);
-        map.set(`${sym}.IS`, d);
-      }
-    });
-    return map;
-  }, [dividendSummaries]);
-  const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
-  const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
-  const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
-  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
-  const [cashBalanceUSD, setCashBalanceUSD] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashUSD);
-
-  const totalPortfolioValueTRY = useMemo(() => {
-    const validHoldings = (portfolio || []).filter(item => item && Number(item.shares) > 0 && Number(item.currentValue) > 0);
-    const stockVal = validHoldings.reduce((acc, item) => {
-      const val = Number(item.currentValue);
-      return acc + (item.currency === 'USD' ? val * usdTryRate : val);
-    }, 0);
-    const totalLiquidCash = (cashBalance > 0 ? cashBalance : 0) + ((cashBalanceUSD > 0 ? cashBalanceUSD : 0) * usdTryRate);
-    return stockVal + totalLiquidCash;
-  }, [portfolio, usdTryRate, cashBalance, cashBalanceUSD]);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
-  const [tradeModalOpen, setTradeModalOpen] = useState(false);
-  const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
-  const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
-  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfileContext | null>(null);
-  const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
-  const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
-  const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
-  const [scannedSignals, setScannedSignals] = useState<ScannedTradeSignal[]>(INITIAL_SCANNED_SIGNALS);
-  const [catalysts, setCatalysts] = useState<MarketCatalyst[]>(() => generateMarketDividendCatalysts());
-  const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
-  const [isCalcModalOpen, setIsCalcModalOpen] = useState<boolean>(false);
-  const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
-  const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
-  const [pipelineHealth, setPipelineHealth] = useState<{
-    status: 'OPTIMAL' | 'NEEDS_ATTENTION' | 'CRITICAL' | 'CHECKING';
-    isHealthy: boolean;
-    openSignalsCount: number;
-    totalSignalsCount: number;
-    latestSignalDate: string | null;
-    hoursSinceLastSignal: number | null;
-    latestPriceDate: string | null;
-    latestReportDate: string | null;
-    activeAssetsCount: number;
-    issues: string[];
-    diagnostics?: {
-      databaseConnected: boolean;
-      hasActiveAssets: boolean;
-      hasPriceHistory: boolean;
-      hasOpenSignals: boolean;
-      isMarketOpenToday: boolean;
-    };
-    checkedAt?: string;
-  } | null>(null);
-  const [isHealingPipeline, setIsHealingPipeline] = useState<boolean>(false);
-  const [isOffline, setIsOffline] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return !navigator.onLine;
-    }
-    return false;
-  });
-  const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
-  const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
-  const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
-  const [isSettingsSheetOpen, setIsSettingsSheetOpen] = useState<boolean>(false);
-  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState<boolean>(false);
-  const [isReportsModalOpen, setIsReportsModalOpen] = useState<boolean>(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
-  const [isSimpleMode, setIsSimpleMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('marketpulse_simple_mode');
-      return saved !== null ? saved === 'true' : true; // Default to true for beginners
-    }
-    return true;
-  });
-
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('marketpulse_right_panel_open');
-      return saved !== null ? saved === 'true' : true;
-    }
-    return true;
-  });
 
   const handleToggleRightPanel = () => {
     setIsRightPanelOpen(prev => {

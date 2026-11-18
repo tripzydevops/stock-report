@@ -61,6 +61,13 @@ interface AiTradeCoPilotModalProps {
   onTradeHolding?: (holding: any) => void;
 }
 
+function computeDaysHeld(entryDate?: string): number | null {
+  if (!entryDate) return null;
+  const entryTime = new Date(entryDate).getTime();
+  if (isNaN(entryTime)) return null;
+  return Math.max(1, Math.round((Date.now() - entryTime) / 86400000));
+}
+
 export default function AiTradeCoPilotModal({
   isOpen,
   onClose,
@@ -68,6 +75,7 @@ export default function AiTradeCoPilotModal({
   onUpdateStopLoss,
   onTradeHolding,
 }: AiTradeCoPilotModalProps) {
+  const { language } = useLanguage();
   const isHolding = Boolean(asset?.shares && asset.shares > 0);
   const [activeTab, setActiveTab] = useState<'brief' | 'blueprint' | 'premortem' | 'qa'>(
     isHolding ? 'brief' : 'blueprint'
@@ -93,9 +101,7 @@ export default function AiTradeCoPilotModal({
   const isPersonalTpHit = (asset.pnlPercent || 0) >= 3.0;
 
   // Holding duration calculation
-  const daysHeld = asset.entryDate
-    ? Math.max(1, Math.round((Date.now() - new Date(asset.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
-    : null;
+  const daysHeld = computeDaysHeld(asset.entryDate);
 
   // Multi-lot calculations
   const hasMultipleBuys = Boolean(asset.buyCount && asset.buyCount > 1);
@@ -104,8 +110,6 @@ export default function AiTradeCoPilotModal({
   const distToBreakevenPct = asset.currentPrice > 0 && entry > 0 
     ? ((entry - asset.currentPrice) / asset.currentPrice) * 100 
     : 0;
-
-  const { language } = useLanguage();
 
   // Algorithmic Signal Analysis Context Extraction
   let triggerReasons: string[] = asset.triggerReasons || [];

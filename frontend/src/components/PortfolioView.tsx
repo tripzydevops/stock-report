@@ -45,6 +45,13 @@ interface PortfolioViewProps {
   onQuickAdminLogin?: () => void;
 }
 
+function computeDaysHeld(entryDate?: string): number | null {
+  if (!entryDate) return null;
+  const entryTime = new Date(entryDate).getTime();
+  if (isNaN(entryTime)) return null;
+  return Math.max(1, Math.round((Date.now() - entryTime) / 86400000));
+}
+
 export default function PortfolioView({
   portfolio,
   signals = [],
@@ -1088,9 +1095,7 @@ export default function PortfolioView({
             const formattedBoughtDate = item.entryDate 
               ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : '24.09.2026';
-            const daysHeld = item.entryDate
-              ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
-              : null;
+            const daysHeld = computeDaysHeld(item.entryDate);
             const lots = getBuyLotsForHolding(item);
             const isExpanded = !!expandedLots[item.symbol];
             const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
@@ -1517,9 +1522,7 @@ export default function PortfolioView({
                 const formattedBoughtDate = item.entryDate 
                   ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
                   : '24.09.2026';
-                const daysHeld = item.entryDate
-                  ? Math.max(1, Math.round((Date.now() - new Date(item.entryDate).getTime()) / (1000 * 60 * 60 * 24)))
-                  : null;
+                const daysHeld = computeDaysHeld(item.entryDate);
                 const cleanSym = item.symbol.replace('.IS', '').trim().toUpperCase();
                 const symbolSwingGains = swingGainsBySymbol[cleanSym] || 0;
                 const isHouseMoney = item.entryPrice <= 0.05 || (item.shares > 0 && symbolSwingGains > 0 && (item.shares * item.entryPrice) <= symbolSwingGains);
