@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PortfolioItem } from '../lib/supabaseClient';
+import { searchAssets } from '../lib/assetSearch';
 
 export interface HoldingAssetOption {
   symbol: string;
@@ -68,51 +69,30 @@ export default function AddHoldingModal({
 
   if (!isOpen) return null;
 
-  // Filter matching assets for live autocomplete suggestions
-  const query = symbol.trim().toUpperCase();
-  const suggestions: Array<{ symbol: string; name: string; market: 'BIST' | 'US'; price?: number }> = [];
+  // Prepare searchable catalog from availableAssets
+  const searchableCatalog = useMemo(() => {
+    return availableAssets.map(a => ({
+      symbol: a.symbol,
+      name: a.name,
+      market: a.market,
+      latestPrice: a.price,
+    }));
+  }, [availableAssets]);
 
-  if (query.length >= 2) {
-    // 1. Check known aliases
-    for (const [aliasKey, aliasVal] of Object.entries(COMMON_BIST_ALIASES)) {
-      if (aliasKey.includes(query) || aliasVal.symbol.includes(query)) {
-        if (!suggestions.some(s => s.symbol === aliasVal.symbol)) {
-          const matchAsset = availableAssets.find(a => a.symbol.replace('.IS', '').toUpperCase() === aliasVal.symbol);
-          suggestions.push({
-            symbol: aliasVal.symbol,
-            name: aliasVal.name,
-            market: 'BIST',
-            price: matchAsset?.price,
-          });
-        }
-      }
-    }
+  // Filter matching assets with diacritic & alias support
+  const suggestions = useMemo(() => {
+    if (!symbol.trim() || symbol.trim().length < 2) return [];
+    return searchAssets(searchableCatalog, symbol, 7);
+  }, [searchableCatalog, symbol]);
 
-    // 2. Check available catalog assets
-    for (const asset of availableAssets) {
-      if (suggestions.length >= 6) break;
-      const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
-      const assetNameUpper = (asset.name || '').toUpperCase();
-      if (cleanSym.includes(query) || assetNameUpper.includes(query)) {
-        if (!suggestions.some(s => s.symbol === cleanSym)) {
-          suggestions.push({
-            symbol: cleanSym,
-            name: asset.name,
-            market: (asset.market === 'US' ? 'US' : 'BIST'),
-            price: asset.price,
-          });
-        }
-      }
-    }
-  }
-
-  const handleSelectSuggestion = (s: { symbol: string; name: string; market: 'BIST' | 'US'; price?: number }) => {
-    setSymbol(s.symbol);
-    setName(s.name);
-    setMarket(s.market);
-    if (s.price && s.price > 0) {
-      setEntryPriceStr(s.price.toFixed(2));
-      setCurrentPriceStr(s.price.toFixed(2));
+  const handleSelectSuggestion = (s: { symbol: string; name?: string; market?: string; latestPrice?: number | null }) => {
+    const cleanSym = s.symbol.replace('.IS', '');
+    setSymbol(cleanSym);
+    setName(s.name || cleanSym);
+    setMarket((s.market === 'US' ? 'US' : 'BIST'));
+    if (s.latestPrice && s.latestPrice > 0) {
+      setEntryPriceStr(s.latestPrice.toFixed(2));
+      setCurrentPriceStr(s.latestPrice.toFixed(2));
     }
     setShowSuggestions(false);
   };
@@ -258,21 +238,22 @@ export default function AddHoldingModal({
 
                 {/* Autocomplete Suggestions Dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto">
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                     {suggestions.map((s) => (
                       <button
                         key={s.symbol}
                         type="button"
                         onClick={() => handleSelectSuggestion(s)}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-800 flex items-center justify-between border-b border-gray-100 dark:border-gray-800 last:border-0 transition-colors cursor-pointer"
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-800 flex items-center justify-between transition-colors cursor-pointer"
                       >
-                        <div className="truncate pr-2">
-                          <span className="font-black text-xs text-blue-600 dark:text-blue-400 mr-1.5">{s.symbol}</span>
+                        <div className="flex items-center gap-1.5 truncate pr-2">
+                          <span className="text-sm select-none">{s.market === 'US' ? '🇺🇸' : '🇹🇷'}</span>
+                          <span className="font-black text-xs text-blue-600 dark:text-blue-400">{s.symbol.replace('.IS', '')}</span>
                           <span className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{s.name}</span>
                         </div>
-                        {s.price && s.price > 0 && (
-                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
-                            {s.market === 'US' ? '$' : '₺'}{s.price.toFixed(2)}
+                        {s.latestPrice && s.latestPrice > 0 && (
+                          <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                            {s.market === 'US' ? '$' : '₺'}{s.latestPrice.toFixed(2)}
                           </span>
                         )}
                       </button>

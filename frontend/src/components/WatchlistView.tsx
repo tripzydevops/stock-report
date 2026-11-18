@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from './Pagination';
+import { searchAssets } from '../lib/assetSearch';
 
 export interface WatchlistItemData {
   id: string;
@@ -98,9 +99,23 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     }
   }, []);
 
-  // Quick 1-Click Add Input
+  // Quick 1-Click Add Input & Autocomplete
   const [quickAddSymbol, setQuickAddSymbol] = useState('');
   const [isQuickAdding, setIsQuickAdding] = useState(false);
+  const [isQuickAddFocused, setIsQuickAddFocused] = useState(false);
+  const [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState<number>(-1);
+  const quickAddRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
+        setIsQuickAddFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Filters & Controls
   const [marketFilter, setMarketFilter] = useState<'ALL' | 'BIST' | 'US' | 'TEFAS' | 'ALERTS'>('ALL');
@@ -229,11 +244,20 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     };
   }, [fetchData]);
 
-  // 1-Click Quick Add by Symbol
-  const handleQuickAdd = async (e?: React.FormEvent) => {
+  // Filter catalog for quick add autocomplete suggestions
+  const quickSuggestions = useMemo(() => {
+    if (!quickAddSymbol.trim() || !catalog.length) return [];
+    return searchAssets(catalog, quickAddSymbol, 7);
+  }, [catalog, quickAddSymbol]);
+
+  // 1-Click Quick Add by Symbol (supports direct symbol override from autocomplete)
+  const handleQuickAdd = async (e?: React.FormEvent, overrideSymbol?: string) => {
     if (e) e.preventDefault();
-    const sym = quickAddSymbol.trim().toUpperCase();
+    const sym = (overrideSymbol || quickAddSymbol).trim().toUpperCase();
     if (!sym) return;
+
+    setIsQuickAddFocused(false);
+    setSelectedSuggestionIdx(-1);
 
     try {
       setIsQuickAdding(true);
@@ -302,6 +326,36 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
       alert('Bağlantı hatası');
     } finally {
       setIsQuickAdding(false);
+    }
+  };
+
+  const handleSelectQuickSuggestion = (asset: CatalogAsset, autoSubmit: boolean = true) => {
+    const cleanSym = asset.symbol.replace('.IS', '');
+    setQuickAddSymbol(cleanSym);
+    setIsQuickAddFocused(false);
+    setSelectedSuggestionIdx(-1);
+    if (autoSubmit) {
+      handleQuickAdd(undefined, asset.symbol);
+    }
+  };
+
+  const handleQuickAddKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isQuickAddFocused || quickSuggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIdx(prev => (prev < quickSuggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIdx(prev => (prev > 0 ? prev - 1 : quickSuggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedSuggestionIdx >= 0 && selectedSuggestionIdx < quickSuggestions.length) {
+        e.preventDefault();
+        handleSelectQuickSuggestion(quickSuggestions[selectedSuggestionIdx], true);
+      }
+    } else if (e.key === 'Escape') {
+      setIsQuickAddFocused(false);
+      setSelectedSuggestionIdx(-1);
     }
   };
 
@@ -759,26 +813,159 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           </div>
         </div>
 
-        {/* 1-Click Quick Add Bar */}
-        <form onSubmit={handleQuickAdd} className="mt-3 flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={quickAddSymbol}
-              onChange={e => setQuickAddSymbol(e.target.value)}
-              placeholder={language === 'tr' ? 'Hızlı Varlık Ekle (Örn: ZBJ, FROTO, AAPL, TI2, TTE yazıp Enter’a basın)...' : 'Quick add by symbol (e.g. ZBJ, FROTO, AAPL, TI2)...'}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl py-2 px-3 pl-9 text-xs sm:text-sm text-slate-900 dark:text-white uppercase font-bold placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="absolute left-3 top-2.5 text-slate-400 text-xs">⚡</span>
-          </div>
-          <button
-            type="submit"
-            disabled={!quickAddSymbol.trim() || isQuickAdding}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
-          >
-            {isQuickAdding ? (language === 'tr' ? 'Ekleniyor...' : 'Adding...') : (language === 'tr' ? '+ Hızlı Ekle' : '+ Add')}
-          </button>
-        </form>
+        {/* 1-Click Quick Add Bar with Intelligent Autocomplete */}
+        <div ref={quickAddRef} className="relative mt-3">
+          <form onSubmit={handleQuickAdd} className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={quickAddSymbol}
+                onChange={e => {
+                  setQuickAddSymbol(e.target.value);
+                  setIsQuickAddFocused(true);
+                  setSelectedSuggestionIdx(-1);
+                }}
+                onFocus={() => setIsQuickAddFocused(true)}
+                onKeyDown={handleQuickAddKeyDown}
+                placeholder={language === 'tr' ? 'Hızlı Varlık Ekle (Örn: Borusan, THY, ZBJ, Apple, TI2 yazın)...' : 'Quick add by name/symbol (e.g. Borusan, THY, Apple, ZBJ)...'}
+                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl py-2 px-3 pl-9 text-xs sm:text-sm text-slate-900 dark:text-white font-bold placeholder:font-normal placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                autoComplete="off"
+                spellCheck="false"
+              />
+              <span className="absolute left-3 top-2.5 text-slate-400 text-xs">⚡</span>
+              {quickAddSymbol.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickAddSymbol('');
+                    setIsQuickAddFocused(false);
+                    setSelectedSuggestionIdx(-1);
+                  }}
+                  className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs p-0.5 rounded-full"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={!quickAddSymbol.trim() || isQuickAdding}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 flex items-center gap-1.5"
+            >
+              {isQuickAdding ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                  <span>{language === 'tr' ? 'Ekleniyor...' : 'Adding...'}</span>
+                </>
+              ) : (
+                <>
+                  <span>+</span>
+                  <span>{language === 'tr' ? 'Hızlı Ekle' : 'Add'}</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Floating Autocomplete Dropdown */}
+          {isQuickAddFocused && quickAddSymbol.trim().length > 0 && quickSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in zoom-in-95 duration-100 backdrop-blur-md">
+              <div className="px-3.5 py-2 bg-slate-50/80 dark:bg-slate-800/60 flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-blue-500">🔍</span>
+                  <span>{language === 'tr' ? `Önerilen Varlıklar (${quickSuggestions.length})` : `Suggested Assets (${quickSuggestions.length})`}</span>
+                </span>
+                <span className="text-[10px] text-slate-400 hidden sm:inline">
+                  {language === 'tr' ? '↑↓ Gezin • Enter Ekle • Esc Kapat' : '↑↓ Navigate • Enter Add • Esc Close'}
+                </span>
+              </div>
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100/80 dark:divide-slate-800/80">
+                {quickSuggestions.map((asset, idx) => {
+                  const cleanSym = asset.symbol.replace('.IS', '');
+                  const isWatched = items.some(i => i.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
+                  const isSelected = idx === selectedSuggestionIdx;
+                  const isFund = asset.market === 'TEFAS' || asset.assetClass === 'fund';
+                  const isUS = asset.market === 'US';
+                  const flag = isFund ? '🏦' : isUS ? '🇺🇸' : '🇹🇷';
+                  const typeLabel = isFund ? 'TEFAS Fon' : asset.assetClass === 'etf' ? 'ETF' : (isUS ? 'US Hisse' : 'BIST Hisse');
+                  const currencySymbol = isUS ? '$' : '₺';
+
+                  return (
+                    <div
+                      key={asset.id || asset.symbol}
+                      onClick={() => handleSelectQuickSuggestion(asset, true)}
+                      onMouseEnter={() => setSelectedSuggestionIdx(idx)}
+                      className={`px-3.5 py-2.5 flex items-center justify-between gap-3 cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-blue-50/90 dark:bg-blue-950/50'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-lg shrink-0 select-none">{flag}</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-xs sm:text-sm text-slate-900 dark:text-white tracking-wide">
+                              {cleanSym}
+                            </span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                              {typeLabel}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px] sm:max-w-xs md:max-w-md">
+                            {asset.name}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        {asset.latestPrice !== undefined && asset.latestPrice !== null && asset.latestPrice > 0 && (
+                          <div className="text-right">
+                            <div className="font-mono font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                              {currencySymbol}{Number(asset.latestPrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            {asset.dailyChangePercent !== undefined && asset.dailyChangePercent !== null && (
+                              <div className={`text-[10px] font-bold ${
+                                asset.dailyChangePercent > 0
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : asset.dailyChangePercent < 0
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : 'text-slate-400'
+                              }`}>
+                                {asset.dailyChangePercent > 0 ? '+' : ''}{asset.dailyChangePercent.toFixed(2)}%
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {isWatched ? (
+                          <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/60 px-2 py-1 rounded-lg shrink-0">
+                            ✓ {language === 'tr' ? 'Listede' : 'Watched'}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectQuickSuggestion(asset, true);
+                            }}
+                            className="text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 px-2.5 py-1 rounded-lg transition-all shadow-2xs shrink-0 cursor-pointer"
+                          >
+                            + {language === 'tr' ? 'Ekle' : 'Add'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-3.5 py-1.5 bg-slate-50/50 dark:bg-slate-800/30 text-[10px] text-slate-400 text-center">
+                {language === 'tr'
+                  ? '💡 İpucu: Şirket adı (örn. Borusan, Şişecam, Apple) veya fon adı (Para Piyasası) ile arayabilirsiniz.'
+                  : '💡 Tip: You can search by company name (e.g. Apple, Ford) or fund name.'}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Quick Starter Pack Pills (Always accessible for 1-click addition) */}
         <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
@@ -1474,40 +1661,40 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
 
                 {modalSearch.trim().length > 0 && !selectedAssetForAdd && (
                   <div className="mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700 shadow-lg">
-                    {catalog
-                      .filter(
-                        c =>
-                          c.symbol.toLowerCase().includes(modalSearch.toLowerCase()) ||
-                          c.name.toLowerCase().includes(modalSearch.toLowerCase())
-                      )
-                      .slice(0, 8)
-                      .map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedAssetForAdd(c);
-                            setModalSearch(c.symbol);
-                          }}
-                          className="w-full text-left p-2.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-center justify-between transition-colors cursor-pointer"
-                        >
-                          <div>
-                            <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                              <span>{(c.market === 'TEFAS' || c.assetClass === 'fund') ? '🏦' : c.market === 'US' ? '🇺🇸' : '🇹🇷'}</span>
-                              <span>{c.symbol}</span>
-                              <span className="text-[10px] text-slate-400 font-normal">
-                                ({(c.market === 'TEFAS' || c.assetClass === 'fund') ? 'TEFAS Fon' : c.assetClass === 'etf' ? 'ETF' : 'Hisse'})
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 truncate max-w-[280px]">{c.name}</div>
+                    {searchAssets(catalog, modalSearch, 8).map(c => (
+                      <button
+                        key={c.id || c.symbol}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAssetForAdd(c);
+                          setModalSearch(c.symbol);
+                        }}
+                        className="w-full text-left p-2.5 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-center justify-between transition-colors cursor-pointer"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span>{(c.market === 'TEFAS' || c.assetClass === 'fund') ? '🏦' : c.market === 'US' ? '🇺🇸' : '🇹🇷'}</span>
+                            <span>{c.symbol}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              ({(c.market === 'TEFAS' || c.assetClass === 'fund') ? 'TEFAS Fon' : c.assetClass === 'etf' ? 'ETF' : 'Hisse'})
+                            </span>
                           </div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[240px] sm:max-w-[280px]">{c.name}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {c.latestPrice !== undefined && c.latestPrice !== null && c.latestPrice > 0 && (
+                            <span className="font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {c.market === 'US' ? '$' : '₺'}{c.latestPrice.toFixed(2)}
+                            </span>
+                          )}
                           {c.isWatched && (
                             <span className="text-[10px] bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold px-1.5 py-0.5 rounded">
                               {language === 'tr' ? 'Ekli' : 'Added'}
                             </span>
                           )}
-                        </button>
-                      ))}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
