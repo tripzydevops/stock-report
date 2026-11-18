@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabaseServer';
-import { fetchTradingViewBistQuote } from '@/lib/tradingViewScanner';
+import { fetchTradingViewBistQuote, isValidBistQuoteSession } from '@/lib/tradingViewScanner';
 
 const supabase = getServerSupabase();
 
@@ -131,8 +131,14 @@ async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResu
         sessionDate = d.toISOString().slice(0, 10);
       }
     }
-    if (!sessionDate || !isValidSessionDate(sessionDate, 7)) {
-      console.warn(`Unrecognized, stale or future market timestamp for ${symbol}: ${sessionDate}`);
+
+    const isBist = symbol.endsWith('.IS') || symbol === 'XU100.IS';
+    const isSessionFresh = isBist 
+      ? (sessionDate ? isValidBistQuoteSession(sessionDate) : false)
+      : (sessionDate ? isValidSessionDate(sessionDate, 7) : false);
+
+    if (!sessionDate || !isSessionFresh) {
+      console.warn(`Unrecognized, stale or date-mismatched market timestamp for ${symbol}: ${sessionDate}`);
       return null;
     }
 

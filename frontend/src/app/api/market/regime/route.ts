@@ -71,11 +71,14 @@ function evaluateDynamicRegime(
   name: string,
   market: 'US' | 'BIST',
   closes: number[],
-  fallbackClose: number,
-  fallbackStatus: 'Bullish' | 'Neutral' | 'Bearish',
-  fallbackTrend: 'up' | 'down' | 'flat'
-): MarketRegimeEvaluation {
+  fallbackClose: number = 0,
+  fallbackStatus: 'Bullish' | 'Neutral' | 'Bearish' = 'Neutral',
+  fallbackTrend: 'up' | 'down' | 'flat' = 'flat'
+): MarketRegimeEvaluation | null {
   if (closes.length < 5) {
+    if (!fallbackClose || fallbackClose <= 0) {
+      return null;
+    }
     const isBear = fallbackStatus === 'Bearish';
     const isBull = fallbackStatus === 'Bullish';
     return {
@@ -230,18 +233,18 @@ export async function GET() {
     );
 
     let activeCorrectionMarket: 'US' | 'BIST' | 'BOTH' | 'NONE' = 'NONE';
-    if (usRegime.isCorrection && bistRegime.isCorrection) {
+    if (usRegime?.isCorrection && bistRegime?.isCorrection) {
       activeCorrectionMarket = 'BOTH';
-    } else if (usRegime.isCorrection) {
+    } else if (usRegime?.isCorrection) {
       activeCorrectionMarket = 'US';
-    } else if (bistRegime.isCorrection) {
+    } else if (bistRegime?.isCorrection) {
       activeCorrectionMarket = 'BIST';
     }
 
     return NextResponse.json({
       us: usRegime,
       bist: bistRegime,
-      isAnyCorrection: usRegime.isCorrection || bistRegime.isCorrection,
+      isAnyCorrection: (usRegime?.isCorrection || bistRegime?.isCorrection) ?? false,
       activeCorrectionMarket,
       timestamp: new Date().toISOString(),
     });
@@ -249,44 +252,11 @@ export async function GET() {
     console.error('Market regime API exception:', error);
     return NextResponse.json(
       {
-        us: {
-          symbol: 'SPY',
-          name: 'S&P 500 ETF',
-          market: 'US',
-          close: 0,
-          prevClose: 0,
-          changePct: 0,
-          return5d: 0,
-          high20: 0,
-          low20: 0,
-          drawdownFromPeakPct: 0,
-          status: 'Neutral',
-          trend: 'flat',
-          descriptionTr: 'Piyasa verisi bekleniyor',
-          descriptionEn: 'Awaiting market data',
-          isCorrection: false,
-          updatedAt: new Date().toISOString(),
-        },
-        bist: {
-          symbol: 'XU100',
-          name: 'BIST 100',
-          market: 'BIST',
-          close: 0,
-          prevClose: 0,
-          changePct: 0,
-          return5d: 0,
-          high20: 0,
-          low20: 0,
-          drawdownFromPeakPct: 0,
-          status: 'Neutral',
-          trend: 'flat',
-          descriptionTr: 'Piyasa verisi bekleniyor',
-          descriptionEn: 'Awaiting market data',
-          isCorrection: false,
-          updatedAt: new Date().toISOString(),
-        },
+        us: null,
+        bist: null,
         isAnyCorrection: false,
-        activeCorrectionMarket: 'US',
+        activeCorrectionMarket: 'NONE',
+        error: error?.message || 'Market regime data currently unavailable',
         timestamp: new Date().toISOString(),
       },
       { status: 200 }

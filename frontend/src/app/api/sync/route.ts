@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase, getAuthenticatedSupabase, verifyCronAuthorization } from '@/lib/supabaseServer';
-import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch, getBistTradingSessionDate } from '@/lib/tradingViewScanner';
+import { fetchTradingViewBistQuote, fetchTradingViewBistQuotesBatch, getBistTradingSessionDate, isValidBistQuoteSession } from '@/lib/tradingViewScanner';
 
 const HIGH_PRIORITY_MACRO = [
   'SPY', 'QQQ', 'VOO', 'GLD', 'TLT', 'TRY=X', 'XU100.IS'
@@ -113,7 +113,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (!res.ok) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) return tvQuote;
       }
       return null;
     }
@@ -122,7 +122,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (!result) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) return tvQuote;
       }
       return null;
     }
@@ -132,7 +132,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) return tvQuote;
       }
       return null;
     }
@@ -152,12 +152,16 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
       sessionDate = new Date().toISOString().slice(0, 10);
     }
 
-    // Strict session-date validation: prevent stale weekend or outdated historical quotes from entering price_history
-    if (!isValidSessionDate(sessionDate, 7)) {
-      console.warn(`Rejecting stale or future Yahoo session date ${sessionDate} for ${symbol}`);
+    // Strict session-date validation: ensure BIST matches active session schedule; US/global within max 7 days
+    const isSessionFresh = isBist 
+      ? isValidBistQuoteSession(sessionDate) 
+      : isValidSessionDate(sessionDate, 7);
+
+    if (!isSessionFresh) {
+      console.warn(`Rejecting stale or date-mismatched Yahoo session date ${sessionDate} for ${symbol}`);
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) return tvQuote;
       }
       return null;
     }
@@ -178,7 +182,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (isBist) {
       try {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) return tvQuote;
       } catch (tvErr) {
         console.warn(`TradingView fallback also failed for ${symbol}:`, tvErr);
       }
@@ -393,7 +397,7 @@ export async function POST(request: Request) {
     for (const sym of uniqueBist) {
       const clean = sym.replace('.IS', '').toUpperCase();
       const tvQuote = tvBistMap.get(clean) || tvBistMap.get(`${clean}.IS`);
-      if (tvQuote && tvQuote.price > 0) {
+      if (tvQuote && tvQuote.price > 0 && isValidBistQuoteSession(tvQuote.sessionDate)) {
         quotes.push(tvQuote);
       } else {
         unpricedBist.push(sym);
@@ -405,8 +409,10 @@ export async function POST(request: Request) {
       try {
         const fallbackResults = await fetchWithConcurrency(unpricedBist, fetchLiveQuote, 5);
         for (const q of fallbackResults) {
-          if (q && q.price > 0) {
+          if (q && q.price > 0 && isValidBistQuoteSession(q.sessionDate)) {
             quotes.push({ ...q, source: 'yahoo_fallback' });
+          } else if (q) {
+            console.warn(`Rejecting BIST fallback quote for ${q.symbol} due to session date mismatch (${q.sessionDate})`);
           }
         }
       } catch (fallbackErr) {
@@ -639,10 +645,13 @@ export async function POST(request: Request) {
       }, { status: 207 });
     }
 
+    const fxSegment = updatedFxRate != null ? `FX (₺${updatedFxRate.toFixed(2)})` : 'FX (unchanged)';
+    const bistSegment = updatedBistClose != null ? `BIST 100 (${updatedBistClose.toFixed(0)})` : 'BIST 100 (unchanged)';
+
     return NextResponse.json({
       success: true,
       dispatched: true,
-      message: `Live Market Data Synced! Updated ${priceUpsertSuccessCount} prices, ${orbUpsertSuccessCount} ORB records + FX (₺${updatedFxRate?.toFixed(2) || '49.96'}) & BIST 100 (${updatedBistClose?.toFixed(0) || '10710'}).`,
+      message: `Live Market Data Synced! Updated ${priceUpsertSuccessCount} prices, ${orbUpsertSuccessCount} ORB records + ${fxSegment} & ${bistSegment}.`,
       updatedCount: priceUpsertSuccessCount,
       orbCount: orbUpsertSuccessCount,
       timestamp: new Date().toISOString()

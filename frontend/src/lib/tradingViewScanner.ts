@@ -27,9 +27,11 @@ export {
   isBistHoliday,
   isBistHalfDay,
   isBistMarketOpen,
-  getBistTradingSessionDate
+  getBistTradingSessionDate,
+  getPriorBistSessionDate,
+  isValidBistQuoteSession
 } from './bistCalendar';
-import { getBistTradingSessionDate } from './bistCalendar';
+import { getBistTradingSessionDate, isValidBistQuoteSession } from './bistCalendar';
 
 function normalizeToTvTicker(symbol: string): string {
   const clean = symbol.replace('.IS', '').trim().toUpperCase();

@@ -110,3 +110,59 @@ export function getBistTradingSessionDate(now: Date = new Date()): string {
 
   return targetDate.toISOString().slice(0, 10);
 }
+
+/**
+ * Resolves the prior official BIST trading session date immediately preceding a given session.
+ */
+export function getPriorBistSessionDate(fromSession?: string): string {
+  const base = fromSession 
+    ? new Date(`${fromSession}T12:00:00Z`) 
+    : new Date(Date.now() + 3 * 60 * 60 * 1000);
+  base.setUTCDate(base.getUTCDate() - 1);
+  while (
+    base.getUTCDay() === 0 ||
+    base.getUTCDay() === 6 ||
+    isBistHoliday(base.toISOString().slice(0, 10))
+  ) {
+    base.setUTCDate(base.getUTCDate() - 1);
+  }
+  return base.toISOString().slice(0, 10);
+}
+
+/**
+ * Validates whether a BIST quote's session date is fresh and market-session-aware.
+ * - Accepts if quote session date == current official BIST session date.
+ * - Rejects if quote session date > current official session date (future date).
+ * - Accepts immediately preceding session if current session hasn't opened yet (< 10:00 AM TRT)
+ *   or during the early opening transition (< 10:30 AM TRT) or when the market is closed.
+ * - Rejects stale quotes older than the prior session.
+ */
+export function isValidBistQuoteSession(quoteSessionDate: string, now: Date = new Date()): boolean {
+  if (!quoteSessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(quoteSessionDate)) return false;
+
+  const currentSession = getBistTradingSessionDate(now);
+  if (quoteSessionDate === currentSession) {
+    return true;
+  }
+
+  // Reject future-dated quotes
+  if (quoteSessionDate > currentSession) {
+    return false;
+  }
+
+  // Allow immediately preceding session during pre-market, opening auction transition, or closed hours
+  const priorSession = getPriorBistSessionDate(currentSession);
+  if (quoteSessionDate === priorSession) {
+    const istanbulMs = now.getTime() + 3 * 60 * 60 * 1000;
+    const trt = new Date(istanbulMs);
+    const trtHour = trt.getUTCHours();
+    const trtMin = trt.getUTCMinutes();
+    const totalMin = trtHour * 60 + trtMin;
+    // Before 10:30 TRT (pre-market + opening auction) or outside market hours (weekend/holiday/evening)
+    if (totalMin < 10 * 60 + 30 || !isBistMarketOpen(now)) {
+      return true;
+    }
+  }
+
+  return false;
+}
