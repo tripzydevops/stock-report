@@ -33,6 +33,86 @@ def _calc_cagr(start_val: Optional[float], end_val: Optional[float], years: floa
     return None
 
 
+def _calc_pct_change(prev: Optional[float], curr: Optional[float]) -> Optional[float]:
+    if prev is not None and curr is not None and prev != 0:
+        try:
+            return round(((curr - prev) / abs(prev)) * 100.0, 2)
+        except Exception:
+            return None
+    return None
+
+
+def _extract_multi_period_financials(df: Any, is_quarterly: bool = False) -> list:
+    if df is None or getattr(df, 'empty', True):
+        return []
+
+    # Sort columns chronologically (oldest to newest)
+    sorted_cols = sorted(list(df.columns))
+    results = []
+
+    for col in sorted_cols:
+        try:
+            if hasattr(col, 'strftime'):
+                date_str = col.strftime('%Y-%m-%d')
+                year_str = col.strftime('%Y')
+                quarter_num = (col.month - 1) // 3 + 1
+                period_label = f"{year_str[-2:]}-Q{quarter_num}" if is_quarterly else year_str
+                period_display = f"{year_str} Q{quarter_num}" if is_quarterly else year_str
+            else:
+                date_str = str(col)
+                period_label = str(col)[:10]
+                period_display = period_label
+        except Exception:
+            date_str = str(col)
+            period_label = str(col)
+            period_display = str(col)
+
+        def _get_val(keys):
+            for k in keys:
+                if k in df.index:
+                    v = _safe_float(df.loc[k, col])
+                    if v is not None:
+                        return v
+            return None
+
+        rev = _get_val(['Total Revenue', 'Operating Revenue'])
+        ebitda = _get_val(['EBITDA', 'Normalized EBITDA', 'Operating Income', 'EBIT', 'Pretax Income'])
+        ebit = _get_val(['EBIT', 'Operating Income'])
+        ni = _get_val(['Net Income', 'Net Income Common Stockholders', 'Net Income From Continuing Operation Net Minority Interest'])
+        eps = _get_val(['Diluted EPS', 'Basic EPS'])
+
+        if rev is None and ebitda is None and ni is None and eps is None:
+            continue
+
+        results.append({
+            'period': period_label,
+            'periodDisplay': period_display,
+            'date': date_str,
+            'sales': rev,
+            'ebitda': ebitda,
+            'ebit': ebit,
+            'netIncome': ni,
+            'eps': eps,
+        })
+
+    for i in range(len(results)):
+        if i > 0:
+            prev = results[i - 1]
+            curr = results[i]
+            curr['salesGrowth'] = _calc_pct_change(prev['sales'], curr['sales'])
+            curr['ebitdaGrowth'] = _calc_pct_change(prev['ebitda'], curr['ebitda'])
+            curr['netIncomeGrowth'] = _calc_pct_change(prev['netIncome'], curr['netIncome'])
+            curr['epsGrowth'] = _calc_pct_change(prev['eps'], curr['eps'])
+        else:
+            curr = results[i]
+            curr['salesGrowth'] = None
+            curr['ebitdaGrowth'] = None
+            curr['netIncomeGrowth'] = None
+            curr['epsGrowth'] = None
+
+    return results
+
+
 def extract_year_founded(summary: str) -> Optional[int]:
     import re
     if not summary:
@@ -103,14 +183,19 @@ def fetch_stock_fundamentals(symbol: str) -> Optional[Dict[str, Any]]:
         'currency': info.get('currency') or ('TRY' if is_bist else 'USD'),
     }
 
-    # 2. Historical financials for 5Y CAGR
+    # 2. Historical financials for 5Y CAGR & multi-period tables
     fin = None
+    quarterly_fin = None
     cashflow = None
     try:
         fin = ticker.financials
+        quarterly_fin = ticker.quarterly_financials
         cashflow = ticker.cashflow
     except Exception as fe:
         logger.debug(f"Could not load financial statements for {yf_symbol}: {fe}")
+
+    annual_financials = _extract_multi_period_financials(fin, is_quarterly=False)
+    quarterly_financials = _extract_multi_period_financials(quarterly_fin, is_quarterly=True)
 
     sales_start, sales_end = None, _safe_float(info.get('totalRevenue'))
     ebitda_start, ebitda_end = None, _safe_float(info.get('ebitda'))
@@ -240,6 +325,8 @@ def fetch_stock_fundamentals(symbol: str) -> Optional[Dict[str, Any]]:
         'symbol': clean_sym,
         'profile': profile,
         'financialsGrowth': financials_growth,
+        'annualFinancials': annual_financials,
+        'quarterlyFinancials': quarterly_financials,
         'capitalStructure': capital_structure,
         'keyData': key_data,
         'analysts': analysts,

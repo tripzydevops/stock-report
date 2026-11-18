@@ -29,6 +29,8 @@ import DateFilterBar from '../components/DateFilterBar';
 import MobileBottomNav from '../components/MobileBottomNav';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
 import ReportsArchiveModal from '../components/ReportsArchiveModal';
+import OnboardingWizardModal, { UserProfileContext } from '../components/OnboardingWizardModal';
+import { userSignalBuffer } from '../lib/userSignalBuffer';
 import { DateRangeFilter, getDateRangeFromPreset, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth, ADMIN_USER_ID } from '../context/AuthContext';
@@ -1279,6 +1281,10 @@ export default function Home() {
   }, []);
 
   const handleTabChange = (newTab: TabId) => {
+    userSignalBuffer.recordSignal({
+      eventType: 'tab_switch',
+      payload: { from: activeTab, to: newTab }
+    });
     setActiveTab(newTab);
     if (typeof window !== 'undefined') {
       try {
@@ -1291,6 +1297,21 @@ export default function Home() {
       }
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const rawProfile = localStorage.getItem('market_pulse_user_profile');
+        if (rawProfile) {
+          setUserProfile(JSON.parse(rawProfile));
+        } else {
+          // Cold-Start: prompt investor archetype wizard for zero-history users
+          const timer = setTimeout(() => setIsOnboardingModalOpen(true), 1500);
+          return () => clearTimeout(timer);
+        }
+      } catch {}
+    }
+  }, []);
 
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
     status: 'Bearish', close: 766.81, trend: 'down'
@@ -1338,6 +1359,8 @@ export default function Home() {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
   const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfileContext | null>(null);
   const [realizedTrades, setRealizedTrades] = useState<RealizedTrade[]>(INITIAL_REALIZED_TRADES);
   const [executedOrders, setExecutedOrders] = useState<ExecutedOrder[]>(INITIAL_ORDERS);
   const [transfers, setTransfers] = useState<CapitalTransfer[]>(INITIAL_TRANSFERS);
@@ -1488,6 +1511,7 @@ export default function Home() {
       high52w: matched?.high52w,
       low52w: matched?.low52w
     });
+    userSignalBuffer.recordAssetView(clean);
   };
 
   // Fetch real data from Supabase
@@ -4325,6 +4349,22 @@ export default function Home() {
                         )}
                       </button>
                     )}
+                    {/* Cold-Start Lifestyle Archetype Profiler Badge */}
+                    <button
+                      type="button"
+                      onClick={() => setIsOnboardingModalOpen(true)}
+                      className="text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/80 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-all inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      title={language === 'tr' ? 'Yatırımcı Kimliği & Strateji Sihirbazı' : 'Investor Archetype & Strategy Wizard'}
+                    >
+                      <span>🎯</span>
+                      <span>
+                        {userProfile?.lifestyle_archetype === 'passive_cashflow' ? 'Pasif Nakit Akışı' :
+                         userProfile?.lifestyle_archetype === 'momentum_growth' ? 'Momentum & Büyüme' :
+                         userProfile?.lifestyle_archetype === 'capital_preserver' ? 'Sermaye Koruyucu' :
+                         userProfile?.lifestyle_archetype === 'balanced_compounder' ? 'Dengeli Bileşikçi' :
+                         (language === 'tr' ? 'Yatırımcı Kimliği' : 'Investor Profile')}
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleToggleRightPanel}
@@ -5021,7 +5061,10 @@ export default function Home() {
               <div className="pt-2">
                 <AssetTable 
                   assets={assets} 
-                  onSelectAsset={(asset) => setSelectedAssetForHistory(asset)}
+                  onSelectAsset={(asset) => {
+                    setSelectedAssetForHistory(asset);
+                    userSignalBuffer.recordAssetView(asset.symbol);
+                  }}
                 />
               </div>
             )}
@@ -5247,6 +5290,15 @@ export default function Home() {
         isOpen={!!selectedAssetForHistory}
         onClose={() => setSelectedAssetForHistory(null)}
         asset={selectedAssetForHistory}
+      />
+
+      <OnboardingWizardModal
+        isOpen={isOnboardingModalOpen}
+        onClose={() => setIsOnboardingModalOpen(false)}
+        currentProfile={userProfile}
+        onProfileSaved={(newProf) => {
+          setUserProfile(newProf);
+        }}
       />
 
       <PositionCalculatorModal

@@ -155,16 +155,26 @@ export default function AiAssistantView() {
         const match = queryText.toUpperCase().match(/\b(FROTO|TURSG|THYAO|ISMEN|EREGL|TUPRS|AKBNK|GARAN|ASELS|BIMAS|SOKM|MGROS|PETKM|AAPL|MSFT|NVDA)\b/);
         const targetSym = match ? match[1] : 'FROTO';
 
+        let userProfile = {
+          is_cold_start: true,
+          lifestyle_archetype: 'balanced_compounder',
+          risk_tolerance: 'moderate',
+          account_size_try: 300000.0
+        };
+        try {
+          const raw = localStorage.getItem('market_pulse_user_profile');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            userProfile = { ...userProfile, ...parsed };
+          }
+        } catch {}
+
         const maRes = await fetch('/api/assistant/multi-agent-analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             symbol: targetSym,
-            user_profile: {
-              is_cold_start: true,
-              lifestyle_archetype: 'balanced_compounder',
-              risk_tolerance: 'moderate'
-            }
+            user_profile: userProfile
           })
         });
 
