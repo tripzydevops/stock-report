@@ -5327,11 +5327,13 @@ export default function Home() {
         onSell={handleSellHolding}
       />
 
-      <AssetHistoryModal
-        isOpen={!!selectedAssetForHistory}
-        onClose={() => setSelectedAssetForHistory(null)}
-        asset={selectedAssetForHistory}
-      />
+      {selectedAssetForHistory && (
+        <AssetHistoryModal
+          isOpen={!!selectedAssetForHistory}
+          onClose={() => setSelectedAssetForHistory(null)}
+          asset={selectedAssetForHistory}
+        />
+      )}
 
       <OnboardingWizardModal
         isOpen={isOnboardingModalOpen}

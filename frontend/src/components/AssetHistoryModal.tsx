@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AssetData } from './AssetTable';
 import InteractiveCanvasChart, { ChartPriceBar } from './InteractiveCanvasChart';
@@ -315,11 +315,10 @@ export default function AssetHistoryModal({
     fetchAssetHistory();
   }, [isOpen, asset, tradeSignal]);
 
-  if (!isOpen || !asset || !asset.symbol) return null;
-
-  const rawSym = asset.symbol || '';
+  // Defensive values
+  const rawSym = asset?.symbol || '';
   const cleanSym = rawSym.replace('.IS', '').trim().toUpperCase();
-  const isBist = asset.market === 'BIST' || rawSym.endsWith('.IS') || (cleanSym.length === 5);
+  const isBist = asset?.market === 'BIST' || rawSym.endsWith('.IS') || (cleanSym.length === 5);
   const currencyCode = isBist ? 'TRY' : 'USD';
   const currencySymbol = isBist ? '₺' : '$';
 
@@ -328,8 +327,8 @@ export default function AssetHistoryModal({
     return `${currencySymbol}${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const effectivePrice = currentPrice > 0 ? currentPrice : (asset.price || 0);
-  const effectiveChange = currentChange !== 0 ? currentChange : (asset.changePercent || 0);
+  const effectivePrice = currentPrice > 0 ? currentPrice : (asset?.price || 0);
+  const effectiveChange = currentChange !== 0 ? currentChange : (asset?.changePercent || 0);
   const changeDiff = Number((effectivePrice * (effectiveChange / 100)).toFixed(2));
 
   const handleToggleFavorite = () => {
@@ -402,7 +401,7 @@ export default function AssetHistoryModal({
     return Number((dailyStd * Math.sqrt(252) * 100).toFixed(2));
   }, [chartBars]);
 
-  const tvSymbol = getTradingViewSymbol(asset.symbol, asset.market);
+  const tvSymbol = asset?.symbol ? getTradingViewSymbol(asset.symbol, asset.market) : '';
   const tradingViewUrl = `https://www.tradingview.com/symbols/${tvSymbol.replace(':', '-')}/`;
 
   const todayBar = historyTable[0] || {
@@ -423,12 +422,29 @@ export default function AssetHistoryModal({
     return null;
   }, [fundamentals, effectivePrice]);
 
+  // Prevent mobile touch tap bleeding / ghost clicks on backdrop
+  const openTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (isOpen) {
+      openTimeRef.current = Date.now();
+    }
+  }, [isOpen]);
+
+  const handleBackdropClick = () => {
+    if (Date.now() - openTimeRef.current < 450) {
+      return;
+    }
+    onClose();
+  };
+
+  if (!isOpen || !asset || !asset.symbol) return null;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       {/* Sibling Backdrop - Clicks here close modal, but CANNOT bubble from dialog */}
       <div 
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
-        onClick={onClose}
+        onClick={handleBackdropClick}
         aria-hidden="true"
       />
 
