@@ -59,3 +59,14 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python backend/scripts/sync_live_catalysts.py
+
+      - name: Verify Trade Signal Liveness & Self-Heal
+        if: always()
+        env:
+          PYTHONPATH: backend:.
+          PYTHONIOENCODING: utf-8
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python scripts/check_pipeline_health.py --max-age-hours 48 --auto-heal

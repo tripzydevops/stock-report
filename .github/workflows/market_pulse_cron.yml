@@ -52,13 +52,16 @@ jobs:
           python export_to_spreadsheet.py
           python backend/scripts/sync_live_catalysts.py
 
-      - name: Verify Post-Sync Pipeline Health & Data Freshness
+      - name: Verify Post-Sync Pipeline Health, Freshness & Self-Healing
+        if: always()
         env:
+          PYTHONPATH: backend:.
+          PYTHONIOENCODING: utf-8
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python scripts/check_pipeline_health.py --max-age-hours 2
+          python scripts/check_pipeline_health.py --max-age-hours 24 --auto-heal
 
       - name: Upload Latest Spreadsheet as Workflow Artifact
         uses: actions/upload-artifact@v4

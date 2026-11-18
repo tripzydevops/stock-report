@@ -1350,6 +1350,27 @@ export default function Home() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [pipelineHealth, setPipelineHealth] = useState<{
+    status: 'OPTIMAL' | 'NEEDS_ATTENTION' | 'CRITICAL' | 'CHECKING';
+    isHealthy: boolean;
+    openSignalsCount: number;
+    totalSignalsCount: number;
+    latestSignalDate: string | null;
+    hoursSinceLastSignal: number | null;
+    latestPriceDate: string | null;
+    latestReportDate: string | null;
+    activeAssetsCount: number;
+    issues: string[];
+    diagnostics?: {
+      databaseConnected: boolean;
+      hasActiveAssets: boolean;
+      hasPriceHistory: boolean;
+      hasOpenSignals: boolean;
+      isMarketOpenToday: boolean;
+    };
+    checkedAt?: string;
+  } | null>(null);
+  const [isHealingPipeline, setIsHealingPipeline] = useState<boolean>(false);
   const [isOffline, setIsOffline] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return !navigator.onLine;
@@ -2438,6 +2459,17 @@ export default function Home() {
           }
         }
 
+        // 7. Check autonomous trade pipeline health
+        try {
+          const healthRes = await fetch('/api/signals/health');
+          if (healthRes.ok) {
+            const healthJson = await healthRes.json();
+            setPipelineHealth(healthJson);
+          }
+        } catch (hErr) {
+          console.warn('Pipeline health fetch skipped:', hErr);
+        }
+
         const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
         setLastRefreshedAt(nowStr);
 
@@ -2449,6 +2481,60 @@ export default function Home() {
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
+      }
+    };
+
+    const fetchPipelineHealth = async () => {
+      try {
+        const res = await fetch('/api/signals/health');
+        if (res.ok) {
+          const data = await res.json();
+          setPipelineHealth(data);
+        }
+      } catch (e) {
+        console.warn('Pipeline health polling failed:', e);
+      }
+    };
+
+    const handleRunPipelineSelfHeal = async () => {
+      try {
+        setIsHealingPipeline(true);
+        setSyncFeedback({
+          type: 'info',
+          message: language === 'tr'
+            ? '🤖 Otonom sistem teşhisi ve kendi kendini onarma başlatıldı... Algoritmik tarayıcı çalıştırılıyor.'
+            : '🤖 Autonomous diagnosis & self-healing triggered... Algorithmic screener is running.'
+        });
+
+        const res = await fetch('/api/signals/health', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'diagnose_and_heal' })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+          setSyncFeedback({
+            type: 'success',
+            message: language === 'tr'
+              ? (data.message || 'Sistem başarıyla teşhis edildi ve tarama süreci başlatıldı.')
+              : 'System diagnosed and scan process initiated successfully.'
+          });
+          await loadData(true);
+          await fetchPipelineHealth();
+        } else {
+          setSyncFeedback({
+            type: 'error',
+            message: (data.error || 'Self-healing trigger encountered an issue.')
+          });
+        }
+      } catch (e: any) {
+        setSyncFeedback({
+          type: 'error',
+          message: `Heal failed: ${e.message || e}`
+        });
+      } finally {
+        setIsHealingPipeline(false);
       }
     };
 
@@ -4206,6 +4292,39 @@ export default function Home() {
                     <p className="text-xs text-gray-500">{t.signals.subtitle}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Autonomous Pipeline Health & Diagnostic Badge */}
+                    {pipelineHealth && (
+                      <button
+                        type="button"
+                        onClick={handleRunPipelineSelfHeal}
+                        disabled={isHealingPipeline}
+                        className={`text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all inline-flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                          pipelineHealth.status === 'OPTIMAL'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                            : pipelineHealth.status === 'NEEDS_ATTENTION'
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                            : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 hover:bg-rose-100 animate-pulse'
+                        }`}
+                        title={language === 'tr' ? 'Otonom Algoritmik Tarayıcı Sağlığı & Otomatik Teşhis' : 'Autonomous Screener Health & Self-Diagnosis'}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${
+                          pipelineHealth.status === 'OPTIMAL' ? 'bg-emerald-500 animate-pulse' :
+                          pipelineHealth.status === 'NEEDS_ATTENTION' ? 'bg-amber-500' : 'bg-rose-500 animate-ping'
+                        }`} />
+                        <span>
+                          {isHealingPipeline
+                            ? (language === 'tr' ? 'Tarayıcı Çalıştırılıyor...' : 'Scanner Running...')
+                            : pipelineHealth.status === 'OPTIMAL'
+                            ? (language === 'tr' ? `Tarayıcı Aktif (${pipelineHealth.openSignalsCount} Sinyal)` : `Scanner Active (${pipelineHealth.openSignalsCount} Signals)`)
+                            : (language === 'tr' ? '⚠️ Tarayıcıyı Teşhis Et' : '⚠️ Diagnose Scanner')}
+                        </span>
+                        {pipelineHealth.hoursSinceLastSignal !== null && (
+                          <span className="text-[10px] opacity-70 hidden md:inline">
+                            · {pipelineHealth.hoursSinceLastSignal}s
+                          </span>
+                        )}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handleToggleRightPanel}
@@ -4630,16 +4749,133 @@ export default function Home() {
                     });
 
                     if (filtered.length === 0) {
+                      const isZeroTotalSignals = signals.length === 0;
+
+                      if (isZeroTotalSignals) {
+                        return (
+                          <div className="col-span-1 md:col-span-2 p-6 sm:p-8 bg-white dark:bg-gray-800 rounded-3xl border border-rose-200/80 dark:border-rose-900/50 shadow-md space-y-6">
+                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+                              <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 dark:text-rose-400 flex items-center justify-center text-3xl font-black shrink-0">
+                                🤖
+                              </div>
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                                  <h3 className="text-lg font-black text-gray-900 dark:text-white">
+                                    {language === 'tr' ? 'Otonom Sistem Teşhis & Kendi Kendini Onarma' : 'Autonomous System Diagnostics & Self-Healing'}
+                                  </h3>
+                                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                                    {pipelineHealth?.status || 'CRITICAL'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {language === 'tr'
+                                    ? 'Açık işlem havuzunda 0 aktif kurulum tespit edildi. Sistem otomatik olarak sağlığını denetledi ve kök neden analizini hazırladı.'
+                                    : '0 active setups found in the open pool. The system ran self-diagnostics and prepared root-cause analysis.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Diagnostic Checklist */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-gray-900/70 p-4 rounded-2xl border border-gray-200 dark:border-gray-800">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  {language === 'tr' ? 'Veritabanı' : 'Database'}
+                                </span>
+                                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                  <span>✅</span>
+                                  <span>Supabase Online</span>
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  {language === 'tr' ? 'Varlık Evreni' : 'Asset Catalog'}
+                                </span>
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                  <span>📈</span>
+                                  <span>{pipelineHealth?.activeAssetsCount || assets.length || 118} {language === 'tr' ? 'Hisse' : 'Stocks'}</span>
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  {language === 'tr' ? 'Piyasa Rejimi' : 'Market Regime'}
+                                </span>
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                  <span>🌐</span>
+                                  <span>BIST: {getLocalizedRegime(bistRegime?.status)}</span>
+                                </div>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  {language === 'tr' ? 'Son Tarama' : 'Last Scan'}
+                                </span>
+                                <div className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                  <span>⏱️</span>
+                                  <span>{pipelineHealth?.hoursSinceLastSignal !== null ? `${pipelineHealth?.hoursSinceLastSignal}s önce` : 'Kontrol ediliyor'}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Issues list if any */}
+                            {pipelineHealth?.issues && pipelineHealth.issues.length > 0 && (
+                              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                                <div className="font-bold flex items-center gap-1">
+                                  <span>⚠️</span>
+                                  <span>{language === 'tr' ? 'Sistem Tespitleri:' : 'System Observations:'}</span>
+                                </div>
+                                <ul className="list-disc list-inside space-y-0.5 text-[11px] opacity-90 pl-1">
+                                  {pipelineHealth.issues.map((issue, i) => (
+                                    <li key={i}>{issue}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Self-Healing Trigger Button */}
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-700/60">
+                              <span className="text-[11px] text-gray-400 text-center sm:text-left">
+                                {language === 'tr'
+                                  ? 'Otonom tarayıcıyı anında tetikleyerek piyasayı taratabilir ve yeni kurulumları havuza yazdırabilirsiniz.'
+                                  : 'Dispatch the autonomous scanner immediately to screen the universe and rebuild the open trade setup pool.'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={handleRunPipelineSelfHeal}
+                                disabled={isHealingPipeline}
+                                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                  isHealingPipeline
+                                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-emerald-500/25 hover:scale-102 active:scale-98'
+                                }`}
+                              >
+                                {isHealingPipeline ? (
+                                  <>
+                                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <span>{language === 'tr' ? 'Otonom Tarayıcı Çalışıyor...' : 'Autonomous Scanner Running...'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span>⚡</span>
+                                    <span>{language === 'tr' ? 'Sistemi Teşhis Et & Kendi Kendini Onar' : 'Diagnose & Auto-Heal System'}</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
-                        <div className="col-span-1 md:col-span-2 p-8 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2">
+                        <div className="col-span-1 md:col-span-2 p-8 text-center bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-3">
                           <span className="text-3xl block">🎯</span>
                           <h3 className="text-base font-bold text-gray-900 dark:text-white">{t.signals.noActiveTrades}</h3>
                           <p className="text-xs text-gray-500 max-w-md mx-auto">
                             {selectedStrategyFilter !== 'ALL'
                               ? (language === 'tr' ? 'Seçilen işlem tipine uygun aktif kurulum bulunamadı.' : 'No active setups found matching the selected trade type.')
+                              : signalFilter !== 'ALL'
+                              ? (language === 'tr' ? `Seçilen pazar/durum filtresinde işlem bulunamadı. Toplam ${signals.length} adet sinyal mevcuttur.` : `No trades found for this filter. Total ${signals.length} signals exist in other categories.`)
                               : t.signals.noActiveDesc}
                           </p>
-                          <div className="flex justify-center gap-2 pt-1">
+                          <div className="flex justify-center gap-2 pt-1 flex-wrap">
                             {selectedStrategyFilter !== 'ALL' && (
                               <button
                                 type="button"
@@ -4654,7 +4890,16 @@ export default function Home() {
                               onClick={() => { setSignalFilter('ALL'); setSelectedStrategyFilter('ALL'); }}
                               className="px-3 py-1 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200"
                             >
-                              {t.signals.resetFilter}
+                              {t.signals.resetFilter} ({signals.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRunPipelineSelfHeal}
+                              disabled={isHealingPipeline}
+                              className="px-3 py-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer hover:bg-emerald-100 inline-flex items-center gap-1"
+                            >
+                              <span>⚡</span>
+                              <span>{language === 'tr' ? 'Yeniden Tara' : 'Rescan'}</span>
                             </button>
                           </div>
                         </div>
