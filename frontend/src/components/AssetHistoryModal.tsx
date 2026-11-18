@@ -315,9 +315,11 @@ export default function AssetHistoryModal({
     fetchAssetHistory();
   }, [isOpen, asset, tradeSignal]);
 
-  if (!isOpen || !asset) return null;
+  if (!isOpen || !asset || !asset.symbol) return null;
 
-  const isBist = asset.market === 'BIST' || asset.symbol.endsWith('.IS') || (asset.symbol.replace('.IS', '').length === 5);
+  const rawSym = asset.symbol || '';
+  const cleanSym = rawSym.replace('.IS', '').trim().toUpperCase();
+  const isBist = asset.market === 'BIST' || rawSym.endsWith('.IS') || (cleanSym.length === 5);
   const currencyCode = isBist ? 'TRY' : 'USD';
   const currencySymbol = isBist ? '₺' : '$';
 
@@ -329,7 +331,6 @@ export default function AssetHistoryModal({
   const effectivePrice = currentPrice > 0 ? currentPrice : (asset.price || 0);
   const effectiveChange = currentChange !== 0 ? currentChange : (asset.changePercent || 0);
   const changeDiff = Number((effectivePrice * (effectiveChange / 100)).toFixed(2));
-  const cleanSym = asset.symbol.replace('.IS', '').toUpperCase();
 
   const handleToggleFavorite = () => {
     const nextState = !isFavorite;
@@ -423,13 +424,17 @@ export default function AssetHistoryModal({
   }, [fundamentals, effectivePrice]);
 
   return (
-    <div 
-      onClick={onClose}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none overflow-y-auto"
-    >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      {/* Sibling Backdrop - Clicks here close modal, but CANNOT bubble from dialog */}
       <div 
-        className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] my-auto"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Dialog Body - Isolated from backdrop click events */}
+      <div 
+        className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] my-auto"
       >
         {/* Toast Alert Banner */}
         {toastMessage && (

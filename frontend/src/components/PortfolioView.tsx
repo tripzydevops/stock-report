@@ -307,8 +307,18 @@ export default function PortfolioView({
   const getBuyLotsForHolding = (item: PortfolioItem) => getTranchesForHolding(item).activeLots;
   const getClosedLotsForHolding = (item: PortfolioItem) => getTranchesForHolding(item).closedLots;
 
+  // Defensive portfolio sanitization: purge any placeholder UNKNOWN/UNDEFINED/NULL symbols and non-positive shares
+  const cleanPortfolio = React.useMemo(() => {
+    const INVALID = new Set(['UNKNOWN', 'UNDEFINED', 'NULL', 'NONE', 'N/A', 'NA', 'INVALID']);
+    return (portfolio || []).filter(item => {
+      if (!item || !item.symbol) return false;
+      const clean = item.symbol.replace('.IS', '').trim().toUpperCase();
+      return clean && !INVALID.has(clean) && !clean.includes('UNKNOWN') && Number(item.shares) > 0;
+    });
+  }, [portfolio]);
+
   // Sector concentration and risk profile
-  const sectorRisk = calculateSectorRisk(portfolio, usdTryRate);
+  const sectorRisk = calculateSectorRisk(cleanPortfolio, usdTryRate);
 
   // Deposit modal state
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
@@ -319,11 +329,11 @@ export default function PortfolioView({
   const [modalCurrency, setModalCurrency] = useState<'TRY' | 'USD'>('TRY');
 
   // Active portfolio calculations
-  const totalCostTRY = portfolio.reduce((acc, item) => {
+  const totalCostTRY = cleanPortfolio.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.totalCost * usdTryRate : item.totalCost);
   }, 0);
 
-  const totalStockValTRY = portfolio.reduce((acc, item) => {
+  const totalStockValTRY = cleanPortfolio.reduce((acc, item) => {
     return acc + (item.currency === 'USD' ? item.currentValue * usdTryRate : item.currentValue);
   }, 0);
 
@@ -345,11 +355,11 @@ export default function PortfolioView({
 
   // Conditional USD Visibility: Only reveal USD Wallet when user currently holds US stocks/ETFs (shares > 0) or has positive USD cash
   const hasUsAssets = React.useMemo(() => {
-    const hasUsHoldings = portfolio.some(
+    const hasUsHoldings = cleanPortfolio.some(
       p => p.market === 'US' && Number(p.shares) > 0
     );
     return hasUsHoldings || cashValUSD > 0;
-  }, [portfolio, cashValUSD]);
+  }, [cleanPortfolio, cashValUSD]);
 
   const recordedDepositsTRY = React.useMemo(() => {
     return cleanTransfers
@@ -373,8 +383,8 @@ export default function PortfolioView({
   const dividendAssets = React.useMemo(() => {
     return portfolioDividends && portfolioDividends.length > 0
       ? portfolioDividends
-      : deriveDividendsFromPortfolio(portfolio);
-  }, [portfolio, portfolioDividends]);
+      : deriveDividendsFromPortfolio(cleanPortfolio);
+  }, [cleanPortfolio, portfolioDividends]);
 
   // Cumulative swing gains per symbol from realized trades (used for Maliyet Düşürme / House Money tracking)
   const swingGainsBySymbol = React.useMemo(() => {
@@ -1032,7 +1042,7 @@ export default function PortfolioView({
 
         {/* Mobile View: Dedicated Card List (< 768px, eliminates horizontal scroll completely) */}
         <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
-          {portfolio.map((item, idx) => {
+          {cleanPortfolio.map((item, idx) => {
             const isProfit = item.pnlPercent >= 0;
             const formattedBoughtDate = item.entryDate 
               ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -1461,7 +1471,7 @@ export default function PortfolioView({
               )}
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {portfolio.map((item, idx) => {
+              {cleanPortfolio.map((item, idx) => {
                 const isProfit = item.pnlPercent >= 0;
                 const formattedBoughtDate = item.entryDate 
                   ? new Date(item.entryDate).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -2521,7 +2531,7 @@ export default function PortfolioView({
                   </React.Fragment>
                 );
               })}
-              {portfolio.length === 0 && (
+              {cleanPortfolio.length === 0 && (
                 <tr>
                   <td colSpan={isCompactTable ? 8 : 12} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                     <p className="text-base font-semibold">No active holdings in portfolio.</p>
@@ -3376,7 +3386,7 @@ export default function PortfolioView({
       <PortfolioBriefModal
         isOpen={isPortfolioBriefOpen}
         onClose={() => setIsPortfolioBriefOpen(false)}
-        portfolio={portfolio}
+        portfolio={cleanPortfolio}
         realizedTrades={realizedTrades}
         orders={orders}
         transfers={transfers}

@@ -1118,6 +1118,25 @@ function sanitizeTransfers(transfersList: any[]): any[] {
   return transfersList.filter(isValidTransfer);
 }
 
+const INVALID_PORTFOLIO_SYMBOLS = new Set([
+  'UNKNOWN', 'UNDEFINED', 'NULL', 'NONE', 'N/A', 'NA', 'TBD', 'TEST', 'STOCK', 'EMPTY', 'INVALID'
+]);
+
+function sanitizePortfolioHoldings(holdings: any[]): PortfolioItem[] {
+  if (!Array.isArray(holdings)) return [];
+  return holdings.filter(h => {
+    if (!h || !h.symbol) return false;
+    const clean = String(h.symbol).replace('.IS', '').trim().toUpperCase();
+    if (!clean || INVALID_PORTFOLIO_SYMBOLS.has(clean) || clean.includes('UNKNOWN')) return false;
+    if (h.name && typeof h.name === 'string') {
+      const cleanName = h.name.toUpperCase();
+      if (cleanName.includes('UNKNOWN') || cleanName.includes('UNDEFINED')) return false;
+    }
+    if (!h.shares || Number(h.shares) <= 0) return false;
+    return true;
+  });
+}
+
 export default function Home() {
   const { language, setLanguage, t } = useLanguage();
   const { user, session, isDemoMode, signOut, signInAsAdmin } = useAuth();
@@ -1211,7 +1230,19 @@ export default function Home() {
         if (rawPort) {
           const parsed = JSON.parse(rawPort);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setPortfolio(parsed);
+            const cleaned = sanitizePortfolioHoldings(parsed);
+            const hasTkfen = cleaned.some(p => p.symbol.replace('.IS', '').trim().toUpperCase() === 'TKFEN');
+            if (!hasTkfen) {
+              const tkfenInit = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
+              if (tkfenInit) cleaned.unshift(tkfenInit);
+            }
+            setPortfolio(cleaned);
+            if (cleaned.length !== parsed.length || !hasTkfen) {
+              try {
+                localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(cleaned));
+                localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(cleaned));
+              } catch (e) {}
+            }
           }
         }
         const rawOrd = localStorage.getItem(GUEST_ORDERS_KEY) || localStorage.getItem('market_pulse_cached_orders');
@@ -1304,10 +1335,6 @@ export default function Home() {
         const rawProfile = localStorage.getItem('market_pulse_user_profile');
         if (rawProfile) {
           setUserProfile(JSON.parse(rawProfile));
-        } else {
-          // Cold-Start: prompt investor archetype wizard for zero-history users
-          const timer = setTimeout(() => setIsOnboardingModalOpen(true), 1500);
-          return () => clearTimeout(timer);
         }
       } catch {}
     }
@@ -1476,10 +1503,12 @@ export default function Home() {
   }, [portfolio, assets, dividendSummaries]);
 
   const handleSelectTicker = (symbol: string) => {
-    const clean = symbol.replace('.IS', '').toUpperCase();
-    const matched = assets.find(a => a.symbol.replace('.IS', '').toUpperCase() === clean);
-    const portItem = portfolio.find(p => p.symbol.replace('.IS', '').toUpperCase() === clean);
-    const sigItem = signals.find(s => s.symbol.replace('.IS', '').toUpperCase() === clean);
+    if (!symbol) return;
+    const clean = String(symbol).replace('.IS', '').trim().toUpperCase();
+    if (!clean || INVALID_PORTFOLIO_SYMBOLS.has(clean)) return;
+    const matched = assets.find(a => (a.symbol || '').replace('.IS', '').trim().toUpperCase() === clean);
+    const portItem = portfolio.find(p => (p.symbol || '').replace('.IS', '').trim().toUpperCase() === clean);
+    const sigItem = signals.find(s => (s.symbol || '').replace('.IS', '').trim().toUpperCase() === clean);
 
     const price = (matched?.price && matched.price > 0)
       ? matched.price
@@ -2129,7 +2158,13 @@ export default function Home() {
               if (rawPortfolio) {
                 const parsedPort = JSON.parse(rawPortfolio);
                 if (Array.isArray(parsedPort) && parsedPort.length > 0) {
-                  const rehydratedPortfolio: PortfolioItem[] = parsedPort.map((p: PortfolioItem) => {
+                  const cleanedPort = sanitizePortfolioHoldings(parsedPort);
+                  const hasTkfen = cleanedPort.some(p => p.symbol.replace('.IS', '').trim().toUpperCase() === 'TKFEN');
+                  if (!hasTkfen) {
+                    const tkfenInit = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
+                    if (tkfenInit) cleanedPort.unshift(tkfenInit);
+                  }
+                  const rehydratedPortfolio: PortfolioItem[] = cleanedPort.map((p: PortfolioItem) => {
                     const cleanP = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
                     const live = loadedAssets.find((a: AssetData) => (a.symbol || '').replace('.IS', '').trim().toUpperCase() === cleanP);
                     const curPrice = live && live.price > 0 ? live.price : p.currentPrice;
@@ -2381,9 +2416,15 @@ export default function Home() {
           let { data: positionsData } = await positionsQuery;
 
           if (positionsData && positionsData.length > 0) {
-            const mappedPortfolio: PortfolioItem[] = positionsData.map((pos: any) => {
-              const rawSym = pos.assets?.symbol || 'UNKNOWN';
-              const cleanSym = rawSym.replace('.IS', '');
+            const validPositions = positionsData.filter((pos: any) => {
+              const raw = pos.assets?.symbol;
+              if (!raw) return false;
+              const clean = raw.replace('.IS', '').trim().toUpperCase();
+              return clean && !INVALID_PORTFOLIO_SYMBOLS.has(clean) && Number(pos.quantity) > 0;
+            });
+            const mappedPortfolio: PortfolioItem[] = sanitizePortfolioHoldings(validPositions.map((pos: any) => {
+              const rawSym = pos.assets?.symbol;
+              const cleanSym = rawSym.replace('.IS', '').trim().toUpperCase();
               const matchedAsset = loadedAssets.find((a: AssetData) => a.id === pos.asset_id || a.symbol.replace('.IS', '').toUpperCase() === cleanSym.toUpperCase());
               const currPrice = matchedAsset ? matchedAsset.price : Number(pos.avg_entry_price);
               const shares = Number(pos.quantity);
@@ -2457,7 +2498,7 @@ export default function Home() {
                 strategyType: strategyType,
                 adjustedBreakEven: pos.adjusted_break_even !== null && pos.adjusted_break_even !== undefined ? Number(pos.adjusted_break_even) : undefined
               };
-            });
+            }));
 
             setPortfolio(mappedPortfolio);
             const activeDivMap = new Map<string, any>();

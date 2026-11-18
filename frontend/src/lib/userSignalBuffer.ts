@@ -37,25 +37,34 @@ class UserSignalBuffer {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.sessionId = this.getOrCreateSessionId();
-      this.loadPersistedBuffer();
-      this.startFlushTimer();
-      this.setupUnloadHandler();
+      try {
+        this.sessionId = this.getOrCreateSessionId();
+        this.loadPersistedBuffer();
+        this.startFlushTimer();
+        this.setupUnloadHandler();
+      } catch (e) {
+        this.sessionId = `ses_mem_${Date.now()}`;
+      }
     }
   }
 
   private getOrCreateSessionId(): string {
     if (typeof window === 'undefined') return 'server';
-    let sid = sessionStorage.getItem(SESSION_KEY);
-    if (!sid) {
-      sid = `ses_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-      sessionStorage.setItem(SESSION_KEY, sid);
+    try {
+      let sid = sessionStorage.getItem(SESSION_KEY);
+      if (!sid) {
+        sid = `ses_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        sessionStorage.setItem(SESSION_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return `ses_mem_${Date.now()}`;
     }
-    return sid;
   }
 
   private loadPersistedBuffer() {
     try {
+      if (typeof window === 'undefined') return;
       const saved = sessionStorage.getItem(BUFFER_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -75,26 +84,34 @@ class UserSignalBuffer {
   }
 
   private startFlushTimer() {
-    if (this.flushTimer) clearInterval(this.flushTimer);
-    this.flushTimer = setInterval(() => {
-      if (this.queue.length > 0) {
-        this.flush();
-      }
-    }, FLUSH_INTERVAL_MS);
+    try {
+      if (this.flushTimer) clearInterval(this.flushTimer);
+      this.flushTimer = setInterval(() => {
+        if (this.queue.length > 0) {
+          this.flush();
+        }
+      }, FLUSH_INTERVAL_MS);
+    } catch {}
   }
 
   private setupUnloadHandler() {
     if (typeof window === 'undefined') return;
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && this.queue.length > 0) {
-        this.flush(true);
-      }
-    });
-    window.addEventListener('beforeunload', () => {
-      if (this.queue.length > 0) {
-        this.flush(true);
-      }
-    });
+    try {
+      window.addEventListener('visibilitychange', () => {
+        try {
+          if (document.visibilityState === 'hidden' && this.queue.length > 0) {
+            this.flush(true);
+          }
+        } catch {}
+      });
+      window.addEventListener('beforeunload', () => {
+        try {
+          if (this.queue.length > 0) {
+            this.flush(true);
+          }
+        } catch {}
+      });
+    } catch {}
   }
 
   public recordSignal(event: Omit<UserSignalEvent, 'timestamp'>) {

@@ -157,10 +157,16 @@ export default function OnboardingWizardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      {/* Sibling Backdrop */}
       <div 
-        className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
-        onClick={e => e.stopPropagation()}
+        className="fixed inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity" 
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <div 
+        className="relative z-10 w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* MODAL HEADER */}
         <div className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
