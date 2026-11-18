@@ -22,11 +22,12 @@ interface AssetHistoryModalProps {
 
 interface PriceBarItem {
   date: string;
-  open: number;
-  high: number;
-  low: number;
+  open: number | null;
+  high: number | null;
+  low: number | null;
   close: number;
-  volume: number;
+  volume: number | null;
+  isCloseOnly?: boolean;
 }
 
 interface IndicatorDetails {
@@ -245,25 +246,37 @@ export default function AssetHistoryModal({
             }
 
             setHistoryTable(
-              priceBars.map((p: any) => ({
-                date: p.date,
+              priceBars.map((p: any) => {
+                const hasFullOhlc = p.open !== null && p.open !== undefined &&
+                                    p.high !== null && p.high !== undefined &&
+                                    p.low !== null && p.low !== undefined;
+                return {
+                  date: p.date,
+                  open: p.open !== null && p.open !== undefined ? Number(p.open) : null,
+                  high: p.high !== null && p.high !== undefined ? Number(p.high) : null,
+                  low: p.low !== null && p.low !== undefined ? Number(p.low) : null,
+                  close: Number(p.close),
+                  volume: p.volume !== null && p.volume !== undefined ? Number(p.volume) : null,
+                  isCloseOnly: !hasFullOhlc
+                };
+              })
+            );
+
+            const chronological = [...priceBars].reverse();
+            const mappedBars: ChartPriceBar[] = chronological.map((p: any) => {
+              const hasFullOhlc = p.open !== null && p.open !== undefined &&
+                                  p.high !== null && p.high !== undefined &&
+                                  p.low !== null && p.low !== undefined;
+              return {
+                time: p.date,
                 open: p.open !== null && p.open !== undefined ? Number(p.open) : Number(p.close),
                 high: p.high !== null && p.high !== undefined ? Number(p.high) : Number(p.close),
                 low: p.low !== null && p.low !== undefined ? Number(p.low) : Number(p.close),
                 close: Number(p.close),
-                volume: Number(p.volume) || 0
-              }))
-            );
-
-            const chronological = [...priceBars].reverse();
-            const mappedBars: ChartPriceBar[] = chronological.map((p: any) => ({
-              time: p.date,
-              open: p.open !== null && p.open !== undefined ? Number(p.open) : Number(p.close),
-              high: p.high !== null && p.high !== undefined ? Number(p.high) : Number(p.close),
-              low: p.low !== null && p.low !== undefined ? Number(p.low) : Number(p.close),
-              close: Number(p.close),
-              volume: Number(p.volume) || 0
-            }));
+                volume: p.volume !== null && p.volume !== undefined ? Number(p.volume) : 0,
+                isCloseOnly: !hasFullOhlc
+              };
+            });
             setChartBars(mappedBars);
           } else {
             setHistoryTable([]);
@@ -370,13 +383,33 @@ export default function AssetHistoryModal({
   const tvSymbol = asset?.symbol ? getTradingViewSymbol(asset.symbol, asset.market) : '';
   const tradingViewUrl = `https://www.tradingview.com/symbols/${tvSymbol.replace(':', '-')}/`;
 
+  // Robust pointer tracking for backdrop clicks to prevent ghost taps / drag-release closures
+  const backdropPointerDownRef = useRef(false);
+
+  const handleBackdropPointerDown = (e: React.PointerEvent) => {
+    if (e.target === e.currentTarget) {
+      backdropPointerDownRef.current = true;
+    } else {
+      backdropPointerDownRef.current = false;
+    }
+  };
+
+  const handleBackdropPointerUp = (e: React.PointerEvent) => {
+    if (backdropPointerDownRef.current && e.target === e.currentTarget) {
+      backdropPointerDownRef.current = false;
+      onClose();
+    }
+    backdropPointerDownRef.current = false;
+  };
+
   const todayBar = historyTable[0] || (effectivePrice > 0 ? {
     date: 'Today',
-    open: effectivePrice,
-    high: effectivePrice,
-    low: effectivePrice,
+    open: null,
+    high: null,
+    low: null,
     close: effectivePrice,
-    volume: 0
+    volume: null,
+    isCloseOnly: true
   } : null);
 
   // Upside potential to analyst mean target
@@ -392,20 +425,19 @@ export default function AssetHistoryModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      {/* Sibling Backdrop - Clicks here close modal, but CANNOT bubble from dialog */}
+      {/* Sibling Backdrop - Clicks here close modal only if pointer started AND ended on backdrop */}
       <div 
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onClose();
-          }
-        }}
+        onPointerDown={handleBackdropPointerDown}
+        onPointerUp={handleBackdropPointerUp}
         aria-hidden="true"
       />
 
-      {/* Dialog Body - Isolated from backdrop click events */}
+      {/* Dialog Body - Isolated from backdrop pointer & touch events */}
       <div 
         className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] my-auto"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
       >
@@ -699,7 +731,7 @@ export default function AssetHistoryModal({
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Volume</span>
                       <span className="font-bold text-slate-900 dark:text-white font-mono">
-                        {todayBar && todayBar.volume > 0 
+                        {todayBar && todayBar.volume !== null && todayBar.volume > 0 
                           ? todayBar.volume.toLocaleString() 
                           : (fundamentals?.keyData?.volume ? fundamentals.keyData.volume.toLocaleString() : '—')}
                       </span>
@@ -1411,12 +1443,22 @@ export default function AssetHistoryModal({
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
                     {historyTable.slice(0, 15).map((row, i) => (
                       <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="px-3.5 py-2 font-semibold text-slate-700 dark:text-slate-300 font-sans">{row.date}</td>
-                        <td className="px-3.5 py-2 text-right text-slate-500">{formatMoney(row.open)}</td>
-                        <td className="px-3.5 py-2 text-right text-emerald-500">{formatMoney(row.high)}</td>
-                        <td className="px-3.5 py-2 text-right text-rose-500">{formatMoney(row.low)}</td>
+                        <td className="px-3.5 py-2 font-semibold text-slate-700 dark:text-slate-300 font-sans flex items-center gap-1.5">
+                          <span>{row.date}</span>
+                          {row.isCloseOnly && (
+                            <span 
+                              className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-normal shrink-0"
+                              title="Bu işlem günü için tam OHLC verisi bulunmamaktadır; sadece resmi kapanış fiyatı kaydedilmiştir."
+                            >
+                              Kapanış
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3.5 py-2 text-right text-slate-500">{row.open !== null ? formatMoney(row.open) : '—'}</td>
+                        <td className="px-3.5 py-2 text-right text-emerald-500">{row.high !== null ? formatMoney(row.high) : '—'}</td>
+                        <td className="px-3.5 py-2 text-right text-rose-500">{row.low !== null ? formatMoney(row.low) : '—'}</td>
                         <td className="px-3.5 py-2 text-right font-bold text-slate-900 dark:text-white">{formatMoney(row.close)}</td>
-                        <td className="px-3.5 py-2 text-right text-slate-400">{formatKoyfinVal(row.volume, '', 1)}</td>
+                        <td className="px-3.5 py-2 text-right text-slate-400">{row.volume !== null ? formatKoyfinVal(row.volume, '', 1) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

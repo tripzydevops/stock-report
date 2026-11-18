@@ -2787,22 +2787,33 @@ export default function Home() {
         type: 'info'
       });
 
-      // 1. Trigger on-demand quote fetching & database update on /api/sync
-      try {
-        const res = await fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: triggerCloudCrawl ? 'cloud_crawl' : 'sync_live' })
-        });
-        const json = await res.json();
-        if (json.message) {
-          setSyncFeedback({
-            message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
-            type: 'success'
+      // 1. Trigger on-demand quote fetching & database update on /api/sync only if user is authorized admin
+      const isAdmin = user?.email?.toLowerCase() === 'successofmentors@gmail.com' || 
+                      user?.id === 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb' || 
+                      (user as any)?.app_metadata?.role === 'admin' || 
+                      (user as any)?.user_metadata?.role === 'admin';
+
+      if (isAdmin) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+            },
+            body: JSON.stringify({ action: triggerCloudCrawl ? 'cloud_crawl' : 'sync_live' })
           });
+          const json = await res.json();
+          if (json.message) {
+            setSyncFeedback({
+              message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
+              type: 'success'
+            });
+          }
+        } catch (e) {
+          console.warn('Sync API request warning:', e);
         }
-      } catch (e) {
-        console.warn('Sync API request warning:', e);
       }
 
       // 2. Reload fresh data & recalculate portfolio from Supabase

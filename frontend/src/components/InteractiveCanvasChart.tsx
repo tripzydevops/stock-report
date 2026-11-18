@@ -18,6 +18,7 @@ export interface ChartPriceBar {
   low: number;
   close: number;
   volume?: number;
+  isCloseOnly?: boolean;
 }
 
 interface InteractiveCanvasChartProps {

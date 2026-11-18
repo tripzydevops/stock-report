@@ -387,11 +387,14 @@ export default function PortfolioView({
 
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
   const autoInjectedCapitalUSD = Math.max(0, totalDepositedUSD - recordedDepositsUSD);
+  const inferredFundingTRY = ledgerCash.inferredFundingTRY || autoInjectedCapitalTRY;
+  const inferredFundingUSD = ledgerCash.inferredFundingUSD || autoInjectedCapitalUSD;
 
   const consolidatedTotalDepositedTRY = totalDepositedTRY + (totalDepositedUSD * usdTryRate);
   const consolidatedTotalWithdrawalsTRY = (ledgerCash.totalWithdrawalsTRY || 0) + ((ledgerCash.totalWithdrawalsUSD || 0) * usdTryRate);
   const consolidatedNetDepositedTRY = Math.max(0, consolidatedTotalDepositedTRY - consolidatedTotalWithdrawalsTRY);
-  const consolidatedAutoInjectedTRY = autoInjectedCapitalTRY + (autoInjectedCapitalUSD * usdTryRate);
+  const consolidatedInferredFundingTRY = inferredFundingTRY + (inferredFundingUSD * usdTryRate);
+  const consolidatedRecordedDepositsTRY = recordedDepositsTRY + (recordedDepositsUSD * usdTryRate);
 
   // Active Portfolio Dividend Stream & Annual Income Run-Rate
   const dividendAssets = React.useMemo(() => {
@@ -736,7 +739,19 @@ export default function PortfolioView({
         <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span className="truncate">{language === 'tr' ? 'Yatırılan Para' : 'Total Deposited'}</span>
+              <span className="truncate flex items-center gap-1.5">
+                <span>{language === 'tr' ? 'Yatırılan Sermaye' : 'Total Deposited'}</span>
+                {consolidatedInferredFundingTRY > 0 && (
+                  <span 
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800 cursor-help"
+                    title={language === 'tr'
+                      ? 'Nakit bakiyesi yetersizken girilen alış emirlerini dengelemek için varsayılan tahmini fonlamayı içerir; kullanıcı onaylı banka transferi değildir.'
+                      : 'Includes inferred auto-funding to balance stock buys when cash was short; not a confirmed bank transfer.'}
+                  >
+                    {language === 'tr' ? 'Tahmini Fonlama Dahil' : 'Incl. Inferred'}
+                  </span>
+                )}
+              </span>
               <button
                 onClick={() => setIsDepositModalOpen(true)}
                 className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
@@ -755,10 +770,10 @@ export default function PortfolioView({
                 language === 'tr' 
                   ? `Net: ${formatCurr(netDepositedDisplay)} (Çekilen: ${formatCurr(totalWithdrawnDisplay)})`
                   : `Net: ${formatCurr(netDepositedDisplay)} (Out: ${formatCurr(totalWithdrawnDisplay)})`
-              ) : consolidatedAutoInjectedTRY > 0 ? (
+              ) : consolidatedInferredFundingTRY > 0 ? (
                 language === 'tr' 
-                  ? `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`
-                  : `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`
+                  ? `Kayıtlı: ${formatCurr(currencyMode === 'USD' ? consolidatedRecordedDepositsTRY / usdTryRate : consolidatedRecordedDepositsTRY)} • Tahmini: ${formatCurr(currencyMode === 'USD' ? consolidatedInferredFundingTRY / usdTryRate : consolidatedInferredFundingTRY)}`
+                  : `Recorded: ${formatCurr(currencyMode === 'USD' ? consolidatedRecordedDepositsTRY / usdTryRate : consolidatedRecordedDepositsTRY)} • Inferred: ${formatCurr(currencyMode === 'USD' ? consolidatedInferredFundingTRY / usdTryRate : consolidatedInferredFundingTRY)}`
               ) : (
                 language === 'tr' ? 'Net Ana Para' : 'Capital'
               )}

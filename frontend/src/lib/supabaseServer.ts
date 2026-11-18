@@ -98,13 +98,12 @@ export function getAdminSupabase(): SupabaseClient {
 export function verifyCronAuthorization(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET;
   
-  // If no CRON_SECRET is configured, allow in development but block in production
+  // If no CRON_SECRET is configured, strictly reject requests
   if (!cronSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('CRON_SECRET environment variable is missing in production.');
-      return false;
+    if (process.env.NODE_ENV === 'development' && process.env.ALLOW_UNAUTHENTICATED_DEV_CRON === 'true') {
+      return true;
     }
-    return true; // Allow local dev without secret
+    return false;
   }
 
   // Check Bearer token

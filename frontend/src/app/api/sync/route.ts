@@ -319,11 +319,13 @@ export async function POST(request: Request) {
           }
         } else {
           // Unknown symbol: Do not default blindly to BIST (.IS).
-          // Classify by pattern, prioritizing known US/macro or rejecting invalid format.
-          if (US_PATTERN.test(clean) && clean.length <= 4 && !clean.includes('0') && !clean.includes('1')) {
+          // If the ticker explicitly ends in .IS, it is BIST.
+          // Otherwise, if it matches standard US pattern (1-5 uppercase letters), route to US/macro.
+          // Never fabricate a .IS ticker for unverified symbols!
+          if (sym.endsWith('.IS')) {
+            bistSymbolsToSync.push(sym);
+          } else if (US_PATTERN.test(clean)) {
             usMacroSymbolsToSync.push(clean);
-          } else if (BIST_PATTERN.test(clean)) {
-            bistSymbolsToSync.push(`${clean}.IS`);
           }
         }
       }
@@ -530,11 +532,13 @@ export async function POST(request: Request) {
       }
     }
 
+    const marketSessionDate = getBistTradingSessionDate();
+
     // 10. Update FX Rates with error verification
     if (updatedFxRate) {
       const { error } = await supabase
         .from('fx_rates')
-        .upsert([{ pair: 'USDTRY', rate: updatedFxRate, date: today }], { onConflict: 'pair,date' });
+        .upsert([{ pair: 'USDTRY', rate: updatedFxRate, date: marketSessionDate }], { onConflict: 'pair,date' });
       if (error) {
         console.error('Failed to upsert fx_rates:', error);
         writeErrors.push(`fx_rates: ${error.message}`);
@@ -547,7 +551,7 @@ export async function POST(request: Request) {
         .from('market_regime')
         .upsert([{
           market: 'BIST',
-          date: today,
+          date: marketSessionDate,
           index_close: updatedBistClose,
           regime: 'neutral',
           notes: `Live synced at ${new Date().toLocaleTimeString('tr-TR')}`
@@ -583,9 +587,9 @@ export async function POST(request: Request) {
         }, { status: 502 });
       }
       return NextResponse.json({
-        success: true,
+        success: false,
         partial: true,
-        warning: `${writeErrors.length} database chunk(s) encountered errors`,
+        warning: `${writeErrors.length} database chunk(s) encountered write errors`,
         writeErrors,
         updatedCount: priceUpsertSuccessCount,
         orbCount: orbUpsertSuccessCount,

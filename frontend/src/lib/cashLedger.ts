@@ -15,6 +15,8 @@ export interface LedgerCashResult {
   totalSellsUSD: number;
   consolidatedCashTRY: number;
   consolidatedCashUSD: number;
+  inferredFundingTRY: number;
+  inferredFundingUSD: number;
   hasRecordHistory: boolean;
   isLedgerEmpty: boolean;
   hasUsdActivity: boolean;
@@ -135,6 +137,8 @@ export function calculateLedgerCash(
   let totalBuysUSD = 0;
   let totalSellsTRY = 0;
   let totalSellsUSD = 0;
+  let inferredFundingTRY = 0;
+  let inferredFundingUSD = 0;
 
   for (const ev of events) {
     if (ev.currency === 'USD') {
@@ -154,7 +158,8 @@ export function calculateLedgerCash(
           totalBuysUSD += ev.amount;
           if (ev.amount > runningCashUSD) {
             const shortfall = ev.amount - runningCashUSD;
-            totalDepositsUSD += shortfall; // Auto-fund native USD shortfall
+            totalDepositsUSD += shortfall; // Inferred auto-fund native USD shortfall
+            inferredFundingUSD += shortfall;
             runningCashUSD = 0;
           } else {
             runningCashUSD -= ev.amount;
@@ -179,7 +184,8 @@ export function calculateLedgerCash(
           totalBuysTRY += ev.amount;
           if (ev.amount > runningCashTRY) {
             const shortfall = ev.amount - runningCashTRY;
-            totalDepositsTRY += shortfall; // Auto-fund native TRY shortfall
+            totalDepositsTRY += shortfall; // Inferred auto-fund native TRY shortfall
+            inferredFundingTRY += shortfall;
             runningCashTRY = 0;
           } else {
             runningCashTRY -= ev.amount;
@@ -215,6 +221,8 @@ export function calculateLedgerCash(
     totalSellsUSD: Number(totalSellsUSD.toFixed(2)),
     consolidatedCashTRY,
     consolidatedCashUSD,
+    inferredFundingTRY: Number(inferredFundingTRY.toFixed(2)),
+    inferredFundingUSD: Number(inferredFundingUSD.toFixed(2)),
     hasRecordHistory,
     isLedgerEmpty,
     hasUsdActivity
