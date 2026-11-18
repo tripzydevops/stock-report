@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { searchAssets, resolveUnambiguousAlias } from '../lib/assetSearch';
 import { PortfolioItem } from '../lib/supabaseClient';
-import { searchAssets } from '../lib/assetSearch';
 
 export interface HoldingAssetOption {
   symbol: string;
@@ -108,11 +108,22 @@ export default function AddHoldingModal({
     // Check alias resolution (e.g. user typed "ASELSAN" -> resolves to "ASELS")
     let resolvedName = name.trim();
     let resolvedMarket = market;
-    if (COMMON_BIST_ALIASES[sym]) {
+    const unambiguous = resolveUnambiguousAlias(sym);
+    if (unambiguous) {
+      sym = unambiguous;
+      if (COMMON_BIST_ALIASES[sym] || COMMON_BIST_ALIASES[symbol.toUpperCase().trim()]) {
+        resolvedName = resolvedName || (COMMON_BIST_ALIASES[sym]?.name || COMMON_BIST_ALIASES[symbol.toUpperCase().trim()]?.name);
+      }
+      resolvedMarket = 'BIST';
+    } else if (COMMON_BIST_ALIASES[sym]) {
       const alias = COMMON_BIST_ALIASES[sym];
       sym = alias.symbol;
       resolvedName = resolvedName || alias.name;
       resolvedMarket = 'BIST';
+    } else if (suggestions.length > 1 && !availableAssets.some(a => a.symbol.replace('.IS', '').toUpperCase() === sym)) {
+      setErrorMsg(`"${sym}" birden fazla varlıkla eşleşiyor (${suggestions.map(s => s.symbol.replace('.IS', '')).slice(0, 3).join(', ')}). Lütfen öneri listesinden seçin.`);
+      setShowSuggestions(true);
+      return;
     }
 
     const shares = parseFloat(sharesStr);

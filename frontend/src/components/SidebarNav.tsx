@@ -55,7 +55,7 @@ export default function SidebarNav({
   catalystsCount = 9,
   usRegime,
   bistRegime,
-  usdTryRate = 48.95,
+  usdTryRate = 50.43,
   isMobileOpen,
   onCloseMobile,
   onTriggerSync,

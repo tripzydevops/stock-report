@@ -206,14 +206,17 @@ export async function GET() {
       fetchTickerCloses('XU100.IS'),
     ]);
 
+    const usFallback = usCloses.length > 0 ? usCloses[usCloses.length - 1] : 0;
+    const bistFallback = bistCloses.length > 0 ? bistCloses[bistCloses.length - 1] : 0;
+
     const usRegime = evaluateDynamicRegime(
       'SPY',
       'S&P 500 ETF (US Benchmark)',
       'US',
       usCloses,
-      766.81,
-      'Bearish',
-      'down'
+      usFallback,
+      'Neutral',
+      'flat'
     );
 
     const bistRegime = evaluateDynamicRegime(
@@ -221,9 +224,9 @@ export async function GET() {
       'BIST 100 Endeksi',
       'BIST',
       bistCloses,
-      11591.54,
-      'Bullish',
-      'up'
+      bistFallback,
+      'Neutral',
+      'flat'
     );
 
     let activeCorrectionMarket: 'US' | 'BIST' | 'BOTH' | 'NONE' = 'NONE';
@@ -250,39 +253,39 @@ export async function GET() {
           symbol: 'SPY',
           name: 'S&P 500 ETF',
           market: 'US',
-          close: 766.81,
-          prevClose: 754.35,
-          changePct: 1.65,
-          return5d: -0.33,
-          high20: 769.36,
-          low20: 752.1,
-          drawdownFromPeakPct: -2.2,
-          status: 'Bearish',
-          trend: 'down',
-          descriptionTr: 'Son 1 haftadır düzeltme ve kâr realizasyonu modu',
-          descriptionEn: '1-week pullback and profit-taking regime',
-          isCorrection: true,
+          close: 0,
+          prevClose: 0,
+          changePct: 0,
+          return5d: 0,
+          high20: 0,
+          low20: 0,
+          drawdownFromPeakPct: 0,
+          status: 'Neutral',
+          trend: 'flat',
+          descriptionTr: 'Piyasa verisi bekleniyor',
+          descriptionEn: 'Awaiting market data',
+          isCorrection: false,
           updatedAt: new Date().toISOString(),
         },
         bist: {
           symbol: 'XU100',
           name: 'BIST 100',
           market: 'BIST',
-          close: 11591.54,
-          prevClose: 11478.1,
-          changePct: 0.99,
-          return5d: 7.73,
-          high20: 11591.54,
-          low20: 10759.6,
-          drawdownFromPeakPct: 0.0,
-          status: 'Bullish',
-          trend: 'up',
-          descriptionTr: '5 günlük getiri +%7.7 ile güçlü tepki ve yükseliş',
-          descriptionEn: 'Strong recovery and upward momentum with +7.7% 5-day return',
+          close: 0,
+          prevClose: 0,
+          changePct: 0,
+          return5d: 0,
+          high20: 0,
+          low20: 0,
+          drawdownFromPeakPct: 0,
+          status: 'Neutral',
+          trend: 'flat',
+          descriptionTr: 'Piyasa verisi bekleniyor',
+          descriptionEn: 'Awaiting market data',
           isCorrection: false,
           updatedAt: new Date().toISOString(),
         },
-        isAnyCorrection: true,
+        isAnyCorrection: false,
         activeCorrectionMarket: 'US',
         timestamp: new Date().toISOString(),
       },

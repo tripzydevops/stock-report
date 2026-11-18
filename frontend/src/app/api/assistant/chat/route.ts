@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
   * MO (Altria Group) - US: Fiyat ~$52.00, Temettü Verimi ~%7.9 - %8.1, Çeyreklik DPS ~$1.02, Yıllık ~$4.08
   * ORC (Orchid Island) - US REIT: Fiyat ~$8.40, Temettü Verimi ~%16.0, Aylık DPS ~$0.12, Yıllık ~$1.44
   * MAIN (Main Street Capital) - US BDC: Fiyat ~$51.50, Düzenli + Ek Temettü Verimi ~%8.2, Aylık DPS ~$0.25 + Ek
-- Dolar/TL Kuru Referansı: ~48.95 TRY = 1 USD (Veya piyasa cari kuru).
+- Dolar/TL Kuru Referansı: ~50.43 TRY = 1 USD (Veya piyasa cari kuru).
 - Snowball Kuralı: Bir hissenin nakit temettüsü, listedeki bir sonraki hissenin en az 1 tam hissesini satın alabilmelidir.
 `;
       sourcesUsed.push({
@@ -356,7 +356,7 @@ Yatırımcıyla gerçek zamanlı, akıcı, zeki ve analitik bir sohbet yürütü
 | **Step 4** | **ARCC** | Ares Capital Corp | 🇺🇸 US | **$21.40** (~₺1,045)| **9.4%** | Quarterly | **$0.48** (~₺23.50) |
 | **Step 5** | **TUPRS** | Tüpraş Türkiye Petrol | 🇹🇷 BIST | **₺165.00** | **9.5%** | Semi-Annual | **₺15.65** |
 
-*(Exchange rate reference: 1 USD ≈ 48.95 TRY)*
+*(Exchange rate reference: 1 USD ≈ 50.43 TRY)*
 
 ---
 

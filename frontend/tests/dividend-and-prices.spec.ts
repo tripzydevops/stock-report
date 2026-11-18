@@ -162,7 +162,9 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(fullResult.isLedgerEmpty).toBe(false);
     expect(fullResult.hasRecordHistory).toBe(true);
     expect(fullResult.availableCashTRY).toBe(13000.0);
-    expect(fullResult.totalDepositsTRY).toBe(18000.0); // net deposits (20k - 2k)
+    expect(fullResult.totalDepositsTRY).toBe(20000.0); // gross deposits
+    expect(fullResult.totalWithdrawalsTRY).toBe(2000.0); // withdrawals
+    expect(fullResult.netDepositsTRY).toBe(18000.0); // net deposits (20k - 2k)
     expect(fullResult.totalBuysTRY).toBe(10000.0);
     expect(fullResult.totalSellsTRY).toBe(5000.0);
   });

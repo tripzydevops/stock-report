@@ -1136,12 +1136,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
-  const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>({
-    status: 'Bearish', close: 766.81, trend: 'down'
-  });
-  const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>({
-    status: 'Neutral', close: 11591.54, trend: 'up'
-  });
+  const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>(undefined);
+  const [bistRegime, setBistRegime] = useState<RegimeStatus | undefined>(undefined);
   const [signals, setSignals] = useState<TradeSignal[]>(INITIAL_SIGNALS);
   const [signalFilter, setSignalFilter] = useState<'ALL' | 'TODAY' | 'BUY_ZONE' | 'TARGET_HIT' | 'RECOVERED' | 'BIST' | 'US'>('ALL');
   const [selectedStrategyFilter, setSelectedStrategyFilter] = useState<string>('ALL');
@@ -1163,9 +1159,9 @@ export default function Home() {
   }, [dividendSummaries]);
   const [strategies, setStrategies] = useState<StrategyStat[]>(INITIAL_STRATEGIES);
   const [orbItems, setOrbItems] = useState<OpeningDirectionItem[]>(INITIAL_ORB);
-  const [usdTryRate, setUsdTryRate] = useState<number>(48.95);
-  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashTRY);
-  const [cashBalanceUSD, setCashBalanceUSD] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 48.95).availableCashUSD);
+  const [usdTryRate, setUsdTryRate] = useState<number>(50.43);
+  const [cashBalance, setCashBalance] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 50.43).availableCashTRY);
+  const [cashBalanceUSD, setCashBalanceUSD] = useState<number>(() => calculateLedgerCash(INITIAL_ORDERS, INITIAL_TRANSFERS, 50.43).availableCashUSD);
 
   const totalPortfolioValueTRY = useMemo(() => {
     const validHoldings = (portfolio || []).filter(item => item && Number(item.shares) > 0 && Number(item.currentValue) > 0);

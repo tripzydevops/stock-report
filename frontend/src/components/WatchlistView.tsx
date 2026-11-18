@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from './Pagination';
-import { searchAssets } from '../lib/assetSearch';
+import { searchAssets, resolveUnambiguousAlias } from '../lib/assetSearch';
 
 export interface WatchlistItemData {
   id: string;
@@ -253,8 +253,24 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
   // 1-Click Quick Add by Symbol (supports direct symbol override from autocomplete)
   const handleQuickAdd = async (e?: React.FormEvent, overrideSymbol?: string) => {
     if (e) e.preventDefault();
-    const sym = (overrideSymbol || quickAddSymbol).trim().toUpperCase();
+    let sym = (overrideSymbol || quickAddSymbol).trim().toUpperCase();
     if (!sym) return;
+
+    // Check alias resolution if not an explicit suggestion override
+    if (!overrideSymbol) {
+      const unambiguous = resolveUnambiguousAlias(sym);
+      if (unambiguous) {
+        sym = unambiguous;
+      } else if (quickSuggestions.length > 1 && !catalog.some(c => c.symbol.replace('.IS', '').toUpperCase() === sym)) {
+        setIsQuickAddFocused(true);
+        setFeedbackMsg(
+          language === 'tr'
+            ? `"${sym}" birden fazla varlıkla eşleşiyor. Lütfen önerilerden birini seçin.`
+            : `"${sym}" matches multiple assets. Please choose from suggestions.`
+        );
+        return;
+      }
+    }
 
     setIsQuickAddFocused(false);
     setSelectedSuggestionIdx(-1);

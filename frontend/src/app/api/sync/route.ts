@@ -85,6 +85,18 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
   }
 }
 
+function isValidSessionDate(sessionDate: string, maxAgeDays: number = 7): boolean {
+  if (!sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return false;
+  const quoteTime = new Date(`${sessionDate}T23:59:59Z`).getTime();
+  if (isNaN(quoteTime)) return false;
+  const now = Date.now();
+  // Reject future session dates (> 24 hours ahead)
+  if (quoteTime > now + 86400000) return false;
+  // Reject stale session dates older than maxAgeDays
+  const ageDays = (now - quoteTime) / 86400000;
+  return ageDays <= maxAgeDays;
+}
+
 async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
   const isBist = symbol.endsWith('.IS') || symbol === 'XU100.IS';
   try {
@@ -101,7 +113,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (!res.ok) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
       }
       return null;
     }
@@ -110,7 +122,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (!result) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
       }
       return null;
     }
@@ -120,17 +132,34 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
       if (isBist) {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
       }
       return null;
     }
 
-    let sessionDate = isBist ? getBistTradingSessionDate() : new Date().toISOString().slice(0, 10);
+    let sessionDate: string | null = null;
     if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
       const d = new Date(meta.regularMarketTime * 1000);
       if (!isNaN(d.getTime())) {
         sessionDate = d.toISOString().slice(0, 10);
       }
+    }
+
+    // For BIST, validate session date or fallback to current session
+    if (!sessionDate && isBist) {
+      sessionDate = getBistTradingSessionDate();
+    } else if (!sessionDate) {
+      sessionDate = new Date().toISOString().slice(0, 10);
+    }
+
+    // Strict session-date validation: prevent stale weekend or outdated historical quotes from entering price_history
+    if (!isValidSessionDate(sessionDate, 7)) {
+      console.warn(`Rejecting stale or future Yahoo session date ${sessionDate} for ${symbol}`);
+      if (isBist) {
+        const tvQuote = await fetchTradingViewBistQuote(symbol);
+        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
+      }
+      return null;
     }
 
     return {
@@ -149,7 +178,7 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
     if (isBist) {
       try {
         const tvQuote = await fetchTradingViewBistQuote(symbol);
-        if (tvQuote && tvQuote.price > 0) return tvQuote;
+        if (tvQuote && tvQuote.price > 0 && isValidSessionDate(tvQuote.sessionDate, 7)) return tvQuote;
       } catch (tvErr) {
         console.warn(`TradingView fallback also failed for ${symbol}:`, tvErr);
       }
@@ -182,11 +211,19 @@ async function fetchWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R
   return Promise.all(results);
 }
 
+// ==============================================================================
+// TEMPORARY TESTING ADMIN ALLOWLIST
+// Note: Replace with server-verified database-backed role authorization or custom claims before production.
+// ==============================================================================
+const ALLOW_TEST_ADMIN_ALLOWLIST = process.env.NODE_ENV !== 'production' || process.env.ENABLE_TEST_ADMIN_ALLOWLIST === 'true';
+const TEST_ADMIN_USER_ID = 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb';
+const TEST_ADMIN_EMAIL = 'successofmentors@gmail.com';
+
 /**
  * Validates request authorization for /api/sync.
  * Strictly limited to:
  * 1. Verified cron secret (Vercel Cron, GitHub Actions, automation runners)
- * 2. Authenticated administrative user (successofmentors@gmail.com, designated admin ID, or admin role)
+ * 2. Authenticated administrative user (app_metadata.role === 'admin' or temporary test allowlist)
  * Unauthenticated same-origin or regular user sessions are blocked.
  */
 async function isAuthorizedSyncRequest(request: Request): Promise<boolean> {
@@ -201,12 +238,17 @@ async function isAuthorizedSyncRequest(request: Request): Promise<boolean> {
     const { data: { user }, error } = await authClient.auth.getUser();
     if (!error && user) {
       const email = user.email?.toLowerCase();
-      const role = user.app_metadata?.role || user.user_metadata?.role;
-      if (
-        user.id === 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb' ||
-        email === 'successofmentors@gmail.com' ||
-        role === 'admin'
-      ) {
+      // Primary: Server-managed app_metadata (cannot be tampered with by regular client users)
+      const appRole = user.app_metadata?.role;
+      // Secondary: user_metadata.role accepted strictly in test environments
+      const userRole = ALLOW_TEST_ADMIN_ALLOWLIST ? user.user_metadata?.role : undefined;
+      const role = appRole || userRole;
+
+      const isAllowlistedAdmin = ALLOW_TEST_ADMIN_ALLOWLIST && (
+        user.id === TEST_ADMIN_USER_ID || email === TEST_ADMIN_EMAIL
+      );
+
+      if (role === 'admin' || isAllowlistedAdmin) {
         return true;
       }
     }
@@ -494,7 +536,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 8. Batch upsert price_history in chunks of 250 with verified results
+    // 8. Batch upsert price_history concurrently in chunks of 250 with verified results
     let priceUpsertSuccessCount = 0;
     let orbUpsertSuccessCount = 0;
     const writeErrors: string[] = [];
@@ -503,7 +545,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < priceRows.length; i += 250) {
       priceChunks.push(priceRows.slice(i, i + 250));
     }
-    for (const chunk of priceChunks) {
+    await Promise.all(priceChunks.map(async (chunk) => {
       const { error } = await supabase
         .from('price_history')
         .upsert(chunk, { onConflict: 'asset_id,date' });
@@ -513,14 +555,14 @@ export async function POST(request: Request) {
       } else {
         priceUpsertSuccessCount += chunk.length;
       }
-    }
+    }));
 
-    // 9. Batch upsert opening_direction in chunks of 250 with verified results
+    // 9. Batch upsert opening_direction concurrently in chunks of 250 with verified results
     const orbChunks: any[][] = [];
     for (let i = 0; i < orbRows.length; i += 250) {
       orbChunks.push(orbRows.slice(i, i + 250));
     }
-    for (const chunk of orbChunks) {
+    await Promise.all(orbChunks.map(async (chunk) => {
       const { error } = await supabase
         .from('opening_direction')
         .upsert(chunk, { onConflict: 'symbol,date' });
@@ -530,7 +572,7 @@ export async function POST(request: Request) {
       } else {
         orbUpsertSuccessCount += chunk.length;
       }
-    }
+    }));
 
     const marketSessionDate = getBistTradingSessionDate();
 

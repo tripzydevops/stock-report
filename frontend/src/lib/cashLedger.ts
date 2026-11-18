@@ -61,7 +61,7 @@ export function parseOrderTimestamp(order: ExecutedOrder): number {
 export function calculateLedgerCash(
   orders: ExecutedOrder[] = [],
   transfers: CapitalTransfer[] = [],
-  usdTryRate: number = 48.95,
+  usdTryRate: number = 50.43,
   initialBaseDepositTRY: number = 0
 ): LedgerCashResult {
   interface TimelineEvent {

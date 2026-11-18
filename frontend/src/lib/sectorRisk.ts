@@ -41,7 +41,7 @@ export const ASSET_SECTOR_MAP: Record<string, { sector: string; industry: string
 
 export function calculateSectorRisk(
   portfolio: Array<{ symbol: string; currentValue: number; totalCost: number; currency: string }>,
-  usdTryRate: number = 48.95
+  usdTryRate: number = 50.43
 ) {
   const sectorTotals: Record<string, { totalVal: number; totalCost: number; symbols: string[]; color: string }> = {};
 

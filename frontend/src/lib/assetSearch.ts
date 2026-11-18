@@ -221,3 +221,23 @@ export function searchAssets<T extends SearchableAsset>(
 
   return scored.slice(0, limit).map(s => s.asset);
 }
+
+/**
+ * Resolves an alias only if it maps to a single, unambiguous ticker symbol.
+ * If an alias maps to multiple possible instruments (e.g. BORUSAN -> BRSAN vs BRYAT),
+ * it returns null, making ambiguous aliases suggestion-only rather than blindly auto-selected.
+ */
+export function resolveUnambiguousAlias(rawQuery: string): string | null {
+  if (!rawQuery || !rawQuery.trim()) return null;
+  const qNorm = normalizeSearchText(rawQuery.trim());
+  for (const [aliasKey, targets] of Object.entries(COMMON_ASSET_ALIASES)) {
+    if (normalizeSearchText(aliasKey) === qNorm) {
+      if (targets.length === 1) {
+        return targets[0];
+      }
+      // Ambiguous multi-target alias: suggestion-only!
+      return null;
+    }
+  }
+  return null;
+}

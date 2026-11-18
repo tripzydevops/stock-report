@@ -37,6 +37,16 @@ function parseTefasDate(rawDate?: any): string | null {
   return null;
 }
 
+function isValidSessionDate(sessionDate: string, maxAgeDays: number = 7): boolean {
+  if (!sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return false;
+  const quoteTime = new Date(`${sessionDate}T23:59:59Z`).getTime();
+  if (isNaN(quoteTime)) return false;
+  const now = Date.now();
+  if (quoteTime > now + 86400000) return false;
+  const ageDays = (now - quoteTime) / 86400000;
+  return ageDays <= maxAgeDays;
+}
+
 async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
   try {
     const res = await fetch('https://www.tefas.gov.tr/api/funds/fonFiyatBilgiGetir', {
@@ -121,8 +131,8 @@ async function fetchLiveQuote(symbol: string, market: string): Promise<QuoteResu
         sessionDate = d.toISOString().slice(0, 10);
       }
     }
-    if (!sessionDate) {
-      console.warn(`Unrecognized or missing market timestamp for ${symbol}`);
+    if (!sessionDate || !isValidSessionDate(sessionDate, 7)) {
+      console.warn(`Unrecognized, stale or future market timestamp for ${symbol}: ${sessionDate}`);
       return null;
     }
 
