@@ -37,6 +37,23 @@ export const ASSET_SECTOR_MAP: Record<string, { sector: string; industry: string
   ALGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Tourism & Cash-Rich REIT', color: '#047857' },
   RYGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Logistics Warehousing REIT', color: '#059669' },
   PSGYO: { sector: 'Real Estate & GYO', industry: 'Turkish Urban Project REIT', color: '#0891b2' },
+  ET: { sector: 'Energy & Infrastructure', industry: 'Midstream Oil & Gas MLP', color: '#f97316' },
+  EPD: { sector: 'Energy & Infrastructure', industry: 'Midstream Energy Pipeline', color: '#ea580c' },
+  AGNC: { sector: 'Real Estate & Income', industry: 'Agency Mortgage REIT', color: '#8b5cf6' },
+  ORC: { sector: 'Real Estate & Income', industry: 'Mortgage REIT', color: '#7c3aed' },
+  STWD: { sector: 'Real Estate & Finance', industry: 'Commercial Mortgage REIT', color: '#a855f7' },
+  MPW: { sector: 'Real Estate & Healthcare', industry: 'Hospital Facility REIT', color: '#c084fc' },
+  SPYD: { sector: 'Dividend ETF', industry: 'S&P 500 High Dividend', color: '#14b8a6' },
+  PFF: { sector: 'Fixed Income ETF', industry: 'Preferred & Income Securities', color: '#06b6d4' },
+  AAL: { sector: 'Industrials & Aviation', industry: 'Commercial Passenger Airline', color: '#f59e0b' },
+  TCOM: { sector: 'Travel & Consumer', industry: 'Online Travel Agency (OTA)', color: '#3b82f6' },
+  H: { sector: 'Travel & Hospitality', industry: 'Hotels & Luxury Resorts', color: '#6366f1' },
+  IHG: { sector: 'Travel & Hospitality', industry: 'Global Hotel Franchising', color: '#4f46e5' },
+  WH: { sector: 'Travel & Hospitality', industry: 'Hotel Franchisor & Management', color: '#4338ca' },
+  TRIP: { sector: 'Travel & Technology', industry: 'Travel Reviews & Booking', color: '#0ea5e9' },
+  SABR: { sector: 'Travel & Technology', industry: 'Global Travel Distribution GDS', color: '#0284c7' },
+  MSTR: { sector: 'Technology & AI', industry: 'Enterprise Software & Treasury', color: '#10b981' },
+  SPLG: { sector: 'Broad Market ETF', industry: 'S&P 500 Core Index', color: '#3b82f6' },
 };
 
 export function calculateSectorRisk(
