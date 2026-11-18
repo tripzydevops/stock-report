@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AssetData } from './AssetTable';
 import InteractiveCanvasChart, { ChartPriceBar } from './InteractiveCanvasChart';
+import KoyfinPriceOverviewChart from './KoyfinPriceOverviewChart';
 import { getTradingViewSymbol } from './TradingViewChart';
 
 interface AssetHistoryModalProps {
@@ -170,9 +171,6 @@ export default function AssetHistoryModal({
       }
     } catch {}
 
-    // Seed fallback price bars immediately
-    generateFallbackBars(asset);
-
     // 1. Fetch Fundamentals from API
     setIsLoadingFundamentals(true);
     fetch(`/api/assets/${cleanSym}/fundamentals`)
@@ -249,9 +247,9 @@ export default function AssetHistoryModal({
             setHistoryTable(
               priceBars.map((p: any) => ({
                 date: p.date,
-                open: Number(p.open) || Number(p.close),
-                high: Number(p.high) || Number(p.close),
-                low: Number(p.low) || Number(p.close),
+                open: p.open !== null && p.open !== undefined ? Number(p.open) : Number(p.close),
+                high: p.high !== null && p.high !== undefined ? Number(p.high) : Number(p.close),
+                low: p.low !== null && p.low !== undefined ? Number(p.low) : Number(p.close),
                 close: Number(p.close),
                 volume: Number(p.volume) || 0
               }))
@@ -260,13 +258,16 @@ export default function AssetHistoryModal({
             const chronological = [...priceBars].reverse();
             const mappedBars: ChartPriceBar[] = chronological.map((p: any) => ({
               time: p.date,
-              open: Number(p.open) || Number(p.close),
-              high: Number(p.high) || Number(p.close),
-              low: Number(p.low) || Number(p.close),
+              open: p.open !== null && p.open !== undefined ? Number(p.open) : Number(p.close),
+              high: p.high !== null && p.high !== undefined ? Number(p.high) : Number(p.close),
+              low: p.low !== null && p.low !== undefined ? Number(p.low) : Number(p.close),
               close: Number(p.close),
               volume: Number(p.volume) || 0
             }));
             setChartBars(mappedBars);
+          } else {
+            setHistoryTable([]);
+            setChartBars([]);
           }
         }
       } catch (err) {
@@ -276,51 +277,16 @@ export default function AssetHistoryModal({
       }
     }
 
-    function generateFallbackBars(a: AssetData) {
-      const bars: ChartPriceBar[] = [];
-      let base = a.price;
-      const today = new Date();
-
-      for (let i = 45; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        if (d.getDay() === 0 || d.getDay() === 6) continue;
-
-        const noise = Math.sin(i * 0.7) * 0.02;
-        const close = base * (1 + noise);
-        const open = close * (1 - Math.cos(i * 0.5) * 0.012);
-        bars.push({
-          time: d.toISOString().split('T')[0],
-          open,
-          high: Math.max(open, close) * 1.015,
-          low: Math.min(open, close) * 0.985,
-          close,
-          volume: Math.floor(150000 + Math.random() * 600000)
-        });
-        base = close;
-      }
-      setChartBars(bars);
-      setHistoryTable(
-        [...bars].reverse().map(b => ({
-          date: b.time,
-          open: b.open,
-          high: b.high,
-          low: b.low,
-          close: b.close,
-          volume: b.volume || 0
-        }))
-      );
-    }
-
     fetchAssetHistory();
   }, [isOpen, asset, tradeSignal]);
 
   // Defensive values
   const rawSym = asset?.symbol || '';
   const cleanSym = rawSym.replace('.IS', '').trim().toUpperCase();
-  const isBist = asset?.market === 'BIST' || rawSym.endsWith('.IS') || (cleanSym.length === 5);
-  const currencyCode = isBist ? 'TRY' : 'USD';
-  const currencySymbol = isBist ? '₺' : '$';
+  const assetCurrency = asset?.currency || fundamentals?.profile?.currency;
+  const isBist = asset?.market === 'BIST' || assetCurrency === 'TRY' || rawSym.endsWith('.IS');
+  const currencyCode = assetCurrency || (isBist ? 'TRY' : 'USD');
+  const currencySymbol = currencyCode === 'TRY' ? '₺' : '$';
 
   const formatMoney = (val: number | null | undefined) => {
     if (val === null || val === undefined) return '-';
@@ -385,16 +351,16 @@ export default function AssetHistoryModal({
     };
   }, [filteredOverviewBars]);
 
-  // 1Y Volatility Calculation
-  const calculatedVolatility1Y = useMemo(() => {
-    if (chartBars.length < 15) return 44.74;
+  // 1Y Volatility Calculation - strictly return null if insufficient history
+  const calculatedVolatility1Y = useMemo<number | null>(() => {
+    if (chartBars.length < 15) return null;
     const returns: number[] = [];
     for (let i = 1; i < chartBars.length; i++) {
       const prev = chartBars[i - 1].close;
       const curr = chartBars[i].close;
       if (prev > 0) returns.push((curr - prev) / prev);
     }
-    if (returns.length === 0) return 44.74;
+    if (returns.length === 0) return null;
     const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
     const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (returns.length - 1);
     const dailyStd = Math.sqrt(variance);
@@ -404,14 +370,14 @@ export default function AssetHistoryModal({
   const tvSymbol = asset?.symbol ? getTradingViewSymbol(asset.symbol, asset.market) : '';
   const tradingViewUrl = `https://www.tradingview.com/symbols/${tvSymbol.replace(':', '-')}/`;
 
-  const todayBar = historyTable[0] || {
+  const todayBar = historyTable[0] || (effectivePrice > 0 ? {
     date: 'Today',
     open: effectivePrice,
-    high: effectivePrice * 1.01,
-    low: effectivePrice * 0.99,
+    high: effectivePrice,
+    low: effectivePrice,
     close: effectivePrice,
     volume: 0
-  };
+  } : null);
 
   // Upside potential to analyst mean target
   const analystUpsidePct = useMemo(() => {
@@ -422,21 +388,6 @@ export default function AssetHistoryModal({
     return null;
   }, [fundamentals, effectivePrice]);
 
-  // Prevent mobile touch tap bleeding / ghost clicks on backdrop
-  const openTimeRef = useRef<number>(0);
-  useEffect(() => {
-    if (isOpen) {
-      openTimeRef.current = Date.now();
-    }
-  }, [isOpen]);
-
-  const handleBackdropClick = () => {
-    if (Date.now() - openTimeRef.current < 450) {
-      return;
-    }
-    onClose();
-  };
-
   if (!isOpen || !asset || !asset.symbol) return null;
 
   return (
@@ -444,13 +395,19 @@ export default function AssetHistoryModal({
       {/* Sibling Backdrop - Clicks here close modal, but CANNOT bubble from dialog */}
       <div 
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity" 
-        onClick={handleBackdropClick}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            onClose();
+          }
+        }}
         aria-hidden="true"
       />
 
       {/* Dialog Body - Isolated from backdrop click events */}
       <div 
         className="relative z-10 bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col max-h-[94vh] my-auto"
+        onClick={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       >
         {/* Toast Alert Banner */}
         {toastMessage && (
@@ -665,41 +622,16 @@ export default function AssetHistoryModal({
                   </div>
                 </div>
 
-                {/* Koyfin-style Vector Price Trend Chart */}
-                <div className="relative w-full h-[170px] bg-slate-50/60 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 p-2 overflow-hidden flex flex-col justify-between">
-                  {sparklineSvg ? (
-                    <>
-                      <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 px-1">
-                        <span>Max: {formatMoney(sparklineSvg.maxPrice)}</span>
-                        <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold">
-                          {formatMoney(effectivePrice)}
-                        </span>
-                      </div>
-
-                      <div className="w-full flex-1 flex items-center justify-center my-1">
-                        <svg viewBox="0 0 360 140" className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                          <polygon points={sparklineSvg.polygon} fill={sparklineSvg.fillColor} />
-                          <polyline
-                            fill="none"
-                            stroke={sparklineSvg.strokeColor}
-                            strokeWidth="2.4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={sparklineSvg.polyline}
-                          />
-                        </svg>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 px-1">
-                        <span>Min: {formatMoney(sparklineSvg.minPrice)}</span>
-                        <span>{filteredOverviewBars.length} Seans</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400">
-                      Grafik yükleniyor...
-                    </div>
-                  )}
+                {/* Koyfin-style Financial Price Chart with real axes & proportions */}
+                <div className="relative w-full bg-slate-50/60 dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800/60 p-2 sm:p-3 overflow-hidden">
+                  <KoyfinPriceOverviewChart
+                    data={chartBars}
+                    symbol={cleanSym}
+                    currency={currencyCode}
+                    timeframe={overviewTimeframe}
+                    height={280}
+                    isLoading={isLoading}
+                  />
                 </div>
               </div>
 
@@ -727,19 +659,19 @@ export default function AssetHistoryModal({
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Volatility (1Y)</span>
                       <span className="font-bold text-slate-900 dark:text-white font-mono">
-                        {calculatedVolatility1Y}%
+                        {calculatedVolatility1Y !== null ? `${calculatedVolatility1Y}%` : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Today's Low</span>
                       <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
-                        {formatMoney(todayBar.low)}
+                        {todayBar ? formatMoney(todayBar.low) : '—'}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Today's High</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        {formatMoney(todayBar.high)}
+                        {todayBar ? formatMoney(todayBar.high) : '—'}
                       </span>
                     </div>
                   </div>
@@ -767,15 +699,19 @@ export default function AssetHistoryModal({
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Volume</span>
                       <span className="font-bold text-slate-900 dark:text-white font-mono">
-                        {todayBar.volume > 0 ? todayBar.volume.toLocaleString() : (fundamentals?.keyData?.volume ? fundamentals.keyData.volume.toLocaleString() : '243,232,800')}
+                        {todayBar && todayBar.volume > 0 
+                          ? todayBar.volume.toLocaleString() 
+                          : (fundamentals?.keyData?.volume ? fundamentals.keyData.volume.toLocaleString() : '—')}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800/60">
                       <span className="text-slate-500 dark:text-slate-400">Relative vs 10DAvg</span>
                       <span className={`font-bold font-mono ${
-                        (indicators?.volume_ratio ?? asset.volumeRatio) >= 1.2 ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-300'
+                        (indicators?.volume_ratio ?? asset.volumeRatio ?? 0) >= 1.2 ? 'text-emerald-500' : 'text-slate-700 dark:text-slate-300'
                       }`}>
-                        {(indicators?.volume_ratio ?? asset.volumeRatio ?? 1.15).toFixed(2)}x
+                        {(indicators?.volume_ratio ?? asset.volumeRatio) !== undefined && (indicators?.volume_ratio ?? asset.volumeRatio) !== null
+                          ? `${Number(indicators?.volume_ratio ?? asset.volumeRatio).toFixed(2)}x`
+                          : '—'}
                       </span>
                     </div>
                   </div>

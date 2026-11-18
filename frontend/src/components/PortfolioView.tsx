@@ -363,20 +363,34 @@ export default function PortfolioView({
 
   const recordedDepositsTRY = React.useMemo(() => {
     return cleanTransfers
-      .filter(t => t.currency?.toUpperCase() !== 'USD')
-      .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
+      .filter(t => t.currency?.toUpperCase() !== 'USD' && t.transferType === 'DEPOSIT')
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [cleanTransfers]);
+
+  const recordedWithdrawalsTRY = React.useMemo(() => {
+    return cleanTransfers
+      .filter(t => t.currency?.toUpperCase() !== 'USD' && t.transferType === 'WITHDRAWAL')
+      .reduce((acc, t) => acc + t.amount, 0);
   }, [cleanTransfers]);
 
   const recordedDepositsUSD = React.useMemo(() => {
     return cleanTransfers
-      .filter(t => t.currency?.toUpperCase() === 'USD')
-      .reduce((acc, t) => acc + (t.transferType === 'DEPOSIT' ? t.amount : -t.amount), 0);
+      .filter(t => t.currency?.toUpperCase() === 'USD' && t.transferType === 'DEPOSIT')
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [cleanTransfers]);
+
+  const recordedWithdrawalsUSD = React.useMemo(() => {
+    return cleanTransfers
+      .filter(t => t.currency?.toUpperCase() === 'USD' && t.transferType === 'WITHDRAWAL')
+      .reduce((acc, t) => acc + t.amount, 0);
   }, [cleanTransfers]);
 
   const autoInjectedCapitalTRY = Math.max(0, totalDepositedTRY - recordedDepositsTRY);
   const autoInjectedCapitalUSD = Math.max(0, totalDepositedUSD - recordedDepositsUSD);
 
   const consolidatedTotalDepositedTRY = totalDepositedTRY + (totalDepositedUSD * usdTryRate);
+  const consolidatedTotalWithdrawalsTRY = (ledgerCash.totalWithdrawalsTRY || 0) + ((ledgerCash.totalWithdrawalsUSD || 0) * usdTryRate);
+  const consolidatedNetDepositedTRY = Math.max(0, consolidatedTotalDepositedTRY - consolidatedTotalWithdrawalsTRY);
   const consolidatedAutoInjectedTRY = autoInjectedCapitalTRY + (autoInjectedCapitalUSD * usdTryRate);
 
   // Active Portfolio Dividend Stream & Annual Income Run-Rate
@@ -418,10 +432,12 @@ export default function PortfolioView({
   const totalPnlTRY = totalStockValTRY - totalCostTRY;
   const totalPnlPct = totalCostTRY > 0 ? (totalPnlTRY / totalCostTRY) * 100 : 0;
 
-  // True Lifetime Return: Total Account Value vs Total Money Put In (Consolidated Total Deposited)
-  // Reflects real market gains on invested principal without distorting new stock additions as profit
-  const trueRoiAmountTRY = totalValTRY - consolidatedTotalDepositedTRY;
-  const trueRoiPercent = consolidatedTotalDepositedTRY > 0 ? (trueRoiAmountTRY / consolidatedTotalDepositedTRY) * 100 : 0;
+  // True Lifetime Return:
+  // Net Return = Total Current Value + Total Withdrawals - Total Gross Deposited
+  // (Mathematically identical to: Total Current Value - Net Capital Deposited)
+  const trueRoiAmountTRY = (totalValTRY + consolidatedTotalWithdrawalsTRY) - consolidatedTotalDepositedTRY;
+  const roiDenominator = consolidatedNetDepositedTRY > 0 ? consolidatedNetDepositedTRY : consolidatedTotalDepositedTRY;
+  const trueRoiPercent = roiDenominator > 0 ? (trueRoiAmountTRY / roiDenominator) * 100 : 0;
 
   const totalValDisplay = currencyMode === 'USD' ? (totalValTRY / usdTryRate) : totalValTRY;
   const totalStockDisplay = currencyMode === 'USD' ? (totalStockValTRY / usdTryRate) : totalStockValTRY;
@@ -429,6 +445,8 @@ export default function PortfolioView({
   const totalRealizedDisplay = currencyMode === 'USD' ? (totalRealizedPnlTRY / usdTryRate) : totalRealizedPnlTRY;
   const cashDisplay = currencyMode === 'USD' ? (cashValTRY / usdTryRate) : cashValTRY;
   const totalDepositedDisplay = currencyMode === 'USD' ? (consolidatedTotalDepositedTRY / usdTryRate) : consolidatedTotalDepositedTRY;
+  const totalWithdrawnDisplay = currencyMode === 'USD' ? (consolidatedTotalWithdrawalsTRY / usdTryRate) : consolidatedTotalWithdrawalsTRY;
+  const netDepositedDisplay = currencyMode === 'USD' ? (consolidatedNetDepositedTRY / usdTryRate) : consolidatedNetDepositedTRY;
   const trueRoiDisplay = currencyMode === 'USD' ? (trueRoiAmountTRY / usdTryRate) : trueRoiAmountTRY;
 
   // Date-filtered collections
@@ -733,9 +751,17 @@ export default function PortfolioView({
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 flex justify-between items-center">
             <span className="truncate">
-              {consolidatedAutoInjectedTRY > 0 
-                ? (language === 'tr' ? `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}` : `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`)
-                : (language === 'tr' ? 'Net Ana Para' : 'Capital')}
+              {consolidatedTotalWithdrawalsTRY > 0 ? (
+                language === 'tr' 
+                  ? `Net: ${formatCurr(netDepositedDisplay)} (Çekilen: ${formatCurr(totalWithdrawnDisplay)})`
+                  : `Net: ${formatCurr(netDepositedDisplay)} (Out: ${formatCurr(totalWithdrawnDisplay)})`
+              ) : consolidatedAutoInjectedTRY > 0 ? (
+                language === 'tr' 
+                  ? `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`
+                  : `+${formatCurr(currencyMode === 'USD' ? consolidatedAutoInjectedTRY / usdTryRate : consolidatedAutoInjectedTRY)}`
+              ) : (
+                language === 'tr' ? 'Net Ana Para' : 'Capital'
+              )}
             </span>
             <button
               onClick={() => setShowTransfers(!showTransfers)}
@@ -762,7 +788,7 @@ export default function PortfolioView({
             </div>
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate">
-            {language === 'tr' ? 'Yatırılan: ' : 'vs '}<span className="font-semibold">{formatCurr(totalDepositedDisplay)}</span>
+            {language === 'tr' ? 'Yatırılan: ' : 'vs '}<span className="font-semibold">{formatCurr(consolidatedTotalWithdrawalsTRY > 0 ? netDepositedDisplay : totalDepositedDisplay)}</span>
           </div>
         </div>
 
@@ -3188,7 +3214,7 @@ export default function PortfolioView({
                       {t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
                     </span>
                     <span className="font-black text-sm text-gray-900 dark:text-white">
-                      {t.transferType === 'DEPOSIT' ? '+' : '-'}₺{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {t.transferType === 'DEPOSIT' ? '+' : '-'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500">
@@ -3231,7 +3257,7 @@ export default function PortfolioView({
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white whitespace-nowrap">
-                        {t.transferType === 'DEPOSIT' ? '+' : '-'}₺{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {t.transferType === 'DEPOSIT' ? '+' : '-'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
                         {t.notes || 'Brokerage funding'}

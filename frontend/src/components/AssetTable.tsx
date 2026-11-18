@@ -16,6 +16,7 @@ export interface AssetData {
   volumeRatio: number;
   high52w?: number;
   low52w?: number;
+  currency?: string;
 }
 
 interface AssetTableProps {
