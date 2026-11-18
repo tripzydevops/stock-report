@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
@@ -33,21 +34,40 @@ export async function POST(req: NextRequest) {
     const archetype = user_profile?.lifestyle_archetype || 'balanced_compounder';
     const isColdStart = user_profile?.is_cold_start ?? true;
 
+    // Fetch live market data dynamically from Supabase
+    let currentPrice = 100.0;
+    let liveRsi = 54.5;
+    let liveVolRatio = 1.35;
+    try {
+      const supabase = getServerSupabase();
+      const { data: priceRow } = await supabase
+        .from('v_latest_prices')
+        .select('latest_price, rsi_14, volume_ratio')
+        .or(`symbol.eq.${cleanSym},symbol.eq.${cleanSym}.IS`)
+        .maybeSingle();
+
+      if (priceRow && Number(priceRow.latest_price) > 0) {
+        currentPrice = Number(priceRow.latest_price);
+        if (priceRow.rsi_14) liveRsi = Number(priceRow.rsi_14);
+        if (priceRow.volume_ratio) liveVolRatio = Number(priceRow.volume_ratio);
+      }
+    } catch {}
+
     // Screener Agent Verdict
     const screenerVerdict = {
       symbol: cleanSym,
       passed: true,
       trend_stage: 'Stage 2 Markup (Bullish Trend)',
       ema_alignment: `Bullish: Fiyat > EMA50 > EMA200`,
-      rsi_status: 'Healthy Momentum (54.5)',
-      volume_confirmed: true,
-      volume_surge_ratio: 1.35,
+      rsi_status: `Healthy Momentum (${liveRsi.toFixed(1)})`,
+      volume_confirmed: liveVolRatio >= 1.0,
+      volume_surge_ratio: Number(liveVolRatio.toFixed(2)),
       orb_bias: 'Broke High (Bullish Morning Session)',
       confidence_score: 0.82,
       technical_reasons: [
         'Hisse 200 günlük kurumsal hareketli ortalamanın üzerinde sağlıklı Yükseliş Evresinde.',
-        'RSI 54.5 seviyesinde aşırı alım köpüğü olmadan yükseliş marjı sunuyor.',
-        'Hacim 20 günlük ortalamanın %35 üzerinde teyit edildi.'
+        `RSI ${liveRsi.toFixed(1)} seviyesinde aşırı alım köpüğü olmadan yükseliş marjı sunuyor.`,
+        `Hacim ortalamanın ${((liveVolRatio - 1) * 100).toFixed(0)}% üzerinde teyit edildi.`
       ]
     };
 
@@ -81,12 +101,11 @@ export async function POST(req: NextRequest) {
         };
 
     // Risk Guard Agent Verdict
-    const currentPrice = cleanSym === 'FROTO' ? 1050.0 : cleanSym === 'TUPRS' ? 165.2 : cleanSym === 'TURSG' ? 64.2 : 100.0;
     const stopLoss = Math.round(currentPrice * 0.945 * 100) / 100;
     const targetPrice = Math.round((currentPrice + (currentPrice - stopLoss) * 2.0) * 100) / 100;
     const accountSize = user_profile?.account_size_try || 300000.0;
     const riskAmount = accountSize * 0.01;
-    const riskShares = Math.max(1, Math.floor(riskAmount / (currentPrice - stopLoss)));
+    const riskShares = Math.max(1, Math.floor(riskAmount / Math.max(0.01, currentPrice - stopLoss)));
     const posValue = Math.round(riskShares * currentPrice);
 
     const riskVerdict = {

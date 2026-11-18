@@ -674,7 +674,7 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     // 1. Initial Position: 200 shares bought @ ₺100.00 (Total investment: ₺20,000)
     let heldShares = 200;
     const originalAcquisitionCost = 100.0;
-    let avgEntryPrice = 100.0;
+    const avgEntryPrice = 100.0;
     let adjustedBreakEven: number | null = null;
     let isOpen = true;
 

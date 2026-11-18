@@ -13,20 +13,15 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('tr');
-
-  useEffect(() => {
+  const [language, setLanguageState] = useState<Language>(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('market_pulse_lang');
-        if (saved === 'en' || saved === 'tr') {
-          setLanguageState(saved);
-        }
-      } catch (e) {
-        // Ignore localStorage error
-      }
+        if (saved === 'en' || saved === 'tr') return saved;
+      } catch {}
     }
-  }, []);
+    return 'tr';
+  });
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

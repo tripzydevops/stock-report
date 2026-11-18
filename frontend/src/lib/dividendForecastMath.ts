@@ -997,7 +997,7 @@ export function resolveDividendSchedule(symbol: string): {
     };
   }
 
-  let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '');
+  const exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '');
   let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate || '');
 
   // If live data has confirmed exDate but payDate is null (common for BIST), calculate payDate as exDate + 2 business days
