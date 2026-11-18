@@ -233,6 +233,35 @@ export async function POST(request: NextRequest) {
     const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
     const resolvedCurrency = currency || (resolvedMarket === 'US' ? 'USD' : 'TRY');
     const resolvedCostBasis = typeof costBasis === 'number' && Number.isFinite(costBasis) && costBasis > 0 ? Number(costBasis) : null;
+    // Strict Guard against Trial Admin / Model Portfolio simulated injections
+    if (notes && typeof notes === 'string') {
+      const lowerNotes = notes.toLowerCase();
+      if (lowerNotes.includes('trial admin') || lowerNotes.includes('eklenen pozisyon (trial admin)')) {
+        return NextResponse.json(
+          { error: 'Trial Admin simulated positions cannot be persisted to user accounts.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Strict Guard for Historical Imports (Guest Migration):
+    // Never allow a historical re-import to overwrite or duplicate an asset the user already has (open or closed).
+    if (isHistoricalImport === true && assetId) {
+      const { data: existingPos } = await serverSupabase
+        .from('portfolio_positions')
+        .select('id, is_open')
+        .eq('user_id', user.id)
+        .eq('asset_id', assetId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPos) {
+        return NextResponse.json(
+          { error: `Asset '${cleanSym}' already exists in user portfolio (${existingPos.is_open ? 'open' : 'closed'}). Historical import skipped.` },
+          { status: 409 }
+        );
+      }
+    }
 
     // 5. Genuinely Atomic Transaction: Call PostgreSQL RPC Function
     // Inserts or merges position, records executed order, and calculates required auto-funding
