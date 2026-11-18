@@ -195,25 +195,17 @@ const INITIAL_SIGNALS: TradeSignal[] = [
 
 const INITIAL_PORTFOLIO: PortfolioItem[] = [
   {
-    symbol: 'TKFEN', name: 'Tekfen Holding', market: 'BIST',
-    shares: 6, entryPrice: 187.90, currentPrice: 189.10, currency: 'TRY',
-    totalCost: 1127.40, currentValue: 1134.60, pnlAmount: 7.20, pnlPercent: 0.64,
-    stopLoss: 178.51, targetPrice: 216.09, distanceToStop: 5.60, isDividend: false,
-    dcaZone: 'HOLD', dcaRationale: 'Tekfen Holding - Eklenen Pozisyon (Trial Admin)',
-    entryDate: '2026-11-17', strategyType: 'SWING'
-  },
-  {
     symbol: 'ISMEN', name: 'İş Yatırım Menkul', market: 'BIST',
-    shares: 258, entryPrice: 30.71, currentPrice: 28.78, currency: 'TRY',
-    totalCost: 7923.18, currentValue: 7425.24, pnlAmount: -497.94, pnlPercent: -6.28,
+    shares: 298, entryPrice: 30.20, currentPrice: 28.78, currency: 'TRY',
+    totalCost: 8999.08, currentValue: 8576.44, pnlAmount: -422.64, pnlPercent: -4.70,
     stopLoss: 0, targetPrice: 38.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Flash discount below ₺29.00; Forward dividend yield surges to 8.55%. Prime DCA accumulation tranche.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
   },
   {
     symbol: 'TURSG', name: 'Türkiye Sigorta', market: 'BIST',
-    shares: 2821, entryPrice: 4.94, currentPrice: 5.15, currency: 'TRY',
-    totalCost: 13935.74, currentValue: 14528.15, pnlAmount: 592.41, pnlPercent: 4.25,
+    shares: 3471, entryPrice: 4.62, currentPrice: 5.15, currency: 'TRY',
+    totalCost: 16043.91, currentValue: 17875.65, pnlAmount: 1831.74, pnlPercent: 11.42,
     stopLoss: 0, targetPrice: 7.00, distanceToStop: 0, isDividend: true,
     dcaZone: 'BUY', dcaRationale: 'Prime DCA accumulation tranche; high forward yield.',
     entryDate: '2026-09-18', strategyType: 'CORE_DIVIDEND'
@@ -1150,21 +1142,33 @@ export default function Home() {
 
     const autoMigrateGuestHoldings = async () => {
       try {
-        const rawGuest = localStorage.getItem(GUEST_PORTFOLIO_KEY) || localStorage.getItem('market_pulse_cached_portfolio');
-        if (!rawGuest) return;
+        // Strict guard: ONLY migrate if the guest explicitly customized holdings and has a guest portfolio key.
+        // NEVER migrate from the generic market_pulse_cached_portfolio UI cache.
+        if (localStorage.getItem(GUEST_CUSTOMIZED_KEY) !== 'true') return;
+        const rawGuest = localStorage.getItem(GUEST_PORTFOLIO_KEY);
+        if (!rawGuest) {
+          localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+          return;
+        }
 
         const parsed: PortfolioItem[] = JSON.parse(rawGuest);
-        if (!Array.isArray(parsed) || parsed.length === 0) return;
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+          localStorage.removeItem(GUEST_PORTFOLIO_KEY);
+          return;
+        }
 
-        // Fetch current user positions to prevent duplicates
+        // Fetch current user positions (both open AND closed) to prevent duplicates or re-opening sold holdings
         const { data: existingPositions } = await supabase
           .from('portfolio_positions')
           .select('asset_id, assets(symbol)')
-          .eq('user_id', user.id)
-          .eq('is_open', true);
+          .eq('user_id', user.id);
 
         const existingSymbols = new Set(
-          (existingPositions || []).map((p: any) => (p.assets?.symbol || '').replace('.IS', '').trim().toUpperCase())
+          (existingPositions || []).map((p: any) => {
+            const sym = Array.isArray(p.assets) ? p.assets[0]?.symbol : p.assets?.symbol;
+            return (sym || '').replace('.IS', '').trim().toUpperCase();
+          }).filter(Boolean)
         );
 
         const itemsToMigrate = parsed.filter(item => {
@@ -1177,6 +1181,9 @@ export default function Home() {
 
         if (itemsToMigrate.length === 0) {
           localStorage.removeItem(GUEST_CUSTOMIZED_KEY);
+          localStorage.removeItem(GUEST_PORTFOLIO_KEY);
+          localStorage.removeItem(GUEST_ORDERS_KEY);
+          localStorage.removeItem(GUEST_TRANSFERS_KEY);
           return;
         }
 
@@ -1231,13 +1238,8 @@ export default function Home() {
           const parsed = JSON.parse(rawPort);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const cleaned = sanitizePortfolioHoldings(parsed);
-            const hasTkfen = cleaned.some(p => p.symbol.replace('.IS', '').trim().toUpperCase() === 'TKFEN');
-            if (!hasTkfen) {
-              const tkfenInit = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
-              if (tkfenInit) cleaned.unshift(tkfenInit);
-            }
             setPortfolio(cleaned);
-            if (cleaned.length !== parsed.length || !hasTkfen) {
+            if (cleaned.length !== parsed.length) {
               try {
                 localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(cleaned));
                 localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(cleaned));
@@ -2159,11 +2161,6 @@ export default function Home() {
                 const parsedPort = JSON.parse(rawPortfolio);
                 if (Array.isArray(parsedPort) && parsedPort.length > 0) {
                   const cleanedPort = sanitizePortfolioHoldings(parsedPort);
-                  const hasTkfen = cleanedPort.some(p => p.symbol.replace('.IS', '').trim().toUpperCase() === 'TKFEN');
-                  if (!hasTkfen) {
-                    const tkfenInit = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
-                    if (tkfenInit) cleanedPort.unshift(tkfenInit);
-                  }
                   const rehydratedPortfolio: PortfolioItem[] = cleanedPort.map((p: PortfolioItem) => {
                     const cleanP = (p.symbol || '').replace('.IS', '').trim().toUpperCase();
                     const live = loadedAssets.find((a: AssetData) => (a.symbol || '').replace('.IS', '').trim().toUpperCase() === cleanP);
@@ -2679,11 +2676,6 @@ export default function Home() {
         if (cachedPortfolio) {
           const parsed = JSON.parse(cachedPortfolio);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const hasTkfen = parsed.some((p: any) => (p.symbol || '').replace('.IS', '').toUpperCase() === 'TKFEN');
-            if (!hasTkfen) {
-              const tkfenInitial = INITIAL_PORTFOLIO.find(p => p.symbol === 'TKFEN');
-              if (tkfenInitial) parsed.unshift(tkfenInitial);
-            }
             setPortfolio(parsed);
           }
         }
