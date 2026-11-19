@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { calculateLedgerCash } from '../src/lib/cashLedger';
 import { ExecutedOrder, CapitalTransfer } from '../src/lib/supabaseClient';
 import { deriveDividendsFromPortfolio, deriveAllMarketDividends, resolveDividendSchedule } from '../src/lib/dividendForecastMath';
+import { fetchTradingViewBistQuotesBatch } from '../src/lib/tradingViewScanner';
+import { isValidBistQuoteSession, getBistTradingSessionDate, getPriorBistSessionDate } from '../src/lib/bistCalendar';
 
 test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
 
@@ -1114,6 +1116,45 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(casaMarket?.nextExDate).toBe('');
     expect(casaMarket?.payoutMonth).toBe('Tarih Belirlenmedi');
   });
+
+  test('21. Unit Test: TradingView quotes carry upstream-verified timestamps and session-aware validation', async () => {
+    // 1. Live TradingView scanner batch fetch for major liquid BIST tickers
+    const testSymbols = ['THYAO', 'BIMAS', 'AKBNK'];
+    const quotes = await fetchTradingViewBistQuotesBatch(testSymbols);
+
+    expect(quotes.size).toBeGreaterThanOrEqual(testSymbols.length);
+
+    for (const sym of testSymbols) {
+      const q = quotes.get(sym);
+      expect(q).toBeDefined();
+      if (q) {
+        expect(q.price).toBeGreaterThan(0);
+        expect(q.source).toBe('tradingview');
+        // Upstream timestamp verification:
+        expect(typeof q.upstreamTime).toBe('number');
+        expect(q.upstreamTime).toBeGreaterThan(0);
+        expect(q.upstreamUpdatedAt).toBeDefined();
+        expect(typeof q.upstreamUpdatedAt).toBe('string');
+        expect(q.upstreamSessionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        // Effective session date must match independently verified upstream session
+        expect(q.sessionDate).toBe(q.upstreamSessionDate);
+        // Must be verified as a valid session
+        expect(isValidBistQuoteSession(q.sessionDate)).toBe(true);
+      }
+    }
+
+    // 2. Session validation unit tests:
+    const currentSession = getBistTradingSessionDate();
+    expect(isValidBistQuoteSession(currentSession)).toBe(true);
+
+    // Stale date (> 10 sessions ago) must be rejected
+    expect(isValidBistQuoteSession('2024-01-01')).toBe(false);
+    expect(isValidBistQuoteSession('2021-12-14')).toBe(false);
+
+    // Future date must be rejected
+    expect(isValidBistQuoteSession('2099-01-01')).toBe(false);
+  });
 });
+
 
 

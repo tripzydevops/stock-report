@@ -57,22 +57,45 @@ export function isBistHalfDay(dateStr: string): boolean {
 }
 
 /**
+ * Resolves date components strictly in Europe/Istanbul timezone via Intl DateTimeFormat.
+ * Provides timezone-resilient hour, minute, day-of-week, and dateStr regardless of host system configuration.
+ */
+export function getIstanbulDateParts(now: Date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(now).map(p => [p.type, p.value]));
+  const dateStr = `${parts.year}-${parts.month}-${parts.day}`;
+  const hour = parseInt(parts.hour, 10);
+  const minute = parseInt(parts.minute, 10);
+
+  const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Istanbul', weekday: 'short' });
+  const dayName = dayFormatter.format(now);
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = dayMap[dayName] ?? 1;
+
+  return { dateStr, hour, minute, dayOfWeek };
+}
+
+/**
  * Checks whether Borsa Istanbul is currently in an active trading session.
  * Regular trading days: 10:00 to 18:10 TRT (UTC+3).
  * Half trading days: 10:00 to 13:00 TRT (UTC+3).
  */
 export function isBistMarketOpen(now: Date = new Date()): boolean {
-  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
-  const trtDate = new Date(istanbulTimeMs);
-  const dayOfWeek = trtDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
-  const dateStr = trtDate.toISOString().slice(0, 10);
+  const { dateStr, hour, minute, dayOfWeek } = getIstanbulDateParts(now);
 
   if (dayOfWeek === 0 || dayOfWeek === 6 || isBistHoliday(dateStr)) {
     return false;
   }
 
-  const hour = trtDate.getUTCHours();
-  const minute = trtDate.getUTCMinutes();
   const totalMinutes = hour * 60 + minute;
   const marketOpen = 10 * 60; // 10:00
   const marketClose = isBistHalfDay(dateStr) ? 13 * 60 : 18 * 60 + 10; // 13:00 or 18:10
@@ -87,12 +110,8 @@ export function isBistMarketOpen(now: Date = new Date()): boolean {
  * Automatically rolls back past weekends and official closed market holidays.
  */
 export function getBistTradingSessionDate(now: Date = new Date()): string {
-  // Istanbul is UTC+3 (no DST)
-  const istanbulTimeMs = now.getTime() + 3 * 60 * 60 * 1000;
-  const trtDate = new Date(istanbulTimeMs);
-  const hour = trtDate.getUTCHours();
-
-  const targetDate = new Date(trtDate);
+  const { dateStr, hour } = getIstanbulDateParts(now);
+  const targetDate = new Date(`${dateStr}T12:00:00Z`);
 
   // If before 10:00 AM TRT, look for previous trading session
   if (hour < 10) {
@@ -115,9 +134,8 @@ export function getBistTradingSessionDate(now: Date = new Date()): string {
  * Resolves the prior official BIST trading session date immediately preceding a given session.
  */
 export function getPriorBistSessionDate(fromSession?: string): string {
-  const base = fromSession 
-    ? new Date(`${fromSession}T12:00:00Z`) 
-    : new Date(Date.now() + 3 * 60 * 60 * 1000);
+  const baseDateStr = fromSession || getIstanbulDateParts().dateStr;
+  const base = new Date(`${baseDateStr}T12:00:00Z`);
   base.setUTCDate(base.getUTCDate() - 1);
   while (
     base.getUTCDay() === 0 ||
@@ -153,11 +171,8 @@ export function isValidBistQuoteSession(quoteSessionDate: string, now: Date = ne
   // Allow immediately preceding session during pre-market, opening auction transition, or closed hours
   const priorSession = getPriorBistSessionDate(currentSession);
   if (quoteSessionDate === priorSession) {
-    const istanbulMs = now.getTime() + 3 * 60 * 60 * 1000;
-    const trt = new Date(istanbulMs);
-    const trtHour = trt.getUTCHours();
-    const trtMin = trt.getUTCMinutes();
-    const totalMin = trtHour * 60 + trtMin;
+    const { hour, minute } = getIstanbulDateParts(now);
+    const totalMin = hour * 60 + minute;
     // Before 10:30 TRT (pre-market + opening auction) or outside market hours (weekend/holiday/evening)
     if (totalMin < 10 * 60 + 30 || !isBistMarketOpen(now)) {
       return true;

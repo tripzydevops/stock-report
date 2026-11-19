@@ -11,6 +11,9 @@ export interface TradingViewQuoteResult {
   sessionDate: string;
   source: 'tradingview';
   observedAt: string;
+  upstreamTime?: number | null;
+  upstreamUpdatedAt?: string | null;
+  upstreamSessionDate?: string | null;
   open: number | null;
   prevClose: number | null;
   high: number | null;
@@ -38,6 +41,19 @@ function normalizeToTvTicker(symbol: string): string {
   return `BIST:${clean}`;
 }
 
+/**
+ * Derives YYYY-MM-DD trading session date in Europe/Istanbul timezone from an epoch timestamp.
+ */
+function toIstanbulDate(epochSec: number): string {
+  const d = new Date(epochSec * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
+}
+
 export async function fetchTradingViewBistQuote(symbol: string): Promise<TradingViewQuoteResult | null> {
   const results = await fetchTradingViewBistQuotesBatch([symbol]);
   return results.get(symbol.toUpperCase()) || results.get(symbol.replace('.IS', '').toUpperCase()) || null;
@@ -63,7 +79,7 @@ export async function fetchTradingViewBistQuotesBatch(
       },
       body: JSON.stringify({
         symbols: { tickers: uniqueTickers },
-        columns: ['close', 'open', 'high', 'low', 'volume', 'change', 'change_abs']
+        columns: ['close', 'open', 'high', 'low', 'volume', 'change', 'change_abs', 'time', 'update_time']
       }),
       signal: AbortSignal.timeout(8000),
       next: { revalidate: 0 }
@@ -83,7 +99,7 @@ export async function fetchTradingViewBistQuotesBatch(
 
     for (const item of data) {
       const ticker = item?.s; // e.g. "BIST:THYAO"
-      const values = item?.d; // [close, open, high, low, volume, change, change_abs]
+      const values = item?.d; // [close, open, high, low, volume, change, change_abs, time, update_time]
 
       if (!ticker || !Array.isArray(values) || values.length < 5) continue;
 
@@ -98,6 +114,23 @@ export async function fetchTradingViewBistQuotesBatch(
       const volume = typeof values[4] === 'number' && Number.isFinite(values[4]) ? Math.round(values[4]) : null;
       const changePct = typeof values[5] === 'number' && Number.isFinite(values[5]) ? values[5] : null;
       const changeAbs = typeof values[6] === 'number' && Number.isFinite(values[6]) ? values[6] : null;
+
+      // Upstream TradingView Timestamp Extraction & Verification
+      const upstreamTime = typeof values[7] === 'number' && Number.isFinite(values[7]) ? values[7] : null;
+      const upstreamUpdateTime = typeof values[8] === 'number' && Number.isFinite(values[8]) ? values[8] : null;
+      const upstreamEpoch = upstreamUpdateTime ?? upstreamTime;
+      const upstreamSessionDate = upstreamEpoch !== null ? toIstanbulDate(upstreamEpoch) : null;
+      const upstreamUpdatedAt = upstreamUpdateTime !== null ? new Date(upstreamUpdateTime * 1000).toISOString() : null;
+
+      // Assign the independently verified upstream session date; fall back to calendar session if TV omits timestamp
+      const effectiveSessionDate = upstreamSessionDate || sessionDate;
+
+      // Upstream quote timestamp verification:
+      // Reject any delayed or stale TradingView quote whose upstream session is older than allowed by isValidBistQuoteSession
+      if (!isValidBistQuoteSession(effectiveSessionDate)) {
+        console.warn(`TradingView quote for ${rawClean} discarded: upstream session ${effectiveSessionDate} is stale/invalid`);
+        continue;
+      }
 
       // Compute prevClose ONLY if real delta exists; otherwise leave as null
       let prevClose: number | null = null;
@@ -116,7 +149,10 @@ export async function fetchTradingViewBistQuotesBatch(
       const quote: TradingViewQuoteResult = {
         symbol: `${rawClean}.IS`,
         price: close,
-        sessionDate,
+        sessionDate: effectiveSessionDate,
+        upstreamSessionDate,
+        upstreamTime,
+        upstreamUpdatedAt,
         source: 'tradingview',
         observedAt: nowIso,
         open,

@@ -85,6 +85,72 @@ async function fetchTefasQuote(code: string): Promise<QuoteResult | null> {
   }
 }
 
+/**
+ * Derives YYYY-MM-DD trading session date in America/New_York timezone from an epoch timestamp.
+ */
+function toUsSessionDate(epochSec: number): string {
+  const d = new Date(epochSec * 1000);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
+}
+
+/**
+ * Resolves the latest official US market trading session date in YYYY-MM-DD format.
+ * Regular US market hours: Monday–Friday 09:30–16:00 EST / America/New_York.
+ * If called pre-market (< 09:30 AM EST), rolls back to the previous session.
+ */
+function getUsTradingSessionDate(now: Date = new Date()): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(now).map(p => [p.type, p.value]));
+  const dateStr = `${parts.year}-${parts.month}-${parts.day}`;
+  const hour = parseInt(parts.hour, 10);
+  const minute = parseInt(parts.minute, 10);
+  const targetDate = new Date(`${dateStr}T12:00:00Z`);
+
+  // If before 09:30 AM EST, look for previous trading session
+  if (hour < 9 || (hour === 9 && minute < 30)) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  // Roll back weekends (0=Sun, 6=Sat)
+  while (targetDate.getUTCDay() === 0 || targetDate.getUTCDay() === 6) {
+    targetDate.setUTCDate(targetDate.getUTCDate() - 1);
+  }
+
+  return targetDate.toISOString().slice(0, 10);
+}
+
+/**
+ * Validates whether a US market quote's session date is fresh (current or immediately prior session).
+ */
+function isValidUsQuoteSession(quoteSessionDate: string, now: Date = new Date()): boolean {
+  if (!quoteSessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(quoteSessionDate)) return false;
+  const currentUsSession = getUsTradingSessionDate(now);
+  if (quoteSessionDate === currentUsSession) return true;
+  if (quoteSessionDate > currentUsSession) return false;
+
+  // Allow immediately preceding US session (e.g. over weekend, holiday, or before market open)
+  const prior = new Date(`${currentUsSession}T12:00:00Z`);
+  prior.setUTCDate(prior.getUTCDate() - 1);
+  while (prior.getUTCDay() === 0 || prior.getUTCDay() === 6) {
+    prior.setUTCDate(prior.getUTCDate() - 1);
+  }
+  const priorUsSession = prior.toISOString().slice(0, 10);
+  return quoteSessionDate === priorUsSession;
+}
+
 function isValidSessionDate(sessionDate: string, maxAgeDays: number = 7): boolean {
   if (!sessionDate || !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return false;
   const quoteTime = new Date(`${sessionDate}T23:59:59Z`).getTime();
@@ -139,23 +205,22 @@ async function fetchLiveQuote(symbol: string): Promise<QuoteResult | null> {
 
     let sessionDate: string | null = null;
     if (typeof meta?.regularMarketTime === 'number' && meta.regularMarketTime > 0) {
-      const d = new Date(meta.regularMarketTime * 1000);
-      if (!isNaN(d.getTime())) {
-        sessionDate = d.toISOString().slice(0, 10);
-      }
+      sessionDate = isBist 
+        ? new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10)
+        : toUsSessionDate(meta.regularMarketTime);
     }
 
-    // For BIST, validate session date or fallback to current session
+    // Validate session date or fallback to market session
     if (!sessionDate && isBist) {
       sessionDate = getBistTradingSessionDate();
     } else if (!sessionDate) {
-      sessionDate = new Date().toISOString().slice(0, 10);
+      sessionDate = getUsTradingSessionDate();
     }
 
-    // Strict session-date validation: ensure BIST matches active session schedule; US/global within max 7 days
+    // Strict session-date validation: ensure BIST matches BIST calendar; US matches US sessions; others within 7 days
     const isSessionFresh = isBist 
       ? isValidBistQuoteSession(sessionDate) 
-      : isValidSessionDate(sessionDate, 7);
+      : (symbol === 'TRY=X' ? isValidSessionDate(sessionDate, 3) : isValidUsQuoteSession(sessionDate));
 
     if (!isSessionFresh) {
       console.warn(`Rejecting stale or date-mismatched Yahoo session date ${sessionDate} for ${symbol}`);
