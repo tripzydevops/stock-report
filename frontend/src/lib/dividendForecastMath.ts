@@ -1566,8 +1566,25 @@ export function deriveDividendsFromPortfolio(
       ? Number((pos.shares * estimatedDPS).toFixed(2))
       : null;
 
-    const nextExDate = sched.exDate || divSummary?.latest_ex_date || existing?.nextExDate || '';
-    const nextPaymentDate = sched.payDate || existing?.nextPaymentDate || '';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const currentYearMonth = todayStr.slice(0, 7);
+
+    // Only accept upcoming ex-dates (current or future session >= currentYearMonth)
+    // Never treat past historical dividend dates (e.g. 2021) as next upcoming ex-dates
+    let nextExDate = '';
+    let nextPaymentDate = '';
+
+    if (sched.exDate && sched.exDate >= currentYearMonth) {
+      nextExDate = sched.exDate;
+      nextPaymentDate = sched.payDate || nextExDate;
+    } else if (existing?.nextExDate && existing.nextExDate >= currentYearMonth) {
+      nextExDate = existing.nextExDate;
+      nextPaymentDate = existing.nextPaymentDate || nextExDate;
+    } else if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
+      nextExDate = divSummary.latest_ex_date;
+      nextPaymentDate = nextExDate;
+    }
+
     const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
       ? sched.month
       : (existing?.payoutMonth || (nextExDate ? '' : 'Tarih Belirlenmedi'));
@@ -1727,8 +1744,22 @@ export function deriveAllMarketDividends(
     const safetyRating = (profile?.safetyGrade?.charAt(0) || 'A') as 'A' | 'B' | 'C';
     const payoutRatio = profile?.payoutRatio || 50;
 
-    const nextExDate = sched.exDate || divSummary?.latest_ex_date || '';
-    const nextPayDate = sched.payDate || nextExDate || '';
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const currentYearMonth = todayStr.slice(0, 7);
+
+    // Only accept upcoming ex-dates (current or future session >= currentYearMonth)
+    // Never treat past historical dividend dates (e.g. 2021) as next upcoming ex-dates
+    let nextExDate = '';
+    let nextPayDate = '';
+
+    if (sched.exDate && sched.exDate >= currentYearMonth) {
+      nextExDate = sched.exDate;
+      nextPayDate = sched.payDate || nextExDate;
+    } else if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
+      nextExDate = divSummary.latest_ex_date;
+      nextPayDate = nextExDate;
+    }
+
     const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
       ? sched.month
       : (nextExDate ? '' : 'Tarih Belirlenmedi');

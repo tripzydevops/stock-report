@@ -126,6 +126,7 @@ export default function DividendRaindropCalendar({
       const isUsd = asset.currency === 'USD';
       const yieldPct = asset.dividendYield || 0;
       const annualAmount = asset.annualPayout || (asset.shares * (asset.currentPrice || 0) * (yieldPct / 100));
+      if (!annualAmount || annualAmount <= 0) continue;
 
       const cleanSym = asset.symbol.replace('.IS', '').trim().toUpperCase();
       const customTranche = KNOWN_DIVIDEND_TRANCHES[cleanSym];

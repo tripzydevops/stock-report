@@ -1035,5 +1035,85 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     expect(updatedAvgEntryPrice).toBe(20.0); // Acquisition price of remaining lot
     expect(adjustedBreakEven).toBe(5.0);      // Net house-money break-even
   });
+
+  test('20. Unit Test: Historical ex-dates from past years (e.g. 2021 WULF/ARKG/CASA) are strictly excluded from upcoming nextExDate', async () => {
+    // 1. Mock DB summary with 2021 historical ex-dates
+    const mockDbSummaries = [
+      {
+        symbol: 'WULF',
+        name: 'TeraWulf Inc.',
+        market: 'US',
+        currency: 'USD',
+        latest_price: '11.71',
+        latest_dps: '5.0',
+        latest_ex_date: '2021-12-14',
+        trailing_yield_pct: null,
+      },
+      {
+        symbol: 'ARKG',
+        name: 'ARK Genomic Revolution ETF',
+        market: 'US',
+        currency: 'USD',
+        latest_price: '40.19',
+        latest_dps: '0.382',
+        latest_ex_date: '2021-12-29',
+        trailing_yield_pct: null,
+      },
+      {
+        symbol: 'CASA.IS',
+        name: 'CASA EMTIA',
+        market: 'BIST',
+        currency: 'TRY',
+        latest_price: '39.78',
+        latest_dps: '0.292',
+        latest_ex_date: '2021-12-31',
+        trailing_yield_pct: null,
+      }
+    ];
+
+    // 2. deriveDividendsFromPortfolio with WULF holding
+    const mockPortfolio = [{
+      symbol: 'WULF',
+      shares: 100,
+      entryPrice: 10.0,
+      currentPrice: 11.71,
+      currency: 'USD',
+      market: 'US',
+      isDividend: true,
+    }];
+
+    const divSummaryMap = new Map<string, any>();
+    for (const s of mockDbSummaries) {
+      divSummaryMap.set(s.symbol, s);
+    }
+
+    const portfolioDerived = deriveDividendsFromPortfolio(mockPortfolio, [], divSummaryMap);
+    expect(portfolioDerived.length).toBe(1);
+    const wulfItem = portfolioDerived[0];
+
+    // WULF nextExDate MUST NOT be '2021-12-14'
+    expect(wulfItem.nextExDate).toBe('');
+    expect(wulfItem.nextPaymentDate).toBe('');
+    expect(wulfItem.payoutMonth).toBe('Tarih Belirlenmedi');
+
+    // 3. deriveAllMarketDividends for all 3 tickers
+    const marketDerived = deriveAllMarketDividends([], {}, mockDbSummaries);
+    const wulfMarket = marketDerived.find(d => d.symbol === 'WULF');
+    const arkgMarket = marketDerived.find(d => d.symbol === 'ARKG');
+    const casaMarket = marketDerived.find(d => d.symbol === 'CASA');
+
+    expect(wulfMarket).toBeDefined();
+    expect(wulfMarket?.nextExDate).toBe('');
+    expect(wulfMarket?.payoutMonth).toBe('Tarih Belirlenmedi');
+
+    expect(arkgMarket).toBeDefined();
+    expect(arkgMarket?.nextExDate).toBe('');
+    expect(arkgMarket?.payoutMonth).toBe('Tarih Belirlenmedi');
+
+    expect(casaMarket).toBeDefined();
+    expect(casaMarket?.nextExDate).toBe('');
+    expect(casaMarket?.payoutMonth).toBe('Tarih Belirlenmedi');
+  });
 });
+
 

@@ -97,9 +97,14 @@ function getMonthKeyAndLabel(asset: DividendAsset, lang: 'tr' | 'en' = 'tr'): { 
       label: `${capitalized} ${y}`
     };
   }
-  if (asset.payoutMonth) {
+  if (
+    asset.payoutMonth &&
+    asset.payoutMonth !== 'Tarih Belirlenmedi' &&
+    asset.payoutMonth !== 'Belirlenmedi (Dağıtım Yok)'
+  ) {
+    const is2026 = asset.payoutMonth.toLowerCase().includes('2026');
     return {
-      key: asset.payoutMonth.toLowerCase().includes('2026') ? '2026-12' : '2027-03',
+      key: is2026 ? '2026-12' : '2027-03',
       label: asset.payoutMonth
     };
   }
@@ -217,10 +222,11 @@ export default function DividendView({
 
     universeBase.forEach(a => {
       const ex = a.nextExDate || '';
+      if (!ex) return; // Do not bucket unannounced or empty dates into timeframe pills
       if (ex.startsWith('2026') || ex.startsWith('2027-01')) imminent++;
       else if (ex.startsWith('2027-02') || ex.startsWith('2027-03')) q1++;
       else if (ex.startsWith('2027-04') || ex.startsWith('2027-05') || ex.startsWith('2027-06')) q2++;
-      else q3++;
+      else if (ex >= '2027-07') q3++;
     });
 
     return { all: universeBase.length, imminent, q1, q2, q3 };
@@ -248,7 +254,7 @@ export default function DividendView({
         if (!ex.startsWith('2027-04') && !ex.startsWith('2027-05') && !ex.startsWith('2027-06')) return false;
       } else if (timeframeFilter === 'Q3_2027') {
         const ex = asset.nextExDate || '';
-        if (ex.startsWith('2026') || ex.startsWith('2027-01') || ex.startsWith('2027-02') || ex.startsWith('2027-03') || ex.startsWith('2027-04') || ex.startsWith('2027-05') || ex.startsWith('2027-06')) return false;
+        if (!ex || ex < '2027-07') return false;
       }
 
       // Live search
@@ -286,10 +292,19 @@ export default function DividendView({
 
   // Investing.com Chronological Month Grouping
   const monthGroups = useMemo(() => {
+    const todayYm = new Date().toISOString().slice(0, 7);
     const groupsMap = new Map<string, { key: string; label: string; assets: DividendAsset[]; totalExpectedPayoutTRY: number }>();
 
     sortedUpcoming.forEach(asset => {
       const { key, label } = getMonthKeyAndLabel(asset, language);
+
+      // In upcoming payment calendar, exclude past historical records (< todayYm)
+      // unless a custom date filter is explicitly active
+      const isPast = key !== '9999-99' && key < todayYm;
+      if (isPast && (!dateFilter || dateFilter.preset !== 'CUSTOM')) {
+        return;
+      }
+
       if (!groupsMap.has(key)) {
         groupsMap.set(key, { key, label, assets: [], totalExpectedPayoutTRY: 0 });
       }
@@ -301,8 +316,13 @@ export default function DividendView({
       grp.totalExpectedPayoutTRY += estPayoutTRY;
     });
 
-    return Array.from(groupsMap.values()).sort((a, b) => a.key.localeCompare(b.key));
-  }, [sortedUpcoming, language, usdTryRate]);
+    return Array.from(groupsMap.values()).sort((a, b) => {
+      // Always place 'Tarih Bekleniyor' (9999-99) at the very end
+      if (a.key === '9999-99') return 1;
+      if (b.key === '9999-99') return -1;
+      return a.key.localeCompare(b.key);
+    });
+  }, [sortedUpcoming, language, usdTryRate, dateFilter]);
 
   const totalMarketCount: number | null = (allMarketDividends && allMarketDividends.length > 0)
     ? allMarketDividends.length
@@ -700,13 +720,23 @@ export default function DividendView({
               return (
                 <div key={group.key} className="space-y-3">
                   {/* Month Header Banner (Investing.com Calendar Style) */}
-                  <div className="sticky top-0 z-10 flex items-center justify-between bg-gradient-to-r from-slate-100 via-blue-50/50 to-slate-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-800 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs backdrop-blur-md">
+                  <div className={`sticky top-0 z-10 flex items-center justify-between ${
+                    group.key === '9999-99'
+                      ? 'bg-gradient-to-r from-slate-100 via-amber-50/40 to-slate-100 dark:from-slate-800 dark:via-amber-950/20 dark:to-slate-800 border-amber-200/60 dark:border-amber-800/40'
+                      : 'bg-gradient-to-r from-slate-100 via-blue-50/50 to-slate-100 dark:from-slate-800 dark:via-blue-950/40 dark:to-slate-800 border-slate-200 dark:border-slate-700'
+                  } px-4 py-2.5 rounded-2xl border shadow-xs backdrop-blur-md`}>
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="text-lg">🗓️</span>
+                      <span className="text-lg">{group.key === '9999-99' ? '⏳' : '🗓️'}</span>
                       <span className="font-black text-sm text-slate-900 dark:text-white tracking-tight">
-                        {group.label}
+                        {group.key === '9999-99'
+                          ? (language === 'tr' ? 'Tarih Bekleniyor (Açıklanacak Dağıtımlar)' : 'Date TBD (Unannounced Distributions)')
+                          : group.label}
                       </span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        group.key === '9999-99'
+                          ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                          : 'bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300'
+                      }`}>
                         {group.assets.length} {language === 'tr' ? 'Şirket' : 'Companies'}
                       </span>
                     </div>
