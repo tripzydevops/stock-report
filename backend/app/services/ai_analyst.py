@@ -65,7 +65,7 @@ def generate_trade_card(signal: Dict, indicators: Dict, regime: Dict, asset_info
     try:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=prompt,
             config={
                 'response_mime_type': 'application/json',

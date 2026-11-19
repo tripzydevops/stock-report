@@ -70,12 +70,27 @@ OUTPUT_DIR = Path(__file__).parent
 
 
 def fetch_all_data():
-    """Fetch price data for all configured tickers."""
-    print("📡 Fetching US stocks & ETFs...")
-    us_data = fetch_us_prices(US_STOCKS + US_ETFS, period="1y")
+    """Fetch price data for all configured tickers, dynamically expanding to all registered active database assets if Supabase is connected."""
+    us_symbols = list(set(US_STOCKS + US_ETFS))
+    bist_symbols = list(set(BIST_STOCKS))
+
+    try:
+        from app.core.database import get_supabase_client
+        client = get_supabase_client()
+        res_us = client.table("assets").select("symbol").eq("market", "US").eq("is_active", True).execute()
+        if res_us.data:
+            us_symbols = list(set(us_symbols + [a["symbol"] for a in res_us.data]))
+        res_bist = client.table("assets").select("symbol").eq("market", "BIST").eq("is_active", True).execute()
+        if res_bist.data:
+            bist_symbols = list(set(bist_symbols + [a["symbol"] for a in res_bist.data]))
+    except Exception as e:
+        print(f"Note: Using default symbol list (Supabase dynamic expansion skipped: {e})")
+
+    print(f"📡 Fetching {len(us_symbols)} US stocks & ETFs...")
+    us_data = fetch_us_prices(us_symbols, period="1y")
     
-    print("📡 Fetching BIST stocks...")
-    bist_data = fetch_bist_prices(BIST_STOCKS, period="1y")
+    print(f"📡 Fetching {len(bist_symbols)} BIST stocks...")
+    bist_data = fetch_bist_prices(bist_symbols, period="1y")
     
     # Fetch BIST index directly
     print("📡 Fetching BIST 100 index...")

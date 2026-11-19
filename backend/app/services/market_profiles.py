@@ -181,6 +181,25 @@ US_GROWTH_MOMENTUM_UNIVERSE: Set[str] = {
     'AVGO', 'COST', 'SMH', 'QQQ', 'SPY', 'VOO', 'BRK-B'
 }
 
+# Defensive income / REIT assets steered exclusively towards Dividend / DCA engine
+US_DEFENSIVE_DIVIDEND_EXCLUSIONS: Set[str] = {
+    'O', 'AGNC', 'NLY', 'WPC', 'VICI', 'STWD', 'MPW', 'ORC', 'EPD', 'ET', 'MAIN'
+}
+
+
+def is_us_momentum_eligible(clean_sym: str, close: float = 0.0) -> bool:
+    """
+    Checks if a US ticker is eligible for momentum breakout and trend pullback.
+    Defensive income, REITs, and MLPs (e.g. 'O') are steered towards the Dividend/DCA engine.
+    Permits all liquid US equities and ETFs with close >= $3.00, or explicitly in the growth universe,
+    preventing penny-stock noise while opening the full catalog to trading opportunities.
+    """
+    if clean_sym in US_DEFENSIVE_DIVIDEND_EXCLUSIONS:
+        return False
+    if clean_sym in US_GROWTH_MOMENTUM_UNIVERSE:
+        return True
+    return close >= 3.0
+
 
 def get_market_profile(market_str: str) -> MarketProfile:
     """Returns the market profile for a given market string."""

@@ -47,7 +47,9 @@ def db_upsert_prices(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.Data
             len(symbol) <= 4 and symbol.isalpha() and not symbol.endswith(".IS") for _ in [0]
         )
         now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        for idx, row in df.tail(5).iterrows():  # Only upsert last 5 days (efficiency)
+        # Upsert up to 252 bars for new or maturing assets, or last 10 sessions for established assets
+        bars_to_upsert = df.tail(252) if len(df) <= 252 and not is_tefas_sym else df.tail(10)
+        for idx, row in bars_to_upsert.iterrows():
             dt = idx if isinstance(idx, datetime.date) else idx.date()
             rows.append({
                 "asset_id": asset_id,
@@ -63,11 +65,14 @@ def db_upsert_prices(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.Data
             })
 
     if rows:
-        try:
-            upsert_rows("price_history", rows, on_conflict="asset_id,date")
-            logger.info(f"Upserted {len(rows)} price rows for {len(asset_data)} assets.")
-        except Exception as e:
-            logger.error(f"Error upserting prices: {e}")
+        # Upsert in safe chunks of 500
+        for i in range(0, len(rows), 500):
+            chunk = rows[i:i + 500]
+            try:
+                upsert_rows("price_history", chunk, on_conflict="asset_id,date")
+            except Exception as e:
+                logger.error(f"Error upserting prices chunk {i}: {e}")
+        logger.info(f"Upserted {len(rows)} price rows for {len(asset_data)} assets.")
 
 
 def db_upsert_indicators(asset_id_map: Dict[str, str], asset_data: Dict[str, pd.DataFrame]):

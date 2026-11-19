@@ -113,7 +113,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
         except (ValueError, TypeError):
             return None
 
-    recent_prices = df_prices.groupby("Symbol").tail(15).copy()
+    recent_prices = df_prices.groupby("Symbol").tail(30).copy()
     
     price_rows = []
     for _, row in recent_prices.iterrows():

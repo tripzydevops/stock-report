@@ -10,7 +10,7 @@ import pandas as pd
 from typing import Dict, List, Optional
 import numpy as np
 
-from app.services.market_profiles import get_market_profile, US_GROWTH_MOMENTUM_UNIVERSE, MarketType
+from app.services.market_profiles import get_market_profile, US_GROWTH_MOMENTUM_UNIVERSE, MarketType, is_us_momentum_eligible
 from app.services.signal_explainer import (
     build_pullback_reclaim_explanation,
     build_momentum_breakout_explanation,
@@ -40,7 +40,8 @@ def screen_momentum_breakout(df: pd.DataFrame, symbol: str, market: str = "BIST"
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -137,7 +138,8 @@ def screen_trend_pullback(df: pd.DataFrame, symbol: str, market: str = "BIST") -
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -251,9 +253,9 @@ def screen_pullback_reclaim(
         return None
 
     profile = get_market_profile(market)
-
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -399,7 +401,8 @@ def screen_mean_reversion(df: pd.DataFrame, symbol: str, market: str = "BIST") -
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -521,7 +524,8 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str, market: str = "BIST
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     squeeze = (df['bb_upper'] < df['kc_upper']) & (df['bb_lower'] > df['kc_lower'])
@@ -666,7 +670,8 @@ def screen_minervini_vcp(df: pd.DataFrame, symbol: str, market: str = "BIST") ->
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -911,7 +916,8 @@ def screen_connors_rsi2_rebound(df: pd.DataFrame, symbol: str, market: str = "US
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
