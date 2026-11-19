@@ -3045,7 +3045,7 @@ export default function Home() {
             orderDate: orderDateStr,
             orderType: 'Limit',
             status: 'Filled',
-            isHistoricalImport: true,
+            side: 'BUY',
           }),
         });
 
@@ -3059,6 +3059,10 @@ export default function Home() {
 
         // Reconcile and reload complete portfolio, orders, transfers & cash strictly from server truth
         await loadData(false);
+        setSyncFeedback({
+          message: `${cleanSymUpper} başarıyla portföye eklendi!`,
+          type: 'success'
+        });
         return;
       } catch (err: any) {
         console.error('Network error persisting portfolio position:', err);
