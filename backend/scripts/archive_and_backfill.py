@@ -47,6 +47,9 @@ from app.core.database import get_supabase_client
 from app.services.market_data_archive import (
     export_dataframe_to_parquet,
     upload_parquet_archive_to_supabase,
+    export_symbol_archive,
+    upload_symbol_archive_to_supabase,
+    validate_and_sanitize_ohlcv_dataframe,
     upsert_hot_tier_to_database
 )
 from app.services.indicators import compute_all_indicators
@@ -85,16 +88,20 @@ def run_tefas_backfill_and_archive(client: Any) -> Dict[str, Any]:
 
         for r in resp.data or []:
             asset = r.get("assets") or {}
+            open_v = r.get("open")
+            high_v = r.get("high")
+            low_v = r.get("low")
+            vol_v = r.get("volume")
             tefas_rows.append({
                 "symbol": asset.get("symbol"),
                 "market": "TEFAS",
                 "date": r["date"],
-                "open": r["open"],
-                "high": r["high"],
-                "low": r["low"],
-                "close": r["close"],
-                "adj_close": r["adj_close"],
-                "volume": r["volume"] or 0,
+                "open": float(open_v) if pd.notna(open_v) and np.isfinite(open_v) else None,
+                "high": float(high_v) if pd.notna(high_v) and np.isfinite(high_v) else None,
+                "low": float(low_v) if pd.notna(low_v) and np.isfinite(low_v) else None,
+                "close": float(r["close"]),
+                "adj_close": float(r.get("adj_close", r["close"])),
+                "volume": float(vol_v) if pd.notna(vol_v) and np.isfinite(vol_v) else 0.0,
                 "source": "tefas",
             })
 
@@ -166,23 +173,37 @@ def run_equities_backfill_and_archive(
 
                     clean_sym = orig_sym.replace(".IS", "").upper()
                     df_sym = df_sym.dropna(subset=['close'])
+                    df_sym = validate_and_sanitize_ohlcv_dataframe(df_sym)
                     if len(df_sym) < 5:
                         continue
 
                     all_dfs[clean_sym] = df_sym
 
+                    # Export & upload partitioned per-symbol Parquet archive
+                    try:
+                        _, sym_bytes = export_symbol_archive(df_sym, market=market, symbol=clean_sym)
+                        upload_symbol_archive_to_supabase(sym_bytes, market=market, symbol=clean_sym, client=client)
+                    except Exception as sym_err:
+                        logger.debug(f"Partitioned archive for {clean_sym} skipped/failed: {sym_err}")
+
                     for dt, r in df_sym.iterrows():
                         d_str = dt.strftime("%Y-%m-%d") if hasattr(dt, 'strftime') else str(dt)[:10]
+                        open_val = r.get("open")
+                        high_val = r.get("high")
+                        low_val = r.get("low")
+                        adj_val = r.get("adj_close")
+                        vol_val = r.get("volume")
+
                         master_rows.append({
                             "symbol": clean_sym,
                             "market": market,
                             "date": d_str,
-                            "open": float(r.get("open", r["close"])),
-                            "high": float(r.get("high", r["close"])),
-                            "low": float(r.get("low", r["close"])),
+                            "open": float(open_val) if pd.notna(open_val) and np.isfinite(open_val) else None,
+                            "high": float(high_val) if pd.notna(high_val) and np.isfinite(high_val) else None,
+                            "low": float(low_val) if pd.notna(low_val) and np.isfinite(low_val) else None,
                             "close": float(r["close"]),
-                            "adj_close": float(r.get("adj_close", r["close"])),
-                            "volume": float(r.get("volume", 0)),
+                            "adj_close": float(adj_val) if pd.notna(adj_val) and np.isfinite(adj_val) else None,
+                            "volume": float(vol_val) if pd.notna(vol_val) and np.isfinite(vol_val) else 0.0,
                             "source": "yahoo",
                         })
                 except Exception as ex:
@@ -204,7 +225,10 @@ def run_equities_backfill_and_archive(
         upload_parquet_archive_to_supabase(parquet_bytes, storage_path, client=client)
 
         # 3. Upsert Hot Operational Tier (Latest 252 Bars) to PostgreSQL
-        hot_count = upsert_hot_tier_to_database(df_master, asset_id_map, max_hot_bars=252, client=client)
+        hot_res = upsert_hot_tier_to_database(df_master, asset_id_map, max_hot_bars=252, client=client)
+        hot_count = hot_res.upserted if hasattr(hot_res, 'upserted') else int(hot_res)
+        if getattr(hot_res, 'failed', 0) > 0:
+            logger.warning(f"⚠️ Hot-tier upsert encountered {hot_res.failed} failures: {hot_res.errors}")
 
         # 4. Compute Indicators & Upsert
         logger.info(f"Computing daily indicators for {len(all_dfs)} {market} assets...")
@@ -310,11 +334,11 @@ def run_complete_pipeline(target_market: Optional[str] = None):
         ph = client.table("price_history").select("date, open, high, low, close, volume").eq("asset_id", a["id"]).order("date").execute().data or []
         if len(ph) >= 63:
             df_t = pd.DataFrame(ph).set_index("date")
-            df_t["open"] = df_t["open"].fillna(df_t["close"]).astype(float)
-            df_t["high"] = df_t["high"].fillna(df_t["close"]).astype(float)
-            df_t["low"] = df_t["low"].fillna(df_t["close"]).astype(float)
             df_t["close"] = df_t["close"].astype(float)
-            df_t["volume"] = df_t["volume"].fillna(0).astype(float)
+            df_t["open"] = pd.to_numeric(df_t.get("open"), errors="coerce")
+            df_t["high"] = pd.to_numeric(df_t.get("high"), errors="coerce")
+            df_t["low"] = pd.to_numeric(df_t.get("low"), errors="coerce")
+            df_t["volume"] = pd.to_numeric(df_t.get("volume"), errors="coerce").fillna(0).astype(float)
             asset_data[sym] = compute_all_indicators(df_t)
 
     logger.info(f"Loaded and enriched {len(asset_data)} assets for screening.")

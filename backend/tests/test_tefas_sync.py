@@ -38,7 +38,7 @@ def test_parse_tefas_date_formats():
 
 
 def test_process_fund_quotes_chronological_ordering():
-    """Verify price bars are constructed in chronological order with accurate prior-close open prices."""
+    """Verify price bars are constructed in chronological order with pure NAV quotes (null open/high/low)."""
     mock_history = [
         {"tarih": "2026-11-05", "fiyat": 5.584937, "PAY_SAYISI": 1000000},
         {"tarih": "2026-11-06", "fiyat": 5.590457, "PAY_SAYISI": 1050000},
@@ -49,26 +49,28 @@ def test_process_fund_quotes_chronological_ordering():
 
     assert len(rows) == 3
 
-    # Day 1 (first available bar, open equals close)
+    # Day 1: pure NAV quote without fabricated OHLC
     assert rows[0]["date"] == "2026-11-05"
     assert rows[0]["close"] == 5.584937
-    assert rows[0]["open"] == 5.584937
+    assert rows[0]["open"] is None
+    assert rows[0]["high"] is None
+    assert rows[0]["low"] is None
     assert rows[0]["source"] == "tefas"
     assert rows[0]["observed_at"] is not None
 
-    # Day 2 (open equals Day 1 close)
+    # Day 2
     assert rows[1]["date"] == "2026-11-06"
     assert rows[1]["close"] == 5.590457
-    assert rows[1]["open"] == 5.584937
-    assert rows[1]["high"] == 5.590457
-    assert rows[1]["low"] == 5.584937
+    assert rows[1]["open"] is None
+    assert rows[1]["high"] is None
+    assert rows[1]["low"] is None
 
-    # Day 3 (open equals Day 2 close, capturing weekend gain)
+    # Day 3
     assert rows[2]["date"] == "2026-11-09"
     assert rows[2]["close"] == 5.607002
-    assert rows[2]["open"] == 5.590457
-    assert rows[2]["high"] == 5.607002
-    assert rows[2]["low"] == 5.590457
+    assert rows[2]["open"] is None
+    assert rows[2]["high"] is None
+    assert rows[2]["low"] is None
     assert rows[2]["volume"] == 1100000.0
 
 
@@ -83,7 +85,9 @@ def test_process_fund_quotes_string_comma_replacement():
 
     assert len(rows) == 2
     assert rows[1]["close"] == 5.607002
-    assert rows[1]["open"] == 5.590457
+    assert rows[1]["open"] is None
+    assert rows[1]["high"] is None
+    assert rows[1]["low"] is None
 
 
 def test_fetch_tefas_fund_history_resilience_on_empty():

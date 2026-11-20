@@ -33,6 +33,56 @@ from app.services.indicators import compute_all_indicators
 logger = logging.getLogger("market_data_archive")
 
 
+def validate_and_sanitize_ohlcv_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Validates and sanitizes OHLCV data according to core market microstructure invariants:
+    - close > 0 and is finite
+    - If high and low present and non-null: high >= low - 1e-5
+    - If high and open present and non-null: high >= open - 1e-5
+    - If high present and non-null: high >= close - 1e-5
+    - If low and open present and non-null: low <= open + 1e-5
+    - If low present and non-null: low <= close + 1e-5
+    - If volume present: volume >= 0
+    Preserves true null values without fabricating synthetic prices.
+    Drops rows violating physical price laws.
+    """
+    if df is None or df.empty or 'close' not in df.columns:
+        return df
+
+    work = df.copy()
+    c = pd.to_numeric(work['close'], errors='coerce')
+    valid = (c > 0) & np.isfinite(c)
+
+    has_open = 'open' in work.columns
+    has_high = 'high' in work.columns
+    has_low = 'low' in work.columns
+    has_vol = 'volume' in work.columns
+
+    o = pd.to_numeric(work['open'], errors='coerce') if has_open else None
+    h = pd.to_numeric(work['high'], errors='coerce') if has_high else None
+    l = pd.to_numeric(work['low'], errors='coerce') if has_low else None
+    v = pd.to_numeric(work['volume'], errors='coerce') if has_vol else None
+
+    if has_high and has_low:
+        valid = valid & (h.isna() | l.isna() | (h >= l - 1e-5))
+    if has_high and has_open:
+        valid = valid & (h.isna() | o.isna() | (h >= o - 1e-5))
+    if has_high:
+        valid = valid & (h.isna() | (h >= c - 1e-5))
+    if has_low and has_open:
+        valid = valid & (l.isna() | o.isna() | (l <= o + 1e-5))
+    if has_low:
+        valid = valid & (l.isna() | (l <= c + 1e-5))
+    if has_vol:
+        valid = valid & (v.isna() | (v >= 0))
+
+    dropped = len(work) - int(valid.sum())
+    if dropped > 0:
+        logger.warning(f"Sanitizer dropped {dropped} invalid OHLCV rows violating price invariants.")
+
+    return work[valid].copy()
+
+
 def export_dataframe_to_parquet(
     df: pd.DataFrame,
     file_path: Optional[Path] = None,
@@ -79,6 +129,32 @@ def export_dataframe_to_parquet(
     return parquet_bytes
 
 
+class HotTierUpsertResult(dict):
+    """Result container for hot tier upsert operations with int-coercion backward compatibility."""
+    def __init__(self, upserted: int = 0, failed: int = 0, total_attempted: int = 0, errors: Optional[List[str]] = None):
+        super().__init__(
+            upserted=upserted,
+            failed=failed,
+            total_attempted=total_attempted,
+            errors=errors or []
+        )
+        self.upserted = upserted
+        self.failed = failed
+        self.total_attempted = total_attempted
+        self.errors = errors or []
+
+    def __int__(self):
+        return self.upserted
+
+    def __index__(self):
+        return self.upserted
+
+    def __eq__(self, other):
+        if isinstance(other, int):
+            return self.upserted == other
+        return super().__eq__(other)
+
+
 def upload_parquet_archive_to_supabase(
     parquet_bytes: bytes,
     storage_path: str,
@@ -86,17 +162,12 @@ def upload_parquet_archive_to_supabase(
     client: Any = None
 ) -> str:
     """
-    Uploads compressed Parquet bytes to Supabase Storage with idempotency.
+    Uploads compressed Parquet bytes to Supabase Storage with atomic overwrite (upsert).
+    Does NOT remove the file first, preventing data loss on failed uploads.
     Returns the storage path.
     """
     sb_client = client or get_supabase_client()
     try:
-        # Check if already exists; remove first if overwriting
-        try:
-            sb_client.storage.from_(bucket_name).remove([storage_path])
-        except Exception:
-            pass
-
         try:
             sb_client.storage.from_(bucket_name).upload(
                 path=storage_path,
@@ -115,6 +186,45 @@ def upload_parquet_archive_to_supabase(
     except Exception as e:
         logger.error(f"Failed to upload Parquet archive to Supabase Storage '{storage_path}': {e}")
         raise RuntimeError(f"Storage upload failed: {e}")
+
+
+def export_symbol_archive(
+    df: pd.DataFrame,
+    market: str,
+    symbol: str,
+    base_dir: Optional[Path] = None,
+    compression: str = "zstd"
+) -> Tuple[Path, bytes]:
+    """
+    Exports a single asset's historical data into a partitioned Parquet archive:
+    data/archives/{market}/{symbol}.parquet
+    """
+    clean_sym = symbol.replace('.IS', '').upper()
+    target_dir = (base_dir or (Path(__file__).resolve().parent.parent.parent.parent / "data" / "archives")) / market.lower()
+    target_path = target_dir / f"{clean_sym}.parquet"
+    raw_bytes = export_dataframe_to_parquet(df, file_path=target_path, compression=compression)
+    return target_path, raw_bytes
+
+
+def upload_symbol_archive_to_supabase(
+    parquet_bytes: bytes,
+    market: str,
+    symbol: str,
+    bucket_name: str = BUCKET_NAME,
+    client: Any = None
+) -> str:
+    """
+    Uploads a single asset's Parquet archive to partitioned Supabase Storage path:
+    archives/parquet/{market}/{symbol}.parquet
+    """
+    clean_sym = symbol.replace('.IS', '').upper()
+    storage_path = f"archives/parquet/{market.lower()}/{clean_sym}.parquet"
+    return upload_parquet_archive_to_supabase(
+        parquet_bytes=parquet_bytes,
+        storage_path=storage_path,
+        bucket_name=bucket_name,
+        client=client
+    )
 
 
 def query_parquet_archive(
@@ -148,10 +258,11 @@ def upsert_hot_tier_to_database(
     max_hot_bars: int = 252,
     chunk_size: int = 500,
     client: Any = None
-) -> int:
+) -> HotTierUpsertResult:
     """
     Splits multi-year historical data into the hot operational tier (last 252 bars per asset)
     and batch upserts clean price records into Supabase PostgreSQL.
+    Tracks exact failure counts and error details.
     """
     sb_client = client or get_supabase_client()
     now_utc = datetime.now(timezone.utc).isoformat()
@@ -172,20 +283,29 @@ def upsert_hot_tier_to_database(
             d_val = row['date']
             d_str = d_val.strftime('%Y-%m-%d') if isinstance(d_val, (datetime, pd.Timestamp, date)) else str(d_val)[:10]
 
+            open_val = row.get('open')
+            high_val = row.get('high')
+            low_val = row.get('low')
+            adj_val = row.get('adj_close')
+            vol_val = row.get('volume')
+
             rows_to_insert.append({
                 "asset_id": asset_id,
                 "date": d_str,
-                "open": float(row['open']) if pd.notna(row.get('open')) else None,
-                "high": float(row['high']) if pd.notna(row.get('high')) else None,
-                "low": float(row['low']) if pd.notna(row.get('low')) else None,
+                "open": float(open_val) if pd.notna(open_val) and np.isfinite(open_val) else None,
+                "high": float(high_val) if pd.notna(high_val) and np.isfinite(high_val) else None,
+                "low": float(low_val) if pd.notna(low_val) and np.isfinite(low_val) else None,
                 "close": float(row['close']),
-                "adj_close": float(row.get('adj_close', row['close'])) if pd.notna(row.get('adj_close')) else None,
-                "volume": int(row['volume']) if pd.notna(row.get('volume')) else None,
+                "adj_close": float(adj_val) if pd.notna(adj_val) and np.isfinite(adj_val) else None,
+                "volume": int(float(vol_val)) if pd.notna(vol_val) and np.isfinite(vol_val) else None,
                 "source": "tefas" if is_tefas else "yahoo",
                 "observed_at": now_utc,
             })
 
     total_upserted = 0
+    total_failed = 0
+    errors: List[str] = []
+
     if rows_to_insert:
         for i in range(0, len(rows_to_insert), chunk_size):
             chunk = rows_to_insert[i:i + chunk_size]
@@ -196,7 +316,15 @@ def upsert_hot_tier_to_database(
                 ).execute()
                 total_upserted += len(chunk)
             except Exception as e:
-                logger.error(f"Error upserting hot tier chunk {i}-{i+len(chunk)}: {e}")
+                err_msg = f"Error upserting hot tier chunk {i}-{i+len(chunk)}: {e}"
+                logger.error(err_msg)
+                total_failed += len(chunk)
+                errors.append(err_msg)
 
-    logger.info(f"✅ Upserted {total_upserted} hot-tier price bars into PostgreSQL price_history.")
-    return total_upserted
+    logger.info(f"✅ Hot-tier upsert complete: {total_upserted} succeeded, {total_failed} failed.")
+    return HotTierUpsertResult(
+        upserted=total_upserted,
+        failed=total_failed,
+        total_attempted=len(rows_to_insert),
+        errors=errors
+    )
