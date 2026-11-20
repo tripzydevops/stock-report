@@ -322,3 +322,70 @@ class TestTabanAndHoldingFeasibility:
             assert signal["risk_reward_ratio"] < 10.0, f"R:R should be realistic, got {signal['risk_reward_ratio']}"
 
 
+class TestFundMomentum:
+    def _make_fund_df(self, ret_1m: float, ret_3m: float = 0.10) -> pd.DataFrame:
+        """Create synthetic fund close price series with specific 1-month and 3-month returns."""
+        n = 80
+        dates = pd.date_range(end=date.today(), periods=n, freq="B")
+        base = 100.0
+        # 3m ago was bar index 17 (approx 63 bars ago)
+        # 1m ago was bar index 59 (approx 21 bars ago)
+        prices = [base] * n
+        # set steady trajectory
+        for i in range(n):
+            if i < 17:
+                prices[i] = base
+            elif i < 59:
+                # scale to base * (1 + ret_3m - ret_1m)
+                frac = (i - 17) / (59 - 17)
+                prices[i] = base * (1.0 + (ret_3m - ret_1m) * frac)
+            else:
+                # scale from base * (1 + ret_3m - ret_1m) to base * (1 + ret_3m)
+                frac = (i - 59) / (n - 1 - 59)
+                start_p = base * (1.0 + ret_3m - ret_1m)
+                end_p = start_p * (1.0 + ret_1m)
+                prices[i] = start_p + (end_p - start_p) * frac
+        
+        close = np.array(prices)
+        return pd.DataFrame({"close": close, "open": close, "high": close, "low": close, "volume": np.full(n, 1000.0)}, index=dates)
+
+    def test_fund_momentum_cross_sectional_cutoff_filter(self):
+        # Fund A has 8% 1m return
+        df_a = self._make_fund_df(ret_1m=0.08, ret_3m=0.15)
+        # Fund B has 18% 1m return
+        df_b = self._make_fund_df(ret_1m=0.18, ret_3m=0.25)
+
+        # Without cutoff (default profile is 5%), Fund A passes
+        sig_a_nocutoff = screen_fund_momentum(df_a, "FUND_A")
+        assert sig_a_nocutoff is not None
+
+        # With 90th percentile cross-sectional cutoff at 15%, Fund A is rejected (8% < 15%)
+        sig_a_cutoff = screen_fund_momentum(df_a, "FUND_A", cross_sectional_cutoff=0.15)
+        assert sig_a_cutoff is None
+
+        # Fund B passes even with 15% cutoff (18% >= 15%)
+        sig_b_cutoff = screen_fund_momentum(df_b, "FUND_B", cross_sectional_cutoff=0.15)
+        assert sig_b_cutoff is not None
+        assert sig_b_cutoff["symbol"] == "FUND_B"
+
+    def test_run_all_screens_applies_top_decile_to_funds(self):
+        # Create 12 funds with escalating returns: 2%, 4%, ..., 24%
+        asset_data = {}
+        asset_info = {}
+        for i in range(1, 13):
+            sym = f"FUND_{i:02d}"
+            r1m = i * 0.02 # 0.02 to 0.24
+            asset_data[sym] = self._make_fund_df(ret_1m=r1m, ret_3m=r1m + 0.05)
+            asset_info[sym] = {"asset_class": "fund", "market": "TEFAS"}
+
+        signals = run_all_screens(asset_data, asset_info)
+        # 90th percentile of 12 items retains only top 1-2 funds
+        sig_symbols = [s["symbol"] for s in signals]
+        assert len(sig_symbols) <= 2
+        assert "FUND_12" in sig_symbols
+        # Lowest 10 funds should all be rejected despite positive returns
+        assert "FUND_01" not in sig_symbols
+        assert "FUND_05" not in sig_symbols
+
+
+

@@ -269,3 +269,118 @@ def test_backtest_next_open_execution_timing():
     # Entry price must be 105.0 (Day T+1 open), NOT 101.0 (Day T close)!
     assert trade.entry_price == 105.0
 
+
+def test_two_target_partial_scale_out_execution():
+    """Verify 50% scale-out at Target 1 and remaining 50% exit at Target 2."""
+    dates = pd.date_range(start="2026-01-01", periods=4, freq="D")
+    df = pd.DataFrame({
+        "open":  [100.0, 100.0, 108.0, 118.0],
+        "high":  [101.0, 102.0, 112.0, 122.0],  # Day 2 reaches 112 (> T1=110), Day 3 reaches 122 (> T2=120)
+        "low":   [99.0,  99.0,  105.0, 115.0],
+        "close": [100.0, 101.0, 111.0, 121.0],
+        "volume": [10000.0] * 4,
+    }, index=dates)
+    history = {"SCALE": df}
+
+    signals = [{
+        "symbol": "SCALE",
+        "strategy": "momentum_breakout",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 95.0,
+        "target_1": 110.0,
+        "target_2": 120.0,
+    }]
+
+    # Zero friction to cleanly verify share math
+    config = BacktestConfig(initial_capital=100_000.0, commission_bps=0.0, slippage_bps=0.0, risk_per_trade_pct=2.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    # Risk = 100 - 95 = 5. Risk amount = 2% of 100k = 2000. Shares = 2000 / 5 = 400 shares.
+    assert res.total_trades == 2
+    assert res.winning_trades == 2
+
+    trade_1 = res.trades[0]
+    trade_2 = res.trades[1]
+
+    # Target 1 scale-out: 50% of 400 = 200 shares
+    assert trade_1.exit_reason == "TARGET_1_HIT"
+    assert trade_1.shares == 200
+    assert trade_1.exit_price == 110.0
+    assert trade_1.pnl == 200 * (110.0 - 100.0)  # +2000.0
+
+    # Target 2 final exit: remaining 200 shares
+    assert trade_2.exit_reason == "TARGET_2_HIT"
+    assert trade_2.shares == 200
+    assert trade_2.exit_price == 120.0
+    assert trade_2.pnl == 200 * (120.0 - 100.0)  # +4000.0
+
+    assert res.total_trades == 2
+    assert trade_1.shares + trade_2.shares == 400
+
+
+def test_missing_execution_bar_skips_signal():
+    """Verify that if Day T+1 bar is missing from clean history, trade is safely dropped."""
+    # Days: 2026-01-01 (T) and 2026-01-03 (T+2). 2026-01-02 is absent.
+    dates = pd.to_datetime(["2026-01-01", "2026-01-03"])
+    df = pd.DataFrame({
+        "open":  [100.0, 110.0],
+        "high":  [102.0, 112.0],
+        "low":   [98.0,  108.0],
+        "close": [101.0, 111.0],
+        "volume": [10000.0, 10000.0],
+    }, index=dates)
+    history = {"MISSING_BAR": df}
+
+    # Next open signal issued on 2026-01-01 -> expects to execute on 2026-01-02
+    signals = [{
+        "symbol": "MISSING_BAR",
+        "strategy": "trend_pullback",
+        "signal_date": "2026-01-01",
+        "entry_mode": "next_open",
+        "entry_price": 101.0,
+        "stop_loss": 95.0,
+        "target_1": 115.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    # Must be safely skipped without crashing or falling back to Day T close
+    assert res.total_trades == 0
+
+
+def test_intraday_stop_target_tie_break_assumes_adverse_stop():
+    """Verify conservative institutional rule: when high >= target AND low <= stop in the same bar, assume STOPPED_OUT."""
+    dates = pd.date_range(start="2026-01-01", periods=2, freq="D")
+    df = pd.DataFrame({
+        "open":  [100.0, 100.0],
+        # Day 2: wild bar touching both stop (90) and target (120)
+        "high":  [101.0, 125.0],
+        "low":   [99.0,   85.0],
+        "close": [100.0, 115.0],
+        "volume": [10000.0, 50000.0],
+    }, index=dates)
+    history = {"TIE": df}
+
+    signals = [{
+        "symbol": "TIE",
+        "strategy": "breakout",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 90.0,
+        "target_1": 120.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0, slippage_bps=0.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    assert trade.exit_reason == "STOPPED_OUT"
+    assert trade.outcome == "LOSS"
+
+

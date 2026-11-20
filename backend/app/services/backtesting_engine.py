@@ -124,58 +124,76 @@ class InstitutionalBacktestEngine:
                 pos["days_held"] += 1
                 pos["current_close"] = close
 
-                target = pos["target"]
-                stop = pos["stop_loss"]
-                entry = pos["entry_price"]
+                # Target & Stop evaluation with two-target scale-out
+                target_1 = pos.get("target_1")
+                target_2 = pos.get("target_2")
+                target_1_hit = pos.get("target_1_hit", False)
+                active_target = target_2 if target_1_hit else target_1
+                stop = pos.get("stop_loss")
                 shares = pos["shares"]
 
-                hit_target = target is not None and high >= target
+                hit_active_target = active_target is not None and high >= active_target
                 hit_stop = stop is not None and low <= stop
                 expired = pos["days_held"] >= self.config.max_hold_days
 
-                closed = False
-                exit_price = close
-                exit_reason = "ACTIVE"
-
-                # 1. Opening Gap Evaluation (Gap down through stop or gap up through target)
+                # 1. Opening Gap Evaluation
                 if stop is not None and bar_open <= stop:
+                    # Stopped out on gap
                     exit_price = max(0.01, bar_open * (1.0 - slip_rate))
                     exit_reason = "STOPPED_OUT_GAP"
-                    closed = True
-                elif target is not None and bar_open >= target:
+                    shares_to_exit = shares
+                elif active_target is not None and bar_open >= active_target:
                     exit_price = bar_open * (1.0 - slip_rate)
-                    exit_reason = "TARGET_HIT_GAP"
-                    closed = True
+                    if not target_1_hit and target_2 is not None:
+                        # Partial scale-out: 50% at Target 1
+                        shares_to_exit = max(1, pos["initial_shares"] // 2)
+                        shares_to_exit = min(shares_to_exit, shares)
+                        exit_reason = "TARGET_1_HIT"
+                    else:
+                        shares_to_exit = shares
+                        exit_reason = "TARGET_2_HIT" if target_1_hit else "TARGET_HIT"
                 # 2. Intraday Checks
-                elif hit_stop and hit_target:
-                    # Conservative tie-breaker: assumed stopped out
+                # Conservative tie-breaker: When both stop and target are touched within the same daily bar,
+                # institutional risk rules assume the adverse stop was touched before the target.
+                elif hit_stop and hit_active_target:
                     exit_price = max(0.01, stop * (1.0 - slip_rate))
                     exit_reason = "STOPPED_OUT"
-                    closed = True
-                elif hit_target:
-                    exit_price = target * (1.0 - slip_rate)
-                    exit_reason = "TARGET_HIT"
-                    closed = True
+                    shares_to_exit = shares
+                elif hit_active_target:
+                    exit_price = active_target * (1.0 - slip_rate)
+                    if not target_1_hit and target_2 is not None:
+                        # Partial scale-out: 50% at Target 1
+                        shares_to_exit = max(1, pos["initial_shares"] // 2)
+                        shares_to_exit = min(shares_to_exit, shares)
+                        exit_reason = "TARGET_1_HIT"
+                    else:
+                        shares_to_exit = shares
+                        exit_reason = "TARGET_2_HIT" if target_1_hit else "TARGET_HIT"
                 elif hit_stop:
                     exit_price = max(0.01, stop * (1.0 - slip_rate))
                     exit_reason = "STOPPED_OUT"
-                    closed = True
+                    shares_to_exit = shares
                 elif expired:
                     exit_price = close * (1.0 - slip_rate)
                     exit_reason = "EXPIRED"
-                    closed = True
+                    shares_to_exit = shares
+                else:
+                    shares_to_exit = 0
 
-                if closed:
-                    gross_proceeds = shares * exit_price
+                if shares_to_exit > 0:
+                    gross_proceeds = shares_to_exit * exit_price
                     exit_commission = gross_proceeds * comm_rate
                     net_proceeds = gross_proceeds - exit_commission
                     cash += net_proceeds
 
-                    pnl = net_proceeds - pos["total_cost"]
-                    pnl_pct = (pnl / pos["total_cost"]) * 100.0 if pos["total_cost"] > 0 else 0.0
-                    total_fees = pos["entry_commission"] + exit_commission
+                    # Proportional cost basis allocation for partial exits
+                    share_fraction = shares_to_exit / pos["initial_shares"]
+                    allocated_cost = pos["initial_cost"] * share_fraction
+                    allocated_entry_comm = pos["initial_entry_commission"] * share_fraction
+                    total_fees = allocated_entry_comm + exit_commission
 
-                    # Strict financial outcome derived from net P&L after friction
+                    pnl = net_proceeds - allocated_cost
+                    pnl_pct = (pnl / allocated_cost) * 100.0 if allocated_cost > 0 else 0.0
                     outcome = "WIN" if pnl > 0 else "LOSS"
 
                     completed_trades.append(
@@ -186,8 +204,8 @@ class InstitutionalBacktestEngine:
                             entry_price=round(pos["effective_entry"], 2),
                             exit_date=date_str,
                             exit_price=round(exit_price, 2),
-                            shares=shares,
-                            position_value=round(pos["total_cost"], 2),
+                            shares=shares_to_exit,
+                            position_value=round(allocated_cost, 2),
                             pnl=round(pnl, 2),
                             pnl_pct=round(pnl_pct, 2),
                             fees=round(total_fees, 2),
@@ -196,6 +214,13 @@ class InstitutionalBacktestEngine:
                             exit_reason=exit_reason,
                         )
                     )
+
+                    pos["shares"] -= shares_to_exit
+                    if exit_reason == "TARGET_1_HIT":
+                        pos["target_1_hit"] = True
+
+                    if pos["shares"] > 0:
+                        positions_to_keep.append(pos)
                 else:
                     positions_to_keep.append(pos)
 
@@ -215,20 +240,29 @@ class InstitutionalBacktestEngine:
 
                     raw_entry = float(sig.get("entry_price", 0))
                     raw_stop = float(sig.get("stop_loss", 0)) if sig.get("stop_loss") else None
-                    raw_target = float(sig.get("target_1", 0)) if sig.get("target_1") else None
+                    raw_target_1 = float(sig.get("target_1", 0)) if sig.get("target_1") else None
+                    raw_target_2 = float(sig.get("target_2", 0)) if sig.get("target_2") else None
 
                     if raw_entry <= 0 or not raw_stop or raw_stop >= raw_entry:
                         continue
 
-                    # Determine next available open print (institutional execution reality)
+                    # Determine next available open print (skip trade if execution-date bar is unavailable)
                     sym_df = clean_history.get(sym)
-                    if sym_df is not None and current_date in sym_df.index:
-                        c_bar = sym_df.loc[current_date]
-                        if isinstance(c_bar, pd.DataFrame):
-                            c_bar = c_bar.iloc[-1]
-                        bar_open = float(c_bar.get("open", raw_entry))
-                    else:
-                        bar_open = raw_entry
+                    if sym_df is None or current_date not in sym_df.index:
+                        # Bar is missing on execution date: skip trade rather than entering at signal close
+                        continue
+
+                    c_bar = sym_df.loc[current_date]
+                    if isinstance(c_bar, pd.DataFrame):
+                        c_bar = c_bar.iloc[-1]
+
+                    raw_open = c_bar.get("open")
+                    if pd.isna(raw_open) or not np.isfinite(float(raw_open)) or float(raw_open) <= 0:
+                        # Missing/invalid open print on execution date: skip trade
+                        continue
+
+                    bar_open = float(raw_open)
+                    day_close = float(c_bar.get("close", bar_open))
 
                     # Apply entry slippage
                     effective_entry = bar_open * (1.0 + slip_rate)
@@ -266,12 +300,18 @@ class InstitutionalBacktestEngine:
                             "effective_entry": effective_entry,
                             "entry_price": raw_entry,
                             "stop_loss": raw_stop,
-                            "target": raw_target,
+                            "target_1": raw_target_1,
+                            "target_2": raw_target_2,
+                            "target_1_hit": False,
                             "shares": shares,
+                            "initial_shares": shares,
+                            "initial_cost": total_entry_cost,
+                            "initial_entry_commission": entry_comm,
                             "entry_commission": entry_comm,
                             "total_cost": total_entry_cost,
                             "days_held": 0,
-                            "current_close": effective_entry,
+                            # Value position at actual execution-day close, not entry with slippage
+                            "current_close": day_close,
                         })
 
             # C. End-of-Day Portfolio Valuation & Drawdown

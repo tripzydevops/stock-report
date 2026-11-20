@@ -604,9 +604,16 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str, market: str = "BIST
     return None
 
 
-def screen_fund_momentum(df: pd.DataFrame, symbol: str, market: str = "BIST") -> Optional[Dict]:
+def screen_fund_momentum(
+    df: pd.DataFrame,
+    symbol: str,
+    market: str = "BIST",
+    cross_sectional_cutoff: Optional[float] = None
+) -> Optional[Dict]:
     """
-    For funds/ETFs: 1-month return exceeds threshold (> profile.fund_mom_1m_min), positive 3-month return, max drawdown < limit.
+    For funds/ETFs:
+    Cross-sectional relative strength leader (top decile across fund universe when cutoff provided,
+    otherwise exceeds profile.fund_mom_1m_min), positive 3-month return, max drawdown < limit.
     """
     if len(df) < 63:
         return None
@@ -620,7 +627,9 @@ def screen_fund_momentum(df: pd.DataFrame, symbol: str, market: str = "BIST") ->
     drawdown = (close.tail(63) - rolling_max) / rolling_max
     max_dd = abs(drawdown.min())
 
-    if ret_1m > profile.fund_mom_1m_min and ret_3m > 0 and max_dd < profile.fund_mom_max_dd:
+    min_1m_req = max(profile.fund_mom_1m_min, cross_sectional_cutoff) if cross_sectional_cutoff is not None else profile.fund_mom_1m_min
+
+    if ret_1m >= min_1m_req and ret_3m > 0 and max_dd < profile.fund_mom_max_dd:
         entry = float(close.iloc[-1])
         stop = round(entry * (1.0 - profile.fund_mom_trailing_stop_pct), 2)
         target_1 = round(entry * 1.15, 2)
@@ -1001,8 +1010,26 @@ def screen_connors_rsi2_rebound(df: pd.DataFrame, symbol: str, market: str = "US
 
 
 def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, Dict]) -> List[Dict]:
-    """Runs verified whitelisted screens per market microstructure."""
+    """Runs verified whitelisted screens per market microstructure with cross-sectional decile ranking."""
     signals = []
+
+    # Precalculate cross-sectional 1-month returns across funds for top-decile ranking
+    fund_returns = []
+    for s, d in asset_data.items():
+        if d is not None and not d.empty and len(d) >= 21 and 'close' in d.columns:
+            inf = asset_info.get(s, {})
+            atype = str(inf.get('type') or inf.get('asset_class') or 'stock').lower()
+            if atype in ['fund', 'mutual_fund', 'etf']:
+                c = d['close']
+                r1m = (float(c.iloc[-1]) / float(c.iloc[-21])) - 1.0
+                if np.isfinite(r1m):
+                    fund_returns.append(r1m)
+
+    top_decile_cutoff = (
+        float(np.percentile(fund_returns, 90))
+        if len(fund_returns) >= 10
+        else None
+    )
 
     for symbol, df in asset_data.items():
         if df.empty:
@@ -1047,7 +1074,7 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
                 if sig: signals.append(sig)
 
         if asset_type in ['fund', 'mutual_fund', 'etf']:
-            sig = screen_fund_momentum(df, symbol, market=market_val)
+            sig = screen_fund_momentum(df, symbol, market=market_val, cross_sectional_cutoff=top_decile_cutoff)
             if sig: signals.append(sig)
 
     return signals
