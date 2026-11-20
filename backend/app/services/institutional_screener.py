@@ -14,7 +14,12 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional
 
-from app.services.market_profiles import get_market_profile, US_GROWTH_MOMENTUM_UNIVERSE, MarketType
+from app.services.market_profiles import (
+    get_market_profile,
+    US_GROWTH_MOMENTUM_UNIVERSE,
+    MarketType,
+    is_us_momentum_eligible
+)
 from app.services.signal_explainer import (
     build_anchored_vwap_explanation,
     build_liquidity_sweep_explanation,
@@ -65,7 +70,8 @@ def screen_anchored_vwap_bounce(df: pd.DataFrame, symbol: str, market: str = "BI
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
@@ -177,7 +183,8 @@ def screen_liquidity_sweep_reclaim(df: pd.DataFrame, symbol: str, lookback: int 
 
     profile = get_market_profile(market)
     clean_sym = symbol.replace(".IS", "").upper()
-    if profile.market == MarketType.US and clean_sym not in US_GROWTH_MOMENTUM_UNIVERSE:
+    close_price = float(df['close'].iloc[-1])
+    if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
     last = df.iloc[-1]
