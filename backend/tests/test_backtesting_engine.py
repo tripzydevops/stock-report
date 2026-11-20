@@ -384,3 +384,70 @@ def test_intraday_stop_target_tie_break_assumes_adverse_stop():
     assert trade.outcome == "LOSS"
 
 
+def test_dual_target_opening_gap_exits_full_position():
+    """Verify that when opening price gaps above BOTH Target 1 and Target 2, 100% of shares exit immediately."""
+    dates = pd.date_range(start="2026-01-01", periods=2, freq="D")
+    df = pd.DataFrame({
+        "open":  [100.0, 130.0],  # Day 2 gaps up to 130 (well above T1=110 and T2=120)
+        "high":  [101.0, 132.0],
+        "low":   [99.0,  129.0],
+        "close": [100.0, 131.0],
+        "volume": [10000.0, 20000.0],
+    }, index=dates)
+    history = {"GAP_BOTH": df}
+
+    signals = [{
+        "symbol": "GAP_BOTH",
+        "strategy": "breakout",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 95.0,
+        "target_1": 110.0,
+        "target_2": 120.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0, slippage_bps=0.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    # Must exit 100% of shares immediately at gap price 130.0 with TARGET_2_HIT
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    assert trade.exit_reason == "TARGET_2_HIT"
+    assert trade.exit_price == 130.0
+    assert trade.outcome == "WIN"
+
+
+def test_optimistic_tie_breaker_assumes_target_first():
+    """Verify that with tie_breaker='optimistic', simultaneous stop/target touches favor profit target."""
+    dates = pd.date_range(start="2026-01-01", periods=2, freq="D")
+    df = pd.DataFrame({
+        "open":  [100.0, 100.0],
+        "high":  [101.0, 125.0],  # touches target 120
+        "low":   [99.0,   85.0],  # touches stop 90
+        "close": [100.0, 115.0],
+        "volume": [10000.0, 50000.0],
+    }, index=dates)
+    history = {"OPT_TIE": df}
+
+    signals = [{
+        "symbol": "OPT_TIE",
+        "strategy": "breakout",
+        "signal_date": "2026-01-01",
+        "entry_price": 100.0,
+        "stop_loss": 90.0,
+        "target_1": 120.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0, slippage_bps=0.0, tie_breaker="optimistic")
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    assert trade.exit_reason == "TARGET_HIT"
+    assert trade.outcome == "WIN"
+    assert trade.exit_price == 120.0
+
+
+

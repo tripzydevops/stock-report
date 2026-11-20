@@ -25,6 +25,7 @@ from app.services.signal_explainer import (
     build_liquidity_sweep_explanation,
     build_relative_strength_explanation
 )
+from app.services.confidence_calibrator import default_calibrator as _calibrator
 
 
 def compute_anchored_vwap(df: pd.DataFrame, anchor_idx: int) -> pd.Series:
@@ -155,7 +156,7 @@ def screen_anchored_vwap_bounce(df: pd.DataFrame, symbol: str, market: str = "BI
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'confidence_score': 85.0,
+            'confidence_score': _calibrator.get_calibrated_confidence('Anchored VWAP Pullback', raw_confluence_score=85.0),
             'category': 'INSTITUTIONAL',
             'trigger_reasons': exp["trigger_reasons"],
             'failed_checks': exp["failed_checks"],
@@ -255,7 +256,7 @@ def screen_liquidity_sweep_reclaim(df: pd.DataFrame, symbol: str, lookback: int 
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'confidence_score': 85.0,
+            'confidence_score': _calibrator.get_calibrated_confidence('Liquidity Sweep', raw_confluence_score=85.0),
             'category': 'INSTITUTIONAL',
             'trigger_reasons': exp["trigger_reasons"],
             'failed_checks': exp["failed_checks"],
@@ -363,7 +364,7 @@ def screen_relative_strength_leaders(
             'target_1': target_1,
             'target_2': target_2,
             'risk_reward_ratio': rr,
-            'confidence_score': 85.0,
+            'confidence_score': _calibrator.get_calibrated_confidence('Breakout Retest', raw_confluence_score=85.0),
             'category': 'INSTITUTIONAL',
             'trigger_reasons': exp["trigger_reasons"],
             'failed_checks': exp["failed_checks"],

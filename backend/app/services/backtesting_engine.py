@@ -145,20 +145,37 @@ class InstitutionalBacktestEngine:
                 elif active_target is not None and bar_open >= active_target:
                     exit_price = bar_open * (1.0 - slip_rate)
                     if not target_1_hit and target_2 is not None:
-                        # Partial scale-out: 50% at Target 1
-                        shares_to_exit = max(1, pos["initial_shares"] // 2)
-                        shares_to_exit = min(shares_to_exit, shares)
-                        exit_reason = "TARGET_1_HIT"
+                        if bar_open >= target_2:
+                            # Opening gap surpassed BOTH Target 1 and Target 2: full immediate exit
+                            shares_to_exit = shares
+                            exit_reason = "TARGET_2_HIT"
+                        else:
+                            # Partial scale-out: 50% at Target 1
+                            shares_to_exit = max(1, pos["initial_shares"] // 2)
+                            shares_to_exit = min(shares_to_exit, shares)
+                            exit_reason = "TARGET_1_HIT"
                     else:
                         shares_to_exit = shares
                         exit_reason = "TARGET_2_HIT" if target_1_hit else "TARGET_HIT"
                 # 2. Intraday Checks
-                # Conservative tie-breaker: When both stop and target are touched within the same daily bar,
-                # institutional risk rules assume the adverse stop was touched before the target.
+                # Intraday tie-breaker sensitivity:
+                # - "pessimistic" (default institutional standard): assumes adverse stop touched first
+                # - "optimistic": assumes profit target touched first
                 elif hit_stop and hit_active_target:
-                    exit_price = max(0.01, stop * (1.0 - slip_rate))
-                    exit_reason = "STOPPED_OUT"
-                    shares_to_exit = shares
+                    tie_breaker = getattr(self.config, "tie_breaker", "pessimistic")
+                    if tie_breaker == "optimistic":
+                        exit_price = active_target * (1.0 - slip_rate)
+                        if not target_1_hit and target_2 is not None:
+                            shares_to_exit = max(1, pos["initial_shares"] // 2)
+                            shares_to_exit = min(shares_to_exit, shares)
+                            exit_reason = "TARGET_1_HIT"
+                        else:
+                            shares_to_exit = shares
+                            exit_reason = "TARGET_2_HIT" if target_1_hit else "TARGET_HIT"
+                    else:
+                        exit_price = max(0.01, stop * (1.0 - slip_rate))
+                        exit_reason = "STOPPED_OUT"
+                        shares_to_exit = shares
                 elif hit_active_target:
                     exit_price = active_target * (1.0 - slip_rate)
                     if not target_1_hit and target_2 is not None:

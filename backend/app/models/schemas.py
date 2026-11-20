@@ -1,5 +1,5 @@
 from enum import Enum
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -210,6 +210,7 @@ class BacktestConfig(BaseModel):
     max_open_positions: int = 10
     max_hold_days: int = 20
     risk_free_rate: float = 0.04  # 4% annual risk-free rate
+    tie_breaker: str = "pessimistic"  # "pessimistic" (stop first) or "optimistic" (target first)
     model_config = ConfigDict(from_attributes=True)
 
 class BacktestTradeLog(BaseModel):
@@ -259,4 +260,36 @@ class BacktestResult(BaseModel):
     trades: list[BacktestTradeLog] = []
     strategy_breakdown: dict[str, dict[str, Any]] = {}
     model_config = ConfigDict(from_attributes=True)
+
+
+class WalkForwardFoldResult(BaseModel):
+    fold_id: int
+    train_start: str
+    train_end: str
+    test_start: str
+    test_end: str
+    train_trades: int
+    train_win_rate: float
+    train_profit_factor: float
+    test_trades: int
+    test_win_rate: float
+    test_profit_factor: float
+    test_return_pct: float
+    test_max_drawdown_pct: float
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WalkForwardReport(BaseModel):
+    market: str
+    total_folds: int
+    total_oos_trades: int
+    oos_win_rate: float
+    oos_profit_factor: float
+    oos_expectancy: float
+    calibrated_confidence_map: dict[str, float] = {}
+    strategy_metrics: dict[str, dict[str, Any]] = {}
+    folds: list[WalkForwardFoldResult] = []
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    model_config = ConfigDict(from_attributes=True)
+
 
