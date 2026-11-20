@@ -528,6 +528,9 @@ def screen_volatility_squeeze(df: pd.DataFrame, symbol: str, market: str = "BIST
     if profile.market == MarketType.US and not is_us_momentum_eligible(clean_sym, close_price):
         return None
 
+    if 'bb_upper' not in df.columns or 'kc_upper' not in df.columns or 'bb_lower' not in df.columns or 'kc_lower' not in df.columns:
+        return None
+
     squeeze = (df['bb_upper'] < df['kc_upper']) & (df['bb_lower'] > df['kc_lower'])
 
     prev_squeeze = squeeze.iloc[-2]
@@ -1006,7 +1009,7 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
             continue
 
         info = asset_info.get(symbol, {})
-        asset_type = info.get('type', 'stock').lower()
+        asset_type = str(info.get('type') or info.get('asset_class') or 'stock').lower()
         market_val = info.get('market', info.get('Market', 'BIST' if '.IS' in symbol else 'US')).upper()
         is_us = market_val in ['US', 'NASDAQ', 'NYSE']
 

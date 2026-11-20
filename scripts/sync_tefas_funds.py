@@ -174,7 +174,8 @@ def sync_all_tefas_funds(
     max_days: int = 5,
     max_workers: int = 5,
     filter_symbol: Optional[str] = None,
-    dry_run: bool = False
+    dry_run: bool = False,
+    period_months: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Queries all TEFAS funds from Supabase, fetches live prices concurrently,
@@ -182,6 +183,8 @@ def sync_all_tefas_funds(
     """
     start_time = time.time()
     client = get_supabase_client()
+
+    calc_period = period_months or (12 if max_days > 25 else (3 if max_days > 15 else 1))
 
     logger.info("📡 Loading TEFAS assets from Supabase catalog...")
     query = client.table("assets").select("id, symbol, name, sector").eq("market", "TEFAS")
@@ -194,14 +197,14 @@ def sync_all_tefas_funds(
         logger.warning("No TEFAS assets found in database.")
         return {"status": "EMPTY", "count": 0}
 
-    logger.info(f"Found {len(assets)} TEFAS asset(s) to synchronize.")
+    logger.info(f"Found {len(assets)} TEFAS asset(s) to synchronize (period: {calc_period} month(s), max_days: {max_days}).")
 
     # Concurrently fetch raw history for each asset
     results: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
 
     def _worker(asset_item):
         sym = asset_item["symbol"].strip().upper()
-        history = fetch_tefas_fund_history(sym, period_months=1)
+        history = fetch_tefas_fund_history(sym, period_months=calc_period)
         return asset_item, history
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -275,6 +278,7 @@ def sync_all_tefas_funds(
 def main():
     parser = argparse.ArgumentParser(description="Synchronize TEFAS fund prices to Supabase")
     parser.add_argument("--days", type=int, default=5, help="Number of recent days to sync per fund (default: 5)")
+    parser.add_argument("--period", type=int, default=None, help="TEFAS query period in months (1, 3, 6, 12). Defaults to 12 if --days > 25, else 1")
     parser.add_argument("--workers", type=int, default=5, help="Concurrent HTTP worker threads (default: 5)")
     parser.add_argument("--symbol", type=str, default=None, help="Sync specific fund symbol (e.g. ZBJ)")
     parser.add_argument("--dry-run", action="store_true", help="Fetch quotes without database upsert")
@@ -284,7 +288,8 @@ def main():
         max_days=args.days,
         max_workers=args.workers,
         filter_symbol=args.symbol,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        period_months=args.period
     )
 
     print("\n" + "=" * 60)
