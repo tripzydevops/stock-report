@@ -119,9 +119,29 @@ class InstitutionalWalkForwardEngine:
             ("Connors RSI-2 Rebound", screen_connors_rsi2_rebound),
         ]
 
-        # Scan day by day
+        # Scan day by day with dynamic market regime detection
         for scan_date in dates_to_scan:
             date_str = scan_date.strftime("%Y-%m-%d")
+
+            # 1. Macro Market Regime Assessment (Cross-sectional breadth: % of universe above 50 EMA)
+            advancing = 0
+            total_active = 0
+            for s, d in clean_history.items():
+                if scan_date in d.index and 'close' in d.columns and 'ema_50' in d.columns:
+                    c = d.loc[scan_date, 'close']
+                    e = d.loc[scan_date, 'ema_50']
+                    if pd.notna(c) and pd.notna(e):
+                        total_active += 1
+                        if float(c) > float(e):
+                            advancing += 1
+
+            breadth = (advancing / total_active) if total_active >= 5 else 0.50
+            if breadth >= 0.50:
+                current_regime = "bullish"
+            elif breadth < 0.35:
+                current_regime = "bearish"
+            else:
+                current_regime = "neutral"
 
             for sym, df in clean_history.items():
                 if df.empty or scan_date not in df.index:
@@ -137,6 +157,10 @@ class InstitutionalWalkForwardEngine:
                 sub_df = df.iloc[max(0, bar_idx - 260) : bar_idx + 1]
 
                 for strat_name, screener_fn in strategies_to_run:
+                    # In a Bearish market regime, pause aggressive long breakouts (crash shield)
+                    if current_regime == "bearish" and strat_name in ("Momentum Breakout", "High Tight Flag", "Minervini VCP Breakout"):
+                        continue
+
                     cd_key = (sym, strat_name)
                     if cd_key in cooldown and (bar_idx - cooldown[cd_key]) < 5:
                         continue  # 5-bar cooldown between repeated signals on the same symbol
@@ -147,6 +171,15 @@ class InstitutionalWalkForwardEngine:
                             sig["signal_date"] = date_str
                             sig["entry_mode"] = "next_open"
                             sig["market"] = market
+                            sig["market_regime"] = current_regime
+                            sig["confidence_source"] = "EMPIRICAL" if self.calibrator.is_empirical(strat_name) else "PRIOR"
+                            # Re-calibrate confidence with regime awareness
+                            sig["confidence_score"] = self.calibrator.get_calibrated_confidence(
+                                strategy=strat_name,
+                                market=market,
+                                raw_confluence_score=float(sig.get("confidence_score", 75.0)),
+                                market_regime=current_regime
+                            )
                             signals.append(sig)
                             cooldown[cd_key] = bar_idx
                     except Exception as e:
@@ -199,17 +232,27 @@ class InstitutionalWalkForwardEngine:
         for fold_idx, (tr_start, tr_end, te_start, te_end) in enumerate(windows, start=1):
             logger.info(f"--- FOLD {fold_idx}/{len(windows)}: Train [{tr_start.date()} -> {tr_end.date()}] | Test [{te_start.date()} -> {te_end.date()}] ---")
 
-            # 1. Train Period (In-Sample)
+            # 1. Train Period (In-Sample Standalone Simulation)
             train_dates = [d for d in all_dates if tr_start <= d <= tr_end]
             train_signals = self.scan_historical_signals_on_dates(clean_history, train_dates, market=market)
             engine_train = InstitutionalBacktestEngine(self.config)
-            res_train = engine_train.run_simulation(clean_history, trade_signals=train_signals)
+            res_train = engine_train.run_simulation(
+                clean_history,
+                trade_signals=train_signals,
+                start_date=tr_start.strftime("%Y-%m-%d"),
+                end_date=tr_end.strftime("%Y-%m-%d"),
+            )
 
-            # 2. Test Period (Out-of-Sample)
+            # 2. Test Period (Out-of-Sample Standalone Simulation)
             test_dates = [d for d in all_dates if te_start <= d <= te_end]
             test_signals = self.scan_historical_signals_on_dates(clean_history, test_dates, market=market)
             engine_test = InstitutionalBacktestEngine(self.config)
-            res_test = engine_test.run_simulation(clean_history, trade_signals=test_signals)
+            res_test = engine_test.run_simulation(
+                clean_history,
+                trade_signals=test_signals,
+                start_date=te_start.strftime("%Y-%m-%d"),
+                end_date=te_end.strftime("%Y-%m-%d"),
+            )
 
             fold_res = WalkForwardFoldResult(
                 fold_id=fold_idx,

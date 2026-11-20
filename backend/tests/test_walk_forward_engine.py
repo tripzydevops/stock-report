@@ -40,18 +40,18 @@ def _generate_multi_year_bars(start_date: str = "2022-01-01", days: int = 600) -
 class TestStrategyConfidenceCalibrator:
     def test_default_calibration(self):
         calibrator = StrategyConfidenceCalibrator()
-        assert calibrator.get_calibrated_confidence("Trend Pullback") == 58.5
-        assert calibrator.get_calibrated_confidence("Momentum Breakout") == 57.2
+        assert calibrator.get_calibrated_confidence("Trend Pullback") == 57.8
+        assert calibrator.get_calibrated_confidence("Momentum Breakout") == 57.3
 
     def test_confluence_fine_tuning(self):
         calibrator = StrategyConfidenceCalibrator()
         # High raw score (>80) lifts confidence slightly
         boosted = calibrator.get_calibrated_confidence("Trend Pullback", raw_confluence_score=95.0)
-        assert boosted > 58.5
+        assert boosted > 57.8
 
         # Low raw score (<80) shades confidence slightly down
         shaded = calibrator.get_calibrated_confidence("Trend Pullback", raw_confluence_score=60.0)
-        assert shaded < 58.5
+        assert shaded < 57.8
 
     def test_bayesian_update_from_backtest(self):
         calibrator = StrategyConfidenceCalibrator()

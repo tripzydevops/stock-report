@@ -36,10 +36,13 @@ class InstitutionalBacktestEngine:
         self,
         historical_data: Dict[str, pd.DataFrame],
         trade_signals: Optional[List[Dict[str, Any]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
     ) -> BacktestResult:
         """
         Executes a chronologically aligned portfolio backtest.
         If trade_signals is None, automatically generates signals across historical_data.
+        If start_date/end_date are provided, bounds the simulation strictly to that window (standalone fold execution).
         """
         if trade_signals is None:
             trade_signals = backtest_all_historical_signals(historical_data, lookback_bars=120)
@@ -63,8 +66,25 @@ class InstitutionalBacktestEngine:
         if not all_dates:
             return self._empty_result()
 
-        # Map date T to date T+1 to eliminate lookahead bias
+        # Map date T to date T+1 across full history to eliminate lookahead bias
         date_to_next_date = {all_dates[i]: all_dates[i + 1] for i in range(len(all_dates) - 1)}
+
+        # Filter active simulation window if start_date/end_date are provided
+        if start_date:
+            try:
+                d_start = datetime.strptime(str(start_date)[:10], "%Y-%m-%d").date()
+                all_dates = [d for d in all_dates if d >= d_start]
+            except Exception:
+                pass
+        if end_date:
+            try:
+                d_end = datetime.strptime(str(end_date)[:10], "%Y-%m-%d").date()
+                all_dates = [d for d in all_dates if d <= d_end]
+            except Exception:
+                pass
+
+        if not all_dates:
+            return self._empty_result()
 
         # Index signals by execution date for realistic next-open trading
         signals_by_date: Dict[date, List[Dict[str, Any]]] = {}
