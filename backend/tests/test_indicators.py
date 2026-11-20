@@ -21,6 +21,7 @@ from app.services.indicators import (
     compute_volume_ratio,
     compute_52w_high_low,
     compute_all_indicators,
+    compute_close_only_indicators,
 )
 
 
@@ -206,3 +207,47 @@ class TestComputeAllIndicators:
         result = compute_all_indicators(df)
         for col in ["open", "high", "low", "close", "volume"]:
             assert col in result.columns
+
+    def test_null_ohlc_does_not_fabricate_atr_or_keltner(self):
+        """Verify that missing/null high and low remain NaN and do NOT synthesize high=low=close."""
+        df = pd.DataFrame({
+            "close": [10.0 + i for i in range(50)],
+            "open": [None] * 50,
+            "high": [None] * 50,
+            "low": [None] * 50,
+        })
+        result = compute_all_indicators(df)
+
+        assert pd.notna(result["ema_20"].iloc[-1])
+        assert pd.notna(result["rsi_14"].iloc[-1])
+        # ATR and Keltner must be NaN, NOT 0.0 or collapsed
+        assert pd.isna(result["atr_14"].iloc[-1])
+        assert pd.isna(result["kc_upper"].iloc[-1])
+        assert pd.isna(result["kc_lower"].iloc[-1])
+        assert pd.isna(result["supertrend"].iloc[-1])
+
+
+class TestComputeCloseOnlyIndicators:
+    def test_computes_close_metrics_and_leaves_ohlc_nan(self):
+        """Verify dedicated fund engine calculates close indicators and sets OHLC metrics to NaN."""
+        df = pd.DataFrame({
+            "close": [15.0 + (i * 0.1) for i in range(100)],
+        })
+        result = compute_close_only_indicators(df)
+
+        # Close-based indicators must be valid
+        assert pd.notna(result["ema_20"].iloc[-1])
+        assert pd.notna(result["ema_50"].iloc[-1])
+        assert pd.notna(result["rsi_14"].iloc[-1])
+        assert pd.notna(result["bb_upper"].iloc[-1])
+        assert pd.notna(result["high_52w"].iloc[-1])
+
+        # OHLC/volume indicators must strictly be NaN
+        assert pd.isna(result["atr_14"].iloc[-1])
+        assert pd.isna(result["kc_upper"].iloc[-1])
+        assert pd.isna(result["kc_lower"].iloc[-1])
+        assert pd.isna(result["volume_ratio"].iloc[-1])
+        assert pd.isna(result["supertrend"].iloc[-1])
+        assert pd.isna(result["supertrend_direction"].iloc[-1])
+        assert pd.isna(result["cmf_20"].iloc[-1])
+        assert pd.isna(result["vwap"].iloc[-1])

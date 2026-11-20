@@ -234,3 +234,38 @@ def test_backtest_outcome_driven_by_net_pnl_after_fees():
     assert res.winning_trades == 0
     assert res.losing_trades == 1
 
+
+def test_backtest_next_open_execution_timing():
+    """Verify that signal emitted on date T with entry_mode='next_open' executes on date T+1 at open."""
+    dates = pd.date_range(start="2026-01-01", periods=5, freq="D")
+    df = pd.DataFrame({
+        "open": [100.0, 105.0, 110.0, 115.0, 120.0],
+        "high": [102.0, 107.0, 112.0, 117.0, 122.0],
+        "low": [98.0, 103.0, 108.0, 113.0, 118.0],
+        "close": [101.0, 106.0, 111.0, 116.0, 121.0],
+        "volume": [100000.0] * 5,
+    }, index=dates)
+    history = {"THYAO": df}
+
+    # Signal generated on 2026-01-01 (Day T)
+    signals = [{
+        "symbol": "THYAO",
+        "strategy": "trend_pullback",
+        "signal_date": "2026-01-01",
+        "entry_mode": "next_open",
+        "entry_price": 101.0,  # Signal close reference price
+        "stop_loss": 95.0,
+        "target_1": 115.0,
+    }]
+
+    config = BacktestConfig(initial_capital=50000.0, commission_bps=0.0, slippage_bps=0.0)
+    engine = InstitutionalBacktestEngine(config)
+    res = engine.run_simulation(history, trade_signals=signals)
+
+    assert res.total_trades == 1
+    trade = res.trades[0]
+    # Trade must have entered on 2026-01-02 (T+1), NOT on 2026-01-01!
+    assert trade.entry_date == "2026-01-02"
+    # Entry price must be 105.0 (Day T+1 open), NOT 101.0 (Day T close)!
+    assert trade.entry_price == 105.0
+

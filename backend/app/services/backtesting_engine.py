@@ -63,13 +63,23 @@ class InstitutionalBacktestEngine:
         if not all_dates:
             return self._empty_result()
 
-        # Index signals by signal_date for fast chronological lookup
+        # Map date T to date T+1 to eliminate lookahead bias
+        date_to_next_date = {all_dates[i]: all_dates[i + 1] for i in range(len(all_dates) - 1)}
+
+        # Index signals by execution date for realistic next-open trading
         signals_by_date: Dict[date, List[Dict[str, Any]]] = {}
         for sig in trade_signals:
             try:
                 s_date_str = str(sig.get("signal_date", ""))[:10]
                 s_date = datetime.strptime(s_date_str, "%Y-%m-%d").date()
-                signals_by_date.setdefault(s_date, []).append(sig)
+                entry_mode = sig.get("entry_mode")
+                if entry_mode == "next_open":
+                    exec_date = date_to_next_date.get(s_date)
+                else:
+                    exec_date = s_date
+
+                if exec_date:
+                    signals_by_date.setdefault(exec_date, []).append(sig)
             except Exception:
                 continue
 

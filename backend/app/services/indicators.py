@@ -159,36 +159,104 @@ def compute_vwap(
     vwap = (typical_price * volume).cumsum() / cum_vol
     return pd.Series(vwap, index=close.index)
 
-def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """Computes and adds all indicators to the DataFrame."""
+
+def compute_close_only_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes purely close-based indicators for NAV-only instruments (e.g. TEFAS mutual funds):
+    - EMAs (20, 50, 200)
+    - RSI (14)
+    - MACD (12, 26, 9)
+    - Bollinger Bands (20, 2.0)
+    - 52-week High/Low
+    Strictly avoids fabricating ATR, Keltner Channels, SuperTrend, CMF, or VWAP,
+    leaving them as NaN to prevent misleading false volatility squeeze / breakout signals.
+    """
     if df.empty or 'close' not in df.columns:
         return df
 
     out = df.copy()
     close = out['close']
-    high = out.get('high', close)
-    low = out.get('low', close)
-    volume = out.get('volume', pd.Series(0, index=out.index))
 
     out['ema_20'] = compute_ema(close, 20)
     out['ema_50'] = compute_ema(close, 50)
     out['ema_200'] = compute_ema(close, 200)
-    
     out['rsi_14'] = compute_rsi(close, 14)
-    out['atr_14'] = compute_atr(high, low, close, 14)
-    
     out['macd'], out['macd_signal'], out['macd_histogram'] = compute_macd(close)
-    
     out['bb_upper'], out['bb_middle'], out['bb_lower'] = compute_bollinger_bands(close)
-    
-    out['kc_upper'], out['kc_lower'] = compute_keltner_channels(high, low, close)
-    
-    out['volume_ratio'] = compute_volume_ratio(volume, 20)
-    
     out['high_52w'], out['low_52w'] = compute_52w_high_low(close)
 
-    out['supertrend'], out['supertrend_direction'] = compute_supertrend(high, low, close)
-    out['cmf_20'] = compute_chaikin_money_flow(high, low, close, volume)
-    out['vwap'] = compute_vwap(high, low, close, volume)
-    
+    # OHLC- and volume-dependent indicators must remain NaN for close-only funds
+    out['atr_14'] = np.nan
+    out['kc_upper'] = np.nan
+    out['kc_lower'] = np.nan
+    out['volume_ratio'] = np.nan
+    out['supertrend'] = np.nan
+    out['supertrend_direction'] = np.nan
+    out['cmf_20'] = np.nan
+    out['vwap'] = np.nan
+
+    return validate_indicators_dataframe(out, strict=False)
+
+
+def compute_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes and adds all indicators to the DataFrame.
+    If high, low, or volume are missing or null, their dependent indicators
+    are populated with NaN rather than fabricating synthetic prices from close.
+    """
+    if df.empty or 'close' not in df.columns:
+        return df
+
+    out = df.copy()
+    close = out['close']
+
+    # 1. Close-based indicators (always valid if close exists)
+    out['ema_20'] = compute_ema(close, 20)
+    out['ema_50'] = compute_ema(close, 50)
+    out['ema_200'] = compute_ema(close, 200)
+    out['rsi_14'] = compute_rsi(close, 14)
+    out['macd'], out['macd_signal'], out['macd_histogram'] = compute_macd(close)
+    out['bb_upper'], out['bb_middle'], out['bb_lower'] = compute_bollinger_bands(close)
+    out['high_52w'], out['low_52w'] = compute_52w_high_low(close)
+
+    # 2. Check for valid physical high/low series (never fabricate close as high/low)
+    has_valid_ohlc = (
+        'high' in out.columns and 'low' in out.columns
+        and out['high'].notna().any() and out['low'].notna().any()
+    )
+
+    if has_valid_ohlc:
+        high = out['high']
+        low = out['low']
+        out['atr_14'] = compute_atr(high, low, close, 14)
+        out['kc_upper'], out['kc_lower'] = compute_keltner_channels(high, low, close)
+        out['supertrend'], out['supertrend_direction'] = compute_supertrend(high, low, close)
+    else:
+        out['atr_14'] = np.nan
+        out['kc_upper'] = np.nan
+        out['kc_lower'] = np.nan
+        out['supertrend'] = np.nan
+        out['supertrend_direction'] = np.nan
+
+    # 3. Volume and money-flow indicators
+    has_valid_volume = (
+        'volume' in out.columns
+        and out['volume'].notna().any()
+        and (out['volume'] > 0).any()
+    )
+
+    if has_valid_volume:
+        volume = out['volume']
+        out['volume_ratio'] = compute_volume_ratio(volume, 20)
+        if has_valid_ohlc:
+            out['cmf_20'] = compute_chaikin_money_flow(high, low, close, volume)
+            out['vwap'] = compute_vwap(high, low, close, volume)
+        else:
+            out['cmf_20'] = np.nan
+            out['vwap'] = np.nan
+    else:
+        out['volume_ratio'] = np.nan
+        out['cmf_20'] = np.nan
+        out['vwap'] = np.nan
+
     return validate_indicators_dataframe(out, strict=False)

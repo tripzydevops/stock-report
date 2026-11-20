@@ -52,7 +52,7 @@ from app.services.market_data_archive import (
     validate_and_sanitize_ohlcv_dataframe,
     upsert_hot_tier_to_database
 )
-from app.services.indicators import compute_all_indicators
+from app.services.indicators import compute_all_indicators, compute_close_only_indicators
 from app.services.screener import run_all_screens
 from app.services.institutional_screener import run_institutional_screens
 from app.services.signal_persistence import persist_trade_signals
@@ -67,7 +67,7 @@ logger = logging.getLogger("archive_backfill")
 
 
 def run_tefas_backfill_and_archive(client: Any) -> Dict[str, Any]:
-    """Syncs 1 full year (252 bars) for all 75 TEFAS funds and exports to Parquet."""
+    """Syncs 1 full year (252 bars) for all 75 TEFAS funds and exports partitioned & snapshot Parquet."""
     logger.info("=" * 60)
     logger.info("🏛️ STAGE 1: TEFAS MUTUAL FUNDS 1-YEAR BACKFILL & ARCHIVE")
     logger.info("=" * 60)
@@ -105,18 +105,45 @@ def run_tefas_backfill_and_archive(client: Any) -> Dict[str, Any]:
                 "source": "tefas",
             })
 
+    tefas_partition_archived = 0
+    tefas_partition_failed = 0
+    tefas_errors = []
+
     if tefas_rows:
         df_tefas = pd.DataFrame(tefas_rows)
+
+        # 2a. Partition into canonical per-symbol Parquet archives
+        for sym, df_fund in df_tefas.groupby("symbol"):
+            clean_sym = str(sym).strip().upper()
+            try:
+                _, fund_bytes = export_symbol_archive(df_fund, market="TEFAS", symbol=clean_sym)
+                upload_symbol_archive_to_supabase(fund_bytes, market="TEFAS", symbol=clean_sym, client=client)
+                tefas_partition_archived += 1
+            except Exception as err:
+                tefas_partition_failed += 1
+                err_msg = f"Failed to upload partitioned archive for TEFAS/{clean_sym}: {err}"
+                tefas_errors.append(err_msg)
+                logger.warning(err_msg)
+
+        logger.info(f"✅ TEFAS canonical partitioned archives: {tefas_partition_archived} uploaded, {tefas_partition_failed} failed.")
+
+        # 2b. Export Versioned Disposable Snapshot
+        snapshot_ts = datetime.now(timezone.utc).strftime("%Y%m%d")
         local_parquet = PROJECT_ROOT / "data" / "archives" / "tefas_daily_1y.parquet"
         parquet_bytes = export_dataframe_to_parquet(df_tefas, file_path=local_parquet)
 
-        # Upload to Supabase Storage
-        storage_path = "archives/parquet/tefas_daily_1y.parquet"
+        storage_path = f"archives/parquet/snapshots/tefas_daily_1y_{snapshot_ts}.parquet"
         upload_parquet_archive_to_supabase(parquet_bytes, storage_path, client=client)
 
-        logger.info(f"✅ TEFAS Parquet cold archive created: {len(df_tefas)} rows ({len(parquet_bytes)/1024:.1f} KB).")
+        logger.info(f"✅ TEFAS Parquet snapshot archive created: {len(df_tefas)} rows ({len(parquet_bytes)/1024:.1f} KB).")
 
-    return sync_res
+    return {
+        "sync_res": sync_res,
+        "partition_archived": tefas_partition_archived,
+        "partition_failed": tefas_partition_failed,
+        "partition_errors": tefas_errors,
+        "total_bars": len(tefas_rows)
+    }
 
 
 def run_equities_backfill_and_archive(
@@ -137,6 +164,9 @@ def run_equities_backfill_and_archive(
 
     all_dfs: Dict[str, pd.DataFrame] = {}
     master_rows = []
+    partition_archived = 0
+    partition_failed = 0
+    partition_errors = []
 
     # Process in safe batches of 50 to avoid Yahoo Finance rate limits
     for batch_idx in range(0, len(target_symbols), batch_size):
@@ -179,12 +209,16 @@ def run_equities_backfill_and_archive(
 
                     all_dfs[clean_sym] = df_sym
 
-                    # Export & upload partitioned per-symbol Parquet archive
+                    # Export & upload canonical partitioned per-symbol Parquet archive
                     try:
                         _, sym_bytes = export_symbol_archive(df_sym, market=market, symbol=clean_sym)
                         upload_symbol_archive_to_supabase(sym_bytes, market=market, symbol=clean_sym, client=client)
+                        partition_archived += 1
                     except Exception as sym_err:
-                        logger.debug(f"Partitioned archive for {clean_sym} skipped/failed: {sym_err}")
+                        partition_failed += 1
+                        err_msg = f"Failed to upload partitioned archive for {market}/{clean_sym}: {sym_err}"
+                        partition_errors.append(err_msg)
+                        logger.warning(err_msg)
 
                     for dt, r in df_sym.iterrows():
                         d_str = dt.strftime("%Y-%m-%d") if hasattr(dt, 'strftime') else str(dt)[:10]
@@ -211,17 +245,18 @@ def run_equities_backfill_and_archive(
         except Exception as e:
             logger.error(f"Error downloading batch: {e}")
 
-    logger.info(f"Successfully processed {len(all_dfs)} tickers ({len(master_rows)} total daily bars).")
+    logger.info(f"Successfully processed {len(all_dfs)} tickers ({len(master_rows)} total daily bars). Partition archives: {partition_archived} uploaded, {partition_failed} failed.")
 
     if master_rows:
         df_master = pd.DataFrame(master_rows)
 
-        # 1. Export Parquet Cold Archive
+        # 1. Export Parquet Cold Archive (Versioned Disposable Snapshot)
+        snapshot_ts = datetime.now(timezone.utc).strftime("%Y%m%d")
         local_parquet = PROJECT_ROOT / "data" / "archives" / f"{market.lower()}_daily_{period}.parquet"
         parquet_bytes = export_dataframe_to_parquet(df_master, file_path=local_parquet)
 
-        # 2. Upload Parquet to Supabase Object Storage
-        storage_path = f"archives/parquet/{market.lower()}_daily_{period}.parquet"
+        # 2. Upload Parquet Snapshot to Supabase Object Storage
+        storage_path = f"archives/parquet/snapshots/{market.lower()}_daily_{period}_{snapshot_ts}.parquet"
         upload_parquet_archive_to_supabase(parquet_bytes, storage_path, client=client)
 
         # 3. Upsert Hot Operational Tier (Latest 252 Bars) to PostgreSQL
@@ -254,20 +289,34 @@ def run_equities_backfill_and_archive(
                     ind_row[c] = round(float(val), 6) if pd.notna(val) else None
                 indicator_rows.append(ind_row)
 
+        indicator_upserted = 0
+        indicator_failed = 0
+        indicator_errors = []
         if indicator_rows:
             for i in range(0, len(indicator_rows), 500):
                 c = indicator_rows[i:i + 500]
                 try:
                     client.table("daily_indicators").upsert(c, on_conflict="asset_id,date").execute()
+                    indicator_upserted += len(c)
                 except Exception as e:
-                    logger.error(f"Error upserting indicators: {e}")
-            logger.info(f"✅ Upserted daily indicators for {len(indicator_rows)} {market} assets.")
+                    err_msg = f"Error upserting indicators chunk {i}-{i+len(c)}: {e}"
+                    logger.error(err_msg)
+                    indicator_failed += len(c)
+                    indicator_errors.append(err_msg)
+            logger.info(f"✅ Daily indicators for {market}: {indicator_upserted} upserted, {indicator_failed} failed.")
 
         return {
             "tickers_processed": len(all_dfs),
+            "partition_archived": partition_archived,
+            "partition_failed": partition_failed,
+            "partition_errors": partition_errors,
             "cold_parquet_rows": len(df_master),
             "cold_parquet_kb": round(len(parquet_bytes) / 1024, 1),
             "hot_tier_bars": hot_count,
+            "hot_tier_failed": getattr(hot_res, 'failed', 0),
+            "indicator_upserted": indicator_upserted,
+            "indicator_failed": indicator_failed,
+            "indicator_errors": indicator_errors,
             "dfs": all_dfs,
         }
 
@@ -327,7 +376,7 @@ def run_complete_pipeline(target_market: Optional[str] = None):
         for sym, df_item in summary["US"]["dfs"].items():
             asset_data[sym] = compute_all_indicators(df_item)
 
-    # Add TEFAS funds with >= 63 bars for Fund Momentum screening
+    # Add TEFAS funds with >= 63 bars for Fund Momentum screening (Close-only indicators)
     tefas_assets = client.table("assets").select("id, symbol").eq("market", "TEFAS").execute().data or []
     for a in tefas_assets:
         sym = a["symbol"].strip().upper()
@@ -339,7 +388,8 @@ def run_complete_pipeline(target_market: Optional[str] = None):
             df_t["high"] = pd.to_numeric(df_t.get("high"), errors="coerce")
             df_t["low"] = pd.to_numeric(df_t.get("low"), errors="coerce")
             df_t["volume"] = pd.to_numeric(df_t.get("volume"), errors="coerce").fillna(0).astype(float)
-            asset_data[sym] = compute_all_indicators(df_t)
+            # Use dedicated close-only indicator engine without fabricating OHLC metrics
+            asset_data[sym] = compute_close_only_indicators(df_t)
 
     logger.info(f"Loaded and enriched {len(asset_data)} assets for screening.")
 
@@ -359,8 +409,14 @@ def run_complete_pipeline(target_market: Optional[str] = None):
     print("=" * 65)
     print(f" Total Duration:          {total_duration:.1f}s")
     for m, stats in summary.items():
-        print(f" [{m}] Stats: {stats}")
-    print(f" Total Open Trade Signals: {len(all_signals)}")
+        print(f"\n [{m}] Status & Integrity Metrics:")
+        if isinstance(stats, dict):
+            for k, v in stats.items():
+                if k != "dfs":
+                    print(f"   • {k}: {v}")
+        else:
+            print(f"   • {stats}")
+    print(f"\n Total Open Trade Signals: {len(all_signals)}")
     print("=" * 65)
 
 
