@@ -293,6 +293,9 @@ class WalkForwardReport(BaseModel):
     oos_win_rate: float
     oos_profit_factor: float
     oos_expectancy: float
+    oos_total_return_pct: float = 0.0
+    oos_cagr_pct: float = 0.0
+    oos_max_drawdown_pct: float = 0.0
     deflated_sharpe_ratio: float | None = None
     annualized_sharpe: float | None = None
     sharpe_bootstrap_ci_95: list[float] | None = None
@@ -303,6 +306,7 @@ class WalkForwardReport(BaseModel):
     round_trip_notional: float = 0.0
     annualized_turnover: float = 0.0
     turnover_ratio: float = 0.0  # backward-compatible proxy
+    equity_curve: list[BacktestEquityPoint] = []
     active_deployment_strategies: list[str] = []
     calibrated_confidence_map: dict[str, float] = {}
     strategy_metrics: dict[str, dict[str, Any]] = {}

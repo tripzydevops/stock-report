@@ -195,4 +195,7 @@ class TestInstitutionalWalkForwardEngine:
         assert report.sharpe_bootstrap_ci_95 is not None
         assert report.round_trip_notional >= 0.0
         assert report.annualized_turnover >= 0.0
+        assert len(report.equity_curve) > 0
+        assert report.oos_total_return_pct is not None
+        assert report.oos_max_drawdown_pct <= 0.0
 

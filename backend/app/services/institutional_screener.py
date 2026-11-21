@@ -381,13 +381,19 @@ def screen_relative_strength_leaders(
 def run_institutional_screens(
     asset_data: Dict[str, pd.DataFrame],
     asset_info: Dict[str, Dict],
-    benchmark_data: Optional[Dict[str, pd.DataFrame]] = None
+    benchmark_data: Optional[Dict[str, pd.DataFrame]] = None,
+    deployed_only: bool = True
 ) -> List[Dict]:
     """
-    Runs ONLY institutional screens across all assets.
+    Runs institutional screens across all assets.
     benchmark_data can contain 'SPY' and 'XU100.IS' for RS calculations.
+    Tags each signal with `is_deployed` and `deployment_status` ("ACTIVE" vs "RESEARCH_ONLY").
+    If `deployed_only=True`, filters out research-only / uncalibrated prior setups.
     """
-    signals = []
+    from app.services.confidence_calibrator import StrategyConfidenceCalibrator
+    calibrator = StrategyConfidenceCalibrator()
+
+    raw_signals = []
     benchmarks = benchmark_data or {}
     spy_df = benchmarks.get('SPY') or asset_data.get('SPY')
     xu100_df = benchmarks.get('XU100.IS') or asset_data.get('XU100.IS')
@@ -402,18 +408,31 @@ def run_institutional_screens(
         is_us = market in ['US', 'NASDAQ', 'NYSE']
 
         if asset_type in ['stock', 'etf']:
-            # 1. Liquidity Sweep Reclaim: Verified alpha on BOTH BIST (+80.8%) and US (+21.7%)
+            # 1. Liquidity Sweep Reclaim: Prior setup
             sig = screen_liquidity_sweep_reclaim(df, symbol, market=market)
             if sig:
-                signals.append(sig)
+                raw_signals.append(sig)
 
-            # 2. Anchored VWAP Bounce: Verified on BIST (+210.2%, 0.86 Sharpe); retired on US due to lag
+            # 2. Anchored VWAP Bounce: Prior setup
             if not is_us:
                 sig = screen_anchored_vwap_bounce(df, symbol, market=market)
                 if sig:
-                    signals.append(sig)
+                    raw_signals.append(sig)
 
-            # Note: Relative Strength Leaders retired from active screening due to empirical underperformance (0.10 Sharpe)
+    # Attach deployment metadata and filter if deployed_only requested
+    final_signals = []
+    for sig in raw_signals:
+        strat = sig.get("strategy", "")
+        mkt = sig.get("market", "BIST")
+        meta = calibrator.get_confidence_metadata(strat, market=mkt, raw_confluence_score=float(sig.get("confidence_score", 70.0)))
+        sig["is_deployed"] = meta["is_deployed"]
+        sig["deployment_status"] = meta["deployment_status"]
+        sig["confidence_source"] = meta["confidence_source"]
+        sig["confidence_score"] = meta["confidence_score"]
 
-    return signals
+        if deployed_only and not sig["is_deployed"]:
+            continue
+        final_signals.append(sig)
+
+    return final_signals
 

@@ -152,3 +152,36 @@ def test_run_institutional_screens_composite():
     }
     signals = run_institutional_screens(asset_data, asset_info)
     assert isinstance(signals, list)
+
+
+def test_scanner_api_endpoints_deployed_only_defaults():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+
+    # 1. User Recommendations Endpoint defaults to deployed_only=True
+    r_recom = client.get("/api/scan/recommendations")
+    assert r_recom.status_code == 200
+    assert isinstance(r_recom.json(), list)
+
+    # 2. Paper Trading Endpoint defaults to deployed_only=True
+    r_paper = client.get("/api/scan/paper-trading")
+    assert r_paper.status_code == 200
+    assert isinstance(r_paper.json(), list)
+
+    # 3. Live Trading Endpoint defaults to deployed_only=True
+    r_live = client.get("/api/scan/live-trading")
+    assert r_live.status_code == 200
+    assert isinstance(r_live.json(), list)
+
+    # 4. Research Endpoint defaults to deployed_only=False
+    r_res = client.get("/api/scan/research")
+    assert r_res.status_code == 200
+    assert isinstance(r_res.json(), list)
+
+    # 5. Production Signals Endpoint defaults to deployed_only=True
+    r_sig = client.get("/api/scan/signals")
+    assert r_sig.status_code == 200
+    assert isinstance(r_sig.json(), list)
+

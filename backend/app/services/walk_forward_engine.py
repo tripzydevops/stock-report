@@ -75,7 +75,7 @@ def compute_deflated_sharpe_ratio(
     Returns:
         (annualized_sharpe, expected_max_sharpe_star, deflated_sharpe_ratio)
     """
-    if len(returns) < 10:
+    if len(returns) < 20:
         return 0.0, 0.0, 0.50
 
     arr = np.array(returns, dtype=float)
@@ -507,6 +507,9 @@ class InstitutionalWalkForwardEngine:
             oos_win_rate=overall_win_rate,
             oos_profit_factor=overall_pf,
             oos_expectancy=overall_exp,
+            oos_total_return_pct=res_continuous.total_return_pct,
+            oos_cagr_pct=res_continuous.cagr_pct,
+            oos_max_drawdown_pct=res_continuous.max_drawdown_pct,
             annualized_sharpe=ann_sr,
             deflated_sharpe_ratio=dsr,
             sharpe_bootstrap_ci_95=boot_ci,
@@ -517,6 +520,7 @@ class InstitutionalWalkForwardEngine:
             round_trip_notional=total_round_trip_notional,
             annualized_turnover=avg_annualized_turnover,
             turnover_ratio=mean_turnover_proxy,
+            equity_curve=res_continuous.equity_curve,
             active_deployment_strategies=deployed_strats,
             calibrated_confidence_map=calibrated_map,
             strategy_metrics=strategy_summary,
