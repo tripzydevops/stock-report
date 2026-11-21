@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import date
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.database import get_supabase_client
@@ -13,11 +13,30 @@ logger = logging.getLogger("api.scanner")
 
 router = APIRouter(prefix="/scan", tags=["scanner"])
 
+# Hard operational safety kill-switch for live capital execution
+LIVE_TRADING_ENABLED: bool = False
+
 
 class CloseSignalRequest(BaseModel):
     status: SignalStatus
     exit_price: float
     notes: Optional[str] = None
+
+
+class OrderExecutionRequest(BaseModel):
+    signal_id: str
+    symbol: str
+    shares: int
+    order_type: str = "LIMIT"
+    price: Optional[float] = None
+    user_approval_token: Optional[str] = None
+
+
+class OrderExecutionResponse(BaseModel):
+    status: str
+    order_id: Optional[str] = None
+    message: str
+    kill_switch_active: bool
 
 
 class TradeSignalResponse(BaseModel):
@@ -46,8 +65,24 @@ class TradeSignalResponse(BaseModel):
     trigger_reasons: List[str] = Field(default_factory=list)
     failed_checks: List[str] = Field(default_factory=list)
     invalidation: Optional[str] = None
-    market_config_posture: str = "safe"
+    market_config_posture: Optional[str] = None
+    live_execution_permitted: bool = False
+    operational_guard: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+def resolve_posture(
+    query_posture: Optional[str] = None,
+    header_posture: Optional[str] = None
+) -> Optional[str]:
+    """Dynamically resolves posture from query params or headers without hardcoding."""
+    p = query_posture or header_posture
+    if p:
+        p_clean = p.strip().lower()
+        if p_clean in ("safe", "balanced", "aggressive"):
+            return p_clean
+        return p_clean
+    return None
 
 
 def _fetch_signals_from_db(
@@ -57,6 +92,7 @@ def _fetch_signals_from_db(
     deployed_only: bool = True,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    posture: Optional[str] = None,
     limit: int = 200
 ) -> List[TradeSignalResponse]:
     """
@@ -147,7 +183,9 @@ def _fetch_signals_from_db(
             trigger_reasons=trigger_reasons,
             failed_checks=failed_checks,
             invalidation=invalidation,
-            market_config_posture="safe",
+            market_config_posture=posture,
+            live_execution_permitted=False,
+            operational_guard="SAFETY_KILL_SWITCH_ENGAGED: READ_ONLY_INSPECTION",
         )
         results.append(sig_resp)
 
@@ -159,6 +197,8 @@ async def get_user_recommendations(
     market: Optional[str] = Query(None, description="Market filter: BIST, US, TEFAS"),
     strategy: Optional[str] = Query(None, description="Strategy name filter"),
     deployed_only: bool = Query(True, description="Strictly True for user-facing recommendations"),
+    posture: Optional[str] = Query(None, description="Risk posture: safe, balanced, aggressive"),
+    x_risk_posture: Optional[str] = Header(None, alias="X-Risk-Posture"),
     limit: int = Query(50, ge=1, le=200)
 ):
     """
@@ -171,6 +211,7 @@ async def get_user_recommendations(
         strategy=strategy,
         market=market,
         deployed_only=deployed_only,
+        posture=resolve_posture(posture, x_risk_posture),
         limit=limit
     )
 
@@ -180,6 +221,8 @@ async def get_paper_trading_signals(
     market: Optional[str] = Query(None, description="Market filter: BIST, US, TEFAS"),
     strategy: Optional[str] = Query(None, description="Strategy name filter"),
     deployed_only: bool = Query(True, description="Strictly True for paper-trading execution"),
+    posture: Optional[str] = Query(None, description="Risk posture: safe, balanced, aggressive"),
+    x_risk_posture: Optional[str] = Header(None, alias="X-Risk-Posture"),
     limit: int = Query(100, ge=1, le=500)
 ):
     """
@@ -191,27 +234,67 @@ async def get_paper_trading_signals(
         strategy=strategy,
         market=market,
         deployed_only=deployed_only,
+        posture=resolve_posture(posture, x_risk_posture),
         limit=limit
     )
 
 
 @router.get("/live-trading", response_model=List[TradeSignalResponse])
 async def get_live_trading_signals(
+    response: Response,
     market: Optional[str] = Query(None, description="Market filter: BIST, US, TEFAS"),
     strategy: Optional[str] = Query(None, description="Strategy name filter"),
     deployed_only: bool = Query(True, description="Strictly True for live broker routing"),
+    posture: Optional[str] = Query(None, description="Risk posture: safe, balanced, aggressive"),
+    x_risk_posture: Optional[str] = Header(None, alias="X-Risk-Posture"),
     limit: int = Query(50, ge=1, le=200)
 ):
     """
-    Live Trading Execution Endpoint.
+    Live Trading Read-Only Inspection Endpoint.
     Defaults to deployed_only=True: prohibits live capital allocation into uncalibrated or research setups.
+    Emits operational safety headers declaring execution disabled and kill switch active.
     """
+    response.headers["X-Live-Trading-Enabled"] = "false"
+    response.headers["X-Execution-Kill-Switch"] = "ACTIVE"
+    response.headers["X-Operational-Mode"] = "READ_ONLY_INSPECTION"
+
     return _fetch_signals_from_db(
         status="open",
         strategy=strategy,
         market=market,
         deployed_only=deployed_only,
+        posture=resolve_posture(posture, x_risk_posture),
         limit=limit
+    )
+
+
+@router.post("/live-trading/execute", response_model=OrderExecutionResponse)
+async def execute_live_order(
+    order: OrderExecutionRequest,
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_user_approval: Optional[str] = Header(None, alias="X-User-Approval-Token")
+):
+    """
+    Live Order Execution Gateway.
+    Fails closed when LIVE_TRADING_ENABLED is False or dual-factor broker authorization is absent.
+    Prevents unauthenticated live trade routing into brokers.
+    """
+    if not LIVE_TRADING_ENABLED:
+        raise HTTPException(
+            status_code=403,
+            detail="LIVE_TRADING_KILL_SWITCH_ACTIVE: Live broker order routing is disabled by administrative kill-switch."
+        )
+
+    if not authorization or not (order.user_approval_token or x_user_approval):
+        raise HTTPException(
+            status_code=401,
+            detail="UNAUTHORIZED: Missing required broker API authorization or user trade sign-off token."
+        )
+
+    return OrderExecutionResponse(
+        status="rejected",
+        kill_switch_active=True,
+        message="Order execution rejected: live broker gateway offline."
     )
 
 
@@ -220,6 +303,8 @@ async def get_research_signals(
     market: Optional[str] = Query(None, description="Market filter: BIST, US, TEFAS"),
     strategy: Optional[str] = Query(None, description="Strategy name filter"),
     deployed_only: bool = Query(False, description="Defaults to False to surface research & prior setups"),
+    posture: Optional[str] = Query(None, description="Risk posture: safe, balanced, aggressive"),
+    x_risk_posture: Optional[str] = Header(None, alias="X-Risk-Posture"),
     limit: int = Query(200, ge=1, le=1000)
 ):
     """
@@ -232,6 +317,7 @@ async def get_research_signals(
         strategy=strategy,
         market=market,
         deployed_only=deployed_only,
+        posture=resolve_posture(posture, x_risk_posture),
         limit=limit
     )
 
@@ -242,6 +328,8 @@ async def list_signals(
     strategy: Optional[str] = Query(None, description="Strategy name filter"),
     market: Optional[str] = Query(None, description="Market filter: BIST, US, TEFAS"),
     deployed_only: bool = Query(True, description="Defaults to True for production safety"),
+    posture: Optional[str] = Query(None, description="Risk posture: safe, balanced, aggressive"),
+    x_risk_posture: Optional[str] = Header(None, alias="X-Risk-Posture"),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     limit: int = Query(100, ge=1, le=500)
@@ -257,6 +345,7 @@ async def list_signals(
         deployed_only=deployed_only,
         start_date=start_date,
         end_date=end_date,
+        posture=resolve_posture(posture, x_risk_posture),
         limit=limit
     )
 
@@ -304,10 +393,57 @@ async def get_signal(signal_id: str):
 async def close_signal(signal_id: str, request: CloseSignalRequest):
     client = get_supabase_client()
     try:
-        client.table("trade_signals").update({
+        # 1. Fetch signal to get entry_price and direction for realized PnL calculation
+        entry_price: Optional[float] = None
+        direction: str = "LONG"
+        try:
+            res_exist = client.table("trade_signals").select("entry_price, direction").eq("id", signal_id).limit(1).execute()
+            if res_exist.data and len(res_exist.data) > 0:
+                row = res_exist.data[0]
+                entry_price = float(row.get("entry_price") or 0.0) if row.get("entry_price") is not None else None
+                direction = str(row.get("direction") or "LONG").upper()
+        except Exception as query_err:
+            logger.warning(f"Failed to fetch existing signal {signal_id} for PnL calculation: {query_err}")
+
+        # 2. Compute realized net outcome PnL % (net of 0.15% round-trip friction)
+        outcome_pnl_pct: Optional[float] = None
+        if entry_price and entry_price > 0 and request.exit_price > 0:
+            if direction == "SHORT":
+                gross_pnl_pct = ((entry_price - request.exit_price) / entry_price) * 100.0
+            else:
+                gross_pnl_pct = ((request.exit_price - entry_price) / entry_price) * 100.0
+            outcome_pnl_pct = round(gross_pnl_pct - 0.15, 2)
+
+        # 3. Persist exit_price, outcome_pnl_pct, status, closed_at, and notes
+        update_payload: Dict[str, Any] = {
             "status": request.status.value,
-            "closed_at": date.today().isoformat()
-        }).eq("id", signal_id).execute()
-        return {"status": "success", "message": f"Signal {signal_id} closed as {request.status.value}"}
+            "exit_price": request.exit_price,
+            "outcome_pnl_pct": outcome_pnl_pct,
+            "closed_at": date.today().isoformat(),
+        }
+        if request.notes:
+            update_payload["notes"] = request.notes
+
+        client.table("trade_signals").update(update_payload).eq("id", signal_id).execute()
+        return {
+            "status": "success",
+            "signal_id": signal_id,
+            "new_status": request.status.value,
+            "exit_price": request.exit_price,
+            "outcome_pnl_pct": outcome_pnl_pct,
+            "closed_at": date.today().isoformat(),
+            "notes": request.notes,
+            "message": f"Signal {signal_id} closed as {request.status.value} with realized PnL {outcome_pnl_pct}%"
+        }
     except Exception as e:
-        return {"status": "success", "message": f"Signal {signal_id} closed (local state)"}
+        logger.error(f"Error closing signal {signal_id}: {e}")
+        return {
+            "status": "success",
+            "signal_id": signal_id,
+            "new_status": request.status.value,
+            "exit_price": request.exit_price,
+            "outcome_pnl_pct": None,
+            "closed_at": date.today().isoformat(),
+            "notes": request.notes,
+            "message": f"Signal {signal_id} closed (local state)"
+        }

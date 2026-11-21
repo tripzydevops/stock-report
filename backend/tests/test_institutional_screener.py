@@ -170,10 +170,13 @@ def test_scanner_api_endpoints_deployed_only_defaults():
     assert r_paper.status_code == 200
     assert isinstance(r_paper.json(), list)
 
-    # 3. Live Trading Endpoint defaults to deployed_only=True
+    # 3. Live Trading Inspection Endpoint defaults to deployed_only=True and emits safety headers
     r_live = client.get("/api/scan/live-trading")
     assert r_live.status_code == 200
     assert isinstance(r_live.json(), list)
+    assert r_live.headers.get("x-live-trading-enabled") == "false"
+    assert r_live.headers.get("x-execution-kill-switch") == "ACTIVE"
+    assert r_live.headers.get("x-operational-mode") == "READ_ONLY_INSPECTION"
 
     # 4. Research Endpoint defaults to deployed_only=False
     r_res = client.get("/api/scan/research")
@@ -184,4 +187,100 @@ def test_scanner_api_endpoints_deployed_only_defaults():
     r_sig = client.get("/api/scan/signals")
     assert r_sig.status_code == 200
     assert isinstance(r_sig.json(), list)
+
+
+def test_live_trading_execution_kill_switch_engaged():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+
+    # Execution attempt must be rejected with 403 Forbidden because LIVE_TRADING_ENABLED = False
+    order_payload = {
+        "signal_id": "test-sig-123",
+        "symbol": "THYAO.IS",
+        "shares": 100,
+        "order_type": "LIMIT",
+        "price": 310.0,
+        "user_approval_token": "valid-signoff-token"
+    }
+    r = client.post("/api/scan/live-trading/execute", json=order_payload, headers={"Authorization": "Bearer broker-key"})
+    assert r.status_code == 403
+    assert "LIVE_TRADING_KILL_SWITCH_ACTIVE" in r.json()["detail"]
+
+
+def test_signal_close_pnl_calculation_and_persistence(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    import app.api.scanner as scanner_mod
+
+    client = TestClient(app)
+
+    # Mock Supabase table interactions
+    mock_records = {}
+    class MockTable:
+        def __init__(self, name):
+            self.name = name
+            self._select_cols = None
+            self._eq_field = None
+            self._eq_val = None
+            self._update_data = None
+
+        def select(self, cols):
+            self._select_cols = cols
+            return self
+
+        def update(self, data):
+            self._update_data = data
+            return self
+
+        def eq(self, field, val):
+            self._eq_field = field
+            self._eq_val = val
+            return self
+
+        def limit(self, n):
+            return self
+
+        def execute(self):
+            class MockRes:
+                def __init__(self, d):
+                    self.data = d
+            if self._update_data is not None:
+                mock_records[self._eq_val] = self._update_data
+                return MockRes([self._update_data])
+            # Return synthetic signal with entry_price=100.0, direction=LONG
+            return MockRes([{"entry_price": 100.0, "direction": "LONG"}])
+
+    class MockClient:
+        def table(self, name):
+            return MockTable(name)
+
+    monkeypatch.setattr(scanner_mod, "get_supabase_client", lambda: MockClient())
+
+    close_req = {
+        "status": "target_hit",
+        "exit_price": 110.0,  # 10% gain - 0.15% friction = +9.85%
+        "notes": "Target 1 hit at resistance"
+    }
+    r = client.put("/api/scan/signals/sig-777/close", json=close_req)
+    assert r.status_code == 200
+    res = r.json()
+    assert res["status"] == "success"
+    assert res["signal_id"] == "sig-777"
+    assert res["new_status"] == "target_hit"
+    assert res["exit_price"] == 110.0
+    assert res["outcome_pnl_pct"] == 9.85
+    assert res["notes"] == "Target 1 hit at resistance"
+    assert "sig-777" in mock_records
+    assert mock_records["sig-777"]["outcome_pnl_pct"] == 9.85
+
+
+def test_dynamic_posture_resolution():
+    from app.api.scanner import resolve_posture
+
+    assert resolve_posture("safe", None) == "safe"
+    assert resolve_posture(None, "AGGRESSIVE") == "aggressive"
+    assert resolve_posture("balanced", "safe") == "balanced"
+    assert resolve_posture(None, None) is None
 

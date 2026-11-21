@@ -127,6 +127,10 @@ class TestInstitutionalWalkForwardEngine:
 
     def test_canonical_deflated_sharpe_ratio(self):
         from app.services.walk_forward_engine import compute_deflated_sharpe_ratio, compute_bootstrap_sharpe_ci
+        # Case 0: Insufficient sample size (< 20 bars) or zero variance must return (None, None, None)
+        assert compute_deflated_sharpe_ratio([0.01] * 15) == (None, None, None)
+        assert compute_deflated_sharpe_ratio([0.00] * 50) == (None, None, None)
+
         # Case 1: Low Sharpe series tested across M=50 trials should be penalized (DSR < 0.5)
         np.random.seed(42)
         low_daily = list(np.random.normal(loc=0.0002, scale=0.012, size=500))
@@ -142,19 +146,21 @@ class TestInstitutionalWalkForwardEngine:
 
         # Case 3: Bootstrap confidence interval
         ci = compute_bootstrap_sharpe_ci(high_daily, n_boot=200, ci_pct=95.0)
+        assert ci is not None
         assert len(ci) == 2
         assert ci[0] < ci[1]
         assert ci[0] > 0.0  # Entire 95% CI is strictly positive
 
     def test_circular_block_bootstrap(self):
         from app.services.walk_forward_engine import compute_block_bootstrap_sharpe_ci
-        # When sample < 20 bars, returns [0.0, 0.0]
-        assert compute_block_bootstrap_sharpe_ci([0.01] * 15) == [0.0, 0.0]
+        # When sample < 20 bars, returns None
+        assert compute_block_bootstrap_sharpe_ci([0.01] * 15) is None
 
         # Valid series with block_size=10
         np.random.seed(42)
         returns = list(np.random.normal(loc=0.001, scale=0.01, size=100))
         ci = compute_block_bootstrap_sharpe_ci(returns, block_size=10, n_boot=200)
+        assert ci is not None
         assert len(ci) == 2
         assert ci[0] <= ci[1]
 

@@ -66,7 +66,7 @@ def compute_deflated_sharpe_ratio(
     num_trials: int = 50,
     benchmark_sharpe: float = 0.0,
     annual_factor: float = 252.0
-) -> Tuple[float, float, float]:
+) -> Tuple[Optional[float], Optional[float], Optional[float]]:
     """
     Canonical Deflated Sharpe Ratio (Bailey & López de Prado, 2014).
     Tests the null hypothesis that true Sharpe ratio <= benchmark_sharpe after correcting
@@ -74,16 +74,17 @@ def compute_deflated_sharpe_ratio(
 
     Returns:
         (annualized_sharpe, expected_max_sharpe_star, deflated_sharpe_ratio)
+        or (None, None, None) if sample size is insufficient (< 20 daily bars) or zero variance.
     """
     if len(returns) < 20:
-        return 0.0, 0.0, 0.50
+        return None, None, None
 
     arr = np.array(returns, dtype=float)
     t_obs = len(arr)
     mean_ret = float(np.mean(arr))
     std_ret = float(np.std(arr, ddof=1))
     if std_ret < 1e-8:
-        return 0.0, 0.0, 0.50
+        return None, None, None
 
     # Daily Sharpe & Annualized Sharpe
     sr_daily = mean_ret / std_ret
@@ -119,13 +120,16 @@ def compute_block_bootstrap_sharpe_ci(
     n_boot: int = 500,
     ci_pct: float = 95.0,
     annual_factor: float = 252.0
-) -> List[float]:
+) -> Optional[List[float]]:
     """
     Computes Circular Block Bootstrap (Politis & Romano, 1994) confidence interval for annualized Sharpe.
     Preserves time-series autocorrelation and volatility clustering (GARCH effects).
+
+    Returns:
+        [lower_ci, upper_ci] or None if sample size is insufficient (< 20 bars).
     """
     if len(returns) < 20:
-        return [0.0, 0.0]
+        return None
     arr = np.array(returns, dtype=float)
     n = len(arr)
     num_blocks = int(math.ceil(n / block_size))
@@ -145,7 +149,7 @@ def compute_block_bootstrap_sharpe_ci(
             boot_srs.append(s_sr)
 
     if not boot_srs:
-        return [0.0, 0.0]
+        return None
 
     alpha = (100.0 - ci_pct) / 2.0
     lower = float(np.percentile(boot_srs, alpha))
@@ -457,7 +461,8 @@ class InstitutionalWalkForwardEngine:
             end_date=oos_end,
         )
 
-        # Extract continuous daily returns from unbroken equity curve
+        # Extract continuous daily returns strictly from unbroken OOS portfolio equity curve
+        # Eliminates return-stitching artifacts, fold boundary capital resets, and jump discontinuities
         continuous_daily_returns: List[float] = []
         eq_pts = res_continuous.equity_curve
         for idx in range(1, len(eq_pts)):
@@ -475,6 +480,7 @@ class InstitutionalWalkForwardEngine:
         mean_turnover_proxy = res_continuous.turnover_ratio
 
         # Compute Canonical Deflated Sharpe Ratio & Circular Block Bootstrap 95% Confidence Interval
+        # Strictly driven by continuous_daily_returns derived from unbroken OOS portfolio equity curve (res_continuous)
         # Documented trials M=50 accounts for 11 candidate strategies, parameter sweeps, and dual-market validation
         trials_assumed = 50
         if len(continuous_daily_returns) >= 20:
