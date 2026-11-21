@@ -211,6 +211,7 @@ class BacktestConfig(BaseModel):
     max_hold_days: int = 20
     risk_free_rate: float = 0.04  # 4% annual risk-free rate
     tie_breaker: str = "pessimistic"  # "pessimistic" (stop first) or "optimistic" (target first)
+    risk_posture: str = "safe"  # "safe" (block aggressive breakouts in bear breadth), "balanced" (selective high confluence), "aggressive" (unconstrained)
     model_config = ConfigDict(from_attributes=True)
 
 class BacktestTradeLog(BaseModel):
@@ -257,7 +258,11 @@ class BacktestResult(BaseModel):
     avg_trade_pnl_pct: float
     avg_holding_days: float
     max_concurrent_positions: int = 0
-    turnover_ratio: float = 0.0
+    entry_notional: float = 0.0
+    exit_notional: float = 0.0
+    round_trip_notional: float = 0.0
+    annualized_turnover: float = 0.0
+    turnover_ratio: float = 0.0  # backward-compatible proxy
     equity_curve: list[BacktestEquityPoint] = []
     trades: list[BacktestTradeLog] = []
     strategy_breakdown: dict[str, dict[str, Any]] = {}
@@ -290,8 +295,14 @@ class WalkForwardReport(BaseModel):
     oos_expectancy: float
     deflated_sharpe_ratio: float | None = None
     annualized_sharpe: float | None = None
+    sharpe_bootstrap_ci_95: list[float] | None = None
+    dsr_trials_assumed: int = 50
     max_concurrent_positions: int = 0
-    turnover_ratio: float = 0.0
+    entry_notional: float = 0.0
+    exit_notional: float = 0.0
+    round_trip_notional: float = 0.0
+    annualized_turnover: float = 0.0
+    turnover_ratio: float = 0.0  # backward-compatible proxy
     active_deployment_strategies: list[str] = []
     calibrated_confidence_map: dict[str, float] = {}
     strategy_metrics: dict[str, dict[str, Any]] = {}

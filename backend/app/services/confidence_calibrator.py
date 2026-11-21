@@ -62,25 +62,37 @@ class StrategyConfidenceCalibrator:
     DEFAULT_CALIBRATION = DEFAULT_BIST_CALIBRATION
 
     # Selective Deployment Matrix per Market
-    # Focuses capital exclusively on validated positive-expectancy strategies
+    # Focuses capital exclusively on validated positive-expectancy strategies.
+    # Excludes strategies that demonstrated negative or marginal expectancy after friction.
     ACTIVE_DEPLOYED_STRATEGIES: Dict[str, Set[str]] = {
         "BIST": {
-            "Trend Pullback",       # 63.0% WR, PF 1.29
-            "Momentum Breakout",    # 64.0% WR, PF 1.23
-            "Volatility Squeeze",   # 67.4% WR, PF 2.54
-            "Mean Reversion",       # 52.7% WR, PF 1.25
+            "Trend Pullback",       # 63.0% WR, PF 1.29 (+TRY 34k)
+            "Momentum Breakout",    # 64.0% WR, PF 1.23 (+TRY 35k)
+            "Volatility Squeeze",   # 67.4% WR, PF 2.54 (+TRY 22k)
         },
         "US": {
-            "Momentum Breakout",    # 61.2% WR, PF 2.04 (US Superstar)
-            "Volatility Squeeze",   # 57.7% WR, PF 3.86
-            "Mean Reversion",       # 50.7% WR, PF 1.04
-            # US Trend Pullback (PF 0.92) and US Connors RSI-2 (PF 0.83) explicitly disabled
+            "Momentum Breakout",    # 61.2% WR, PF 2.04 (+$57k - US Superstar)
+            "Volatility Squeeze",   # 57.7% WR, PF 3.86 (+$8.2k)
+            # US Trend Pullback (PF 0.92, -$10k) and US Connors RSI-2 (PF 0.83, -$18k) disabled
+            # US Mean Reversion (PF 1.04, +$1.9k over 5y) moved to RESEARCH_ONLY due to statistical insignificance
         },
     }
 
-    # Empirical Conditional Multipliers derived from historical breadth buckets
+    # Strategies reserved for research, paper tracking, and further empirical refinement
+    RESEARCH_ONLY_STRATEGIES: Set[str] = {
+        "Mean Reversion",
+        "Connors RSI-2 Rebound",
+        "Fund Momentum",
+        "Minervini VCP Breakout",
+        "Anchored VWAP Pullback",
+        "Liquidity Sweep",
+        "High Tight Flag",
+        "Pullback Reclaim",
+    }
+
+    # Regime Prior Multipliers (Heuristic Baseline Priors pending automated MLE shrinkage)
     # Bearish: breadth < 35% | Neutral: 35% <= breadth < 50% | Bullish: breadth >= 50%
-    EMPIRICAL_REGIME_MULTIPLIERS: Dict[str, Dict[str, float]] = {
+    REGIME_PRIOR_MULTIPLIERS: Dict[str, Dict[str, float]] = {
         "bearish": {
             "Momentum Breakout": 0.70,
             "High Tight Flag": 0.70,
@@ -107,6 +119,8 @@ class StrategyConfidenceCalibrator:
             "Volatility Squeeze": 1.05,
         },
     }
+    # Backward compatibility alias
+    EMPIRICAL_REGIME_MULTIPLIERS = REGIME_PRIOR_MULTIPLIERS
 
     def __init__(
         self,
@@ -183,7 +197,7 @@ class StrategyConfidenceCalibrator:
         market_regime: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Returns complete metadata clarifying empirical calibration vs uncalibrated prior.
+        Returns complete metadata clarifying empirical calibration vs uncalibrated prior and deployment status.
         """
         score = self.get_calibrated_confidence(
             strategy=strategy,
@@ -192,12 +206,20 @@ class StrategyConfidenceCalibrator:
             market_regime=market_regime
         )
         source = "EMPIRICAL" if self.is_empirical(strategy) else "PRIOR"
+        is_deployed = self.is_strategy_deployed(strategy, market)
+        status = "ACTIVE" if is_deployed else "RESEARCH_ONLY"
+
+        regime_clean = (market_regime or "neutral").lower().strip()
+        regime_mult = self.REGIME_PRIOR_MULTIPLIERS.get(regime_clean, {}).get(strategy.strip(), 1.0)
 
         return {
             "confidence_score": score,
             "confidence_source": source,
             "is_calibrated": (source == "EMPIRICAL"),
+            "is_deployed": is_deployed,
+            "deployment_status": status,
             "market_regime": market_regime or "neutral",
+            "regime_prior_multiplier": regime_mult,
         }
 
     def update_from_backtest(self, strategy_metrics: Dict[str, Dict[str, Any]]) -> Dict[str, float]:

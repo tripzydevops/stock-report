@@ -43,52 +43,106 @@ from app.services.screener import (
 logger = logging.getLogger("walk_forward_engine")
 
 
+def inv_norm_cdf(p: float) -> float:
+    """
+    Computes the inverse of the standard normal cumulative distribution function (probit).
+    Uses Abramowitz & Stegun (1964) rational approximation 26.2.23 (accuracy < 1.5e-7).
+    """
+    p = max(1e-12, min(1.0 - 1e-12, float(p)))
+    if p < 0.5:
+        t = math.sqrt(-2.0 * math.log(p))
+        num = 2.515517 + 0.802853 * t + 0.010328 * (t ** 2)
+        den = 1.0 + 1.432788 * t + 0.189269 * (t ** 2) + 0.001308 * (t ** 3)
+        return -(t - num / den)
+    else:
+        t = math.sqrt(-2.0 * math.log(1.0 - p))
+        num = 2.515517 + 0.802853 * t + 0.010328 * (t ** 2)
+        den = 1.0 + 1.432788 * t + 0.189269 * (t ** 2) + 0.001308 * (t ** 3)
+        return t - num / den
+
+
 def compute_deflated_sharpe_ratio(
-    trade_pnls: List[float],
-    num_trials: int = 5,
+    returns: List[float],
+    num_trials: int = 50,
     benchmark_sharpe: float = 0.0,
-    annual_trades: float = 250.0
-) -> Tuple[float, float]:
+    annual_factor: float = 252.0
+) -> Tuple[float, float, float]:
     """
-    Computes Annualized Sharpe Ratio and Marcos López de Prado's Deflated Sharpe Ratio (DSR).
-    DSR tests the null hypothesis that true SR <= benchmark_sharpe after adjusting for
-    skewness, kurtosis, and selection bias over multiple strategy trials.
+    Canonical Deflated Sharpe Ratio (Bailey & López de Prado, 2014).
+    Tests the null hypothesis that true Sharpe ratio <= benchmark_sharpe after correcting
+    for non-normality (skewness, kurtosis) and multiple-testing selection bias across M trials.
+
+    Returns:
+        (annualized_sharpe, expected_max_sharpe_star, deflated_sharpe_ratio)
     """
-    if len(trade_pnls) < 10:
-        return 0.0, 0.50
-    arr = np.array(trade_pnls, dtype=float)
-    mean_pnl = float(np.mean(arr))
-    std_pnl = float(np.std(arr, ddof=1))
-    if std_pnl < 1e-8:
-        return 0.0, 0.50
+    if len(returns) < 10:
+        return 0.0, 0.0, 0.50
 
-    # Per-trade Sharpe annualized
-    ann_factor = np.sqrt(annual_trades)
-    sr = (mean_pnl / std_pnl) * ann_factor
+    arr = np.array(returns, dtype=float)
+    t_obs = len(arr)
+    mean_ret = float(np.mean(arr))
+    std_ret = float(np.std(arr, ddof=1))
+    if std_ret < 1e-8:
+        return 0.0, 0.0, 0.50
 
-    # Skewness & Kurtosis
-    z = (arr - mean_pnl) / std_pnl
+    # Daily Sharpe & Annualized Sharpe
+    sr_daily = mean_ret / std_ret
+    sr_ann = sr_daily * math.sqrt(annual_factor)
+
+    # Standardized moments of returns
+    z = (arr - mean_ret) / std_ret
     skew = float(np.mean(z ** 3))
     kurt = float(np.mean(z ** 4))
 
-    # Variance of the estimated Sharpe Ratio under non-normality
+    # Asymptotic variance of the Sharpe Ratio estimator under non-normality (Mertens, 2002)
+    var_sr_daily = (1.0 - skew * sr_daily + ((kurt - 1.0) / 4.0) * (sr_daily ** 2)) / max(1, t_obs - 1)
+    std_sr_ann = math.sqrt(max(1e-12, annual_factor * var_sr_daily))
+
+    # Expected Maximum Sharpe Ratio SR* under the null hypothesis (Bailey & López de Prado, 2014)
+    # E[max(SR_0)] = sqrt(V[SR]) * ((1 - gamma) * Z^{-1}(1 - 1/M) + gamma * Z^{-1}(1 - 1/(M * e)))
+    m = max(2, int(num_trials))
+    em = 0.5772156649  # Euler-Mascheroni constant
+    z1 = inv_norm_cdf(1.0 - (1.0 / m))
+    z2 = inv_norm_cdf(1.0 - (1.0 / (m * math.e)))
+    sr_star = benchmark_sharpe + math.sqrt(annual_factor * max(1e-12, var_sr_daily)) * ((1.0 - em) * z1 + em * z2)
+
+    # Test statistic Z and DSR
+    z_stat = (sr_ann - sr_star) / max(1e-8, std_sr_ann)
+    dsr = 0.5 * (1.0 + math.erf(z_stat / math.sqrt(2.0)))
+
+    return round(float(sr_ann), 2), round(float(sr_star), 2), round(float(np.clip(dsr, 0.0, 1.0)), 4)
+
+
+def compute_bootstrap_sharpe_ci(
+    returns: List[float],
+    n_boot: int = 500,
+    ci_pct: float = 95.0,
+    annual_factor: float = 252.0
+) -> List[float]:
+    """
+    Computes a non-parametric bootstrap confidence interval for the annualized Sharpe Ratio.
+    """
+    if len(returns) < 10:
+        return [0.0, 0.0]
+    arr = np.array(returns, dtype=float)
     n = len(arr)
-    var_sr = (1.0 - skew * (sr / ann_factor) + ((kurt - 1.0) / 4.0) * ((sr / ann_factor) ** 2)) / max(1, n - 1)
-    std_sr = np.sqrt(max(1e-9, var_sr)) * ann_factor
+    boot_srs = []
+    rng = np.random.default_rng(seed=42)
 
-    # Expected Maximum Sharpe Ratio under null hypothesis given M trials (Euler-Mascheroni constant)
-    em = 0.5772156649
-    m = max(1, num_trials)
-    if m > 1:
-        sr_star = benchmark_sharpe + (np.sqrt(2.0 * np.log(m)) + em / np.sqrt(2.0 * np.log(m))) * (std_sr * 0.1)
-    else:
-        sr_star = benchmark_sharpe
+    for _ in range(n_boot):
+        sample = rng.choice(arr, size=n, replace=True)
+        s_std = np.std(sample, ddof=1)
+        if s_std > 1e-8:
+            s_sr = (np.mean(sample) / s_std) * math.sqrt(annual_factor)
+            boot_srs.append(s_sr)
 
-    z_stat = (sr - sr_star) / max(1e-8, std_sr)
-    # Standard normal CDF using math.erf
-    dsr = 0.5 * (1.0 + math.erf(z_stat / np.sqrt(2.0)))
+    if not boot_srs:
+        return [0.0, 0.0]
 
-    return round(float(sr), 2), round(float(np.clip(dsr, 0.0, 1.0)), 4)
+    alpha = (100.0 - ci_pct) / 2.0
+    lower = float(np.percentile(boot_srs, alpha))
+    upper = float(np.percentile(boot_srs, 100.0 - alpha))
+    return [round(lower, 2), round(upper, 2)]
 
 
 class InstitutionalWalkForwardEngine:
@@ -355,7 +409,11 @@ class InstitutionalWalkForwardEngine:
 
         # Concurrency & Turnover across OOS folds
         peak_concurrency = max([r.max_concurrent_positions for r in fold_sim_tests]) if fold_sim_tests else 0
-        mean_turnover = round(float(np.mean([r.turnover_ratio for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
+        total_entry_notional = round(sum(r.entry_notional for r in fold_sim_tests), 2)
+        total_exit_notional = round(sum(r.exit_notional for r in fold_sim_tests), 2)
+        total_round_trip_notional = round(total_entry_notional + total_exit_notional, 2)
+        avg_annualized_turnover = round(float(np.mean([r.annualized_turnover for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
+        mean_turnover_proxy = round(float(np.mean([r.turnover_ratio for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
 
         # Build strategy metrics summary
         strategy_summary = {}
@@ -380,13 +438,47 @@ class InstitutionalWalkForwardEngine:
         # Calibrate confidence map from OOS realized stats
         calibrated_map = self.calibrator.update_from_backtest(strategy_summary)
 
-        # Annualized Sharpe & Deflated Sharpe Ratio (DSR)
-        trade_pnls = [t.pnl for t in all_oos_trades]
-        ann_sr, dsr = compute_deflated_sharpe_ratio(
-            trade_pnls=trade_pnls,
-            num_trials=len(strategy_summary),
-            benchmark_sharpe=0.0
-        )
+        # Collect chronological daily portfolio returns across all OOS test folds
+        all_oos_daily_returns: List[float] = []
+        for r in fold_sim_tests:
+            eq_pts = r.equity_curve
+            for idx in range(1, len(eq_pts)):
+                prev_eq = eq_pts[idx - 1].equity
+                curr_eq = eq_pts[idx].equity
+                if prev_eq > 0:
+                    all_oos_daily_returns.append((curr_eq - prev_eq) / prev_eq)
+
+        # Compute Canonical Deflated Sharpe Ratio & Bootstrap 95% Confidence Interval
+        # Documented trials M=50 accounts for strategies, parameter grid, and universe explorations
+        trials_assumed = 50
+        if len(all_oos_daily_returns) >= 20:
+            ann_sr, sr_star, dsr = compute_deflated_sharpe_ratio(
+                returns=all_oos_daily_returns,
+                num_trials=trials_assumed,
+                benchmark_sharpe=0.0,
+                annual_factor=252.0
+            )
+            boot_ci = compute_bootstrap_sharpe_ci(
+                returns=all_oos_daily_returns,
+                n_boot=500,
+                ci_pct=95.0,
+                annual_factor=252.0
+            )
+        else:
+            # Fallback to trade PnL percentage if daily returns series is brief
+            trade_pcts = [t.pnl_pct / 100.0 for t in all_oos_trades]
+            ann_sr, sr_star, dsr = compute_deflated_sharpe_ratio(
+                returns=trade_pcts,
+                num_trials=trials_assumed,
+                benchmark_sharpe=0.0,
+                annual_factor=250.0
+            )
+            boot_ci = compute_bootstrap_sharpe_ci(
+                returns=trade_pcts,
+                n_boot=500,
+                ci_pct=95.0,
+                annual_factor=250.0
+            )
 
         deployed_strats = self.calibrator.get_deployed_strategies(market)
 
@@ -399,8 +491,14 @@ class InstitutionalWalkForwardEngine:
             oos_expectancy=overall_exp,
             annualized_sharpe=ann_sr,
             deflated_sharpe_ratio=dsr,
+            sharpe_bootstrap_ci_95=boot_ci,
+            dsr_trials_assumed=trials_assumed,
             max_concurrent_positions=peak_concurrency,
-            turnover_ratio=mean_turnover,
+            entry_notional=total_entry_notional,
+            exit_notional=total_exit_notional,
+            round_trip_notional=total_round_trip_notional,
+            annualized_turnover=avg_annualized_turnover,
+            turnover_ratio=mean_turnover_proxy,
             active_deployment_strategies=deployed_strats,
             calibrated_confidence_map=calibrated_map,
             strategy_metrics=strategy_summary,

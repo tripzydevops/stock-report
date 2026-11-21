@@ -107,7 +107,8 @@ class InstitutionalBacktestEngine:
         cash = float(self.config.initial_capital)
         peak_equity = float(self.config.initial_capital)
         peak_concurrent_positions = 0
-        total_traded_volume = 0.0
+        entry_notional = 0.0
+        exit_notional = 0.0
         open_positions: List[Dict[str, Any]] = []
         completed_trades: List[BacktestTradeLog] = []
         equity_curve: List[BacktestEquityPoint] = []
@@ -224,6 +225,7 @@ class InstitutionalBacktestEngine:
                     exit_commission = gross_proceeds * comm_rate
                     net_proceeds = gross_proceeds - exit_commission
                     cash += net_proceeds
+                    exit_notional += gross_proceeds
 
                     # Proportional cost basis allocation for partial exits
                     share_fraction = shares_to_exit / pos["initial_shares"]
@@ -306,11 +308,34 @@ class InstitutionalBacktestEngine:
                     # Apply entry slippage
                     effective_entry = bar_open * (1.0 + slip_rate)
 
+                    # Check macro market regime against user's risk posture
+                    regime = sig.get("market_regime", "neutral")
+                    strat_name = sig.get("strategy", "unknown")
+                    posture = getattr(self.config, "risk_posture", "safe").lower().strip()
+
+                    if regime == "bearish":
+                        if posture == "safe":
+                            # Safe mode: pause aggressive breakouts in bear breadth
+                            if strat_name in ("Momentum Breakout", "High Tight Flag", "Minervini VCP Breakout"):
+                                continue
+                            risk_scale = 0.70
+                        elif posture == "balanced":
+                            # Balanced mode: allow breakouts with high confluence (>=80), scale risk down 15%
+                            conf = float(sig.get("confidence_score", 70.0))
+                            if strat_name in ("Momentum Breakout", "High Tight Flag", "Minervini VCP Breakout") and conf < 80.0:
+                                continue
+                            risk_scale = 0.85
+                        else:
+                            # Aggressive mode: unconstrained entries
+                            risk_scale = 1.0
+                    else:
+                        risk_scale = 1.0
+
                     # Position sizing based on fixed fractional risk
                     current_port_equity = cash + sum(
                         p["shares"] * p.get("current_close", p["effective_entry"]) for p in open_positions
                     )
-                    risk_amount = current_port_equity * (self.config.risk_per_trade_pct / 100.0)
+                    risk_amount = current_port_equity * (self.config.risk_per_trade_pct / 100.0) * risk_scale
                     risk_per_share = max(0.01, effective_entry - raw_stop)
                     desired_shares = int(risk_amount / risk_per_share)
 
@@ -331,7 +356,7 @@ class InstitutionalBacktestEngine:
 
                     if cash >= total_entry_cost:
                         cash -= total_entry_cost
-                        total_traded_volume += total_entry_cost
+                        entry_notional += total_entry_cost
                         open_positions.append({
                             "symbol": sym,
                             "strategy": sig.get("strategy", "unknown"),
@@ -387,7 +412,8 @@ class InstitutionalBacktestEngine:
             final_equity=prev_day_equity,
             num_trading_days=len(all_dates),
             peak_concurrent_positions=peak_concurrent_positions,
-            total_traded_volume=total_traded_volume,
+            entry_notional=entry_notional,
+            exit_notional=exit_notional,
         )
 
     def _build_analytics(
@@ -398,15 +424,19 @@ class InstitutionalBacktestEngine:
         final_equity: float,
         num_trading_days: int,
         peak_concurrent_positions: int = 0,
-        total_traded_volume: float = 0.0,
+        entry_notional: float = 0.0,
+        exit_notional: float = 0.0,
     ) -> BacktestResult:
         """Computes institutional metrics: Sharpe, Sortino, Calmar, MaxDD, Win Rate, Expectancy, Turnover."""
         init_cap = self.config.initial_capital
         total_ret_pct = ((final_equity - init_cap) / init_cap) * 100.0
 
-        # Turnover Ratio
+        # Turnover Metrics (Canonical two-sided annualized turnover + entry notional proxy)
         mean_equity = float(np.mean([pt.equity for pt in equity_curve])) if equity_curve else init_cap
-        turnover_ratio = round(total_traded_volume / max(1.0, mean_equity), 2)
+        years = max(0.1, num_trading_days / 252.0)
+        round_trip_notional = entry_notional + exit_notional
+        annualized_turnover = round(((round_trip_notional / 2.0) / max(1.0, mean_equity)) / years, 2)
+        turnover_ratio = round(entry_notional / max(1.0, mean_equity), 2)
 
         # CAGR
         years = max(0.1, num_trading_days / 252.0)
@@ -488,6 +518,10 @@ class InstitutionalBacktestEngine:
             avg_trade_pnl_pct=round(avg_pnl_pct, 2),
             avg_holding_days=round(avg_hold, 1),
             max_concurrent_positions=peak_concurrent_positions,
+            entry_notional=round(entry_notional, 2),
+            exit_notional=round(exit_notional, 2),
+            round_trip_notional=round(round_trip_notional, 2),
+            annualized_turnover=annualized_turnover,
             turnover_ratio=turnover_ratio,
             equity_curve=equity_curve,
             trades=completed_trades,

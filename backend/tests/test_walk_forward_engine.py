@@ -76,17 +76,25 @@ class TestStrategyConfidenceCalibrator:
 
     def test_selective_deployment_matrix(self):
         calibrator = StrategyConfidenceCalibrator()
-        # BIST approves Trend Pullback
+        # BIST approves Trend Pullback, Momentum Breakout, Volatility Squeeze
         assert calibrator.is_strategy_deployed("Trend Pullback", "BIST") is True
-        # US explicitly disables Trend Pullback and Connors RSI to prevent friction bleed
-        assert calibrator.is_strategy_deployed("Trend Pullback", "US") is False
-        assert calibrator.is_strategy_deployed("Connors RSI-2 Rebound", "US") is False
-        # Both approve Momentum Breakout and Volatility Squeeze
+        assert calibrator.is_strategy_deployed("Momentum Breakout", "BIST") is True
+        assert calibrator.is_strategy_deployed("Volatility Squeeze", "BIST") is True
+
+        # US approves Momentum Breakout and Volatility Squeeze
         assert calibrator.is_strategy_deployed("Momentum Breakout", "US") is True
         assert calibrator.is_strategy_deployed("Volatility Squeeze", "US") is True
-        assert calibrator.is_strategy_deployed("Momentum Breakout", "BIST") is True
 
-    def test_empirical_regime_multiplier(self):
+        # Both markets exclude negative/marginal strategies from active deployment
+        assert calibrator.is_strategy_deployed("Trend Pullback", "US") is False
+        assert calibrator.is_strategy_deployed("Connors RSI-2 Rebound", "US") is False
+        assert calibrator.is_strategy_deployed("Mean Reversion", "US") is False
+        assert calibrator.is_strategy_deployed("Mean Reversion", "BIST") is False
+
+        assert calibrator.get_deployed_strategies("BIST") == ["Momentum Breakout", "Trend Pullback", "Volatility Squeeze"]
+        assert calibrator.get_deployed_strategies("US") == ["Momentum Breakout", "Volatility Squeeze"]
+
+    def test_regime_prior_multiplier(self):
         calibrator = StrategyConfidenceCalibrator()
         # Neutral baseline
         score_neutral = calibrator.get_calibrated_confidence("Momentum Breakout", market="US", market_regime="neutral")
@@ -110,19 +118,39 @@ class TestInstitutionalWalkForwardEngine:
             assert tr_e < te_s
             assert te_s < te_e
 
-    def test_deflated_sharpe_ratio(self):
-        from app.services.walk_forward_engine import compute_deflated_sharpe_ratio
-        # Positive returns with mild skew
-        pnls = [100.0, 250.0, -80.0, 310.0, 150.0, -120.0, 400.0, 90.0, 180.0, 220.0, -50.0, 300.0]
-        sr, dsr = compute_deflated_sharpe_ratio(pnls, num_trials=5, benchmark_sharpe=0.0)
-        assert sr > 0.0
-        assert 0.0 <= dsr <= 1.0
+    def test_inv_norm_cdf_accuracy(self):
+        from app.services.walk_forward_engine import inv_norm_cdf
+        # Standard analytical reference values
+        assert abs(inv_norm_cdf(0.975) - 1.960) < 0.005
+        assert abs(inv_norm_cdf(0.950) - 1.645) < 0.005
+        assert abs(inv_norm_cdf(0.500) - 0.000) < 0.001
+
+    def test_canonical_deflated_sharpe_ratio(self):
+        from app.services.walk_forward_engine import compute_deflated_sharpe_ratio, compute_bootstrap_sharpe_ci
+        # Case 1: Low Sharpe series tested across M=50 trials should be penalized (DSR < 0.5)
+        np.random.seed(42)
+        low_daily = list(np.random.normal(loc=0.0002, scale=0.012, size=500))
+        sr_low, star_low, dsr_low = compute_deflated_sharpe_ratio(low_daily, num_trials=50)
+        assert star_low > sr_low
+        assert dsr_low < 0.50
+
+        # Case 2: High Sharpe series (e.g. SR ~ 2.5) across M=50 trials should hold high confidence (DSR > 0.85)
+        high_daily = list(np.random.normal(loc=0.0018, scale=0.011, size=500))
+        sr_high, star_high, dsr_high = compute_deflated_sharpe_ratio(high_daily, num_trials=50)
+        assert sr_high > star_high
+        assert dsr_high > 0.85
+
+        # Case 3: Bootstrap confidence interval
+        ci = compute_bootstrap_sharpe_ci(high_daily, n_boot=200, ci_pct=95.0)
+        assert len(ci) == 2
+        assert ci[0] < ci[1]
+        assert ci[0] > 0.0  # Entire 95% CI is strictly positive
 
     def test_walk_forward_run_on_synthetic_data(self):
         df = _generate_multi_year_bars(days=500)
         history = {"SYN1": df, "SYN2": df.copy()}
 
-        engine = InstitutionalWalkForwardEngine(BacktestConfig(initial_capital=50_000.0))
+        engine = InstitutionalWalkForwardEngine(BacktestConfig(initial_capital=50_000.0, risk_posture="safe"))
         report = engine.run_walk_forward_validation(
             clean_history=history,
             market="BIST",
@@ -135,7 +163,9 @@ class TestInstitutionalWalkForwardEngine:
         assert report.market == "BIST"
         assert report.total_folds >= 1
         assert "calibrated_confidence_map" in report.model_dump()
-        assert report.active_deployment_strategies == ["Mean Reversion", "Momentum Breakout", "Trend Pullback", "Volatility Squeeze"]
+        assert report.active_deployment_strategies == ["Momentum Breakout", "Trend Pullback", "Volatility Squeeze"]
         assert report.deflated_sharpe_ratio is not None
         assert report.annualized_sharpe is not None
-        assert report.turnover_ratio >= 0.0
+        assert report.sharpe_bootstrap_ci_95 is not None
+        assert report.round_trip_notional >= 0.0
+        assert report.annualized_turnover >= 0.0

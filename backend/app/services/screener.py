@@ -1009,9 +1009,20 @@ def screen_connors_rsi2_rebound(df: pd.DataFrame, symbol: str, market: str = "US
     }
 
 
-def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, Dict]) -> List[Dict]:
-    """Runs verified whitelisted screens per market microstructure with cross-sectional decile ranking."""
-    signals = []
+def run_all_screens(
+    asset_data: Dict[str, pd.DataFrame],
+    asset_info: Dict[str, Dict],
+    deployed_only: bool = False
+) -> List[Dict]:
+    """
+    Runs quantitative screens across asset universe.
+    Aligns strategy activation with empirical market-structure evidence:
+    - BIST: Trend Pullback, Momentum Breakout, Volatility Squeeze.
+    - US: Momentum Breakout, Volatility Squeeze.
+    Tags each signal with `is_deployed` and `deployment_status` ("ACTIVE" vs "RESEARCH_ONLY").
+    If `deployed_only=True`, filters out research-only / negative-expectancy strategies.
+    """
+    raw_signals = []
 
     # Precalculate cross-sectional 1-month returns across funds for top-decile ranking
     fund_returns = []
@@ -1041,41 +1052,57 @@ def run_all_screens(asset_data: Dict[str, pd.DataFrame], asset_info: Dict[str, D
         is_us = market_val in ['US', 'NASDAQ', 'NYSE']
 
         if asset_type in ['stock', 'etf', 'crypto']:
-            # 1. UNIVERSAL PROVEN CORE: Trend Pullback Reclaim (Top #1 risk-adjusted performer in both markets)
-            sig = screen_pullback_reclaim(df, symbol, market=market_val)
-            if sig: signals.append(sig)
+            # 1. CORE DEPLOYED STRATEGY: Momentum Breakout (Top edge in US PF 2.04, solid in BIST PF 1.23)
+            sig = screen_momentum_breakout(df, symbol, market=market_val)
+            if sig: raw_signals.append(sig)
 
-            # 2. UNIVERSAL PROVEN: Trend Pullback (EMA 50)
+            # 2. CORE DEPLOYED STRATEGY: Volatility Squeeze (Universal high payoff: BIST PF 2.54, US PF 3.86)
+            sig = screen_volatility_squeeze(df, symbol, market=market_val)
+            if sig: raw_signals.append(sig)
+
+            # 3. BIST DEPLOYED / US RESEARCH: Trend Pullback (BIST PF 1.29; US PF 0.92 disabled)
             sig = screen_trend_pullback(df, symbol, market=market_val)
-            if sig: signals.append(sig)
+            if sig: raw_signals.append(sig)
 
-            # 3. UNIVERSAL PROVEN: Mean Reversion (Oversold)
+            # 4. RESEARCH ONLY: Mean Reversion (BIST PF 1.25; US PF 1.04 marginal)
             sig = screen_mean_reversion(df, symbol, market=market_val)
-            if sig: signals.append(sig)
+            if sig: raw_signals.append(sig)
 
-            # 4. TOP TRADER: Minervini Volatility Contraction Pattern (VCP)
+            # 5. RESEARCH ONLY: Pullback Reclaim
+            sig = screen_pullback_reclaim(df, symbol, market=market_val)
+            if sig: raw_signals.append(sig)
+
+            # 6. RESEARCH ONLY: Minervini VCP Breakout
             sig = screen_minervini_vcp(df, symbol, market=market_val)
-            if sig: signals.append(sig)
+            if sig: raw_signals.append(sig)
 
             if not is_us:
-                # BIST-SPECIFIC POWERHOUSES (+797% Breakouts & +145% Squeezes)
-                sig = screen_momentum_breakout(df, symbol, market=market_val)
-                if sig: signals.append(sig)
-
-                sig = screen_volatility_squeeze(df, symbol, market=market_val)
-                if sig: signals.append(sig)
-
-                # BIST-SPECIFIC TOP TRADER: High Tight Flag (66.7% win rate, 2.89 profit factor)
+                # 7. BIST RESEARCH: High Tight Flag
                 sig = screen_high_tight_flag(df, symbol, market=market_val)
-                if sig: signals.append(sig)
+                if sig: raw_signals.append(sig)
             else:
-                # US-SPECIFIC TOP TRADER: Connors RSI-2 Panic Rebound (53.4% win rate, -15.8% Max DD)
+                # 8. US RESEARCH: Connors RSI-2 Panic Rebound (US PF 0.83 disabled)
                 sig = screen_connors_rsi2_rebound(df, symbol, market=market_val)
-                if sig: signals.append(sig)
+                if sig: raw_signals.append(sig)
 
         if asset_type in ['fund', 'mutual_fund', 'etf']:
             sig = screen_fund_momentum(df, symbol, market=market_val, cross_sectional_cutoff=top_decile_cutoff)
-            if sig: signals.append(sig)
+            if sig: raw_signals.append(sig)
 
-    return signals
+    # Attach deployment metadata and filter if deployed_only requested
+    final_signals = []
+    for sig in raw_signals:
+        strat = sig.get("strategy", "")
+        mkt = sig.get("market", "BIST")
+        meta = _calibrator.get_confidence_metadata(strat, market=mkt, raw_confluence_score=float(sig.get("confidence_score", 70.0)))
+        sig["is_deployed"] = meta["is_deployed"]
+        sig["deployment_status"] = meta["deployment_status"]
+        sig["confidence_source"] = meta["confidence_source"]
+        sig["confidence_score"] = meta["confidence_score"]
+
+        if deployed_only and not sig["is_deployed"]:
+            continue
+        final_signals.append(sig)
+
+    return final_signals
 
