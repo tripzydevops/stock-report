@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import pandas as pd
 
 from app.services.recovery_tracker import initialize_recovery_tracking
+from app.services.backtesting_engine import calculate_realized_trade_pnl
 
 logger = logging.getLogger(__name__)
 
@@ -625,11 +626,11 @@ def reconcile_open_signals_lifecycle(
             hit_target = (target is not None and high >= target)
 
             if hit_stop and hit_target:
-                pnl = ((stop - entry) / entry) * 100
+                pnl = calculate_realized_trade_pnl(entry, stop, direction="LONG")
                 closed_ts = f"{bar_date}T18:00:00Z"
                 client.table("trade_signals").update({
                     "status": "stopped_out",
-                    "outcome_pnl_pct": round(pnl, 2),
+                    "outcome_pnl_pct": pnl,
                     "closed_at": closed_ts,
                 }).eq("id", sig["id"]).execute()
                 initialize_recovery_tracking(client, {
@@ -646,21 +647,21 @@ def reconcile_open_signals_lifecycle(
                 resolved = True
                 break
             elif hit_target:
-                pnl = ((target - entry) / entry) * 100
+                pnl = calculate_realized_trade_pnl(entry, target, direction="LONG")
                 client.table("trade_signals").update({
                     "status": "target_hit",
-                    "outcome_pnl_pct": round(pnl, 2),
+                    "outcome_pnl_pct": pnl,
                     "closed_at": f"{bar_date}T18:00:00Z",
                 }).eq("id", sig["id"]).execute()
                 target_count += 1
                 resolved = True
                 break
             elif hit_stop:
-                pnl = ((stop - entry) / entry) * 100
+                pnl = calculate_realized_trade_pnl(entry, stop, direction="LONG")
                 closed_ts = f"{bar_date}T18:00:00Z"
                 client.table("trade_signals").update({
                     "status": "stopped_out",
-                    "outcome_pnl_pct": round(pnl, 2),
+                    "outcome_pnl_pct": pnl,
                     "closed_at": closed_ts,
                 }).eq("id", sig["id"]).execute()
                 initialize_recovery_tracking(client, {
@@ -683,11 +684,11 @@ def reconcile_open_signals_lifecycle(
             bar_exp = df.iloc[eval_indices[-1]]
             bar_date_exp = dates[eval_indices[-1]]
             exit_price = float(bar_exp["close"])
-            pnl = ((exit_price - entry) / entry) * 100
+            pnl = calculate_realized_trade_pnl(entry, exit_price, direction="LONG")
             closed_ts = f"{bar_date_exp}T18:00:00Z"
             client.table("trade_signals").update({
                 "status": "expired",
-                "outcome_pnl_pct": round(pnl, 2),
+                "outcome_pnl_pct": pnl,
                 "closed_at": closed_ts,
             }).eq("id", sig["id"]).execute()
             initialize_recovery_tracking(client, {

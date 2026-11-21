@@ -213,8 +213,13 @@ def test_signal_close_pnl_calculation_and_persistence(monkeypatch):
     from fastapi.testclient import TestClient
     from app.main import app
     import app.api.scanner as scanner_mod
+    from app.services.backtesting_engine import calculate_realized_trade_pnl
 
     client = TestClient(app)
+
+    # 1. Verify cost model helper
+    expected_pnl = calculate_realized_trade_pnl(100.0, 110.0, direction="LONG", commission_bps=10.0, slippage_bps=5.0)
+    assert expected_pnl == 9.67
 
     # Mock Supabase table interactions
     mock_records = {}
@@ -250,7 +255,7 @@ def test_signal_close_pnl_calculation_and_persistence(monkeypatch):
                 mock_records[self._eq_val] = self._update_data
                 return MockRes([self._update_data])
             # Return synthetic signal with entry_price=100.0, direction=LONG
-            return MockRes([{"entry_price": 100.0, "direction": "LONG"}])
+            return MockRes([{"id": "sig-777", "entry_price": 100.0, "direction": "LONG", "ai_rationale": "{}"}])
 
     class MockClient:
         def table(self, name):
@@ -258,9 +263,11 @@ def test_signal_close_pnl_calculation_and_persistence(monkeypatch):
 
     monkeypatch.setattr(scanner_mod, "get_supabase_client", lambda: MockClient())
 
+    # Case A: Full 100% exit with configured cost model (9.67% net)
     close_req = {
         "status": "target_hit",
-        "exit_price": 110.0,  # 10% gain - 0.15% friction = +9.85%
+        "exit_price": 110.0,
+        "exit_type": "FINAL",
         "notes": "Target 1 hit at resistance"
     }
     r = client.put("/api/scan/signals/sig-777/close", json=close_req)
@@ -270,10 +277,43 @@ def test_signal_close_pnl_calculation_and_persistence(monkeypatch):
     assert res["signal_id"] == "sig-777"
     assert res["new_status"] == "target_hit"
     assert res["exit_price"] == 110.0
-    assert res["outcome_pnl_pct"] == 9.85
+    assert res["outcome_pnl_pct"] == 9.67
     assert res["notes"] == "Target 1 hit at resistance"
     assert "sig-777" in mock_records
-    assert mock_records["sig-777"]["outcome_pnl_pct"] == 9.85
+    assert mock_records["sig-777"]["outcome_pnl_pct"] == 9.67
+
+    # Case B: Partial exit (50% scale-out at Target 1 with breakeven stop adjustment)
+    partial_req = {
+        "status": "target_hit",
+        "exit_price": 110.0,
+        "exit_type": "PARTIAL",
+        "exit_shares_pct": 0.50,
+        "notes": "50% Target 1 scale-out"
+    }
+    r_part = client.put("/api/scan/signals/sig-777/close", json=partial_req)
+    assert r_part.status_code == 200
+    res_part = r_part.json()
+    assert res_part["status"] == "success"
+    assert res_part["exit_type"] == "PARTIAL"
+    assert res_part["stop_loss_moved_to_breakeven"] == 100.0
+    assert res_part["tranche_pnl_pct"] == 9.67
+    assert mock_records["sig-777"]["stop_loss"] == 100.0
+
+    # Case C: Failure persistence must return HTTP 500 error, never a false success
+    class FailingTable(MockTable):
+        def execute(self):
+            if self._update_data is not None:
+                raise RuntimeError("Supabase connection timeout")
+            return super().execute()
+
+    class FailingClient:
+        def table(self, name):
+            return FailingTable(name)
+
+    monkeypatch.setattr(scanner_mod, "get_supabase_client", lambda: FailingClient())
+    r_fail = client.put("/api/scan/signals/sig-777/close", json=close_req)
+    assert r_fail.status_code == 500
+    assert "DATABASE_PERSISTENCE_ERROR" in r_fail.json()["detail"]
 
 
 def test_dynamic_posture_resolution():

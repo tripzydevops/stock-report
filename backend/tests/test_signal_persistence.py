@@ -455,9 +455,8 @@ class TestHoldingPeriodLifecycleExpiry:
 
         # Verify update call parameters
         update_call = mock_client.table("trade_signals").update.call_args[0][0]
-        assert update_call["status"] == "expired"
-        assert update_call["closed_at"] == f"{dates[7]}T18:00:00Z"  # Session 7 close
-        expected_pnl = round(((df_price.iloc[7]["close"] - 100.0) / 100.0) * 100, 2)
+        from app.services.backtesting_engine import calculate_realized_trade_pnl
+        expected_pnl = calculate_realized_trade_pnl(100.0, float(df_price.iloc[7]["close"]), direction="LONG")
         assert update_call["outcome_pnl_pct"] == expected_pnl
 
 

@@ -23,6 +23,49 @@ from app.services.trade_evaluator import backtest_all_historical_signals
 logger = logging.getLogger(__name__)
 
 
+def calculate_realized_trade_pnl(
+    entry_price: float,
+    exit_price: float,
+    direction: str = "LONG",
+    commission_bps: float = 10.0,
+    slippage_bps: float = 5.0,
+) -> float:
+    """
+    Computes net realized trade PnL percentage strictly consistent with InstitutionalBacktestEngine cost model:
+    - Long:
+        effective_entry = entry_price * (1.0 + slippage_rate)
+        entry_cost = effective_entry * (1.0 + commission_rate)
+        effective_exit = exit_price * (1.0 - slippage_rate)
+        exit_net = effective_exit * (1.0 - commission_rate)
+        pnl_pct = ((exit_net - entry_cost) / entry_cost) * 100.0
+    - Short:
+        effective_entry = entry_price * (1.0 - slippage_rate)
+        entry_net = effective_entry * (1.0 - commission_rate)
+        effective_exit = exit_price * (1.0 + slippage_rate)
+        exit_cost = effective_exit * (1.0 + commission_rate)
+        pnl_pct = ((entry_net - exit_cost) / entry_net) * 100.0
+    """
+    comm_rate = commission_bps / 10_000.0
+    slip_rate = slippage_bps / 10_000.0
+
+    if direction.upper() == "SHORT":
+        eff_entry = entry_price * (1.0 - slip_rate)
+        entry_net = eff_entry * (1.0 - comm_rate)
+        eff_exit = exit_price * (1.0 + slip_rate)
+        exit_cost = eff_exit * (1.0 + comm_rate)
+        if entry_net <= 0:
+            return 0.0
+        return round(((entry_net - exit_cost) / entry_net) * 100.0, 2)
+    else:
+        eff_entry = entry_price * (1.0 + slip_rate)
+        entry_cost = eff_entry * (1.0 + comm_rate)
+        eff_exit = exit_price * (1.0 - slip_rate)
+        exit_net = eff_exit * (1.0 - comm_rate)
+        if entry_cost <= 0:
+            return 0.0
+        return round(((exit_net - entry_cost) / entry_cost) * 100.0, 2)
+
+
 class InstitutionalBacktestEngine:
     """
     Simulates portfolio execution across multiple assets and strategies
