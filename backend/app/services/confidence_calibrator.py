@@ -61,6 +61,53 @@ class StrategyConfidenceCalibrator:
     # Default fallback
     DEFAULT_CALIBRATION = DEFAULT_BIST_CALIBRATION
 
+    # Selective Deployment Matrix per Market
+    # Focuses capital exclusively on validated positive-expectancy strategies
+    ACTIVE_DEPLOYED_STRATEGIES: Dict[str, Set[str]] = {
+        "BIST": {
+            "Trend Pullback",       # 63.0% WR, PF 1.29
+            "Momentum Breakout",    # 64.0% WR, PF 1.23
+            "Volatility Squeeze",   # 67.4% WR, PF 2.54
+            "Mean Reversion",       # 52.7% WR, PF 1.25
+        },
+        "US": {
+            "Momentum Breakout",    # 61.2% WR, PF 2.04 (US Superstar)
+            "Volatility Squeeze",   # 57.7% WR, PF 3.86
+            "Mean Reversion",       # 50.7% WR, PF 1.04
+            # US Trend Pullback (PF 0.92) and US Connors RSI-2 (PF 0.83) explicitly disabled
+        },
+    }
+
+    # Empirical Conditional Multipliers derived from historical breadth buckets
+    # Bearish: breadth < 35% | Neutral: 35% <= breadth < 50% | Bullish: breadth >= 50%
+    EMPIRICAL_REGIME_MULTIPLIERS: Dict[str, Dict[str, float]] = {
+        "bearish": {
+            "Momentum Breakout": 0.70,
+            "High Tight Flag": 0.70,
+            "Minervini VCP Breakout": 0.70,
+            "Trend Pullback": 0.86,
+            "Connors RSI-2 Rebound": 0.85,
+            "Mean Reversion": 0.90,
+            "Volatility Squeeze": 0.88,
+        },
+        "neutral": {
+            "Momentum Breakout": 1.0,
+            "Trend Pullback": 1.0,
+            "Mean Reversion": 1.0,
+            "Volatility Squeeze": 1.0,
+            "Connors RSI-2 Rebound": 1.0,
+        },
+        "bullish": {
+            "Momentum Breakout": 1.08,
+            "High Tight Flag": 1.08,
+            "Minervini VCP Breakout": 1.08,
+            "Trend Pullback": 1.06,
+            "Connors RSI-2 Rebound": 1.02,
+            "Mean Reversion": 1.02,
+            "Volatility Squeeze": 1.05,
+        },
+    }
+
     def __init__(
         self,
         bist_map: Optional[Dict[str, float]] = None,
@@ -79,6 +126,18 @@ class StrategyConfidenceCalibrator:
         """Returns True if the strategy confidence is backed by empirical walk-forward backtests."""
         return strategy.strip() in self._empirical_strategies
 
+    def is_strategy_deployed(self, strategy: str, market: str = "BIST") -> bool:
+        """Returns True if the strategy is approved for active deployment in the given market."""
+        m_key = market.strip().upper()
+        active_set = self.ACTIVE_DEPLOYED_STRATEGIES.get(m_key, self.ACTIVE_DEPLOYED_STRATEGIES["BIST"])
+        return strategy.strip() in active_set
+
+    def get_deployed_strategies(self, market: str = "BIST") -> list[str]:
+        """Returns list of active approved strategies for the specified market."""
+        m_key = market.strip().upper()
+        active_set = self.ACTIVE_DEPLOYED_STRATEGIES.get(m_key, self.ACTIVE_DEPLOYED_STRATEGIES["BIST"])
+        return sorted(list(active_set))
+
     def get_calibrated_confidence(
         self,
         strategy: str,
@@ -88,7 +147,7 @@ class StrategyConfidenceCalibrator:
     ) -> float:
         """
         Returns the calibrated probability score (0-100) for a given strategy.
-        Adjusts for market microstructure (US vs BIST), individual technical confluence, and macro regime.
+        Adjusts for market microstructure (US vs BIST), individual technical confluence, and empirical macro regime.
         """
         strat_key = strategy.strip()
         cal_map = self._us_calibration if market.upper() == "US" else self._bist_calibration
@@ -101,17 +160,18 @@ class StrategyConfidenceCalibrator:
         else:
             score = base
 
-        # 2. Macro Market Regime Gate
+        # 2. Empirical Macro Market Regime Gate
         if market_regime:
             regime_clean = market_regime.lower().strip()
+            mult_map = self.EMPIRICAL_REGIME_MULTIPLIERS.get(regime_clean, {})
+            # Look up empirical strategy multiplier or apply conservative default
             if regime_clean in ("bearish", "bear"):
-                # Breakout / momentum strategies suffer sharp false-breakout rates in bear regimes
-                if strat_key in ("Momentum Breakout", "High Tight Flag", "Minervini VCP Breakout"):
-                    score *= 0.75  # 25% discount in bear market
-                else:
-                    score *= 0.88  # 12% discount for pullbacks/mean reversion
+                mult = mult_map.get(strat_key, 0.85)
             elif regime_clean in ("bullish", "bull"):
-                score *= 1.05  # 5% boost in favorable market regime
+                mult = mult_map.get(strat_key, 1.05)
+            else:
+                mult = 1.0
+            score *= mult
 
         return round(float(np.clip(score, 40.0, 95.0)), 1)
 

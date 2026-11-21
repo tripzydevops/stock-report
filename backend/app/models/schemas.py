@@ -256,6 +256,8 @@ class BacktestResult(BaseModel):
     calmar_ratio: float
     avg_trade_pnl_pct: float
     avg_holding_days: float
+    max_concurrent_positions: int = 0
+    turnover_ratio: float = 0.0
     equity_curve: list[BacktestEquityPoint] = []
     trades: list[BacktestTradeLog] = []
     strategy_breakdown: dict[str, dict[str, Any]] = {}
@@ -286,6 +288,11 @@ class WalkForwardReport(BaseModel):
     oos_win_rate: float
     oos_profit_factor: float
     oos_expectancy: float
+    deflated_sharpe_ratio: float | None = None
+    annualized_sharpe: float | None = None
+    max_concurrent_positions: int = 0
+    turnover_ratio: float = 0.0
+    active_deployment_strategies: list[str] = []
     calibrated_confidence_map: dict[str, float] = {}
     strategy_metrics: dict[str, dict[str, Any]] = {}
     folds: list[WalkForwardFoldResult] = []

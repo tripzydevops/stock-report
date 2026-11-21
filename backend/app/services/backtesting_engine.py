@@ -106,6 +106,8 @@ class InstitutionalBacktestEngine:
         # Simulation State
         cash = float(self.config.initial_capital)
         peak_equity = float(self.config.initial_capital)
+        peak_concurrent_positions = 0
+        total_traded_volume = 0.0
         open_positions: List[Dict[str, Any]] = []
         completed_trades: List[BacktestTradeLog] = []
         equity_curve: List[BacktestEquityPoint] = []
@@ -329,6 +331,7 @@ class InstitutionalBacktestEngine:
 
                     if cash >= total_entry_cost:
                         cash -= total_entry_cost
+                        total_traded_volume += total_entry_cost
                         open_positions.append({
                             "symbol": sym,
                             "strategy": sig.get("strategy", "unknown"),
@@ -350,6 +353,9 @@ class InstitutionalBacktestEngine:
                             # Value position at actual execution-day close, not entry with slippage
                             "current_close": day_close,
                         })
+
+            # Track peak concurrent open positions
+            peak_concurrent_positions = max(peak_concurrent_positions, len(open_positions))
 
             # C. End-of-Day Portfolio Valuation & Drawdown
             positions_value = sum(
@@ -380,6 +386,8 @@ class InstitutionalBacktestEngine:
             daily_returns=daily_returns,
             final_equity=prev_day_equity,
             num_trading_days=len(all_dates),
+            peak_concurrent_positions=peak_concurrent_positions,
+            total_traded_volume=total_traded_volume,
         )
 
     def _build_analytics(
@@ -389,10 +397,16 @@ class InstitutionalBacktestEngine:
         daily_returns: List[float],
         final_equity: float,
         num_trading_days: int,
+        peak_concurrent_positions: int = 0,
+        total_traded_volume: float = 0.0,
     ) -> BacktestResult:
-        """Computes institutional metrics: Sharpe, Sortino, Calmar, MaxDD, Win Rate, Expectancy."""
+        """Computes institutional metrics: Sharpe, Sortino, Calmar, MaxDD, Win Rate, Expectancy, Turnover."""
         init_cap = self.config.initial_capital
         total_ret_pct = ((final_equity - init_cap) / init_cap) * 100.0
+
+        # Turnover Ratio
+        mean_equity = float(np.mean([pt.equity for pt in equity_curve])) if equity_curve else init_cap
+        turnover_ratio = round(total_traded_volume / max(1.0, mean_equity), 2)
 
         # CAGR
         years = max(0.1, num_trading_days / 252.0)
@@ -473,6 +487,8 @@ class InstitutionalBacktestEngine:
             calmar_ratio=round(calmar, 2),
             avg_trade_pnl_pct=round(avg_pnl_pct, 2),
             avg_holding_days=round(avg_hold, 1),
+            max_concurrent_positions=peak_concurrent_positions,
+            turnover_ratio=turnover_ratio,
             equity_curve=equity_curve,
             trades=completed_trades,
             strategy_breakdown=breakdown,

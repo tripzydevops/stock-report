@@ -74,6 +74,29 @@ class TestStrategyConfidenceCalibrator:
         # Low win-rate strategy should be calibrated lower
         assert updated["Mean Reversion"] < 65.0
 
+    def test_selective_deployment_matrix(self):
+        calibrator = StrategyConfidenceCalibrator()
+        # BIST approves Trend Pullback
+        assert calibrator.is_strategy_deployed("Trend Pullback", "BIST") is True
+        # US explicitly disables Trend Pullback and Connors RSI to prevent friction bleed
+        assert calibrator.is_strategy_deployed("Trend Pullback", "US") is False
+        assert calibrator.is_strategy_deployed("Connors RSI-2 Rebound", "US") is False
+        # Both approve Momentum Breakout and Volatility Squeeze
+        assert calibrator.is_strategy_deployed("Momentum Breakout", "US") is True
+        assert calibrator.is_strategy_deployed("Volatility Squeeze", "US") is True
+        assert calibrator.is_strategy_deployed("Momentum Breakout", "BIST") is True
+
+    def test_empirical_regime_multiplier(self):
+        calibrator = StrategyConfidenceCalibrator()
+        # Neutral baseline
+        score_neutral = calibrator.get_calibrated_confidence("Momentum Breakout", market="US", market_regime="neutral")
+        # Bearish regime discount (0.70x for Breakouts)
+        score_bear = calibrator.get_calibrated_confidence("Momentum Breakout", market="US", market_regime="bearish")
+        assert score_bear < score_neutral
+        # Bullish regime boost (1.08x for Breakouts)
+        score_bull = calibrator.get_calibrated_confidence("Momentum Breakout", market="US", market_regime="bullish")
+        assert score_bull > score_neutral
+
 
 class TestInstitutionalWalkForwardEngine:
     def test_generate_walk_forward_windows(self):
@@ -86,6 +109,14 @@ class TestInstitutionalWalkForwardEngine:
             assert tr_s < tr_e
             assert tr_e < te_s
             assert te_s < te_e
+
+    def test_deflated_sharpe_ratio(self):
+        from app.services.walk_forward_engine import compute_deflated_sharpe_ratio
+        # Positive returns with mild skew
+        pnls = [100.0, 250.0, -80.0, 310.0, 150.0, -120.0, 400.0, 90.0, 180.0, 220.0, -50.0, 300.0]
+        sr, dsr = compute_deflated_sharpe_ratio(pnls, num_trials=5, benchmark_sharpe=0.0)
+        assert sr > 0.0
+        assert 0.0 <= dsr <= 1.0
 
     def test_walk_forward_run_on_synthetic_data(self):
         df = _generate_multi_year_bars(days=500)
@@ -104,3 +135,7 @@ class TestInstitutionalWalkForwardEngine:
         assert report.market == "BIST"
         assert report.total_folds >= 1
         assert "calibrated_confidence_map" in report.model_dump()
+        assert report.active_deployment_strategies == ["Mean Reversion", "Momentum Breakout", "Trend Pullback", "Volatility Squeeze"]
+        assert report.deflated_sharpe_ratio is not None
+        assert report.annualized_sharpe is not None
+        assert report.turnover_ratio >= 0.0

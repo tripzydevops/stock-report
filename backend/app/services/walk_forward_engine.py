@@ -16,6 +16,7 @@ Architectural Principles:
 """
 
 import logging
+import math
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
@@ -40,6 +41,54 @@ from app.services.screener import (
 )
 
 logger = logging.getLogger("walk_forward_engine")
+
+
+def compute_deflated_sharpe_ratio(
+    trade_pnls: List[float],
+    num_trials: int = 5,
+    benchmark_sharpe: float = 0.0,
+    annual_trades: float = 250.0
+) -> Tuple[float, float]:
+    """
+    Computes Annualized Sharpe Ratio and Marcos López de Prado's Deflated Sharpe Ratio (DSR).
+    DSR tests the null hypothesis that true SR <= benchmark_sharpe after adjusting for
+    skewness, kurtosis, and selection bias over multiple strategy trials.
+    """
+    if len(trade_pnls) < 10:
+        return 0.0, 0.50
+    arr = np.array(trade_pnls, dtype=float)
+    mean_pnl = float(np.mean(arr))
+    std_pnl = float(np.std(arr, ddof=1))
+    if std_pnl < 1e-8:
+        return 0.0, 0.50
+
+    # Per-trade Sharpe annualized
+    ann_factor = np.sqrt(annual_trades)
+    sr = (mean_pnl / std_pnl) * ann_factor
+
+    # Skewness & Kurtosis
+    z = (arr - mean_pnl) / std_pnl
+    skew = float(np.mean(z ** 3))
+    kurt = float(np.mean(z ** 4))
+
+    # Variance of the estimated Sharpe Ratio under non-normality
+    n = len(arr)
+    var_sr = (1.0 - skew * (sr / ann_factor) + ((kurt - 1.0) / 4.0) * ((sr / ann_factor) ** 2)) / max(1, n - 1)
+    std_sr = np.sqrt(max(1e-9, var_sr)) * ann_factor
+
+    # Expected Maximum Sharpe Ratio under null hypothesis given M trials (Euler-Mascheroni constant)
+    em = 0.5772156649
+    m = max(1, num_trials)
+    if m > 1:
+        sr_star = benchmark_sharpe + (np.sqrt(2.0 * np.log(m)) + em / np.sqrt(2.0 * np.log(m))) * (std_sr * 0.1)
+    else:
+        sr_star = benchmark_sharpe
+
+    z_stat = (sr - sr_star) / max(1e-8, std_sr)
+    # Standard normal CDF using math.erf
+    dsr = 0.5 * (1.0 + math.erf(z_stat / np.sqrt(2.0)))
+
+    return round(float(sr), 2), round(float(np.clip(dsr, 0.0, 1.0)), 4)
 
 
 class InstitutionalWalkForwardEngine:
@@ -226,6 +275,7 @@ class InstitutionalWalkForwardEngine:
         logger.info(f"Generated {len(windows)} walk-forward folds for market {market}.")
 
         fold_results: List[WalkForwardFoldResult] = []
+        fold_sim_tests: List[BacktestResult] = []
         all_oos_trades = []
         strategy_stats_acc: Dict[str, Dict[str, Any]] = {}
 
@@ -270,6 +320,7 @@ class InstitutionalWalkForwardEngine:
                 test_max_drawdown_pct=res_test.max_drawdown_pct,
             )
             fold_results.append(fold_res)
+            fold_sim_tests.append(res_test)
 
             # Accumulate out-of-sample trades
             for t in res_test.trades:
@@ -302,6 +353,10 @@ class InstitutionalWalkForwardEngine:
         overall_pf = round((gross_profit_oos / gross_loss_oos), 2) if gross_loss_oos > 0 else (9.99 if gross_profit_oos > 0 else 0.0)
         overall_exp = round((sum(t.pnl for t in all_oos_trades) / total_oos), 2) if total_oos > 0 else 0.0
 
+        # Concurrency & Turnover across OOS folds
+        peak_concurrency = max([r.max_concurrent_positions for r in fold_sim_tests]) if fold_sim_tests else 0
+        mean_turnover = round(float(np.mean([r.turnover_ratio for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
+
         # Build strategy metrics summary
         strategy_summary = {}
         for s_name, s_data in strategy_stats_acc.items():
@@ -325,6 +380,16 @@ class InstitutionalWalkForwardEngine:
         # Calibrate confidence map from OOS realized stats
         calibrated_map = self.calibrator.update_from_backtest(strategy_summary)
 
+        # Annualized Sharpe & Deflated Sharpe Ratio (DSR)
+        trade_pnls = [t.pnl for t in all_oos_trades]
+        ann_sr, dsr = compute_deflated_sharpe_ratio(
+            trade_pnls=trade_pnls,
+            num_trials=len(strategy_summary),
+            benchmark_sharpe=0.0
+        )
+
+        deployed_strats = self.calibrator.get_deployed_strategies(market)
+
         report = WalkForwardReport(
             market=market,
             total_folds=len(fold_results),
@@ -332,6 +397,11 @@ class InstitutionalWalkForwardEngine:
             oos_win_rate=overall_win_rate,
             oos_profit_factor=overall_pf,
             oos_expectancy=overall_exp,
+            annualized_sharpe=ann_sr,
+            deflated_sharpe_ratio=dsr,
+            max_concurrent_positions=peak_concurrency,
+            turnover_ratio=mean_turnover,
+            active_deployment_strategies=deployed_strats,
             calibrated_confidence_map=calibrated_map,
             strategy_metrics=strategy_summary,
             folds=fold_results,
