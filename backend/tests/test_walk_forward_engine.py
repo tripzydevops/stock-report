@@ -146,6 +146,32 @@ class TestInstitutionalWalkForwardEngine:
         assert ci[0] < ci[1]
         assert ci[0] > 0.0  # Entire 95% CI is strictly positive
 
+    def test_circular_block_bootstrap(self):
+        from app.services.walk_forward_engine import compute_block_bootstrap_sharpe_ci
+        # When sample < 20 bars, returns [0.0, 0.0]
+        assert compute_block_bootstrap_sharpe_ci([0.01] * 15) == [0.0, 0.0]
+
+        # Valid series with block_size=10
+        np.random.seed(42)
+        returns = list(np.random.normal(loc=0.001, scale=0.01, size=100))
+        ci = compute_block_bootstrap_sharpe_ci(returns, block_size=10, n_boot=200)
+        assert len(ci) == 2
+        assert ci[0] <= ci[1]
+
+    def test_tefas_deployment_and_screener_default(self):
+        from app.services.confidence_calibrator import StrategyConfidenceCalibrator
+        import inspect
+        from app.services.screener import run_all_screens
+
+        calibrator = StrategyConfidenceCalibrator()
+        assert calibrator.is_strategy_deployed("Fund Momentum", "TEFAS") is True
+        assert calibrator.get_deployed_strategies("TEFAS") == ["Fund Momentum"]
+        assert calibrator.is_strategy_deployed("Trend Pullback", "TEFAS") is False
+
+        # Verify run_all_screens signature defaults deployed_only to True
+        sig = inspect.signature(run_all_screens)
+        assert sig.parameters["deployed_only"].default is True
+
     def test_walk_forward_run_on_synthetic_data(self):
         df = _generate_multi_year_bars(days=500)
         history = {"SYN1": df, "SYN2": df.copy()}
@@ -169,3 +195,4 @@ class TestInstitutionalWalkForwardEngine:
         assert report.sharpe_bootstrap_ci_95 is not None
         assert report.round_trip_notional >= 0.0
         assert report.annualized_turnover >= 0.0
+

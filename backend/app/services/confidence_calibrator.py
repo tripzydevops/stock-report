@@ -76,13 +76,15 @@ class StrategyConfidenceCalibrator:
             # US Trend Pullback (PF 0.92, -$10k) and US Connors RSI-2 (PF 0.83, -$18k) disabled
             # US Mean Reversion (PF 1.04, +$1.9k over 5y) moved to RESEARCH_ONLY due to statistical insignificance
         },
+        "TEFAS": {
+            "Fund Momentum",        # Top-decile relative strength mutual fund allocation
+        },
     }
 
     # Strategies reserved for research, paper tracking, and further empirical refinement
     RESEARCH_ONLY_STRATEGIES: Set[str] = {
         "Mean Reversion",
         "Connors RSI-2 Rebound",
-        "Fund Momentum",
         "Minervini VCP Breakout",
         "Anchored VWAP Pullback",
         "Liquidity Sweep",

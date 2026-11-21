@@ -649,7 +649,7 @@ def screen_fund_momentum(
 
         return {
             'symbol': symbol,
-            'market': profile.market.value,
+            'market': market.upper() if market and market.upper() == "TEFAS" else profile.market.value,
             'strategy': 'Fund Momentum',
             'direction': 'LONG',
             'entry_mode': 'next_open',
@@ -1012,7 +1012,7 @@ def screen_connors_rsi2_rebound(df: pd.DataFrame, symbol: str, market: str = "US
 def run_all_screens(
     asset_data: Dict[str, pd.DataFrame],
     asset_info: Dict[str, Dict],
-    deployed_only: bool = False
+    deployed_only: bool = True
 ) -> List[Dict]:
     """
     Runs quantitative screens across asset universe.

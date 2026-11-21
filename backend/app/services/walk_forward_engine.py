@@ -113,24 +113,32 @@ def compute_deflated_sharpe_ratio(
     return round(float(sr_ann), 2), round(float(sr_star), 2), round(float(np.clip(dsr, 0.0, 1.0)), 4)
 
 
-def compute_bootstrap_sharpe_ci(
+def compute_block_bootstrap_sharpe_ci(
     returns: List[float],
+    block_size: int = 10,  # 2 trading weeks per block
     n_boot: int = 500,
     ci_pct: float = 95.0,
     annual_factor: float = 252.0
 ) -> List[float]:
     """
-    Computes a non-parametric bootstrap confidence interval for the annualized Sharpe Ratio.
+    Computes Circular Block Bootstrap (Politis & Romano, 1994) confidence interval for annualized Sharpe.
+    Preserves time-series autocorrelation and volatility clustering (GARCH effects).
     """
-    if len(returns) < 10:
+    if len(returns) < 20:
         return [0.0, 0.0]
     arr = np.array(returns, dtype=float)
     n = len(arr)
+    num_blocks = int(math.ceil(n / block_size))
     boot_srs = []
     rng = np.random.default_rng(seed=42)
 
     for _ in range(n_boot):
-        sample = rng.choice(arr, size=n, replace=True)
+        start_indices = rng.integers(0, n, size=num_blocks)
+        sample = np.concatenate([
+            arr.take(np.arange(start, start + block_size), mode="wrap")
+            for start in start_indices
+        ])[:n]
+
         s_std = np.std(sample, ddof=1)
         if s_std > 1e-8:
             s_sr = (np.mean(sample) / s_std) * math.sqrt(annual_factor)
@@ -143,6 +151,10 @@ def compute_bootstrap_sharpe_ci(
     lower = float(np.percentile(boot_srs, alpha))
     upper = float(np.percentile(boot_srs, 100.0 - alpha))
     return [round(lower, 2), round(upper, 2)]
+
+
+# Backward compatibility alias
+compute_bootstrap_sharpe_ci = compute_block_bootstrap_sharpe_ci
 
 
 class InstitutionalWalkForwardEngine:
@@ -331,6 +343,7 @@ class InstitutionalWalkForwardEngine:
         fold_results: List[WalkForwardFoldResult] = []
         fold_sim_tests: List[BacktestResult] = []
         all_oos_trades = []
+        all_oos_test_signals: List[Dict[str, Any]] = []
         strategy_stats_acc: Dict[str, Dict[str, Any]] = {}
 
         for fold_idx, (tr_start, tr_end, te_start, te_end) in enumerate(windows, start=1):
@@ -350,6 +363,7 @@ class InstitutionalWalkForwardEngine:
             # 2. Test Period (Out-of-Sample Standalone Simulation)
             test_dates = [d for d in all_dates if te_start <= d <= te_end]
             test_signals = self.scan_historical_signals_on_dates(clean_history, test_dates, market=market)
+            all_oos_test_signals.extend(test_signals)
             engine_test = InstitutionalBacktestEngine(self.config)
             res_test = engine_test.run_simulation(
                 clean_history,
@@ -407,14 +421,6 @@ class InstitutionalWalkForwardEngine:
         overall_pf = round((gross_profit_oos / gross_loss_oos), 2) if gross_loss_oos > 0 else (9.99 if gross_profit_oos > 0 else 0.0)
         overall_exp = round((sum(t.pnl for t in all_oos_trades) / total_oos), 2) if total_oos > 0 else 0.0
 
-        # Concurrency & Turnover across OOS folds
-        peak_concurrency = max([r.max_concurrent_positions for r in fold_sim_tests]) if fold_sim_tests else 0
-        total_entry_notional = round(sum(r.entry_notional for r in fold_sim_tests), 2)
-        total_exit_notional = round(sum(r.exit_notional for r in fold_sim_tests), 2)
-        total_round_trip_notional = round(total_entry_notional + total_exit_notional, 2)
-        avg_annualized_turnover = round(float(np.mean([r.annualized_turnover for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
-        mean_turnover_proxy = round(float(np.mean([r.turnover_ratio for r in fold_sim_tests])), 2) if fold_sim_tests else 0.0
-
         # Build strategy metrics summary
         strategy_summary = {}
         for s_name, s_data in strategy_stats_acc.items():
@@ -438,47 +444,59 @@ class InstitutionalWalkForwardEngine:
         # Calibrate confidence map from OOS realized stats
         calibrated_map = self.calibrator.update_from_backtest(strategy_summary)
 
-        # Collect chronological daily portfolio returns across all OOS test folds
-        all_oos_daily_returns: List[float] = []
-        for r in fold_sim_tests:
-            eq_pts = r.equity_curve
-            for idx in range(1, len(eq_pts)):
-                prev_eq = eq_pts[idx - 1].equity
-                curr_eq = eq_pts[idx].equity
-                if prev_eq > 0:
-                    all_oos_daily_returns.append((curr_eq - prev_eq) / prev_eq)
+        # Single continuous unbroken OOS simulation across all test periods
+        # Eliminates return-stitching artifacts, fold boundary capital resets, and jump discontinuities
+        oos_start = windows[0][2].strftime("%Y-%m-%d")
+        oos_end = windows[-1][3].strftime("%Y-%m-%d")
 
-        # Compute Canonical Deflated Sharpe Ratio & Bootstrap 95% Confidence Interval
-        # Documented trials M=50 accounts for strategies, parameter grid, and universe explorations
+        engine_continuous = InstitutionalBacktestEngine(self.config)
+        res_continuous = engine_continuous.run_simulation(
+            clean_history,
+            trade_signals=all_oos_test_signals,
+            start_date=oos_start,
+            end_date=oos_end,
+        )
+
+        # Extract continuous daily returns from unbroken equity curve
+        continuous_daily_returns: List[float] = []
+        eq_pts = res_continuous.equity_curve
+        for idx in range(1, len(eq_pts)):
+            prev_eq = eq_pts[idx - 1].equity
+            curr_eq = eq_pts[idx].equity
+            if prev_eq > 0:
+                continuous_daily_returns.append((curr_eq - prev_eq) / prev_eq)
+
+        # Portfolio metrics from continuous compounded OOS simulation
+        peak_concurrency = res_continuous.max_concurrent_positions
+        total_entry_notional = res_continuous.entry_notional
+        total_exit_notional = res_continuous.exit_notional
+        total_round_trip_notional = res_continuous.round_trip_notional
+        avg_annualized_turnover = res_continuous.annualized_turnover
+        mean_turnover_proxy = res_continuous.turnover_ratio
+
+        # Compute Canonical Deflated Sharpe Ratio & Circular Block Bootstrap 95% Confidence Interval
+        # Documented trials M=50 accounts for 11 candidate strategies, parameter sweeps, and dual-market validation
         trials_assumed = 50
-        if len(all_oos_daily_returns) >= 20:
+        if len(continuous_daily_returns) >= 20:
             ann_sr, sr_star, dsr = compute_deflated_sharpe_ratio(
-                returns=all_oos_daily_returns,
+                returns=continuous_daily_returns,
                 num_trials=trials_assumed,
                 benchmark_sharpe=0.0,
                 annual_factor=252.0
             )
-            boot_ci = compute_bootstrap_sharpe_ci(
-                returns=all_oos_daily_returns,
+            boot_ci = compute_block_bootstrap_sharpe_ci(
+                returns=continuous_daily_returns,
+                block_size=10,
                 n_boot=500,
                 ci_pct=95.0,
                 annual_factor=252.0
             )
         else:
-            # Fallback to trade PnL percentage if daily returns series is brief
-            trade_pcts = [t.pnl_pct / 100.0 for t in all_oos_trades]
-            ann_sr, sr_star, dsr = compute_deflated_sharpe_ratio(
-                returns=trade_pcts,
-                num_trials=trials_assumed,
-                benchmark_sharpe=0.0,
-                annual_factor=250.0
-            )
-            boot_ci = compute_bootstrap_sharpe_ci(
-                returns=trade_pcts,
-                n_boot=500,
-                ci_pct=95.0,
-                annual_factor=250.0
-            )
+            # When proper daily return series is insufficient (< 20 bars),
+            # return None rather than using an unsound trade-return fallback
+            ann_sr = None
+            dsr = None
+            boot_ci = None
 
         deployed_strats = self.calibrator.get_deployed_strategies(market)
 
