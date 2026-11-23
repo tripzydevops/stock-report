@@ -701,17 +701,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // 12. Background Corporate Dividend Calendar Sync (Non-blocking)
+    // 12. Corporate Dividend Calendar Sync (Native Serverless TypeScript)
     if (body?.syncDividends || body?.action === 'crawler' || body?.action === 'cloud_crawl') {
       try {
-        const { spawn } = await import('child_process');
-        const path = await import('path');
-        const pyPath = path.resolve(process.cwd(), '..', 'backend', '.venv', 'Scripts', 'python.exe');
-        const scriptPath = path.resolve(process.cwd(), '..', 'backend', 'scripts', 'sync_upcoming_dividends.py');
-        const proc = spawn(pyPath, [scriptPath], { detached: true, stdio: 'ignore' });
-        proc.unref();
+        const { syncServerlessDividends } = await import('@/lib/serverlessDividendSync');
+        // Execute serverless dividend audit asynchronously
+        syncServerlessDividends().catch(err => {
+          console.warn('[api/sync] Serverless dividend sync warning:', err);
+        });
       } catch (err) {
-        console.warn('Could not launch background dividend sync process:', err);
+        console.warn('Could not launch serverless dividend sync:', err);
       }
     }
 
