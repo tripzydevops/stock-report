@@ -1884,8 +1884,9 @@ export function deriveAllMarketDividends(
 
 /**
  * Generates verified market-wide dividend disclosure catalysts for the KAP feed.
+ * Computes live yield dynamically from market price when available.
  */
-export function generateMarketDividendCatalysts(): MarketCatalyst[] {
+export function generateMarketDividendCatalysts(livePrices?: Record<string, number>): MarketCatalyst[] {
   const confirmedOrHighYield = [
     {
       symbol: 'FROTO',
@@ -2009,17 +2010,24 @@ export function generateMarketDividendCatalysts(): MarketCatalyst[] {
     }
   ];
 
-  return confirmedOrHighYield.map((item, idx) => ({
-    id: `cat-div-${item.symbol.toLowerCase()}-${idx}`,
-    symbol: item.symbol,
-    market: item.market,
-    category: 'KAP_DIVIDEND',
-    title: item.title,
-    details: item.details,
-    aiVerdict: 'Bullish' as const,
-    aiTakeaway: item.aiTakeaway,
-    impactScore: item.yieldPct >= 5.0 ? 9.2 : 8.5,
-    publishedAt: new Date(Date.now() - idx * 3600 * 1000 * 4).toISOString()
-  }));
+  return confirmedOrHighYield.map((item, idx) => {
+    const livePrice = livePrices ? (livePrices[item.symbol] || livePrices[`${item.symbol}.IS`]) : undefined;
+    const computedYield = (livePrice && livePrice > 0 && item.dps > 0)
+      ? Number(((item.dps / livePrice) * 100).toFixed(2))
+      : item.yieldPct;
+
+    return {
+      id: `cat-div-${item.symbol.toLowerCase()}-${idx}`,
+      symbol: item.symbol,
+      market: item.market,
+      category: 'KAP_DIVIDEND',
+      title: item.title,
+      details: item.details,
+      aiVerdict: 'Bullish' as const,
+      aiTakeaway: item.aiTakeaway,
+      impactScore: computedYield >= 5.0 ? 9.2 : 8.5,
+      publishedAt: new Date(Date.now() - idx * 3600 * 1000 * 4).toISOString()
+    };
+  });
 }
 

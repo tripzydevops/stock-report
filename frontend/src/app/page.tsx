@@ -1113,6 +1113,8 @@ interface OfflineMutation {
   type: 'BUY' | 'SELL';
   body: any;
   createdAt: string;
+  retryCount?: number;
+  lastError?: string;
 }
 
 function getOfflineQueue(): OfflineMutation[] {
@@ -1139,7 +1141,11 @@ function saveOfflineQueue(queue: OfflineMutation[]): void {
 function enqueueOfflineMutation(mutation: OfflineMutation): void {
   const current = getOfflineQueue();
   if (current.some(m => m.clientOrderId === mutation.clientOrderId)) return;
-  saveOfflineQueue([...current, mutation]);
+  const itemWithRetry: OfflineMutation = {
+    ...mutation,
+    retryCount: mutation.retryCount || 0,
+  };
+  saveOfflineQueue([...current, itemWithRetry]);
 }
 
 function sanitizeTransfers(transfersList: any[]): any[] {
@@ -2056,7 +2062,14 @@ export default function Home() {
           .select('*')
           .order('published_at', { ascending: false });
 
-        const marketDividendCats = generateMarketDividendCatalysts();
+        const livePriceMap: Record<string, number> = {};
+        loadedAssets.forEach((a: AssetData) => {
+          if (a.price && a.price > 0) {
+            livePriceMap[a.symbol.replace('.IS', '').toUpperCase()] = a.price;
+          }
+        });
+
+        const marketDividendCats = generateMarketDividendCatalysts(livePriceMap);
         if (catData && catData.length > 0) {
           const mappedCat: MarketCatalyst[] = catData.map((c: any) => ({
             id: c.id,
@@ -2073,7 +2086,13 @@ export default function Home() {
           }));
           const mergedCat = [...mappedCat];
           marketDividendCats.forEach(mdc => {
-            if (!mergedCat.some(c => c.id === mdc.id || (c.symbol === mdc.symbol && c.category === 'DIVIDEND' && c.publishedAt.slice(0, 10) === mdc.publishedAt.slice(0, 10)))) {
+            const mdcClean = mdc.symbol.replace('.IS', '').toUpperCase();
+            const isAlreadyCovered = mergedCat.some(c => 
+              c.id === mdc.id || 
+              (c.symbol.replace('.IS', '').toUpperCase() === mdcClean && 
+               (c.category === 'KAP_DIVIDEND' || c.category === 'DIVIDEND'))
+            );
+            if (!isAlreadyCovered) {
               mergedCat.push(mdc);
             }
           });
@@ -3056,6 +3075,7 @@ export default function Home() {
 
     const remainingQueue: OfflineMutation[] = [];
     let syncedCount = 0;
+    const MAX_RETRIES = 3;
 
     for (const mutation of queue) {
       if (session?.access_token) {
@@ -3075,11 +3095,37 @@ export default function Home() {
           if (res.ok) {
             syncedCount++;
             continue;
-          } else {
-            remainingQueue.push(mutation);
           }
-        } catch {
-          remainingQueue.push(mutation);
+
+          // Non-retryable deterministic client errors (400, 404, 409, 422) should not remain in queue
+          if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+            const errJson = await res.json().catch(() => ({}));
+            console.warn(`[OfflineQueue] Dropping invalid mutation ${mutation.clientOrderId} (${res.status}):`, errJson.error);
+            continue;
+          }
+
+          // Transient server error (5xx) or rate limit (429): track retry count
+          const nextRetry = (mutation.retryCount || 0) + 1;
+          if (nextRetry < MAX_RETRIES) {
+            remainingQueue.push({
+              ...mutation,
+              retryCount: nextRetry,
+              lastError: `HTTP ${res.status}`,
+            });
+          } else {
+            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} exceeded max retries (${MAX_RETRIES}), discarded.`);
+          }
+        } catch (netErr: any) {
+          const nextRetry = (mutation.retryCount || 0) + 1;
+          if (nextRetry < MAX_RETRIES) {
+            remainingQueue.push({
+              ...mutation,
+              retryCount: nextRetry,
+              lastError: netErr?.message || 'Network error',
+            });
+          } else {
+            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} network error exceeded max retries, discarded.`);
+          }
         }
       } else {
         remainingQueue.push(mutation);
@@ -3202,15 +3248,24 @@ export default function Home() {
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'Portföy pozisyonu sunucuya kaydedilemedi.';
-          console.warn('Server validation failed creating position, queueing offline:', errorMsg);
-          enqueueOfflineMutation({
-            id: `mut-${Date.now()}`,
-            clientOrderId,
-            type: 'BUY',
-            body: payloadBody,
-            createdAt: new Date().toISOString(),
-          });
-          setOfflineQueueCount(getOfflineQueue().length);
+          if (apiRes.status === 429 || apiRes.status >= 500) {
+            console.warn('Server error creating position, queueing offline:', errorMsg);
+            enqueueOfflineMutation({
+              id: `mut-${Date.now()}`,
+              clientOrderId,
+              type: 'BUY',
+              body: payloadBody,
+              createdAt: new Date().toISOString(),
+              retryCount: 0,
+            });
+            setOfflineQueueCount(getOfflineQueue().length);
+          } else {
+            console.warn('Server validation failed creating position, skipping queue:', errorMsg);
+            setSyncFeedback({
+              message: `Hata: ${errorMsg}`,
+              type: 'error'
+            });
+          }
         } else {
           // Non-blocking background sync from server truth
           loadData(false).catch(err => console.warn('Background reload failed:', err));
@@ -3403,15 +3458,24 @@ export default function Home() {
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'DCA alım işlemi kaydedilemedi.';
-          console.warn('Server DCA failure, queuing offline & executing locally:', errorMsg);
-          enqueueOfflineMutation({
-            id: `mut-${Date.now()}`,
-            clientOrderId,
-            type: 'BUY',
-            body: dcaPayload,
-            createdAt: new Date().toISOString(),
-          });
-          setOfflineQueueCount(getOfflineQueue().length);
+          if (apiRes.status === 429 || apiRes.status >= 500) {
+            console.warn('Server DCA failure, queuing offline:', errorMsg);
+            enqueueOfflineMutation({
+              id: `mut-${Date.now()}`,
+              clientOrderId,
+              type: 'BUY',
+              body: dcaPayload,
+              createdAt: new Date().toISOString(),
+              retryCount: 0,
+            });
+            setOfflineQueueCount(getOfflineQueue().length);
+          } else {
+            console.warn('Server DCA validation error, skipping queue:', errorMsg);
+            setSyncFeedback({
+              message: `Hata: ${errorMsg}`,
+              type: 'error'
+            });
+          }
         } else {
           setSyncFeedback({
             message: `Successfully added ${additionalShares} shares of ${cleanSymUpper} (DCA Lot)!`,
@@ -3697,15 +3761,24 @@ export default function Home() {
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'Satış emri kaydedilemedi.';
-          console.warn('Server SELL validation failed, queuing offline & executing locally:', errorMsg);
-          enqueueOfflineMutation({
-            id: `mut-${Date.now()}`,
-            clientOrderId,
-            type: 'SELL',
-            body: sellPayload,
-            createdAt: new Date().toISOString(),
-          });
-          setOfflineQueueCount(getOfflineQueue().length);
+          if (apiRes.status === 429 || apiRes.status >= 500) {
+            console.warn('Server SELL failure, queuing offline:', errorMsg);
+            enqueueOfflineMutation({
+              id: `mut-${Date.now()}`,
+              clientOrderId,
+              type: 'SELL',
+              body: sellPayload,
+              createdAt: new Date().toISOString(),
+              retryCount: 0,
+            });
+            setOfflineQueueCount(getOfflineQueue().length);
+          } else {
+            console.warn('Server SELL validation failed, skipping queue:', errorMsg);
+            setSyncFeedback({
+              message: `Hata: ${errorMsg}`,
+              type: 'error'
+            });
+          }
         } else {
           // Record realized trade analytics only after verified server persistence
           recordRealizedTradeLocally();

@@ -265,6 +265,48 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 4.1 Time-Window Deduplication Guard: Suppress rapid double-tap orders within 30 seconds
+    const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
+    const { data: recentDuplicate } = await serverSupabase
+      .from('portfolio_orders')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('symbol', cleanSym)
+      .eq('side', resolvedSide)
+      .eq('quantity', rawShares)
+      .eq('price', rawPrice)
+      .gte('created_at', thirtySecsAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (recentDuplicate) {
+      console.log(JSON.stringify({
+        event: 'portfolio_order_time_window_deduplicated',
+        userId: user.id,
+        orderRef: recentDuplicate.order_ref,
+        symbol: recentDuplicate.symbol,
+        side: recentDuplicate.side,
+        quantity: recentDuplicate.quantity,
+        price: recentDuplicate.price,
+      }));
+
+      return NextResponse.json(
+        {
+          success: true,
+          deduplicated: true,
+          order: recentDuplicate,
+          symbol: recentDuplicate.symbol,
+          shares: Number(recentDuplicate.quantity),
+          entryPrice: Number(recentDuplicate.price),
+          side: recentDuplicate.side,
+          currency: recentDuplicate.currency,
+          message: 'Duplicate order suppressed within 30-second window.',
+        },
+        { status: 200 }
+      );
+    }
+
     const executionDateStr = entryDate || orderDate || new Date().toISOString().slice(0, 10);
     const executionIso = executionDateStr
       ? new Date(executionDateStr + 'T10:00:00Z').toISOString()

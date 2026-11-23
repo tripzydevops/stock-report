@@ -301,16 +301,38 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           continue;
         }
 
-        // Rule B: Did user acquire position before ex-date? (In BIST/NYSE, shares must be held before market close the session prior to ex-date)
-        const entryDateStr = pos.entry_date ? String(pos.entry_date).slice(0, 10) : '';
-        if (entryDateStr && entryDateStr >= exDate) {
+        // Rule B: Calculate exact entitled shares on ex-date:
+        // Sum of all Filled BUYs executed before ex-date minus sum of all Filled SELLs executed before ex-date
+        const { data: userOrders } = await supabase
+          .from('portfolio_orders')
+          .select('side, quantity, executed_at')
+          .eq('user_id', userId)
+          .eq('symbol', divCleanSym)
+          .eq('status', 'Filled')
+          .lt('executed_at', `${exDate}T00:00:00Z`);
+
+        let entitledShares = 0;
+        if (userOrders && userOrders.length > 0) {
+          for (const ord of userOrders) {
+            if (ord.side === 'BUY') entitledShares += Number(ord.quantity) || 0;
+            else if (ord.side === 'SELL') entitledShares -= Number(ord.quantity) || 0;
+          }
+        } else {
+          // Fallback to pos.quantity only if pos.entry_date < exDate and no separate order rows exist
+          const entryDateStr = pos.entry_date ? String(pos.entry_date).slice(0, 10) : '';
+          if (!entryDateStr || entryDateStr < exDate) {
+            entitledShares = Number(pos.quantity) || 0;
+          }
+        }
+
+        entitledShares = Math.max(0, Number(entitledShares.toFixed(4)));
+        if (entitledShares <= 0) {
           summary.skippedCount++;
           continue;
         }
 
-        const shares = Number(pos.quantity) || 0;
         const rate = Number(div.amount) || 0;
-        const totalAmount = Number((shares * rate).toFixed(2));
+        const totalAmount = Number((entitledShares * rate).toFixed(2));
 
         if (totalAmount <= 0) {
           summary.skippedCount++;
@@ -328,7 +350,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
             amount: totalAmount,
             currency: currency,
             transfer_date: payDate,
-            notes: `Nakit Temettü: ${divCleanSym} (${shares} adet @ ₺${rate}) ${noteTag}`
+            notes: `Nakit Temettü: ${divCleanSym} (${entitledShares} adet @ ₺${rate}) ${noteTag}`
           });
 
         if (insErr) {
@@ -339,7 +361,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           summary.creditedTransfers.push({
             userId,
             symbol: divCleanSym,
-            shares,
+            shares: entitledShares,
             amountPerShare: rate,
             totalAmount,
             currency,

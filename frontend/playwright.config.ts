@@ -19,7 +19,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
       },
-      testMatch: /(desktop-view|desktop-sync|orb-and-catalyst|ai-assistant|dividend-and-prices|dividend-tranche-radar|kap-dividend-catalyst|security-and-rls|responsive-matrix|watchlist-api-auth|watchlist-two-account-isolation)\.spec\.ts/,
+      testMatch: /(desktop-view|desktop-sync|orb-and-catalyst|ai-assistant|dividend-and-prices|dividend-tranche-radar|kap-dividend-catalyst|cold-start-agent-reasoning|security-and-rls|responsive-matrix|watchlist-api-auth|watchlist-two-account-isolation)\.spec\.ts/,
     },
     {
       name: 'Mobile Chrome (Pixel 7)',
