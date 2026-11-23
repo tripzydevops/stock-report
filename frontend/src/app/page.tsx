@@ -1107,6 +1107,8 @@ function markGuestCustomized(): void {
 
 const OFFLINE_QUEUE_KEY = 'marketpulse_offline_mutation_queue';
 
+const FAILED_MUTATIONS_KEY = 'marketpulse_failed_mutations';
+
 interface OfflineMutation {
   id: string;
   clientOrderId: string;
@@ -1115,7 +1117,12 @@ interface OfflineMutation {
   createdAt: string;
   retryCount?: number;
   lastError?: string;
+  nextRetryAt?: number;
+  status?: 'PENDING' | 'RETRYING' | 'FAILED';
 }
+
+const RETRY_BACKOFF_DELAYS_MS = [60_000, 300_000, 900_000, 3_600_000]; // 1m, 5m, 15m, 1h
+const MAX_MUTATION_RETRIES = 4;
 
 function getOfflineQueue(): OfflineMutation[] {
   if (typeof window === 'undefined') return [];
@@ -1138,12 +1145,50 @@ function saveOfflineQueue(queue: OfflineMutation[]): void {
   } catch {}
 }
 
+function getFailedMutations(): OfflineMutation[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(FAILED_MUTATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFailedMutations(list: OfflineMutation[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (list.length === 0) {
+      localStorage.removeItem(FAILED_MUTATIONS_KEY);
+    } else {
+      localStorage.setItem(FAILED_MUTATIONS_KEY, JSON.stringify(list));
+    }
+  } catch {}
+}
+
+function recordFailedMutation(mutation: OfflineMutation, reason: string): void {
+  const failed = getFailedMutations();
+  const existingIdx = failed.findIndex(f => f.clientOrderId === mutation.clientOrderId);
+  const updatedItem: OfflineMutation = {
+    ...mutation,
+    status: 'FAILED',
+    lastError: reason,
+  };
+  if (existingIdx >= 0) {
+    failed[existingIdx] = updatedItem;
+    saveFailedMutations(failed);
+  } else {
+    saveFailedMutations([updatedItem, ...failed]);
+  }
+}
+
 function enqueueOfflineMutation(mutation: OfflineMutation): void {
   const current = getOfflineQueue();
   if (current.some(m => m.clientOrderId === mutation.clientOrderId)) return;
   const itemWithRetry: OfflineMutation = {
     ...mutation,
     retryCount: mutation.retryCount || 0,
+    status: mutation.status || 'PENDING',
   };
   saveOfflineQueue([...current, itemWithRetry]);
 }
@@ -2084,21 +2129,9 @@ export default function Home() {
             sourceUrl: c.source_url,
             publishedAt: c.published_at
           }));
-          const mergedCat = [...mappedCat];
-          marketDividendCats.forEach(mdc => {
-            const mdcClean = mdc.symbol.replace('.IS', '').toUpperCase();
-            const isAlreadyCovered = mergedCat.some(c => 
-              c.id === mdc.id || 
-              (c.symbol.replace('.IS', '').toUpperCase() === mdcClean && 
-               (c.category === 'KAP_DIVIDEND' || c.category === 'DIVIDEND'))
-            );
-            if (!isAlreadyCovered) {
-              mergedCat.push(mdc);
-            }
-          });
-          setCatalysts(mergedCat);
+          setCatalysts(mappedCat);
         } else {
-          setCatalysts(marketDividendCats);
+          setCatalysts(generateMarketDividendCatalysts(livePriceMap));
         }
 
         // 3.6 Fetch Opening Range Breakout (15m ORB) & Gaps from Supabase
@@ -3075,9 +3108,15 @@ export default function Home() {
 
     const remainingQueue: OfflineMutation[] = [];
     let syncedCount = 0;
-    const MAX_RETRIES = 3;
+    const now = Date.now();
 
     for (const mutation of queue) {
+      // Check if scheduled backoff interval has arrived
+      if (mutation.nextRetryAt && now < mutation.nextRetryAt) {
+        remainingQueue.push(mutation);
+        continue;
+      }
+
       if (session?.access_token) {
         try {
           const res = await fetch('/api/portfolio/positions', {
@@ -3097,34 +3136,53 @@ export default function Home() {
             continue;
           }
 
-          // Non-retryable deterministic client errors (400, 404, 409, 422) should not remain in queue
+          // Non-retryable deterministic client errors (400, 404, 409, 422):
+          // Record visibly as FAILED, do not retry silently
           if (res.status >= 400 && res.status < 500 && res.status !== 429) {
             const errJson = await res.json().catch(() => ({}));
-            console.warn(`[OfflineQueue] Dropping invalid mutation ${mutation.clientOrderId} (${res.status}):`, errJson.error);
+            const failReason = errJson.error || `HTTP ${res.status}`;
+            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} failed validation (${res.status}):`, failReason);
+            recordFailedMutation(mutation, failReason);
+            setSyncFeedback({
+              message: language === 'tr'
+                ? `⚠️ Çevrimdışı işlem doğrulanamadı: ${mutation.body?.symbol || ''} (${failReason})`
+                : `⚠️ Offline action rejected: ${mutation.body?.symbol || ''} (${failReason})`,
+              type: 'error',
+            });
             continue;
           }
 
-          // Transient server error (5xx) or rate limit (429): track retry count
-          const nextRetry = (mutation.retryCount || 0) + 1;
-          if (nextRetry < MAX_RETRIES) {
+          // Transient server error (5xx) or rate limit (429): exponential backoff
+          const currentRetries = mutation.retryCount || 0;
+          const nextRetry = currentRetries + 1;
+          if (nextRetry < MAX_MUTATION_RETRIES) {
+            const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
             remainingQueue.push({
               ...mutation,
               retryCount: nextRetry,
+              status: 'RETRYING',
               lastError: `HTTP ${res.status}`,
+              nextRetryAt: now + backoffMs,
             });
           } else {
-            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} exceeded max retries (${MAX_RETRIES}), discarded.`);
+            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} exceeded max retries (${MAX_MUTATION_RETRIES}), marking FAILED.`);
+            recordFailedMutation(mutation, `Sunucu yanıt vermedi (${MAX_MUTATION_RETRIES} deneme başarısız)`);
           }
         } catch (netErr: any) {
-          const nextRetry = (mutation.retryCount || 0) + 1;
-          if (nextRetry < MAX_RETRIES) {
+          const currentRetries = mutation.retryCount || 0;
+          const nextRetry = currentRetries + 1;
+          if (nextRetry < MAX_MUTATION_RETRIES) {
+            const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
             remainingQueue.push({
               ...mutation,
               retryCount: nextRetry,
+              status: 'RETRYING',
               lastError: netErr?.message || 'Network error',
+              nextRetryAt: now + backoffMs,
             });
           } else {
-            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} network error exceeded max retries, discarded.`);
+            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} network error exceeded max retries, marking FAILED.`);
+            recordFailedMutation(mutation, netErr?.message || 'Bağlantı hatası (Zaman aşımı)');
           }
         }
       } else {

@@ -265,47 +265,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4.1 Time-Window Deduplication Guard: Suppress rapid double-tap orders within 30 seconds
-    const thirtySecsAgo = new Date(Date.now() - 30000).toISOString();
-    const { data: recentDuplicate } = await serverSupabase
-      .from('portfolio_orders')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('symbol', cleanSym)
-      .eq('side', resolvedSide)
-      .eq('quantity', rawShares)
-      .eq('price', rawPrice)
-      .gte('created_at', thirtySecsAgo)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (recentDuplicate) {
-      console.log(JSON.stringify({
-        event: 'portfolio_order_time_window_deduplicated',
-        userId: user.id,
-        orderRef: recentDuplicate.order_ref,
-        symbol: recentDuplicate.symbol,
-        side: recentDuplicate.side,
-        quantity: recentDuplicate.quantity,
-        price: recentDuplicate.price,
-      }));
-
-      return NextResponse.json(
-        {
-          success: true,
-          deduplicated: true,
-          order: recentDuplicate,
-          symbol: recentDuplicate.symbol,
-          shares: Number(recentDuplicate.quantity),
-          entryPrice: Number(recentDuplicate.price),
-          side: recentDuplicate.side,
-          currency: recentDuplicate.currency,
-          message: 'Duplicate order suppressed within 30-second window.',
-        },
-        { status: 200 }
-      );
-    }
 
     const executionDateStr = entryDate || orderDate || new Date().toISOString().slice(0, 10);
     const executionIso = executionDateStr
@@ -376,6 +335,33 @@ export async function POST(request: NextRequest) {
     );
 
     if (rpcError) {
+      // If a concurrent transaction with the exact same order_ref committed first, fetch and return existing order
+      if (rpcError.message.includes('portfolio_orders_order_ref_key') || rpcError.message.includes('portfolio_orders_user_order_ref_idx') || rpcError.message.includes('duplicate key')) {
+        const { data: existingOrder } = await serverSupabase
+          .from('portfolio_orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('order_ref', orderRef)
+          .maybeSingle();
+
+        if (existingOrder) {
+          return NextResponse.json(
+            {
+              success: true,
+              deduplicated: true,
+              order: existingOrder,
+              symbol: existingOrder.symbol,
+              shares: Number(existingOrder.quantity),
+              entryPrice: Number(existingOrder.price),
+              side: existingOrder.side,
+              currency: existingOrder.currency,
+              message: 'Duplicate order suppressed via database unique constraint.',
+            },
+            { status: 200 }
+          );
+        }
+      }
+
       console.error(JSON.stringify({
         event: 'portfolio_mutation_failed',
         userId: user.id,
@@ -387,6 +373,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Database transaction failed: ${rpcError.message}` },
         { status: 500 }
+      );
+    }
+
+    if (rpcResult?.deduplicated === true) {
+      return NextResponse.json(
+        {
+          success: true,
+          deduplicated: true,
+          position: rpcResult.position,
+          order: rpcResult.order,
+          symbol: cleanSym,
+          shares: rawShares,
+          entryPrice: rawPrice,
+          side: resolvedSide,
+          currency: rpcResult.currency || resolvedCurrency,
+          message: rpcResult.message || 'Duplicate order suppressed via database idempotency.',
+        },
+        { status: 200 }
       );
     }
 

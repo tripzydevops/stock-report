@@ -4,7 +4,8 @@ import path from 'path';
 
 test.describe('KAP Dividend Catalysts & Automation Flow', () => {
   test('1. Verify FROTO KAP Dividend Announcement in Catalyst Feed', async ({ page }, testInfo) => {
-    await page.goto('http://localhost:3001/#catalysts', { waitUntil: 'domcontentloaded' });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    await page.goto(`${baseUrl}/#catalysts`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
 
     // Look for FROTO or Temettüleri Filtrele button
@@ -18,10 +19,10 @@ test.describe('KAP Dividend Catalysts & Automation Flow', () => {
     const frotoText = page.locator('text=FROTO').first();
     await expect(frotoText).toBeVisible({ timeout: 10000 });
 
-    // Capture screenshot portably
-    const brainDir = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed8-95fd-10ef07babef9';
-    const screenshotPath = fs.existsSync(brainDir)
-      ? path.join(brainDir, 'kap_dividend_catalyst_feed.png')
+    // Capture screenshot portably (respecting ARTIFACT_DIR or Playwright output path)
+    const customArtifactDir = process.env.ARTIFACT_DIR;
+    const screenshotPath = (customArtifactDir && fs.existsSync(customArtifactDir))
+      ? path.join(customArtifactDir, 'kap_dividend_catalyst_feed.png')
       : testInfo.outputPath('kap_dividend_catalyst_feed.png');
 
     await page.screenshot({

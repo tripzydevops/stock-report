@@ -3,6 +3,15 @@ import YahooFinance from 'yahoo-finance2';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
+export function toIstanbulCalendarDate(val: string | Date): string {
+  try {
+    const d = new Date(val);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(d);
+  } catch {
+    return String(val).slice(0, 10);
+  }
+}
+
 export const DEFAULT_DIVIDEND_CHAMPIONS = [
   // BIST Dividend Champions & REITs
   'FROTO.IS', 'BIMAS.IS', 'TCELL.IS', 'ISMEN.IS', 'TURSG.IS', 'TTRAK.IS',
@@ -301,7 +310,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           continue;
         }
 
-        // Rule B: Calculate exact entitled shares on ex-date:
+        // Rule B: Calculate exact entitled shares on ex-date with Istanbul timezone normalization:
         // Sum of all Filled BUYs executed before ex-date minus sum of all Filled SELLs executed before ex-date
         const { data: userOrders } = await supabase
           .from('portfolio_orders')
@@ -309,17 +318,25 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           .eq('user_id', userId)
           .eq('symbol', divCleanSym)
           .eq('status', 'Filled')
-          .lt('executed_at', `${exDate}T00:00:00Z`);
+          .order('executed_at', { ascending: true });
 
         let entitledShares = 0;
+        let hasOrderRows = false;
         if (userOrders && userOrders.length > 0) {
           for (const ord of userOrders) {
-            if (ord.side === 'BUY') entitledShares += Number(ord.quantity) || 0;
-            else if (ord.side === 'SELL') entitledShares -= Number(ord.quantity) || 0;
+            const ordDateIstanbul = toIstanbulCalendarDate(ord.executed_at);
+            // In BIST and NYSE, shares must be purchased and settled before ex-date
+            if (ordDateIstanbul < exDate) {
+              hasOrderRows = true;
+              if (ord.side === 'BUY') entitledShares += Number(ord.quantity) || 0;
+              else if (ord.side === 'SELL') entitledShares -= Number(ord.quantity) || 0;
+            }
           }
-        } else {
-          // Fallback to pos.quantity only if pos.entry_date < exDate and no separate order rows exist
-          const entryDateStr = pos.entry_date ? String(pos.entry_date).slice(0, 10) : '';
+        }
+
+        if (!hasOrderRows) {
+          // Fallback to pos.entry_date only if pos.entry_date normalized < exDate
+          const entryDateStr = pos.entry_date ? toIstanbulCalendarDate(pos.entry_date) : '';
           if (!entryDateStr || entryDateStr < exDate) {
             entitledShares = Number(pos.quantity) || 0;
           }
@@ -354,6 +371,12 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           });
 
         if (insErr) {
+          // If already credited in database (unique index on user_id + dividend tag), count as skipped
+          if (insErr.message.includes('portfolio_transfers_user_dividend_tag_idx') || insErr.message.includes('duplicate key')) {
+            summary.skippedCount++;
+            existingTags.add(tagKey);
+            continue;
+          }
           summary.errors.push(`Failed to insert dividend transfer for ${divCleanSym}: ${insErr.message}`);
         } else {
           existingTags.add(tagKey);

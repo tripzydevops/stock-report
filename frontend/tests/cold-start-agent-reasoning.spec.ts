@@ -5,7 +5,8 @@ import path from 'path';
 test.describe('Layer 2 Autonomous Multi-Agent Reasoning & Cold-Start Profiler', () => {
   test('1. Verify Cold-Start Investor Archetype Wizard & Strategy Activation', async ({ page }, testInfo) => {
     test.setTimeout(60000);
-    await page.goto('http://localhost:3001/#signals', { waitUntil: 'domcontentloaded' });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    await page.goto(`${baseUrl}/#signals`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
 
     // Open Investor Archetype modal via header badge title
@@ -18,9 +19,9 @@ test.describe('Layer 2 Autonomous Multi-Agent Reasoning & Cold-Start Profiler', 
     await expect(modalHeader).toBeVisible();
 
     // Capture Step 1 Screenshot portably
-    const brainDir = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed8-95fd-10ef07babef9';
-    const screenshot1Path = fs.existsSync(brainDir)
-      ? path.join(brainDir, 'cold_start_onboarding_modal.png')
+    const customArtifactDir = process.env.ARTIFACT_DIR;
+    const screenshot1Path = (customArtifactDir && fs.existsSync(customArtifactDir))
+      ? path.join(customArtifactDir, 'cold_start_onboarding_modal.png')
       : testInfo.outputPath('cold_start_onboarding_modal.png');
 
     await page.screenshot({
@@ -54,7 +55,8 @@ test.describe('Layer 2 Autonomous Multi-Agent Reasoning & Cold-Start Profiler', 
 
   test('2. Verify Autonomous Multi-Agent Reasoning Endpoint & Cold-Start Explanations', async ({ page }, testInfo) => {
     test.setTimeout(60000);
-    await page.goto('http://localhost:3001/#assistant', { waitUntil: 'domcontentloaded' });
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    await page.goto(`${baseUrl}/#assistant`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000);
 
     // Query AI Copilot to run multi-agent analysis on FROTO
@@ -82,9 +84,9 @@ test.describe('Layer 2 Autonomous Multi-Agent Reasoning & Cold-Start Profiler', 
     await expect(coldStartReasoning).toBeVisible();
 
     // Capture Multi-Agent Reasoning Screenshot portably
-    const brainDir = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed8-95fd-10ef07babef9';
-    const screenshot2Path = fs.existsSync(brainDir)
-      ? path.join(brainDir, 'cold_start_agent_reasoning_report.png')
+    const customArtifactDir = process.env.ARTIFACT_DIR;
+    const screenshot2Path = (customArtifactDir && fs.existsSync(customArtifactDir))
+      ? path.join(customArtifactDir, 'cold_start_agent_reasoning_report.png')
       : testInfo.outputPath('cold_start_agent_reasoning_report.png');
 
     await page.screenshot({
