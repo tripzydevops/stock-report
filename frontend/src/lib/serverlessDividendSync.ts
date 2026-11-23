@@ -321,21 +321,20 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           .order('executed_at', { ascending: true });
 
         let entitledShares = 0;
-        let hasOrderRows = false;
-        if (userOrders && userOrders.length > 0) {
-          for (const ord of userOrders) {
+        const hasAnyOrderHistory = Boolean(userOrders && userOrders.length > 0);
+
+        if (hasAnyOrderHistory) {
+          // Strict ledger calculation: when order history exists, it is the sole source of truth.
+          for (const ord of userOrders!) {
             const ordDateIstanbul = toIstanbulCalendarDate(ord.executed_at);
             // In BIST and NYSE, shares must be purchased and settled before ex-date
             if (ordDateIstanbul < exDate) {
-              hasOrderRows = true;
               if (ord.side === 'BUY') entitledShares += Number(ord.quantity) || 0;
               else if (ord.side === 'SELL') entitledShares -= Number(ord.quantity) || 0;
             }
           }
-        }
-
-        if (!hasOrderRows) {
-          // Fallback to pos.entry_date only if pos.entry_date normalized < exDate
+        } else {
+          // Legacy position fallback: ONLY used when zero order history exists for this symbol/user
           const entryDateStr = pos.entry_date ? toIstanbulCalendarDate(pos.entry_date) : '';
           if (!entryDateStr || entryDateStr < exDate) {
             entitledShares = Number(pos.quantity) || 0;

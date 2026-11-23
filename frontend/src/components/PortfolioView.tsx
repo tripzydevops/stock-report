@@ -39,9 +39,22 @@ interface PortfolioViewProps {
   portfolioDividends?: DividendAsset[];
   isGuest?: boolean;
   userEmail?: string | null;
-  isGuestCustomized?: boolean;
   syncStatus?: 'synced' | 'syncing' | 'offline_queued' | 'offline' | 'local_only';
   offlineQueueCount?: number;
+  failedMutations?: Array<{
+    id: string;
+    clientOrderId: string;
+    type: 'BUY' | 'SELL';
+    body: any;
+    createdAt: string;
+    retryCount?: number;
+    lastError?: string;
+    nextRetryAt?: number;
+    status?: 'PENDING' | 'RETRYING' | 'FAILED';
+  }>;
+  onRetryFailedMutation?: (mutation: any) => void;
+  onDiscardFailedMutation?: (clientOrderId: string) => void;
+  onDiscardAllFailedMutations?: () => void;
   onDrainQueue?: () => void;
   onTriggerSync?: () => void;
   onOpenAuthModal?: () => void;
@@ -83,6 +96,10 @@ export default function PortfolioView({
   isGuestCustomized = false,
   syncStatus = 'synced',
   offlineQueueCount = 0,
+  failedMutations = [],
+  onRetryFailedMutation,
+  onDiscardFailedMutation,
+  onDiscardAllFailedMutations,
   onDrainQueue,
   onTriggerSync,
   onOpenAuthModal,
@@ -609,6 +626,76 @@ export default function PortfolioView({
                 <span>{language === 'tr' ? 'Kuyruğu Eşitle' : 'Sync Queue'}</span>
               </button>
             )}
+          </div>
+        )}
+
+        {/* Failed Mutations Actionable Alert Banner */}
+        {failedMutations && failedMutations.length > 0 && (
+          <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-rose-500/15 via-red-500/15 to-orange-500/15 border border-rose-400/80 dark:border-rose-500/60 shadow-xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-base">⚠️</span>
+                <span className="font-black text-rose-900 dark:text-rose-200">
+                  {failedMutations.length} {language === 'tr' ? 'İşlem Eşitlenemedi' : 'Action(s) Could Not Be Synced'}
+                </span>
+              </div>
+              {onDiscardAllFailedMutations && failedMutations.length > 1 && (
+                <button
+                  type="button"
+                  onClick={onDiscardAllFailedMutations}
+                  className="text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:underline cursor-pointer"
+                >
+                  {language === 'tr' ? 'Tümünü Temizle' : 'Discard All'}
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              {failedMutations.map((item) => (
+                <div
+                  key={item.clientOrderId}
+                  className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-white/70 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 text-xs"
+                >
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${item.type === 'BUY' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'}`}>
+                      {item.type}
+                    </span>
+                    <span className="font-bold text-neutral-900 dark:text-white">
+                      {item.body?.symbol || 'Unknown'}
+                    </span>
+                    <span className="text-neutral-500 text-[11px]">
+                      {item.body?.shares || item.body?.quantity} {language === 'tr' ? 'lot' : 'shares'} @ {item.body?.price} {item.body?.currency || 'TRY'}
+                    </span>
+                    {item.lastError && (
+                      <span className="text-rose-700 dark:text-rose-300 text-[11px] font-medium truncate max-w-[200px] sm:max-w-xs" title={item.lastError}>
+                        • {item.lastError}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                    {onRetryFailedMutation && (
+                      <button
+                        type="button"
+                        onClick={() => onRetryFailedMutation(item)}
+                        className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-[11px] font-black shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <span>🔄</span>
+                        <span>{language === 'tr' ? 'Tekrar Dene' : 'Retry'}</span>
+                      </button>
+                    )}
+                    {onDiscardFailedMutation && (
+                      <button
+                        type="button"
+                        onClick={() => onDiscardFailedMutation(item.clientOrderId)}
+                        className="px-2.5 py-1 rounded-md bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 active:scale-95 text-neutral-800 dark:text-neutral-200 text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        {language === 'tr' ? 'Sil' : 'Discard'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

@@ -34,6 +34,23 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
   let token: string;
   let supabase: any;
   let userId: string;
+  const createdTestOrderRefs: string[] = [];
+
+  test.afterAll(async () => {
+    if (supabase && userId && createdTestOrderRefs.length > 0) {
+      try {
+        for (const ref of createdTestOrderRefs) {
+          await supabase
+            .from('portfolio_orders')
+            .delete()
+            .eq('user_id', userId)
+            .eq('order_ref', ref);
+        }
+      } catch (e) {
+        console.warn('Test cleanup warning:', e);
+      }
+    }
+  });
 
   test.beforeAll(async () => {
     const envLocalPath = path.resolve(__dirname, '../.env.local');
@@ -76,6 +93,7 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     test.skip(!token, 'Requires authenticated session');
 
     const testIdempotencyKey = `ORD-TEST-IDEM-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    createdTestOrderRefs.push(testIdempotencyKey);
     const payload = {
       symbol: 'ASELS',
       shares: 1,
@@ -128,6 +146,7 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
 
     const keyA = `ORD-TEST-LEGIT-A-${Date.now()}`;
     const keyB = `ORD-TEST-LEGIT-B-${Date.now() + 10}`;
+    createdTestOrderRefs.push(keyA, keyB);
 
     const payloadA = {
       symbol: 'AKBNK',

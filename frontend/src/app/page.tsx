@@ -1314,6 +1314,12 @@ export default function Home() {
     }
     return 0;
   });
+  const [failedMutations, setFailedMutations] = useState<OfflineMutation[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getFailedMutations();
+    }
+    return [];
+  });
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
   const [isDateFilterExpanded, setIsDateFilterExpanded] = useState<boolean>(false);
@@ -2911,6 +2917,15 @@ export default function Home() {
     };
   }, [user?.id, isDemoMode]);
 
+  // Automatic retry scheduler for due offline mutations while online
+  useEffect(() => {
+    if (offlineQueueCount === 0 || isOffline) return;
+    const timer = setInterval(() => {
+      drainOfflineQueue();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [offlineQueueCount, isOffline, session?.access_token]);
+
   const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
     try {
       setIsRefreshing(true);
@@ -3143,6 +3158,7 @@ export default function Home() {
             const failReason = errJson.error || `HTTP ${res.status}`;
             console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} failed validation (${res.status}):`, failReason);
             recordFailedMutation(mutation, failReason);
+            setFailedMutations(getFailedMutations());
             setSyncFeedback({
               message: language === 'tr'
                 ? `⚠️ Çevrimdışı işlem doğrulanamadı: ${mutation.body?.symbol || ''} (${failReason})`
@@ -3155,7 +3171,7 @@ export default function Home() {
           // Transient server error (5xx) or rate limit (429): exponential backoff
           const currentRetries = mutation.retryCount || 0;
           const nextRetry = currentRetries + 1;
-          if (nextRetry < MAX_MUTATION_RETRIES) {
+          if (nextRetry <= MAX_MUTATION_RETRIES) {
             const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
             remainingQueue.push({
               ...mutation,
@@ -3167,11 +3183,12 @@ export default function Home() {
           } else {
             console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} exceeded max retries (${MAX_MUTATION_RETRIES}), marking FAILED.`);
             recordFailedMutation(mutation, `Sunucu yanıt vermedi (${MAX_MUTATION_RETRIES} deneme başarısız)`);
+            setFailedMutations(getFailedMutations());
           }
         } catch (netErr: any) {
           const currentRetries = mutation.retryCount || 0;
           const nextRetry = currentRetries + 1;
-          if (nextRetry < MAX_MUTATION_RETRIES) {
+          if (nextRetry <= MAX_MUTATION_RETRIES) {
             const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
             remainingQueue.push({
               ...mutation,
@@ -3183,6 +3200,7 @@ export default function Home() {
           } else {
             console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} network error exceeded max retries, marking FAILED.`);
             recordFailedMutation(mutation, netErr?.message || 'Bağlantı hatası (Zaman aşımı)');
+            setFailedMutations(getFailedMutations());
           }
         }
       } else {
@@ -3202,6 +3220,44 @@ export default function Home() {
       });
       await loadData(false);
     }
+  };
+
+  const handleRetryFailedMutation = (mutation: OfflineMutation) => {
+    // 1. Remove from failed mutations
+    const updatedFailed = failedMutations.filter(f => f.clientOrderId !== mutation.clientOrderId);
+    setFailedMutations(updatedFailed);
+    saveFailedMutations(updatedFailed);
+
+    // 2. Re-enqueue as fresh PENDING mutation in offline queue
+    enqueueOfflineMutation({
+      ...mutation,
+      retryCount: 0,
+      nextRetryAt: undefined,
+      status: 'PENDING',
+    });
+    setOfflineQueueCount(getOfflineQueue().length);
+
+    // 3. Immediately trigger queue drain
+    drainOfflineQueue();
+  };
+
+  const handleDiscardFailedMutation = (clientOrderId: string) => {
+    const updatedFailed = failedMutations.filter(f => f.clientOrderId !== clientOrderId);
+    setFailedMutations(updatedFailed);
+    saveFailedMutations(updatedFailed);
+    setSyncFeedback({
+      message: language === 'tr' ? 'İşlem kuyruktan silindi.' : 'Action discarded.',
+      type: 'info',
+    });
+  };
+
+  const handleDiscardAllFailedMutations = () => {
+    setFailedMutations([]);
+    saveFailedMutations([]);
+    setSyncFeedback({
+      message: language === 'tr' ? 'Tüm başarısız işlemler temizlendi.' : 'All failed actions cleared.',
+      type: 'info',
+    });
   };
 
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv?: boolean, divYield?: number) => {
@@ -5532,6 +5588,10 @@ export default function Home() {
             isGuestCustomized={checkIsGuestCustomized()}
             syncStatus={isRefreshing ? 'syncing' : (isOffline ? 'offline' : (offlineQueueCount > 0 ? 'offline_queued' : (user ? 'synced' : 'local_only')))}
             offlineQueueCount={offlineQueueCount}
+            failedMutations={failedMutations}
+            onRetryFailedMutation={handleRetryFailedMutation}
+            onDiscardFailedMutation={handleDiscardFailedMutation}
+            onDiscardAllFailedMutations={handleDiscardAllFailedMutations}
             onDrainQueue={drainOfflineQueue}
             onTriggerSync={() => handleTriggerSync(false)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
