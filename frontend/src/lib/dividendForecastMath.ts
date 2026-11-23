@@ -1888,6 +1888,16 @@ export function deriveAllMarketDividends(
 export function generateMarketDividendCatalysts(): MarketCatalyst[] {
   const confirmedOrHighYield = [
     {
+      symbol: 'FROTO',
+      market: 'BIST' as const,
+      title: 'Ford Otosan (FROTO) 2. Taksit Nakit Temettü Dağıtım Kararı',
+      details: 'Yönetim Kurulu ve Genel Kurul onayıyla pay başına net ₺14.25 nakit kâr payı dağıtılacaktır. Hak kullanım (Ex-date) tarihi 26 Kasım 2026, hesaba geçiş 28 Kasım 2026 olarak kesinleşmiştir.',
+      aiTakeaway: 'Otomotiv devi %5.60 net temettü verimiyle BIST sanayi şirketleri arasında en yüksek nakit akışını sunmaktadır. Hak kazanmak için son alım günü 25 Kasım kapanışıdır.',
+      exDate: '2026-11-26',
+      dps: 14.25,
+      yieldPct: 5.60
+    },
+    {
       symbol: 'BIMAS',
       market: 'BIST' as const,
       title: 'BİM Mağazalar (BIMAS) 3. Taksit Nakit Temettü Dağıtım Kararı',

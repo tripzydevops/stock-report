@@ -301,8 +301,9 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
           continue;
         }
 
-        // Rule B: Did user acquire position on or before ex-date?
-        if (pos.entry_date && pos.entry_date > exDate) {
+        // Rule B: Did user acquire position before ex-date? (In BIST/NYSE, shares must be held before market close the session prior to ex-date)
+        const entryDateStr = pos.entry_date ? String(pos.entry_date).slice(0, 10) : '';
+        if (entryDateStr && entryDateStr >= exDate) {
           summary.skippedCount++;
           continue;
         }
