@@ -613,21 +613,24 @@ export async function POST(request: Request) {
         volumeSpike = Boolean((q.volume && q.volume > 500000) || Math.abs(gapPct) > 1.0);
       }
 
-      orbRows.push({
-        asset_id: assetId || null,
-        symbol: cleanSym,
-        market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
-        date: recordDate,
-        prev_close: prevClose,
-        open_price: openPrice,
-        current_price: currPrice,
-        gap_percent: gapPct,
-        gap_type: gapType,
-        orb_status: orbStatus,
-        bias: bias,
-        volume_spike: volumeSpike,
-        recommended_action: recAction
-      });
+      // Only record genuine ORB observations where baseline data exists (prevents NOT NULL violation on gap_percent)
+      if (gapPct !== null) {
+        orbRows.push({
+          asset_id: assetId || null,
+          symbol: cleanSym,
+          market: q.symbol.endsWith('.IS') ? 'BIST' : 'US',
+          date: recordDate,
+          prev_close: prevClose,
+          open_price: openPrice,
+          current_price: currPrice,
+          gap_percent: gapPct,
+          gap_type: gapType,
+          orb_status: orbStatus,
+          bias: bias,
+          volume_spike: volumeSpike,
+          recommended_action: recAction
+        });
+      }
     }
 
     // 8. Batch upsert price_history concurrently in chunks of 250 with verified results

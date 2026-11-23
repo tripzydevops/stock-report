@@ -43,6 +43,7 @@ interface PortfolioViewProps {
   syncStatus?: 'synced' | 'syncing' | 'offline_queued' | 'offline' | 'local_only';
   offlineQueueCount?: number;
   onDrainQueue?: () => void;
+  onTriggerSync?: () => void;
   onOpenAuthModal?: () => void;
   onResetToModelPortfolio?: () => void;
   onQuickAdminLogin?: () => void;
@@ -83,6 +84,7 @@ export default function PortfolioView({
   syncStatus = 'synced',
   offlineQueueCount = 0,
   onDrainQueue,
+  onTriggerSync,
   onOpenAuthModal,
   onResetToModelPortfolio,
   onQuickAdminLogin,
@@ -628,9 +630,24 @@ export default function PortfolioView({
                   {language === 'tr' ? 'Eşitleniyor...' : 'Syncing...'}
                 </span>
               ) : (
-                <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium hidden sm:inline">
-                  {language === 'tr' ? 'Tüm cihazlarınızdan otomatik güncellenir' : 'Auto-synced across all your devices'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium hidden sm:inline">
+                    {language === 'tr' ? 'Tüm cihazlarınızdan otomatik güncellenir' : 'Auto-synced across all your devices'}
+                  </span>
+                  {onTriggerSync && (
+                    <button
+                      type="button"
+                      onClick={onTriggerSync}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs cursor-pointer select-none"
+                      title={language === 'tr' ? 'Portföyü Bulutla Şimdi Eşitle' : 'Sync Portfolio with Cloud Now'}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>{language === 'tr' ? 'Şimdi Eşitle' : 'Sync Now'}</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>

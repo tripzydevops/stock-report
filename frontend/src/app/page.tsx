@@ -5401,6 +5401,7 @@ export default function Home() {
             syncStatus={isRefreshing ? 'syncing' : (isOffline ? 'offline' : (offlineQueueCount > 0 ? 'offline_queued' : (user ? 'synced' : 'local_only')))}
             offlineQueueCount={offlineQueueCount}
             onDrainQueue={drainOfflineQueue}
+            onTriggerSync={() => handleTriggerSync(false)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
             onResetToModelPortfolio={handleResetToModelPortfolio}
             onQuickAdminLogin={signInAsAdmin}

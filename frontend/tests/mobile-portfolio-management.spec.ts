@@ -6,7 +6,14 @@ const ARTIFACTS_DIR = 'C:/Users/elif/.gemini/antigravity/brain/63fa77f0-30f5-4ed
 test.describe('Mobile Portfolio Hardening & Zero-Block Execution', () => {
   test.setTimeout(120000);
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, context }) => {
+    // Ensure test runs strictly in isolated guest sandbox and never touches production cloud data
+    await context.clearCookies();
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+
     // Navigate to homepage with portfolio tab
     await page.goto('/?tab=portfolio');
     await page.waitForLoadState('domcontentloaded');
