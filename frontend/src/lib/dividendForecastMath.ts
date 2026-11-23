@@ -956,6 +956,42 @@ export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
     monthLabels: ['Mart (1. Taksit)', 'Kasım (2. Taksit)'],
     dates: ['2027-03-27', '2026-11-26'],
     ratios: [0.5, 0.5]
+  },
+  TTRAK: {
+    months: [3, 10], // April (3), November (10)
+    monthLabels: ['Nisan (1. Taksit)', 'Kasım (2. Taksit)'],
+    dates: ['2027-04-08', '2026-11-28'],
+    ratios: [0.5, 0.5]
+  },
+  DOAS: {
+    months: [3, 10], // April (3), November (10)
+    monthLabels: ['Nisan (1. Taksit)', 'Kasım (2. Taksit)'],
+    dates: ['2027-04-18', '2026-11-20'],
+    ratios: [0.5, 0.5]
+  },
+  TUPRS: {
+    months: [3, 8], // April (3), September (8)
+    monthLabels: ['Nisan (1. Taksit)', 'Eylül (2. Taksit)'],
+    dates: ['2027-04-03', '2026-09-27'],
+    ratios: [0.55, 0.45]
+  },
+  CCOLA: {
+    months: [4, 8, 11], // May (4), September (8), December (11)
+    monthLabels: ['Mayıs (1. Taksit)', 'Eylül (2. Taksit)', 'Aralık (3. Taksit)'],
+    dates: ['2027-05-22', '2027-09-18', '2026-12-19'],
+    ratios: [0.333, 0.333, 0.334]
+  },
+  ISMEN: {
+    months: [2, 8], // March (2), September (8)
+    monthLabels: ['Mart (1. Taksit)', 'Eylül (2. Taksit)'],
+    dates: ['2027-03-29', '2027-09-25'],
+    ratios: [0.6, 0.4]
+  },
+  TRGYO: {
+    months: [5, 9], // June (5), October (9)
+    monthLabels: ['Haziran (1. Taksit)', 'Ekim (2. Taksit)'],
+    dates: ['2027-06-20', '2026-10-20'],
+    ratios: [0.5, 0.5]
   }
 };
 

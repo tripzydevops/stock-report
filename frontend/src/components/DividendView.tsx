@@ -328,6 +328,26 @@ export default function DividendView({
     ? allMarketDividends.length
     : null;
 
+  // Imminent Cum-Dividend / Son Alım Günü Radar (diffDays between 0 and 7)
+  const imminentCumDividends = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return effectiveAssets
+      .map(asset => {
+        if (!asset.nextExDate) return null;
+        const target = new Date(asset.nextExDate);
+        target.setHours(0, 0, 0, 0);
+        const diffTime = target.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return { asset, diffDays };
+      })
+      .filter((item): item is { asset: DividendAsset; diffDays: number } => {
+        return item !== null && item.diffDays >= 0 && item.diffDays <= 7;
+      })
+      .sort((a, b) => a.diffDays - b.diffDays);
+  }, [effectiveAssets]);
+
   return (
     <div className="space-y-6 pb-20 sm:pb-8">
       {/* Top Dividend KPIs (Portföy & Piyasa Özeti) */}
@@ -612,6 +632,100 @@ export default function DividendView({
           </button>
         </div>
       </div>
+
+      {/* CUM-DIVIDEND (SON ALIM GÜNÜ) RADAR BANNER */}
+      {imminentCumDividends.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border-2 border-amber-400 dark:border-amber-600/80 shadow-md space-y-3 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-amber-200 dark:border-amber-900/60">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl animate-pulse">🚨</span>
+              <div>
+                <h3 className="text-sm sm:text-base font-black text-amber-950 dark:text-amber-200 flex items-center gap-2">
+                  <span>{language === 'tr' ? 'Son Alım Günü (Cum-Dividend) & Hak Kullanım Radarı' : 'Cum-Dividend Radar & Last Purchase Day'}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs">
+                    {imminentCumDividends.length} {language === 'tr' ? 'Yaklaşan Fırsat' : 'Imminent'}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-amber-900/80 dark:text-amber-300/80 font-medium">
+                  {language === 'tr'
+                    ? 'Temettü hakkı kazanmak için hisse senedinin en geç hak kullanım (Ex-Date) gününden bir önceki seans kapanışına kadar portföyde olması gerekir.'
+                    : 'To qualify for the dividend payout, you must hold the stock before the market closes on the day prior to the Ex-Date.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pt-1">
+            {imminentCumDividends.map(({ asset, diffDays }) => {
+              const isLastDay = diffDays === 1;
+              const isToday = diffDays === 0;
+              const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (asset.dividendYield || 0) / 100);
+              const currSym = asset.currency === 'USD' ? '$' : '₺';
+
+              return (
+                <div
+                  key={`cum-div-${asset.symbol}`}
+                  className={`p-3.5 rounded-xl border flex flex-col justify-between space-y-2 transition-all ${
+                    isLastDay
+                      ? 'bg-amber-100/90 dark:bg-amber-950/70 border-amber-500 ring-2 ring-amber-400 shadow-md'
+                      : isToday
+                      ? 'bg-rose-50/90 dark:bg-rose-950/70 border-rose-400 dark:border-rose-700 shadow-xs'
+                      : 'bg-white dark:bg-gray-800 border-amber-200 dark:border-amber-800 shadow-xs'
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-black text-base text-gray-900 dark:text-white">{asset.symbol}</span>
+                        {isLastDay && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-600 text-white animate-pulse">
+                            {language === 'tr' ? '⚡ SON ALIM GÜNÜ!' : '⚡ LAST DAY TO BUY!'}
+                          </span>
+                        )}
+                        {isToday && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-600 text-white">
+                            {language === 'tr' ? '🔴 BUGÜN EX-DATE' : '🔴 EX-DATE TODAY'}
+                          </span>
+                        )}
+                        {!isLastDay && !isToday && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-mono">
+                            ⏳ {diffDays} {language === 'tr' ? 'Gün Kaldı' : 'Days Left'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{asset.name}</p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                        {dps > 0 ? `${currSym}${dps.toFixed(2)}` : '—'} / hisse
+                      </div>
+                      {asset.dividendYield !== null && (
+                        <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                          %{asset.dividendYield.toFixed(2)} verim
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/60 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+                    <span className="font-mono text-[11px]">
+                      {language === 'tr' ? 'Hak Kullanım:' : 'Ex-Date:'} <strong className="text-gray-900 dark:text-white">{asset.nextExDate}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectTicker?.(asset.symbol)}
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      {language === 'tr' ? 'İncele →' : 'View →'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* View Switcher Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">

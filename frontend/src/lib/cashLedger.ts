@@ -17,6 +17,8 @@ export interface LedgerCashResult {
   consolidatedCashUSD: number;
   inferredFundingTRY: number;
   inferredFundingUSD: number;
+  totalDividendsReceivedTRY: number;
+  totalDividendsReceivedUSD: number;
   hasRecordHistory: boolean;
   isLedgerEmpty: boolean;
   hasUsdActivity: boolean;
@@ -27,7 +29,7 @@ export function isValidTransfer(t: CapitalTransfer | any): boolean {
   const amt = Number(t.amount);
   if (!Number.isFinite(amt) || amt <= 0) return false;
   const type = (t.transferType || t.transfer_type)?.toUpperCase();
-  return type === 'DEPOSIT' || type === 'WITHDRAWAL';
+  return type === 'DEPOSIT' || type === 'WITHDRAWAL' || type === 'DIVIDEND';
 }
 
 export function parseOrderTimestamp(order: ExecutedOrder): number {
@@ -68,7 +70,7 @@ export function calculateLedgerCash(
     type: 'TRANSFER' | 'ORDER';
     timestamp: number;
     currency: 'TRY' | 'USD';
-    transferType?: 'DEPOSIT' | 'WITHDRAWAL';
+    transferType?: 'DEPOSIT' | 'WITHDRAWAL' | 'DIVIDEND';
     side?: 'BUY' | 'SELL';
     amount: number;
     ref?: string;
@@ -139,6 +141,8 @@ export function calculateLedgerCash(
   let totalSellsUSD = 0;
   let inferredFundingTRY = 0;
   let inferredFundingUSD = 0;
+  let totalDividendsReceivedTRY = 0;
+  let totalDividendsReceivedUSD = 0;
 
   for (const ev of events) {
     if (ev.currency === 'USD') {
@@ -149,6 +153,9 @@ export function calculateLedgerCash(
         } else if (ev.transferType === 'WITHDRAWAL') {
           runningCashUSD = Math.max(0, runningCashUSD - ev.amount);
           totalWithdrawalsUSD += ev.amount;
+        } else if (ev.transferType === 'DIVIDEND') {
+          runningCashUSD += ev.amount;
+          totalDividendsReceivedUSD += ev.amount;
         }
       } else if (ev.type === 'ORDER') {
         if (ev.side === 'SELL') {
@@ -175,6 +182,9 @@ export function calculateLedgerCash(
         } else if (ev.transferType === 'WITHDRAWAL') {
           runningCashTRY = Math.max(0, runningCashTRY - ev.amount);
           totalWithdrawalsTRY += ev.amount;
+        } else if (ev.transferType === 'DIVIDEND') {
+          runningCashTRY += ev.amount;
+          totalDividendsReceivedTRY += ev.amount;
         }
       } else if (ev.type === 'ORDER') {
         if (ev.side === 'SELL') {
@@ -223,6 +233,8 @@ export function calculateLedgerCash(
     consolidatedCashUSD,
     inferredFundingTRY: Number(inferredFundingTRY.toFixed(2)),
     inferredFundingUSD: Number(inferredFundingUSD.toFixed(2)),
+    totalDividendsReceivedTRY: Number(totalDividendsReceivedTRY.toFixed(2)),
+    totalDividendsReceivedUSD: Number(totalDividendsReceivedUSD.toFixed(2)),
     hasRecordHistory,
     isLedgerEmpty,
     hasUsdActivity

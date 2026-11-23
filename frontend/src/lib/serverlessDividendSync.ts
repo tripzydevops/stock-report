@@ -26,6 +26,7 @@ export interface DividendSyncResult {
     rate: number | null;
     currency: string;
   }>;
+  dueDividendsSettled?: DividendCreditSummary;
   errors: string[];
   durationMs: number;
 }
@@ -176,13 +177,179 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
     }
   }
 
+  // 5. Automatically credit any due dividends directly to cash ledger
+  let dueDividendsSettled: DividendCreditSummary | undefined;
+  try {
+    dueDividendsSettled = await processDueDividendsToCashLedger();
+  } catch (settleErr: any) {
+    errors.push(`Auto-credit dividends warning: ${settleErr.message}`);
+  }
+
   return {
     success: true,
     auditedCount: targetSymbols.length,
     upcomingCount: upcomingEvents.length,
     upsertedCount,
     upcomingEvents,
+    dueDividendsSettled,
     errors,
     durationMs: Date.now() - startTime
   };
+}
+
+export interface DividendCreditSummary {
+  processedCount: number;
+  creditedCount: number;
+  creditedTransfers: Array<{
+    userId: string;
+    symbol: string;
+    shares: number;
+    amountPerShare: number;
+    totalAmount: number;
+    currency: string;
+    paymentDate: string;
+  }>;
+  skippedCount: number;
+  errors: string[];
+}
+
+/**
+ * Idempotently evaluates all open portfolio positions against confirmed asset_dividends.
+ * If payment_date <= today and the user held the stock on ex_date, credits cash directly
+ * as a 'DIVIDEND' transfer into portfolio_transfers without altering invested capital.
+ */
+export async function processDueDividendsToCashLedger(): Promise<DividendCreditSummary> {
+  const supabase = getServerSupabase();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const summary: DividendCreditSummary = {
+    processedCount: 0,
+    creditedCount: 0,
+    creditedTransfers: [],
+    skippedCount: 0,
+    errors: []
+  };
+
+  try {
+    // 1. Fetch all open positions with positive quantity
+    const { data: positions, error: posErr } = await supabase
+      .from('portfolio_positions')
+      .select('id, user_id, asset_id, quantity, entry_date, is_open, assets(id, symbol)')
+      .eq('is_open', true)
+      .gt('quantity', 0);
+
+    if (posErr || !positions || positions.length === 0) {
+      if (posErr) summary.errors.push(`Positions fetch error: ${posErr.message}`);
+      return summary;
+    }
+
+    // 2. Fetch all dividends where payment_date <= todayStr
+    const { data: dividends, error: divErr } = await supabase
+      .from('asset_dividends')
+      .select('id, asset_id, symbol, ex_date, payment_date, amount, currency, is_confirmed')
+      .lte('payment_date', todayStr)
+      .gt('amount', 0);
+
+    if (divErr || !dividends || dividends.length === 0) {
+      if (divErr) summary.errors.push(`Dividends fetch error: ${divErr.message}`);
+      return summary;
+    }
+
+    // 3. Fetch existing DIVIDEND transfers to guarantee idempotency
+    const { data: existingTransfers, error: transErr } = await supabase
+      .from('portfolio_transfers')
+      .select('id, user_id, notes, transfer_date')
+      .eq('transfer_type', 'DIVIDEND');
+
+    if (transErr) {
+      summary.errors.push(`Transfers fetch error: ${transErr.message}`);
+      return summary;
+    }
+
+    const existingTags = new Set<string>();
+    if (existingTransfers) {
+      for (const t of existingTransfers) {
+        if (t.notes) {
+          const match = t.notes.match(/\[DIVIDEND:([A-Za-z0-9._]+):([0-9-]+)\]/);
+          if (match) {
+            existingTags.add(`${t.user_id}:${match[1].toUpperCase()}:${match[2]}`);
+          }
+        }
+      }
+    }
+
+    // 4. Match positions against due dividends
+    for (const pos of positions) {
+      summary.processedCount++;
+      const posSymbol = ((pos as any)?.assets?.symbol || '').toUpperCase();
+      const cleanSym = posSymbol.replace('.IS', '');
+      const userId = pos.user_id;
+
+      const matchingDivs = dividends.filter(d => {
+        const dSym = (d.symbol || '').replace('.IS', '').toUpperCase();
+        return (d.asset_id && d.asset_id === pos.asset_id) || (cleanSym && dSym === cleanSym);
+      });
+
+      for (const div of matchingDivs) {
+        const divCleanSym = (div.symbol || cleanSym).replace('.IS', '').toUpperCase();
+        const exDate = div.ex_date;
+        const payDate = div.payment_date || todayStr;
+        const tagKey = `${userId}:${divCleanSym}:${exDate}`;
+
+        // Rule A: Check if already credited
+        if (existingTags.has(tagKey)) {
+          summary.skippedCount++;
+          continue;
+        }
+
+        // Rule B: Did user acquire position on or before ex-date?
+        if (pos.entry_date && pos.entry_date > exDate) {
+          summary.skippedCount++;
+          continue;
+        }
+
+        const shares = Number(pos.quantity) || 0;
+        const rate = Number(div.amount) || 0;
+        const totalAmount = Number((shares * rate).toFixed(2));
+
+        if (totalAmount <= 0) {
+          summary.skippedCount++;
+          continue;
+        }
+
+        const currency = div.currency || (divCleanSym.endsWith('.IS') || div.symbol?.endsWith('.IS') ? 'TRY' : 'USD');
+        const noteTag = `[DIVIDEND:${divCleanSym}:${exDate}]`;
+
+        const { error: insErr } = await supabase
+          .from('portfolio_transfers')
+          .insert({
+            user_id: userId,
+            transfer_type: 'DIVIDEND',
+            amount: totalAmount,
+            currency: currency,
+            transfer_date: payDate,
+            notes: `Nakit Temettü: ${divCleanSym} (${shares} adet @ ₺${rate}) ${noteTag}`
+          });
+
+        if (insErr) {
+          summary.errors.push(`Failed to insert dividend transfer for ${divCleanSym}: ${insErr.message}`);
+        } else {
+          existingTags.add(tagKey);
+          summary.creditedCount++;
+          summary.creditedTransfers.push({
+            userId,
+            symbol: divCleanSym,
+            shares,
+            amountPerShare: rate,
+            totalAmount,
+            currency,
+            paymentDate: payDate
+          });
+        }
+      }
+    }
+  } catch (err: any) {
+    summary.errors.push(`Unexpected error: ${err.message || String(err)}`);
+  }
+
+  return summary;
 }

@@ -337,7 +337,7 @@ export default function PortfolioView({
 
   // Deposit modal state
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [modalTransferType, setModalTransferType] = useState<'DEPOSIT' | 'WITHDRAWAL'>('DEPOSIT');
+  const [modalTransferType, setModalTransferType] = useState<'DEPOSIT' | 'WITHDRAWAL' | 'DIVIDEND'>('DEPOSIT');
   const [modalAmount, setModalAmount] = useState('');
   const [modalDate, setModalDate] = useState(new Date().toISOString().slice(0, 10));
   const [modalNotes, setModalNotes] = useState('');
@@ -573,7 +573,7 @@ export default function PortfolioView({
       amount: parsed,
       currency: modalCurrency,
       transferDate: modalDate,
-      notes: modalNotes || (modalTransferType === 'DEPOSIT' ? 'Brokerage capital deposit' : 'Brokerage capital withdrawal')
+      notes: modalNotes || (modalTransferType === 'DEPOSIT' ? 'Brokerage capital deposit' : modalTransferType === 'WITHDRAWAL' ? 'Brokerage capital withdrawal' : 'Temettü nakit girişi')
     };
     onAddTransfer?.(newTrans);
     setIsDepositModalOpen(false);
@@ -903,6 +903,16 @@ export default function PortfolioView({
                 </span>
                 <span className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold" title="USD Cüzdanı">
                   🇺🇸 ${cashValUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+            {(ledgerCash.totalDividendsReceivedTRY > 0 || ledgerCash.totalDividendsReceivedUSD > 0) && (
+              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold" title={language === 'tr' ? 'Nakit cüzdana eklenen toplam net temettü kazancı' : 'Net dividends credited into cash wallet'}>
+                <span>💰</span>
+                <span>
+                  {currencyMode === 'USD'
+                    ? `+$${((ledgerCash.totalDividendsReceivedTRY / usdTryRate) + ledgerCash.totalDividendsReceivedUSD).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${language === 'tr' ? 'Alınan Temettü' : 'Dividends Paid'}`
+                    : `+₺${(ledgerCash.totalDividendsReceivedTRY + (ledgerCash.totalDividendsReceivedUSD * usdTryRate)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${language === 'tr' ? 'Alınan Temettü' : 'Dividends Paid'}`}
                 </span>
               </div>
             )}
@@ -3320,14 +3330,16 @@ export default function PortfolioView({
                 <div key={t.id} className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${
-                      t.transferType === 'DEPOSIT'
+                      t.transferType === 'DIVIDEND'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
+                        : t.transferType === 'DEPOSIT'
                         ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
                         : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
                     }`}>
-                      {t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
+                      {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ (Dividend)' : t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
                     </span>
                     <span className="font-black text-sm text-gray-900 dark:text-white">
-                      {t.transferType === 'DEPOSIT' ? '+' : '-'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500">
@@ -3362,15 +3374,17 @@ export default function PortfolioView({
                     <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${
-                          t.transferType === 'DEPOSIT'
+                          t.transferType === 'DIVIDEND'
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
+                            : t.transferType === 'DEPOSIT'
                             ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
                             : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
                         }`}>
-                          {t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
+                          {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ (Dividend)' : t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white whitespace-nowrap">
-                        {t.transferType === 'DEPOSIT' ? '+' : '-'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
                         {t.notes || 'Brokerage funding'}
@@ -3410,7 +3424,7 @@ export default function PortfolioView({
             <form onSubmit={handleSaveTransfer} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Transfer Type</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setModalTransferType('DEPOSIT')}
@@ -3420,7 +3434,7 @@ export default function PortfolioView({
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
                     }`}
                   >
-                    ↓ Deposit (Cash In)
+                    ↓ Deposit
                   </button>
                   <button
                     type="button"
@@ -3431,7 +3445,18 @@ export default function PortfolioView({
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
                     }`}
                   >
-                    ↑ Withdrawal (Cash Out)
+                    ↑ Withdraw
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalTransferType('DIVIDEND')}
+                    className={`py-2 text-xs font-bold rounded-xl transition-all border ${
+                      modalTransferType === 'DIVIDEND'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                    }`}
+                  >
+                    💰 Dividend
                   </button>
                 </div>
               </div>

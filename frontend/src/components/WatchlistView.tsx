@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import Pagination from './Pagination';
 import { searchAssets, resolveUnambiguousAlias } from '../lib/assetSearch';
+import { DividendAsset } from '../lib/supabaseClient';
 
 export interface WatchlistItemData {
   id: string;
@@ -52,9 +53,10 @@ export interface CatalogAsset {
 interface WatchlistViewProps {
   onAddToPortfolio?: (asset: { symbol: string; name: string; market: string; currentPrice: number; currency: string }) => void;
   onOpenAuthModal?: () => void;
+  dividendAssets?: DividendAsset[];
 }
 
-export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: WatchlistViewProps) {
+export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, dividendAssets }: WatchlistViewProps) {
   const { language } = useLanguage();
   const { user, session, isDemoMode } = useAuth();
 
@@ -683,6 +685,55 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
     return filteredItems.slice(start, start + pageSize);
   }, [filteredItems, currentPage, pageSize]);
 
+  // Dividend lookup map for watchlist items
+  const dividendMap = useMemo(() => {
+    const map: Record<string, DividendAsset> = {};
+    if (!dividendAssets) return map;
+    for (const a of dividendAssets) {
+      const s = (a.symbol || '').replace('.IS', '').toUpperCase();
+      map[s] = a;
+      map[a.symbol.toUpperCase()] = a;
+    }
+    return map;
+  }, [dividendAssets]);
+
+  const getAssetDivCountdown = useCallback((symbol: string) => {
+    const cleanSym = symbol.replace('.IS', '').toUpperCase();
+    const div = dividendMap[cleanSym];
+    if (!div || !div.nextExDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(div.nextExDate);
+    target.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0 || diffDays > 7) return null;
+    const dps = div.estimatedNextDPS || ((div.currentPrice || 0) * (div.dividendYield || 0) / 100);
+    return { div, diffDays, dps };
+  }, [dividendMap]);
+
+  // Imminent Cum-Dividend Radar for Watchlist items (diffDays 0..7)
+  const imminentWatchlistDividends = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const list: Array<{ item: WatchlistItemData; div: DividendAsset; diffDays: number; dps: number }> = [];
+    for (const item of items) {
+      const cleanSym = (item.symbol || '').replace('.IS', '').toUpperCase();
+      const div = dividendMap[cleanSym];
+      if (div && div.nextExDate) {
+        const target = new Date(div.nextExDate);
+        target.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays <= 7) {
+          const dps = div.estimatedNextDPS || ((div.currentPrice || 0) * (div.dividendYield || 0) / 100);
+          list.push({ item, div, diffDays, dps });
+        }
+      }
+    }
+    list.sort((a, b) => a.diffDays - b.diffDays);
+    return list;
+  }, [items, dividendMap]);
+
   // Aggregate stats
   const stats = useMemo(() => {
     const totalCount = items.length;
@@ -1021,6 +1072,57 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
           </button>
         </div>
 
+        {/* IMMINENT CUM-DIVIDEND RADAR ALERT BANNER */}
+        {imminentWatchlistDividends.length > 0 && (
+          <div className="mt-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border-2 border-amber-400 dark:border-amber-600/80 shadow-xs space-y-2.5 animate-in fade-in duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl animate-pulse">🚨</span>
+                <h4 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-200">
+                  {language === 'tr' ? 'Takip Listenizdeki Yaklaşan Temettü Hak Kullanımları (Son Alım Günü)' : 'Imminent Dividend Ex-Dates on Watchlist (Last Day to Buy)'}
+                </h4>
+              </div>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                {imminentWatchlistDividends.length} {language === 'tr' ? 'Hisse' : 'Alerts'}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {imminentWatchlistDividends.map(({ item, div, diffDays, dps }) => {
+                const isLastDay = diffDays === 1;
+                const isToday = diffDays === 0;
+
+                return (
+                  <div
+                    key={`wl-alert-${item.id}`}
+                    className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                      isLastDay
+                        ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-950 dark:text-amber-200 border-amber-500 ring-1 ring-amber-400'
+                        : isToday
+                        ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-950 dark:text-rose-200 border-rose-400'
+                        : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-amber-200 dark:border-amber-800'
+                    }`}
+                  >
+                    <span className="font-black">{item.symbol.replace('.IS', '')}</span>
+                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                      isLastDay ? 'bg-amber-600 text-white animate-pulse' : isToday ? 'bg-rose-600 text-white' : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+                    }`}>
+                      {isLastDay ? (language === 'tr' ? '⚡ YARIN EX-DATE (SON ALIM!)' : '⚡ TOMORROW EX-DATE!') : isToday ? (language === 'tr' ? '🔴 BUGÜN' : '🔴 TODAY') : `${diffDays}g kaldı`}
+                    </span>
+                    {dps > 0 && (
+                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                        +{item.currency === 'USD' ? '$' : '₺'}{dps.toFixed(2)}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      ({div.nextExDate})
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Stale Cache Notice Banner */}
         {dataStatus === 'stale' && (
           <div className="mt-2.5 py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between animate-in fade-in">
@@ -1278,6 +1380,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
             const isEtf = item.assetClass === 'etf';
             const flag = isFund ? '🏦' : item.market === 'US' ? '🇺🇸' : '🇹🇷';
             const badgeType = isFund ? 'TEFAS Fon' : isEtf ? 'ETF' : 'Hisse';
+            const divCountdown = getAssetDivCountdown(item.symbol);
 
             let alertBelowDistance: number | null = null;
             if (item.alertBelow && item.latestPrice !== null && item.latestPrice > 0) {
@@ -1308,6 +1411,27 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                         <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                           {badgeType}
                         </span>
+                        {divCountdown && (
+                          <span
+                            className={`text-[9px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-1 ${
+                              divCountdown.diffDays === 1
+                                ? 'bg-amber-500 text-white animate-pulse'
+                                : divCountdown.diffDays === 0
+                                ? 'bg-rose-600 text-white'
+                                : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                            }`}
+                            title={`Temettü Hak Kullanım (Ex-Date): ${divCountdown.div.nextExDate} · DPS: ${item.currency === 'USD' ? '$' : '₺'}${divCountdown.dps.toFixed(2)}`}
+                          >
+                            <span>{divCountdown.diffDays === 1 ? '⚡' : divCountdown.diffDays === 0 ? '🔴' : '⏳'}</span>
+                            <span>
+                              {divCountdown.diffDays === 1
+                                ? (language === 'tr' ? 'Yarın Son Alım!' : 'Tomorrow Cutoff!')
+                                : divCountdown.diffDays === 0
+                                ? (language === 'tr' ? 'Bugün Ex-Date' : 'Today Ex-Date')
+                                : `${divCountdown.diffDays}g temettü`}
+                            </span>
+                          </span>
+                        )}
                         {item.sector && (
                           <span className="text-[9px] text-slate-400 dark:text-slate-500 truncate max-w-[100px]">
                             {item.sector}
@@ -1501,6 +1625,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                   const isEtf = item.assetClass === 'etf';
                   const flag = isFund ? '🏦' : item.market === 'US' ? '🇺🇸' : '🇹🇷';
                   const badgeType = isFund ? 'TEFAS Fon' : isEtf ? 'ETF' : 'Hisse';
+                  const divCountdown = getAssetDivCountdown(item.symbol);
 
                   return (
                     <tr
@@ -1511,11 +1636,32 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal }: Wat
                         <div className="flex items-center gap-2">
                           <span className="text-sm shrink-0">{flag}</span>
                           <div>
-                            <div className="font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5">
+                            <div className="font-black text-slate-900 dark:text-white font-mono flex items-center gap-1.5 flex-wrap">
                               <span>{cleanSym}</span>
                               <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">
                                 {badgeType}
                               </span>
+                              {divCountdown && (
+                                <span
+                                  className={`text-[9px] font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 ${
+                                    divCountdown.diffDays === 1
+                                      ? 'bg-amber-500 text-white animate-pulse'
+                                      : divCountdown.diffDays === 0
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                                  }`}
+                                  title={`Temettü Hak Kullanım (Ex-Date): ${divCountdown.div.nextExDate} · DPS: ${item.currency === 'USD' ? '$' : '₺'}${divCountdown.dps.toFixed(2)}`}
+                                >
+                                  <span>{divCountdown.diffDays === 1 ? '⚡' : divCountdown.diffDays === 0 ? '🔴' : '⏳'}</span>
+                                  <span>
+                                    {divCountdown.diffDays === 1
+                                      ? (language === 'tr' ? 'Yarın Son Alım!' : 'Tomorrow Cutoff!')
+                                      : divCountdown.diffDays === 0
+                                      ? (language === 'tr' ? 'Bugün Ex' : 'Today Ex')
+                                      : `${divCountdown.diffDays}g`}
+                                  </span>
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[160px]">
                               {item.name}

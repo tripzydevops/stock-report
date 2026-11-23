@@ -5364,6 +5364,7 @@ export default function Home() {
               setActiveTab('portfolio');
             }}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            dividendAssets={allMarketDividends}
           />
         )}
 

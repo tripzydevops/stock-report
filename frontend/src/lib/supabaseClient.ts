@@ -242,7 +242,7 @@ export interface ExecutedOrder {
 
 export interface CapitalTransfer {
   id: string;
-  transferType: 'DEPOSIT' | 'WITHDRAWAL';
+  transferType: 'DEPOSIT' | 'WITHDRAWAL' | 'DIVIDEND';
   amount: number;
   currency: string;
   transferDate: string;

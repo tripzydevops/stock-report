@@ -316,8 +316,9 @@ export default function DividendRaindropCalendar({
 
   const maxMonthTRY = peakMonth?.totalPayoutTRY || 1;
 
-  // Next upcoming raindrop calculation
+  // Next upcoming raindrop calculation (properly filter >= today)
   const nextRaindrop = useMemo(() => {
+    const todayTimestamp = new Date().setHours(0, 0, 0, 0);
     const allDrops: Array<RaindropItem & { dateSort: number; monthName: string }> = [];
     for (const b of monthlyBuckets) {
       for (const d of b.raindrops) {
@@ -330,8 +331,9 @@ export default function DividendRaindropCalendar({
         });
       }
     }
-    allDrops.sort((a, b) => a.dateSort - b.dateSort);
-    return allDrops.length > 0 ? allDrops[0] : null;
+    const upcomingDrops = allDrops.filter(d => d.dateSort >= todayTimestamp);
+    upcomingDrops.sort((a, b) => a.dateSort - b.dateSort);
+    return upcomingDrops.length > 0 ? upcomingDrops[0] : (allDrops.length > 0 ? allDrops[0] : null);
   }, [monthlyBuckets, language]);
 
   return (
@@ -555,6 +557,11 @@ export default function DividendRaindropCalendar({
                             <span className="font-black text-xs text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
                               {drop.symbol}
                             </span>
+                            {drop.trancheNumber && (
+                              <span className="text-[8px] font-black px-1 py-0.2 rounded bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 shrink-0" title={`${drop.trancheNumber}. Taksit Dağıtımı`}>
+                                T{drop.trancheNumber}
+                              </span>
+                            )}
                             {drop.paymentStatus === 'Confirmed' && (
                               <span className="text-[8px] font-black px-1 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0" title="KAP/Resmi Kesinleşti">
                                 ✓
@@ -653,6 +660,11 @@ export default function DividendRaindropCalendar({
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                             {drop.frequency}
                           </span>
+                          {drop.trancheNumber && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                              {language === 'tr' ? `${drop.trancheNumber}. Taksit` : `Tranche ${drop.trancheNumber}`}
+                            </span>
+                          )}
                           {drop.paymentStatus === 'Confirmed' && (
                             <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300">
                               ✓ {language === 'tr' ? 'Kesinleşti' : 'Confirmed'}
