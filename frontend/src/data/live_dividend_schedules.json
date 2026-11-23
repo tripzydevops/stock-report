@@ -222,13 +222,13 @@
   "FROTO": {
     "symbol": "FROTO",
     "ticker": "FROTO.IS",
-    "exDate": "2026-03-16",
-    "payDate": null,
-    "lastDPS": 3.64,
-    "lastDivDate": "2026-03-16",
-    "paymentStatus": "Estimated",
-    "isConfirmed": false,
-    "updatedAt": "2026-10-24T14:44:32.428023"
+    "exDate": "2026-11-26",
+    "payDate": "2026-11-30",
+    "lastDPS": 14.25,
+    "lastDivDate": "2026-11-26",
+    "paymentStatus": "Confirmed",
+    "isConfirmed": true,
+    "updatedAt": "2026-11-23T16:00:00"
   },
   "SISE": {
     "symbol": "SISE",

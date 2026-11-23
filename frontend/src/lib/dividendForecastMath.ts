@@ -950,6 +950,12 @@ export const KNOWN_DIVIDEND_TRANCHES: Record<string, TrancheSchedule> = {
     monthLabels: ['Haziran (1. Taksit)', 'Aralık (2. Taksit)'],
     dates: ['2027-06-25', '2026-12-11'],
     ratios: [0.5, 0.5]
+  },
+  FROTO: {
+    months: [2, 10], // March (2), November (10)
+    monthLabels: ['Mart (1. Taksit)', 'Kasım (2. Taksit)'],
+    dates: ['2027-03-27', '2026-11-26'],
+    ratios: [0.5, 0.5]
   }
 };
 
@@ -1569,26 +1575,46 @@ export function deriveDividendsFromPortfolio(
     const todayStr = new Date().toISOString().slice(0, 10);
     const currentYearMonth = todayStr.slice(0, 7);
 
-    // Only accept upcoming ex-dates (current or future session >= currentYearMonth)
-    // Never treat past historical dividend dates (e.g. 2021) as next upcoming ex-dates
+    // Candidates for upcoming ex-dates (prefer closest upcoming >= todayStr or currentYearMonth)
+    const candidates: Array<{ date: string; payDate: string; isConfirmed: boolean }> = [];
+    if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
+      const d = new Date(divSummary.latest_ex_date);
+      d.setDate(d.getDate() + 2);
+      candidates.push({ date: divSummary.latest_ex_date, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+    }
+    if (sched.exDate && sched.exDate >= currentYearMonth) {
+      candidates.push({ date: sched.exDate, payDate: sched.payDate || sched.exDate, isConfirmed: sched.isConfirmed });
+    }
+    if (existing?.nextExDate && existing.nextExDate >= currentYearMonth) {
+      candidates.push({ date: existing.nextExDate, payDate: existing.nextPaymentDate || existing.nextExDate, isConfirmed: existing.paymentStatus === 'Confirmed' });
+    }
+    if (trancheInfo?.dates) {
+      for (const td of trancheInfo.dates) {
+        if (td >= currentYearMonth) {
+          const d = new Date(td);
+          d.setDate(d.getDate() + 2);
+          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+        }
+      }
+    }
+
+    // Sort to pick earliest upcoming date
+    candidates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     let nextExDate = '';
     let nextPaymentDate = '';
+    let isCandidateConfirmed = sched.isConfirmed;
 
-    if (sched.exDate && sched.exDate >= currentYearMonth) {
-      nextExDate = sched.exDate;
-      nextPaymentDate = sched.payDate || nextExDate;
-    } else if (existing?.nextExDate && existing.nextExDate >= currentYearMonth) {
-      nextExDate = existing.nextExDate;
-      nextPaymentDate = existing.nextPaymentDate || nextExDate;
-    } else if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
-      nextExDate = divSummary.latest_ex_date;
-      nextPaymentDate = nextExDate;
+    if (candidates.length > 0) {
+      nextExDate = candidates[0].date;
+      nextPaymentDate = candidates[0].payDate;
+      isCandidateConfirmed = candidates[0].isConfirmed || sched.isConfirmed;
     }
 
     const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
       ? sched.month
       : (existing?.payoutMonth || (nextExDate ? '' : 'Tarih Belirlenmedi'));
-    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : (existing?.paymentStatus || 'Estimated'));
+    const paymentStatus = isCandidateConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : (existing?.paymentStatus || 'Estimated'));
 
     const displayName = growthProfile?.name || divSummary?.name || (pos.name && pos.name !== cleanSym ? pos.name : (cleanSym === 'TRGYO' ? 'Torunlar GYO' : cleanSym));
 
@@ -1747,23 +1773,43 @@ export function deriveAllMarketDividends(
     const todayStr = new Date().toISOString().slice(0, 10);
     const currentYearMonth = todayStr.slice(0, 7);
 
-    // Only accept upcoming ex-dates (current or future session >= currentYearMonth)
-    // Never treat past historical dividend dates (e.g. 2021) as next upcoming ex-dates
+    // Candidates for upcoming ex-dates (prefer closest upcoming >= todayStr or currentYearMonth)
+    const candidates: Array<{ date: string; payDate: string; isConfirmed: boolean }> = [];
+    if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
+      const d = new Date(divSummary.latest_ex_date);
+      d.setDate(d.getDate() + 2);
+      candidates.push({ date: divSummary.latest_ex_date, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+    }
+    if (sched.exDate && sched.exDate >= currentYearMonth) {
+      candidates.push({ date: sched.exDate, payDate: sched.payDate || sched.exDate, isConfirmed: sched.isConfirmed });
+    }
+    if (trancheInfo?.dates) {
+      for (const td of trancheInfo.dates) {
+        if (td >= currentYearMonth) {
+          const d = new Date(td);
+          d.setDate(d.getDate() + 2);
+          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+        }
+      }
+    }
+
+    // Sort to pick earliest upcoming date
+    candidates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     let nextExDate = '';
     let nextPayDate = '';
+    let isCandidateConfirmed = sched.isConfirmed;
 
-    if (sched.exDate && sched.exDate >= currentYearMonth) {
-      nextExDate = sched.exDate;
-      nextPayDate = sched.payDate || nextExDate;
-    } else if (divSummary?.latest_ex_date && divSummary.latest_ex_date >= currentYearMonth) {
-      nextExDate = divSummary.latest_ex_date;
-      nextPayDate = nextExDate;
+    if (candidates.length > 0) {
+      nextExDate = candidates[0].date;
+      nextPayDate = candidates[0].payDate;
+      isCandidateConfirmed = candidates[0].isConfirmed || sched.isConfirmed;
     }
 
     const payoutMonth = sched.month && sched.month !== 'Belirlenmedi (Dağıtım Yok)'
       ? sched.month
       : (nextExDate ? '' : 'Tarih Belirlenmedi');
-    const paymentStatus = sched.isConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : 'Estimated');
+    const paymentStatus = isCandidateConfirmed ? 'Confirmed' : (divYield === 0 || divYield === null ? 'Estimated' : 'Estimated');
 
     result.push({
       symbol: cleanSym,
