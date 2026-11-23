@@ -18,6 +18,7 @@ interface TradeHoldingModalProps {
     specificEntryPrice?: number,
     reduceCostBasis?: boolean
   ) => void;
+  initialTab?: 'BUY' | 'SELL';
 }
 
 export default function TradeHoldingModal({
@@ -27,9 +28,10 @@ export default function TradeHoldingModal({
   onClose,
   onBuyMore,
   onSell,
+  initialTab = 'BUY',
 }: TradeHoldingModalProps) {
   const { t, language } = useLanguage();
-  const [tab, setTab] = useState<'BUY' | 'SELL'>('BUY');
+  const [tab, setTab] = useState<'BUY' | 'SELL'>(initialTab);
   const [sharesStr, setSharesStr] = useState<string>('0');
   const [priceStr, setPriceStr] = useState<string>('0');
   const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().slice(0, 10));
@@ -40,16 +42,18 @@ export default function TradeHoldingModal({
 
   useEffect(() => {
     if (holding) {
-      const defaultShares = tab === 'BUY' 
+      const activeTab = initialTab || tab;
+      setTab(activeTab);
+      const defaultShares = activeTab === 'BUY' 
         ? Math.round(holding.shares * 0.25) || 10 
-        : Math.round(holding.shares * 0.5) || holding.shares;
+        : holding.shares;
       setSharesStr(String(defaultShares));
       setPriceStr(String(holding.currentPrice || holding.entryPrice));
       setTradeDate(new Date().toISOString().slice(0, 10));
       setErrorMsg(null);
       setSelectedTranchePrice(null);
     }
-  }, [holding, tab]);
+  }, [holding, initialTab]);
 
   if (!isOpen || !holding) return null;
 

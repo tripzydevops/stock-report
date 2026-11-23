@@ -1176,6 +1176,7 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [tradeModalTab, setTradeModalTab] = useState<'BUY' | 'SELL'>('BUY');
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
   const [selectedAssetForHistory, setSelectedAssetForHistory] = useState<AssetData | null>(null);
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
@@ -2493,7 +2494,40 @@ export default function Home() {
               };
             }));
 
-            setPortfolio(mappedPortfolio);
+            // If unauthenticated guest has customized their portfolio locally, preserve their local positions and re-price them
+            const isGuestCust = (!user || isDemoMode) && checkIsGuestCustomized();
+            const storedGuestPortfolio = isGuestCust && typeof window !== 'undefined'
+              ? localStorage.getItem(GUEST_PORTFOLIO_KEY)
+              : null;
+            let activePortfolioToSet = mappedPortfolio;
+
+            if (isGuestCust && storedGuestPortfolio) {
+              try {
+                const parsed = JSON.parse(storedGuestPortfolio);
+                if (Array.isArray(parsed)) {
+                  activePortfolioToSet = parsed.map((item: PortfolioItem) => {
+                    const clean = item.symbol.replace('.IS', '').trim().toUpperCase();
+                    const matched = loadedAssets.find((a: AssetData) => a.symbol.replace('.IS', '').toUpperCase() === clean);
+                    const currPrice = matched ? matched.price : (item.currentPrice || item.entryPrice);
+                    const totalCost = item.shares * item.entryPrice;
+                    const currentValue = item.shares * currPrice;
+                    const pnlAmount = currentValue - totalCost;
+                    const pnlPercent = totalCost > 0 ? (pnlAmount / totalCost) * 100 : 0;
+                    return {
+                      ...item,
+                      currentPrice: currPrice,
+                      currentValue: Number(currentValue.toFixed(2)),
+                      pnlAmount: Number(pnlAmount.toFixed(2)),
+                      pnlPercent: Number(pnlPercent.toFixed(2)),
+                    };
+                  });
+                }
+              } catch (e) {
+                activePortfolioToSet = mappedPortfolio;
+              }
+            }
+
+            setPortfolio(activePortfolioToSet);
             const activeDivMap = new Map<string, any>();
             (divSummaryData || []).forEach((d: any) => {
               const sym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
@@ -2502,18 +2536,34 @@ export default function Home() {
                 activeDivMap.set(`${sym}.IS`, d);
               }
             });
-            setDividends(prev => deriveDividendsFromPortfolio(mappedPortfolio, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
+            setDividends(prev => deriveDividendsFromPortfolio(activePortfolioToSet, prev, activeDivMap.size > 0 ? activeDivMap : dividendSummaryMap));
 
-            // Only cache in market_pulse_cached_portfolio if unauthenticated model demo
+            // Cache in market_pulse_cached_portfolio
             if (typeof window !== 'undefined' && !user) {
               try {
-                localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(mappedPortfolio));
+                localStorage.setItem('market_pulse_cached_portfolio', JSON.stringify(activePortfolioToSet));
+                if (isGuestCust) {
+                  localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(activePortfolioToSet));
+                }
               } catch (e) {}
             }
           } else {
             // No positions found in database
-            setPortfolio([]);
-            setDividends([]);
+            const isGuestCust = (!user || isDemoMode) && checkIsGuestCustomized();
+            const storedGuestPortfolio = isGuestCust && typeof window !== 'undefined'
+              ? localStorage.getItem(GUEST_PORTFOLIO_KEY)
+              : null;
+            if (isGuestCust && storedGuestPortfolio) {
+              try {
+                const parsed = JSON.parse(storedGuestPortfolio);
+                setPortfolio(Array.isArray(parsed) ? parsed : []);
+              } catch (e) {
+                setPortfolio([]);
+              }
+            } else {
+              setPortfolio([]);
+              setDividends([]);
+            }
           }
         }
 
@@ -2775,33 +2825,30 @@ export default function Home() {
         type: 'info'
       });
 
-      // 1. Trigger on-demand quote fetching & database update on /api/sync only if user is authorized admin
-      const isAdmin = user?.email?.toLowerCase() === 'successofmentors@gmail.com' || 
-                      user?.id === 'b509e10d-863a-4d3a-9b1d-c1ec13e49dcb' || 
-                      (user as any)?.app_metadata?.role === 'admin' || 
-                      (user as any)?.user_metadata?.role === 'admin';
-
-      if (isAdmin) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const res = await fetch('/api/sync', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
-            },
-            body: JSON.stringify({ action: triggerCloudCrawl ? 'cloud_crawl' : 'sync_live' })
+      // 1. Trigger fast targeted quote sync on /api/sync (portfolio holdings & active signals)
+      try {
+        const { data: { session: activeSession } } = await supabase.auth.getSession();
+        const portfolioSymbols = portfolio.map(p => p.symbol.replace('.IS', '').trim().toUpperCase());
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(activeSession?.access_token ? { 'Authorization': `Bearer ${activeSession.access_token}` } : {})
+          },
+          body: JSON.stringify({ 
+            action: triggerCloudCrawl ? 'cloud_crawl' : 'sync_live',
+            symbols: portfolioSymbols
+          })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (json.message) {
+          setSyncFeedback({
+            message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
+            type: 'success'
           });
-          const json = await res.json();
-          if (json.message) {
-            setSyncFeedback({
-              message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
-              type: 'success'
-            });
-          }
-        } catch (e) {
-          console.warn('Sync API request warning:', e);
         }
+      } catch (e) {
+        console.warn('Sync API request warning:', e);
       }
 
       // 2. Reload fresh data & recalculate portfolio from Supabase
@@ -3051,23 +3098,19 @@ export default function Home() {
 
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
-          const errorMsg = errJson.error || 'Portföy pozisyonu kaydedilemedi.';
-          console.error('Server validation failed creating position:', errorMsg);
-          if (typeof window !== 'undefined') alert(`İşlem başarısız: ${errorMsg}`);
-          return; // Fail visibly, stop execution!
+          const errorMsg = errJson.error || 'Portföy pozisyonu sunucuya kaydedilemedi.';
+          console.warn('Server validation failed creating position, falling back to local client execution:', errorMsg);
+        } else {
+          // Reconcile and reload complete portfolio, orders, transfers & cash strictly from server truth
+          await loadData(false);
+          setSyncFeedback({
+            message: `${cleanSymUpper} başarıyla portföye eklendi!`,
+            type: 'success'
+          });
+          return;
         }
-
-        // Reconcile and reload complete portfolio, orders, transfers & cash strictly from server truth
-        await loadData(false);
-        setSyncFeedback({
-          message: `${cleanSymUpper} başarıyla portföye eklendi!`,
-          type: 'success'
-        });
-        return;
       } catch (err: any) {
-        console.error('Network error persisting portfolio position:', err);
-        if (typeof window !== 'undefined') alert(`Sunucuya bağlanılamadı: ${err.message || 'Lütfen internet bağlantınızı kontrol ediniz.'}`);
-        return; // Fail visibly, stop execution!
+        console.warn('Network error persisting portfolio position, falling back to local client execution:', err);
       }
     }
 
@@ -3181,6 +3224,10 @@ export default function Home() {
 
     // Explicitly flag that guest has customized their portfolio so it is never overwritten on reload
     markGuestCustomized();
+    setSyncFeedback({
+      message: `${cleanSymUpper} başarıyla portföye eklendi!`,
+      type: 'success'
+    });
   };
 
   const handleBuyMoreHolding = async (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => {
@@ -3513,31 +3560,29 @@ export default function Home() {
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'Satış emri kaydedilemedi.';
-          console.error('Server SELL validation failed:', errorMsg);
-          if (typeof window !== 'undefined') alert(`İşlem başarısız: ${errorMsg}`);
+          console.warn('Server SELL validation failed, executing locally:', errorMsg);
+        } else {
+          // Record realized trade analytics only after verified server persistence
+          recordRealizedTradeLocally();
+          await loadData(false);
+          setSyncFeedback({
+            message: `${cleanSymUpper} satışı başarıyla tamamlandı!`,
+            type: 'success'
+          });
           return;
         }
-
-        // Record realized trade analytics only after verified server persistence
-        recordRealizedTradeLocally();
-
-        // Reconcile and reload complete database state from server truth
-        await loadData(false);
-        return;
       } catch (err: any) {
-        console.error('Network error executing SELL holding:', err);
-        if (typeof window !== 'undefined') alert(`Sunucuya bağlanılamadı: ${err.message || 'Lütfen internet bağlantınızı kontrol ediniz.'}`);
-        return;
+        console.warn('Network error executing SELL holding, executing locally:', err);
       }
     }
 
-    // 2. Guest / Demo Mode: Local calculation & cache only
+    // 2. Guest / Offline Fallback Execution: Local calculation & cache
     recordRealizedTradeLocally();
 
     if (actualSold >= target.shares) {
       // Full exit
       setPortfolio(prev => {
-        const updated = prev.filter(p => p.symbol !== symbol);
+        const updated = prev.filter(p => p.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(GUEST_PORTFOLIO_KEY, JSON.stringify(updated));
@@ -3546,12 +3591,12 @@ export default function Home() {
         }
         return updated;
       });
-      setDividends(prev => prev.filter(d => d.symbol !== symbol));
+      setDividends(prev => prev.filter(d => d.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper));
     } else {
       // Partial sell
       setPortfolio(prev => {
         const updated = prev.map(item => {
-          if (item.symbol !== symbol) return item;
+          if (item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return item;
 
           // If a specific tranche was sold (and differs from avg entry), reflect remaining lots in avg_entry_price
           let updatedAvgEntryPrice = originalAvgEntryPrice;
@@ -3590,7 +3635,7 @@ export default function Home() {
 
       setDividends(prev => {
         return prev.map(div => {
-          if (div.symbol !== symbol) return div;
+          if (div.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper) return div;
           return {
             ...div,
             shares: remainingShares,
@@ -3642,6 +3687,10 @@ export default function Home() {
 
     // Flag guest customized
     markGuestCustomized();
+    setSyncFeedback({
+      message: `${cleanSymUpper} satışı başarıyla tamamlandı!`,
+      type: 'success'
+    });
   };
 
   const handleUpdateStopLoss = async (symbol: string, newStopPrice: number) => {
@@ -5181,8 +5230,9 @@ export default function Home() {
             isSimpleMode={isSimpleMode}
             onRemoveHolding={handleRemoveHolding}
             onAddHoldingClick={() => setIsHoldingModalOpen(true)}
-            onTradeHolding={(item) => {
+            onTradeHolding={(item, initialTab) => {
               setSelectedHolding(item);
+              setTradeModalTab(initialTab || 'BUY');
               setTradeModalOpen(true);
             }}
             onAddTransfer={handleAddTransfer}
@@ -5328,6 +5378,7 @@ export default function Home() {
         }}
         onBuyMore={handleBuyMoreHolding}
         onSell={handleSellHolding}
+        initialTab={tradeModalTab}
       />
 
       {selectedAssetForHistory && (

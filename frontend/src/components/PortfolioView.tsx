@@ -28,7 +28,7 @@ interface PortfolioViewProps {
   orbItems?: OpeningDirectionItem[];
   onRemoveHolding?: (symbol: string) => void;
   onAddHoldingClick?: () => void;
-  onTradeHolding?: (holding: PortfolioItem) => void;
+  onTradeHolding?: (holding: PortfolioItem, initialTab?: 'BUY' | 'SELL') => void;
   onAddTransfer?: (transfer: CapitalTransfer) => void;
   onUpdateStopLoss?: (symbol: string, newStopPrice: number) => void;
   onOpenCoPilot?: (holding: PortfolioItem) => void;
@@ -1332,13 +1332,22 @@ export default function PortfolioView({
                     </svg>
                   </button>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => onTradeHolding?.(item)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
+                      onClick={() => onTradeHolding?.(item, 'BUY')}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
+                      title={language === 'tr' ? 'Alım Ekle (DCA)' : 'Buy More (DCA)'}
                     >
-                      <span>⚡ Trade / DCA</span>
+                      <span>⚡ Al / DCA</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onTradeHolding?.(item, 'SELL')}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-black bg-rose-600 hover:bg-rose-700 active:scale-95 text-white shadow-xs flex items-center gap-1 cursor-pointer"
+                      title={language === 'tr' ? 'Hisse Sat / Pozisyon Kapat' : 'Sell Shares / Close Position'}
+                    >
+                      <span>🔴 Sat</span>
                     </button>
                     <button
                       type="button"
@@ -1473,9 +1482,29 @@ export default function PortfolioView({
               </div>
             );
           })}
-          {portfolio.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
-              <p className="font-semibold text-sm">Portföyde aktif pozisyon bulunmuyor.</p>
+          {cleanPortfolio.length === 0 && (
+            <div className="p-8 text-center space-y-3 bg-gray-50/50 dark:bg-gray-850/50">
+              <div className="w-12 h-12 mx-auto rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+                💼
+              </div>
+              <div>
+                <p className="font-bold text-sm text-gray-900 dark:text-white">
+                  {language === 'tr' ? 'Portföyde aktif pozisyon bulunmuyor' : 'No active holdings in portfolio'}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {language === 'tr' ? 'Hisse eklemek ve anlık takibe başlamak için aşağıdaki butona dokunun.' : 'Tap below to add your first position and track live P&L.'}
+                </p>
+              </div>
+              {onAddHoldingClick && (
+                <button
+                  type="button"
+                  onClick={onAddHoldingClick}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md shadow-blue-500/30 active:scale-95 transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>➕</span>
+                  <span>{language === 'tr' ? '+ Pozisyon Ekle' : '+ Add Position'}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -2351,11 +2380,18 @@ export default function PortfolioView({
                                 <span>📋 Playbook</span>
                               </button>
                               <button
-                                onClick={() => onTradeHolding?.(item)}
-                                className="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center space-x-1"
-                                title="Buy more lots or sell shares"
+                                onClick={() => onTradeHolding?.(item, 'BUY')}
+                                className="px-2 py-1 rounded-lg text-xs font-black bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center space-x-1 cursor-pointer"
+                                title="Alım Ekle (DCA)"
                               >
-                                <span>⚡ Trade</span>
+                                <span>⚡ Al / DCA</span>
+                              </button>
+                              <button
+                                onClick={() => onTradeHolding?.(item, 'SELL')}
+                                className="px-2 py-1 rounded-lg text-xs font-black bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-300 transition-colors border border-rose-200 dark:border-rose-800 flex items-center space-x-1 cursor-pointer"
+                                title="Hisse Sat / Pozisyon Kapat"
+                              >
+                                <span>🔴 Sat</span>
                               </button>
                               <button
                                 onClick={() => onToggleStrategyType?.(item.symbol)}
@@ -3447,6 +3483,21 @@ export default function PortfolioView({
         onUpdateStopLoss={onUpdateStopLoss}
         onSelectTicker={onSelectTicker}
       />
+
+      {/* Mobile Floating Action Button (FAB) for Quick Add Position */}
+      {onAddHoldingClick && (
+        <div className="md:hidden fixed bottom-6 right-4 z-40 animate-in fade-in duration-200">
+          <button
+            type="button"
+            onClick={onAddHoldingClick}
+            className="flex items-center gap-1.5 px-4 py-3 rounded-full bg-blue-600 text-white font-black text-xs shadow-xl shadow-blue-600/40 active:scale-95 transition-all border border-blue-400 cursor-pointer"
+            title={language === 'tr' ? 'Portföye Yeni Pozisyon Ekle' : 'Add Position to Portfolio'}
+          >
+            <span className="text-sm leading-none">➕</span>
+            <span>{language === 'tr' ? 'Pozisyon Ekle' : 'Add Holding'}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

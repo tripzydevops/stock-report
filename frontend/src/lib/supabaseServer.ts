@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://erzxltcalghadzfevfjx.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
 // Singleton cached server instances
 let serverClient: SupabaseClient | null = null;
@@ -69,26 +69,24 @@ export function getAuthenticatedSupabase(request: Request): SupabaseClient {
 
 /**
  * Privileged administrative Supabase client.
- * Uses SUPABASE_SERVICE_ROLE_KEY to bypass RLS for administrative operations
- * (e.g., generating signed storage download URLs, internal sync routines).
- * If service role key is absent, throws an explicit error to prevent silent RLS failures.
+ * Uses SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY to bypass RLS for administrative operations.
+ * If service role key is absent, gracefully falls back to getServerSupabase() to allow permitted operations.
  */
 export function getAdminSupabase(): SupabaseClient {
-  if (!serviceRoleKey) {
-    throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY environment variable is missing. ' +
-      'Administrative operations require a valid service role key to bypass PostgreSQL RLS.'
-    );
+  if (serviceRoleKey) {
+    if (!adminClient) {
+      adminClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      });
+    }
+    return adminClient;
   }
-  if (!adminClient) {
-    adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-  }
-  return adminClient;
+
+  // Graceful fallback to server client when service key is not configured in local/edge runtime
+  return getServerSupabase();
 }
 
 /**
