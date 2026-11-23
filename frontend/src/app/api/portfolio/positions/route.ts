@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Parse & Validate Payload
+    const idempotencyHeader = request.headers.get('Idempotency-Key') || request.headers.get('x-idempotency-key');
     const body = await request.json().catch(() => ({}));
     const {
       symbol,
@@ -63,7 +64,14 @@ export async function POST(request: NextRequest) {
       autoFund = true,
       reduceCostBasis = false,
       costBasis,
+      client_order_id,
+      idempotency_key,
     } = body;
+
+    const rawIdempotency = idempotencyHeader || idempotency_key || client_order_id;
+    const sanitizedIdempotencyKey = rawIdempotency && typeof rawIdempotency === 'string'
+      ? rawIdempotency.trim().slice(0, 64)
+      : null;
 
     // Strict Market Allowlist Validation
     const marketUpper = String(market).trim().toUpperCase();
@@ -220,14 +228,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Execution Date & Order Reference
+    // 4. Execution Date & Order Reference (with Idempotency Protection)
+    if (sanitizedIdempotencyKey) {
+      const { data: existingOrder } = await serverSupabase
+        .from('portfolio_orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('order_ref', sanitizedIdempotencyKey)
+        .maybeSingle();
+
+      if (existingOrder) {
+        console.log(JSON.stringify({
+          event: 'portfolio_order_deduplicated',
+          userId: user.id,
+          orderRef: sanitizedIdempotencyKey,
+          symbol: existingOrder.symbol,
+          side: existingOrder.side,
+          quantity: existingOrder.quantity,
+          price: existingOrder.price,
+        }));
+
+        return NextResponse.json(
+          {
+            success: true,
+            deduplicated: true,
+            order: existingOrder,
+            symbol: existingOrder.symbol,
+            shares: Number(existingOrder.quantity),
+            entryPrice: Number(existingOrder.price),
+            side: existingOrder.side,
+            currency: existingOrder.currency,
+            message: 'Duplicate order suppressed via idempotency key.',
+          },
+          { status: 200 }
+        );
+      }
+    }
+
     const executionDateStr = entryDate || orderDate || new Date().toISOString().slice(0, 10);
     const executionIso = executionDateStr
       ? new Date(executionDateStr + 'T10:00:00Z').toISOString()
       : new Date().toISOString();
     const datePrefix = executionDateStr.replace(/-/g, '');
     const randomSuffix = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
-    const orderRef = `ORD-${datePrefix}-${randomSuffix}`;
+    const orderRef = sanitizedIdempotencyKey || `ORD-${datePrefix}-${randomSuffix}`;
 
     const resolvedStop = stopLoss && Number.isFinite(stopLoss) && stopLoss > 0 ? Number(stopLoss) : null;
     const resolvedTarget = targetPrice && Number.isFinite(targetPrice) && targetPrice > 0 ? Number(targetPrice) : null;
@@ -290,12 +334,30 @@ export async function POST(request: NextRequest) {
     );
 
     if (rpcError) {
-      console.error('PostgreSQL transaction RPC error in execute_portfolio_holding_and_order:', rpcError);
+      console.error(JSON.stringify({
+        event: 'portfolio_mutation_failed',
+        userId: user.id,
+        symbol: cleanSym,
+        side: resolvedSide,
+        orderRef,
+        error: rpcError.message,
+      }));
       return NextResponse.json(
         { error: `Database transaction failed: ${rpcError.message}` },
         { status: 500 }
       );
     }
+
+    console.log(JSON.stringify({
+      event: 'portfolio_order_created',
+      userId: user.id,
+      symbol: cleanSym,
+      side: resolvedSide,
+      shares: rawShares,
+      price: rawPrice,
+      orderRef,
+      status: resolvedStatus,
+    }));
 
     return NextResponse.json(
       {
@@ -316,7 +378,10 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err: any) {
-    console.error('Portfolio Positions API unexpected exception:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    console.error(JSON.stringify({
+      event: 'portfolio_mutation_exception',
+      error: err?.message || 'Internal Server Error',
+    }));
+    return NextResponse.json({ error: err?.message || 'Internal Server Error' }, { status: 500 });
   }
 }

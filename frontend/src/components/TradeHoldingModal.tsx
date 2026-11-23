@@ -9,7 +9,7 @@ interface TradeHoldingModalProps {
   holding: PortfolioItem | null;
   recentOrders?: ExecutedOrder[];
   onClose: () => void;
-  onBuyMore: (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => void;
+  onBuyMore: (symbol: string, additionalShares: number, buyPrice: number, tradeDate?: string) => Promise<void> | void;
   onSell: (
     symbol: string, 
     sharesToSell: number, 
@@ -17,7 +17,7 @@ interface TradeHoldingModalProps {
     tradeDate?: string, 
     specificEntryPrice?: number,
     reduceCostBasis?: boolean
-  ) => void;
+  ) => Promise<void> | void;
   initialTab?: 'BUY' | 'SELL';
 }
 
@@ -36,6 +36,7 @@ export default function TradeHoldingModal({
   const [priceStr, setPriceStr] = useState<string>('0');
   const [tradeDate, setTradeDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [useTrancheMatch, setUseTrancheMatch] = useState<boolean>(true);
   const [selectedTranchePrice, setSelectedTranchePrice] = useState<number | null>(null);
   const [reduceCostBasis, setReduceCostBasis] = useState<boolean>(true);
@@ -99,7 +100,7 @@ export default function TradeHoldingModal({
     setSharesStr(String(qty));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -108,16 +109,31 @@ export default function TradeHoldingModal({
         setErrorMsg(language === 'tr' ? 'Lütfen pozitif bir hisse adedi ve alış fiyatı girin.' : 'Please specify a positive number of shares and purchase price.');
         return;
       }
-      onBuyMore(holding.symbol, buyAdditionalShares, buyExecPrice, tradeDate);
+      setIsSubmitting(true);
+      try {
+        await onBuyMore(holding.symbol, buyAdditionalShares, buyExecPrice, tradeDate);
+        onClose();
+      } catch (err: any) {
+        setErrorMsg(err?.message || (language === 'tr' ? 'Alım işlemi sırasında hata oluştu.' : 'Failed to record purchase.'));
+      } finally {
+        setIsSubmitting(false);
+      }
     } else {
       if (sellShares <= 0 || sellExecPrice <= 0) {
         setErrorMsg(language === 'tr' ? 'Lütfen geçerli bir satış adedi ve fiyatı girin.' : 'Please specify a valid number of shares to sell and sell price.');
         return;
       }
       const passedEntryPrice = effectiveCostBasis !== holding.entryPrice ? effectiveCostBasis : undefined;
-      onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice, reduceCostBasis);
+      setIsSubmitting(true);
+      try {
+        await onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice, reduceCostBasis);
+        onClose();
+      } catch (err: any) {
+        setErrorMsg(err?.message || (language === 'tr' ? 'Satış işlemi sırasında hata oluştu.' : 'Failed to record sale.'));
+      } finally {
+        setIsSubmitting(false);
+      }
     }
-    onClose();
   };
 
   return (
@@ -746,23 +762,35 @@ export default function TradeHoldingModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors cursor-pointer"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
               {t.common.cancel}
             </button>
             <button
               type="submit"
-              className={`px-6 py-2.5 text-xs font-black text-white rounded-xl transition-all shadow-md cursor-pointer active:scale-95 ${
+              disabled={isSubmitting}
+              className={`px-6 py-2.5 text-xs font-black text-white rounded-xl transition-all shadow-md cursor-pointer active:scale-95 flex items-center space-x-1.5 disabled:opacity-60 disabled:cursor-not-allowed ${
                 tab === 'BUY'
                   ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
                   : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'
               }`}
             >
-              {tab === 'BUY' 
-                ? (language === 'tr' ? 'Alım Emrini Onayla' : 'Confirm Purchase (DCA Lot)') 
-                : isFullExit 
-                  ? (language === 'tr' ? 'Tüm Pozisyonu Kapat' : 'Confirm Full Exit') 
-                  : (language === 'tr' ? 'Kısmi Satışı Onayla' : 'Confirm Partial Sell')}
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>{language === 'tr' ? 'İşleniyor...' : 'Processing...'}</span>
+                </>
+              ) : (
+                tab === 'BUY' 
+                  ? (language === 'tr' ? 'Alım Emrini Onayla' : 'Confirm Purchase (DCA Lot)') 
+                  : isFullExit 
+                    ? (language === 'tr' ? 'Tüm Pozisyonu Kapat' : 'Confirm Full Exit') 
+                    : (language === 'tr' ? 'Kısmi Satışı Onayla' : 'Confirm Partial Sell')
+              )}
             </button>
           </div>
         </form>

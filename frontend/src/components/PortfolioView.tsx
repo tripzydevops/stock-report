@@ -40,6 +40,9 @@ interface PortfolioViewProps {
   isGuest?: boolean;
   userEmail?: string | null;
   isGuestCustomized?: boolean;
+  syncStatus?: 'synced' | 'syncing' | 'offline_queued' | 'offline' | 'local_only';
+  offlineQueueCount?: number;
+  onDrainQueue?: () => void;
   onOpenAuthModal?: () => void;
   onResetToModelPortfolio?: () => void;
   onQuickAdminLogin?: () => void;
@@ -77,6 +80,9 @@ export default function PortfolioView({
   isGuest = true,
   userEmail = null,
   isGuestCustomized = false,
+  syncStatus = 'synced',
+  offlineQueueCount = 0,
+  onDrainQueue,
   onOpenAuthModal,
   onResetToModelPortfolio,
   onQuickAdminLogin,
@@ -577,10 +583,37 @@ export default function PortfolioView({
     <div className="space-y-6 pb-20 sm:pb-8">
       {/* Portfolio Mode & Storage Sync Status Banner */}
       <div>
+        {/* Offline Queue Reconnect Alert */}
+        {offlineQueueCount > 0 && (
+          <div className="mb-2 p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/80 dark:border-amber-500/60 flex items-center justify-between gap-2 shadow-xs">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-base animate-pulse">⏳</span>
+              <div>
+                <span className="font-black text-amber-900 dark:text-amber-200">
+                  {offlineQueueCount} {language === 'tr' ? 'İşlem Çevrimdışı Kuyruğunda Bekliyor' : 'Actions Queued Offline'}
+                </span>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300/80">
+                  {language === 'tr' ? 'Bağlantı kurulduğunda otomatik olarak buluta aktarılacak.' : 'Will automatically sync to cloud when connected.'}
+                </p>
+              </div>
+            </div>
+            {onDrainQueue && (
+              <button
+                type="button"
+                onClick={onDrainQueue}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 flex items-center gap-1"
+              >
+                <span>🔄</span>
+                <span>{language === 'tr' ? 'Kuyruğu Eşitle' : 'Sync Queue'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {!isGuest ? (
           <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 shadow-xs">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className={`w-2.5 h-2.5 rounded-full ${syncStatus === 'syncing' ? 'bg-amber-400 animate-spin' : 'bg-emerald-500 animate-pulse'}`}></span>
               <span className="font-bold">
                 {language === 'tr' ? '☁️ Bulut Hesabınızla Senkronize' : '☁️ Cloud Synchronized'}
               </span>
@@ -588,8 +621,17 @@ export default function PortfolioView({
                 ({userEmail || 'Aktif'})
               </span>
             </div>
-            <div className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-              {language === 'tr' ? 'Tüm cihazlarınızdan otomatik güncellenir' : 'Auto-synced across all your devices'}
+            <div className="flex items-center gap-2">
+              {syncStatus === 'syncing' ? (
+                <span className="px-2 py-0.5 rounded bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-[11px] font-bold flex items-center gap-1">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                  {language === 'tr' ? 'Eşitleniyor...' : 'Syncing...'}
+                </span>
+              ) : (
+                <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium hidden sm:inline">
+                  {language === 'tr' ? 'Tüm cihazlarınızdan otomatik güncellenir' : 'Auto-synced across all your devices'}
+                </span>
+              )}
             </div>
           </div>
         ) : isGuestCustomized ? (

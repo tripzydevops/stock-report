@@ -1105,6 +1105,43 @@ function markGuestCustomized(): void {
   }
 }
 
+const OFFLINE_QUEUE_KEY = 'marketpulse_offline_mutation_queue';
+
+interface OfflineMutation {
+  id: string;
+  clientOrderId: string;
+  type: 'BUY' | 'SELL';
+  body: any;
+  createdAt: string;
+}
+
+function getOfflineQueue(): OfflineMutation[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveOfflineQueue(queue: OfflineMutation[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (queue.length === 0) {
+      localStorage.removeItem(OFFLINE_QUEUE_KEY);
+    } else {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    }
+  } catch {}
+}
+
+function enqueueOfflineMutation(mutation: OfflineMutation): void {
+  const current = getOfflineQueue();
+  if (current.some(m => m.clientOrderId === mutation.clientOrderId)) return;
+  saveOfflineQueue([...current, mutation]);
+}
+
 function sanitizeTransfers(transfersList: any[]): any[] {
   if (!Array.isArray(transfersList)) return [];
   return transfersList.filter(isValidTransfer);
@@ -1219,6 +1256,12 @@ export default function Home() {
       return !navigator.onLine;
     }
     return false;
+  });
+  const [offlineQueueCount, setOfflineQueueCount] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return getOfflineQueue().length;
+    }
+    return 0;
   });
   const [turmoilGuard, setTurmoilGuard] = useState<boolean>(false);
   const [dateFilter, setDateFilter] = useState<DateRangeFilter>(getDateRangeFromPreset('ALL'));
@@ -2784,6 +2827,7 @@ export default function Home() {
         type: 'info'
       });
       loadData(true);
+      drainOfflineQueue();
     };
 
     const handleOffline = () => {
@@ -3002,6 +3046,60 @@ export default function Home() {
     'TURK TELEKOM': { symbol: 'TTKOM', name: 'TÜRK TELEKOMÜNİKASYON A.Ş.' },
   };
 
+  const drainOfflineQueue = async () => {
+    if (typeof window === 'undefined') return;
+    const queue = getOfflineQueue();
+    if (queue.length === 0) {
+      setOfflineQueueCount(0);
+      return;
+    }
+
+    const remainingQueue: OfflineMutation[] = [];
+    let syncedCount = 0;
+
+    for (const mutation of queue) {
+      if (session?.access_token) {
+        try {
+          const res = await fetch('/api/portfolio/positions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+              'Idempotency-Key': mutation.clientOrderId,
+            },
+            body: JSON.stringify({
+              ...mutation.body,
+              client_order_id: mutation.clientOrderId,
+            }),
+          });
+          if (res.ok) {
+            syncedCount++;
+            continue;
+          } else {
+            remainingQueue.push(mutation);
+          }
+        } catch {
+          remainingQueue.push(mutation);
+        }
+      } else {
+        remainingQueue.push(mutation);
+      }
+    }
+
+    saveOfflineQueue(remainingQueue);
+    setOfflineQueueCount(remainingQueue.length);
+
+    if (syncedCount > 0) {
+      setSyncFeedback({
+        message: language === 'tr'
+          ? `${syncedCount} çevrimdışı işlem başarıyla buluta aktarıldı!`
+          : `Successfully synced ${syncedCount} offline action(s) to cloud!`,
+        type: 'success',
+      });
+      await loadData(false);
+    }
+  };
+
   const handleAddHolding = async (newHolding: PortfolioItem, isDiv?: boolean, divYield?: number) => {
     // Strict Input Guard: Reject missing, zero, negative, or nonfinite prices and shares
     if (
@@ -3060,57 +3158,77 @@ export default function Home() {
     const targetCash = isUSD ? cashBalanceUSD : cashBalance;
     const shortfall = Math.max(0, totalVal - targetCash);
 
+    const clientOrderId = `ORD-${orderDateStr.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
+    const resolvedStop = newHolding.stopLoss > 0 
+      ? newHolding.stopLoss 
+      : (matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : null);
+    const resolvedTarget = (newHolding.targetPrice && newHolding.targetPrice > 0)
+      ? newHolding.targetPrice
+      : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
+
+    const payloadBody = {
+      symbol: cleanSymUpper,
+      shares: newHolding.shares,
+      price: newHolding.entryPrice,
+      stopLoss: resolvedStop,
+      targetPrice: resolvedTarget,
+      market: resolvedMarket,
+      name: resolvedName,
+      currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
+      notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
+      isDividend: isCoreDiv,
+      entryDate: orderDateStr,
+      orderDate: orderDateStr,
+      orderType: 'Limit',
+      status: 'Filled',
+      side: 'BUY',
+      client_order_id: clientOrderId,
+    };
+
     // 1. If user is authenticated, call server transactional API (with atomic auto-deposit if shortfall exists)
     if (!isDemoMode && user) {
       try {
-        const matchedSig = signals.find(s => s.symbol.replace('.IS', '').trim().toUpperCase() === cleanSymUpper);
-        const resolvedStop = newHolding.stopLoss > 0 
-          ? newHolding.stopLoss 
-          : (matchedSig && matchedSig.stopLoss > 0 ? matchedSig.stopLoss : null);
-        const resolvedTarget = (newHolding.targetPrice && newHolding.targetPrice > 0)
-          ? newHolding.targetPrice
-          : (matchedSig && matchedSig.targetPrice > 0 ? matchedSig.targetPrice : null);
-
         const apiRes = await fetch('/api/portfolio/positions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Idempotency-Key': clientOrderId,
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
           },
-          body: JSON.stringify({
-            symbol: cleanSymUpper,
-            shares: newHolding.shares,
-            price: newHolding.entryPrice,
-            stopLoss: resolvedStop,
-            targetPrice: resolvedTarget,
-            market: resolvedMarket,
-            name: resolvedName,
-            currency: newHolding.currency || (resolvedMarket === 'US' ? 'USD' : 'TRY'),
-            notes: isCoreDiv ? `Strategy: CORE_DIVIDEND | ${newHolding.dcaRationale || 'Dividend Compounder'}` : (newHolding.dcaRationale || 'Active holding'),
-            isDividend: isCoreDiv,
-            entryDate: orderDateStr,
-            orderDate: orderDateStr,
-            orderType: 'Limit',
-            status: 'Filled',
-            side: 'BUY',
-          }),
+          body: JSON.stringify(payloadBody),
         });
 
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'Portföy pozisyonu sunucuya kaydedilemedi.';
-          console.warn('Server validation failed creating position, falling back to local client execution:', errorMsg);
+          console.warn('Server validation failed creating position, queueing offline:', errorMsg);
+          enqueueOfflineMutation({
+            id: `mut-${Date.now()}`,
+            clientOrderId,
+            type: 'BUY',
+            body: payloadBody,
+            createdAt: new Date().toISOString(),
+          });
+          setOfflineQueueCount(getOfflineQueue().length);
         } else {
-          // Reconcile and reload complete portfolio, orders, transfers & cash strictly from server truth
-          await loadData(false);
+          // Non-blocking background sync from server truth
+          loadData(false).catch(err => console.warn('Background reload failed:', err));
           setSyncFeedback({
             message: `${cleanSymUpper} başarıyla portföye eklendi!`,
             type: 'success'
           });
-          return;
         }
       } catch (err: any) {
-        console.warn('Network error persisting portfolio position, falling back to local client execution:', err);
+        console.warn('Network error persisting portfolio position, queueing offline:', err);
+        enqueueOfflineMutation({
+          id: `mut-${Date.now()}`,
+          clientOrderId,
+          type: 'BUY',
+          body: payloadBody,
+          createdAt: new Date().toISOString(),
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
       }
     }
 
@@ -3252,6 +3370,23 @@ export default function Home() {
     const targetCash = isUSD ? cashBalanceUSD : cashBalance;
     const shortfall = Math.max(0, totalVal - targetCash);
 
+    const clientOrderId = `ORD-${orderDateStr.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const dcaPayload = {
+      symbol: cleanSymUpper,
+      shares: additionalShares,
+      price: buyPrice,
+      side: 'BUY',
+      market: target?.market || 'BIST',
+      name: target?.name || cleanSymUpper,
+      currency: target?.currency || 'TRY',
+      notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`,
+      entryDate: orderDateStr,
+      orderDate: orderDateStr,
+      orderType: 'Limit',
+      status: 'Filled',
+      client_order_id: clientOrderId,
+    };
+
     // 1. If user is authenticated, call server transactional API (with atomic DCA position merge & server-calculated auto-deposit)
     if (!isDemoMode && user) {
       try {
@@ -3259,44 +3394,41 @@ export default function Home() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Idempotency-Key': clientOrderId,
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
           },
-          body: JSON.stringify({
-            symbol: cleanSymUpper,
-            shares: additionalShares,
-            price: buyPrice,
-            side: 'BUY',
-            market: target?.market || 'BIST',
-            name: target?.name || cleanSymUpper,
-            currency: target?.currency || 'TRY',
-            notes: `DCA tranche: added ${additionalShares} shares @ ₺${buyPrice.toFixed(2)}`,
-            entryDate: orderDateStr,
-            orderDate: orderDateStr,
-            orderType: 'Limit',
-            status: 'Filled',
-          }),
+          body: JSON.stringify(dcaPayload),
         });
 
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'DCA alım işlemi kaydedilemedi.';
-          console.error('Server DCA failure:', errorMsg);
-          if (typeof window !== 'undefined') alert(`İşlem başarısız: ${errorMsg}`);
-          return;
+          console.warn('Server DCA failure, queuing offline & executing locally:', errorMsg);
+          enqueueOfflineMutation({
+            id: `mut-${Date.now()}`,
+            clientOrderId,
+            type: 'BUY',
+            body: dcaPayload,
+            createdAt: new Date().toISOString(),
+          });
+          setOfflineQueueCount(getOfflineQueue().length);
+        } else {
+          setSyncFeedback({
+            message: `Successfully added ${additionalShares} shares of ${cleanSymUpper} (DCA Lot)!`,
+            type: 'success'
+          });
+          loadData(false).catch(err => console.warn('Background reload failed:', err));
         }
-
-        setSyncFeedback({
-          message: `Successfully added ${additionalShares} shares of ${cleanSymUpper} (DCA Lot)!`,
-          type: 'success'
-        });
-
-        // Reconcile and reload complete database state from server truth
-        await loadData(false);
-        return;
       } catch (err: any) {
-        console.error('Network error executing DCA holding:', err);
-        if (typeof window !== 'undefined') alert(`Sunucuya bağlanılamadı: ${err.message || 'Lütfen internet bağlantınızı kontrol ediniz.'}`);
-        return;
+        console.warn('Network error executing DCA holding, queuing offline & executing locally:', err);
+        enqueueOfflineMutation({
+          id: `mut-${Date.now()}`,
+          clientOrderId,
+          type: 'BUY',
+          body: dcaPayload,
+          createdAt: new Date().toISOString(),
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
       }
     }
 
@@ -3530,6 +3662,25 @@ export default function Home() {
       });
     };
 
+    const clientOrderId = `ORD-${chosenCloseDate.replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const sellPayload = {
+      symbol: cleanSymUpper,
+      shares: actualSold,
+      price: sellPrice,
+      side: 'SELL',
+      market: target.market || 'BIST',
+      name: target.name || cleanSymUpper,
+      currency: target.currency || 'TRY',
+      notes: orderNote,
+      entryDate: chosenCloseDate,
+      orderDate: chosenCloseDate,
+      orderType: 'Limit',
+      status: 'Filled',
+      reduceCostBasis: Boolean(reduceCostBasis),
+      costBasis: costBasis,
+      client_order_id: clientOrderId,
+    };
+
     // 1. If user is authenticated, route SELL through transactional API
     if (!isDemoMode && user) {
       try {
@@ -3537,42 +3688,43 @@ export default function Home() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Idempotency-Key': clientOrderId,
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
           },
-          body: JSON.stringify({
-            symbol: cleanSymUpper,
-            shares: actualSold,
-            price: sellPrice,
-            side: 'SELL',
-            market: target.market || 'BIST',
-            name: target.name || cleanSymUpper,
-            currency: target.currency || 'TRY',
-            notes: orderNote,
-            entryDate: chosenCloseDate,
-            orderDate: chosenCloseDate,
-            orderType: 'Limit',
-            status: 'Filled',
-            reduceCostBasis: Boolean(reduceCostBasis),
-            costBasis: costBasis,
-          }),
+          body: JSON.stringify(sellPayload),
         });
 
         if (!apiRes.ok) {
           const errJson = await apiRes.json().catch(() => ({}));
           const errorMsg = errJson.error || 'Satış emri kaydedilemedi.';
-          console.warn('Server SELL validation failed, executing locally:', errorMsg);
+          console.warn('Server SELL validation failed, queuing offline & executing locally:', errorMsg);
+          enqueueOfflineMutation({
+            id: `mut-${Date.now()}`,
+            clientOrderId,
+            type: 'SELL',
+            body: sellPayload,
+            createdAt: new Date().toISOString(),
+          });
+          setOfflineQueueCount(getOfflineQueue().length);
         } else {
           // Record realized trade analytics only after verified server persistence
           recordRealizedTradeLocally();
-          await loadData(false);
+          loadData(false).catch(err => console.warn('Background reload failed:', err));
           setSyncFeedback({
             message: `${cleanSymUpper} satışı başarıyla tamamlandı!`,
             type: 'success'
           });
-          return;
         }
       } catch (err: any) {
-        console.warn('Network error executing SELL holding, executing locally:', err);
+        console.warn('Network error executing SELL holding, queuing offline & executing locally:', err);
+        enqueueOfflineMutation({
+          id: `mut-${Date.now()}`,
+          clientOrderId,
+          type: 'SELL',
+          body: sellPayload,
+          createdAt: new Date().toISOString(),
+        });
+        setOfflineQueueCount(getOfflineQueue().length);
       }
     }
 
@@ -5246,6 +5398,9 @@ export default function Home() {
             isGuest={!user || isDemoMode}
             userEmail={user?.email}
             isGuestCustomized={checkIsGuestCustomized()}
+            syncStatus={isRefreshing ? 'syncing' : (isOffline ? 'offline' : (offlineQueueCount > 0 ? 'offline_queued' : (user ? 'synced' : 'local_only')))}
+            offlineQueueCount={offlineQueueCount}
+            onDrainQueue={drainOfflineQueue}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
             onResetToModelPortfolio={handleResetToModelPortfolio}
             onQuickAdminLogin={signInAsAdmin}
