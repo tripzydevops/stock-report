@@ -599,7 +599,7 @@ export default function PortfolioView({
   };
 
   return (
-    <div className="space-y-6 pb-20 sm:pb-8">
+    <div data-testid="portfolio-view" className="space-y-6 pb-20 sm:pb-8">
       {/* Portfolio Mode & Storage Sync Status Banner */}
       <div>
         {/* Offline Queue Reconnect Alert */}

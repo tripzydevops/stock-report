@@ -56,6 +56,16 @@ $$q_i^* = q_i \times \prod_{\substack{k \in \mathcal{C}_{\text{sym}} \\ t_i \le 
 The final entitlement on $t_{\text{ex}}$ is:
 $$\text{Entitled Shares}^* = \sum_{\substack{\text{BUY} \\ t_i < t_{\text{ex}}}} q_i^* - \sum_{\substack{\text{SELL} \\ t_j < t_{\text{ex}}}} q_j^*$$
 
+### 4.3 Reverse-Split Ratio Validation & Data-Entry Safeguard
+A reverse stock split consolidates existing shares into fewer shares.
+- Example: A 1-for-10 reverse split must be stored with fractional multiplier $R = 0.10$.
+- **Database CHECK Constraint:** PostgreSQL strictly enforces:
+  ```sql
+  CONSTRAINT corporate_actions_reverse_split_ratio_check 
+  CHECK (action_type != 'REVERSE_SPLIT' OR split_ratio < 1.0)
+  ```
+- **Application Safeguard:** If an inverted ratio ($R > 1.0$, such as $10.0$ entered instead of $0.10$) is detected during runtime evaluation, `calculateAdjustedEntitlement` automatically logs a warning and sanitizes the ratio to $\frac{1.0}{R}$ ($0.10$), preventing an accidental 10x multiplication of user holdings.
+
 ---
 
 ## 5. Schema Specification for `corporate_actions`
@@ -65,13 +75,14 @@ CREATE TABLE IF NOT EXISTS public.corporate_actions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     asset_id UUID REFERENCES public.assets(id) ON DELETE CASCADE,
     symbol VARCHAR(32) NOT NULL,
-    action_type VARCHAR(32) NOT NULL CHECK (action_type IN ('FORWARD_SPLIT', 'REVERSE_SPLIT', 'BONUS_ISSUE', 'RIGHTS_OFFERING', 'TICKER_CHANGE')),
+    action_type VARCHAR(32) NOT NULL CHECK (action_type IN ('FORWARD_SPLIT', 'REVERSE_SPLIT', 'STOCK_SPLIT', 'BONUS_ISSUE', 'RIGHTS_OFFERING', 'TICKER_CHANGE')),
     split_ratio NUMERIC NOT NULL CHECK (split_ratio > 0),
     record_date DATE NOT NULL,
     effective_date DATE NOT NULL,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT corporate_actions_symbol_date_key UNIQUE (symbol, effective_date, action_type)
+    CONSTRAINT corporate_actions_symbol_date_key UNIQUE (symbol, effective_date, action_type),
+    CONSTRAINT corporate_actions_reverse_split_ratio_check CHECK (action_type != 'REVERSE_SPLIT' OR split_ratio < 1.0)
 );
 
 CREATE INDEX IF NOT EXISTS corporate_actions_symbol_date_idx 
@@ -80,7 +91,26 @@ ON public.corporate_actions (symbol, effective_date);
 
 ---
 
-## 6. Paper Trading Readiness Checklist
+## 6. Legacy Dividend Transfer Tag Tradeoff & Planned Migration
+
+### 6.1 The Legacy Tag Tradeoff
+The dividend sync engine enforces deduplication via:
+```typescript
+if (existingTags.has(tagKey) || existingTags.has(legacyTagKey)) {
+  summary.skippedCount++;
+  continue;
+}
+```
+- **Why this rule is conservative & safe:** Legacy unscoped transfer tags (`[DIVIDEND:<symbol>:<ex_date>]`) predate the introduction of `portfolio_id`. If a user previously received a dividend transfer before portfolio scoping was introduced, blocking new credits across all portfolios prevents duplicate cash payouts.
+- **Known Migration Limitation:** If a user subsequently creates multiple separate portfolios and the legacy credit belonged to only one of them, another portfolio holding the same asset could be skipped / under-credited by the legacy tag guard.
+- **Planned One-Time Migration:** To cleanly resolve this limitation without sacrificing idempotency, a database migration script will:
+  1. Inspect legacy transfers with notes matching `[DIVIDEND:<symbol>:<ex_date>]`.
+  2. Resolve the original position's `portfolio_id` based on user holding records.
+  3. Rewrite the tag note into the scoped format `[DIVIDEND:<portfolio_id>:<symbol>:<ex_date>]` and populate `portfolio_transfers.portfolio_id`.
+
+---
+
+## 7. Paper Trading Readiness Checklist
 
 - [x] Database-enforced atomic order idempotency (`portfolio_orders_user_order_ref_idx`).
 - [x] Idempotent dividend credits via unique tag constraints (`portfolio_transfers_user_dividend_tag_idx`).
@@ -89,4 +119,5 @@ ON public.corporate_actions (symbol, effective_date);
 - [x] Offline queue with exponential backoff (`1m, 5m, 15m, 1h`) and 60-second auto-retry scheduler.
 - [x] Persistent actionable failed-action banner with `[Retry]` and `[Discard]`.
 - [x] 100% test teardown restoring positions and auto-deposits cleanly.
-- [x] Corporate action roadmap and mathematical adjustment formulas formalized.
+- [x] Corporate action roadmap, reverse-split ratio validation, and mathematical adjustment formulas formalized.
+- [x] Documented legacy-tag deduplication tradeoff and planned migration path.

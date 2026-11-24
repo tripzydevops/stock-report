@@ -257,6 +257,82 @@ export interface DividendCreditSummary {
   errors: string[];
 }
 
+export interface OrderLedgerEntry {
+  side: string;
+  quantity: number | string;
+  executed_at: string;
+}
+
+export interface CorporateActionEntry {
+  symbol: string;
+  action_type: string;
+  split_ratio: number | string;
+  effective_date: string;
+}
+
+// Whitelist action types that genuinely multiply share counts for free (exclude RIGHTS_OFFERING / BEDELLI which require cash capital subscription)
+export const MULTIPLIER_ACTIONS = new Set([
+  'FORWARD_SPLIT',
+  'REVERSE_SPLIT',
+  'STOCK_SPLIT',
+  'BONUS_ISSUE',
+  'BEDELSIZ'
+]);
+
+/**
+ * Calculates dividend-entitled shares for a symbol as of exDate based strictly on order history,
+ * dynamically applying corporate action split multipliers that took effect between execution and exDate.
+ * Enforces reverse-split validation (preventing inverted ratios > 1 from accidentally multiplying holdings).
+ */
+export function calculateAdjustedEntitlement(
+  orders: OrderLedgerEntry[],
+  corporateActions: CorporateActionEntry[],
+  symbol: string,
+  exDate: string
+): number {
+  const cleanSym = symbol.replace('.IS', '').trim().toUpperCase();
+  let entitledShares = 0;
+
+  for (const ord of orders) {
+    const ordDateIstanbul = toIstanbulCalendarDate(ord.executed_at);
+    // In BIST and NYSE, shares must be purchased and settled before ex-date
+    if (ordDateIstanbul < exDate) {
+      let adjustedQty = Number(ord.quantity) || 0;
+
+      // Apply Corporate Actions Engine adjustment formula: q_i* = q_i * product(R_k)
+      // Only multiply for stock splits and bonus issues; rights offerings (Bedelli) require paid subscription
+      if (corporateActions && corporateActions.length > 0) {
+        for (const ca of corporateActions) {
+          const caSym = (ca.symbol || '').replace('.IS', '').trim().toUpperCase();
+          const actionType = (ca.action_type || '').toUpperCase();
+          if (
+            caSym === cleanSym &&
+            MULTIPLIER_ACTIONS.has(actionType) &&
+            ca.effective_date >= ordDateIstanbul &&
+            ca.effective_date < exDate
+          ) {
+            let ratio = Number(ca.split_ratio) || 1.0;
+            // Reverse-split data integrity guard: A reverse split must reduce shares (ratio < 1).
+            // If an inverted ratio > 1 was entered (e.g. 10 for a 1-for-10 reverse split), sanitize to 1 / ratio.
+            if (actionType === 'REVERSE_SPLIT' && ratio > 1.0) {
+              console.warn(`[CorporateActions] Inverting invalid reverse split ratio ${ratio} > 1 for ${caSym} to ${1.0 / ratio}`);
+              ratio = 1.0 / ratio;
+            }
+            if (ratio > 0) {
+              adjustedQty *= ratio;
+            }
+          }
+        }
+      }
+
+      if (ord.side === 'BUY') entitledShares += adjustedQty;
+      else if (ord.side === 'SELL') entitledShares -= adjustedQty;
+    }
+  }
+
+  return Math.max(0, Number(entitledShares.toFixed(4)));
+}
+
 /**
  * Idempotently evaluates all open portfolio positions against confirmed asset_dividends.
  * If payment_date <= today and the user held the stock on ex_date, credits cash directly
@@ -342,15 +418,6 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
       .select('symbol, action_type, split_ratio, effective_date')
       .in('symbol', searchSymbols);
 
-    // Whitelist action types that genuinely multiply share counts for free (exclude RIGHTS_OFFERING / BEDELLI which require cash capital subscription)
-    const MULTIPLIER_ACTIONS = new Set([
-      'FORWARD_SPLIT',
-      'REVERSE_SPLIT',
-      'STOCK_SPLIT',
-      'BONUS_ISSUE',
-      'BEDELSIZ'
-    ]);
-
     // 4. Match positions against due dividends
     for (const pos of positions) {
       summary.processedCount++;
@@ -399,29 +466,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
 
         if (hasAnyOrderHistory) {
           // Strict ledger calculation: when order history exists, it is the sole source of truth.
-          for (const ord of userOrders!) {
-            const ordDateIstanbul = toIstanbulCalendarDate(ord.executed_at);
-            // In BIST and NYSE, shares must be purchased and settled before ex-date
-            if (ordDateIstanbul < exDate) {
-              let adjustedQty = Number(ord.quantity) || 0;
-
-              // Apply Corporate Actions Engine adjustment formula: q_i* = q_i * product(R_k)
-              // Only multiply for stock splits and bonus issues; rights offerings (Bedelli) require paid subscription
-              if (corporateActions && corporateActions.length > 0) {
-                for (const ca of corporateActions) {
-                  const caSym = (ca.symbol || '').replace('.IS', '').trim().toUpperCase();
-                  const actionType = (ca.action_type || '').toUpperCase();
-                  if (caSym === divCleanSym && MULTIPLIER_ACTIONS.has(actionType) && ca.effective_date >= ordDateIstanbul && ca.effective_date < exDate) {
-                    const ratio = Number(ca.split_ratio) || 1.0;
-                    adjustedQty *= ratio;
-                  }
-                }
-              }
-
-              if (ord.side === 'BUY') entitledShares += adjustedQty;
-              else if (ord.side === 'SELL') entitledShares -= adjustedQty;
-            }
-          }
+          entitledShares = calculateAdjustedEntitlement(userOrders!, corporateActions || [], divCleanSym, exDate);
         } else {
           // Legacy position fallback: ONLY used when zero order history exists for this symbol/user
           const entryDateStr = pos.entry_date ? toIstanbulCalendarDate(pos.entry_date) : '';
