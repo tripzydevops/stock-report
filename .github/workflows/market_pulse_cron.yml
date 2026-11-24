@@ -51,6 +51,24 @@ jobs:
         run: |
           python export_to_spreadsheet.py
           python backend/scripts/sync_live_catalysts.py
+          python scripts/sync_bist_kap_dividends.py
+
+      - name: Set up Node.js for Autonomous Dividend Scraper
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Execute Autonomous BIST Dividend Scraping & Verification (Playwright)
+        working-directory: frontend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.SUPABASE_KEY }}
+        run: |
+          npm install playwright @supabase/supabase-js
+          npx playwright install chromium --with-deps
+          node scripts/scrape_bist_dividends_playwright.mjs || true
 
       - name: Verify Post-Sync Pipeline Health, Freshness & Self-Healing
         if: always()

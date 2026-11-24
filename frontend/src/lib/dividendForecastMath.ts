@@ -149,7 +149,7 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 1045.00,
-    currentYield: 5.60,
+    currentYield: 3.77,
     historical3YrDivCagr: 60.7,
     historical3YrPriceCagr: 28.4,
     predictedGrowth: {
@@ -161,8 +161,8 @@ export const MASTER_GROWTH_PROFILES: Record<string, AssetGrowthProfile> = {
     payoutFrequency: 'Semi-Annual',
     payoutRatio: 55.0,
     safetyGrade: 'A+',
-    aiRationaleTr: 'Avrupa ticari araç ihracat liderliği ve Craiova fabrikasının nakit akışı ile 2022-2025 döneminde %60.7 temettü CAGR kaydetti. Model %19.0 büyüme öngörüyor.',
-    aiRationaleEn: 'Commercial export champion with +60.7% historical dividend CAGR. High reinvestment moat supports +19.0% projected compounding.',
+    aiRationaleTr: '24 Kasım 2026 Olağanüstü Genel Kurul kararıyla pay başına brüt ₺3.07, net ₺2.6095 nakit kâr payı (toplam ₺10.77 milyar brüt) dağıtımı onaylandı. Ex-date: 26 Kasım 2026, nakit hesaba geçiş: 30 Kasım 2026.',
+    aiRationaleEn: 'Approved at the 24 Nov 2026 EGM: gross ₺3.07, net ₺2.6095 per share cash dividend (₺10.77B total). Ex-date: 26 Nov 2026, payment date: 30 Nov 2026.',
   },
   AKBNK: {
     symbol: 'AKBNK',
@@ -1022,12 +1022,12 @@ export function resolveDividendSchedule(symbol: string): {
   const live = LIVE_DIVIDEND_RECORDS[cleanSym];
   const staticSched = KNOWN_DIVIDEND_SCHEDULES[cleanSym];
   const profile = MASTER_GROWTH_PROFILES[cleanSym];
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  const isConfirmed = Boolean(live?.isConfirmed);
-  const status: 'Estimated' | 'Confirmed' = isConfirmed ? 'Confirmed' : 'Estimated';
+  const rawIsConfirmed = Boolean(live?.isConfirmed);
 
   // If asset is a known non-payer and has no confirmed upcoming dividend, do not fabricate an exDate
-  const isNonPayer = (profile?.payoutFrequency === 'None' || profile?.currentYield === 0) && !isConfirmed;
+  const isNonPayer = (profile?.payoutFrequency === 'None' || profile?.currentYield === 0) && !rawIsConfirmed;
   if (isNonPayer && !staticSched) {
     return {
       exDate: '',
@@ -1039,12 +1039,39 @@ export function resolveDividendSchedule(symbol: string): {
     };
   }
 
-  const exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '');
+  let exDate = (live?.isConfirmed && live?.exDate) ? live.exDate : (staticSched?.exDate || '');
   let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate || '');
+  let isConfirmed = rawIsConfirmed;
+  let confirmedDPS = live?.lastDPS || undefined;
+
+  // Auto-roll forward for periodic payers if recorded date is in the past
+  if (exDate && exDate < todayStr) {
+    const isMonthly = profile?.payoutFrequency === 'Monthly' || ['O', 'JEPI', 'JEPQ', 'MAIN'].includes(cleanSym);
+    const isQuarterly = profile?.payoutFrequency === 'Quarterly';
+    const isSemiAnnual = profile?.payoutFrequency === 'Semi-Annual';
+
+    if (isMonthly || isQuarterly || isSemiAnnual) {
+      const stepMonths = isMonthly ? 1 : (isQuarterly ? 3 : 6);
+      const exD = new Date(exDate);
+      const payD = payDate ? new Date(payDate) : new Date(exDate);
+
+      while (exD.toISOString().slice(0, 10) < todayStr) {
+        exD.setMonth(exD.getMonth() + stepMonths);
+        payD.setMonth(payD.getMonth() + stepMonths);
+      }
+
+      exDate = exD.toISOString().slice(0, 10);
+      payDate = payD.toISOString().slice(0, 10);
+      isConfirmed = false;
+      confirmedDPS = undefined;
+    }
+  }
+
+  const status: 'Estimated' | 'Confirmed' = isConfirmed ? 'Confirmed' : 'Estimated';
 
   // If live data has confirmed exDate but payDate is null (common for BIST), calculate payDate as exDate + 2 business days
-  if (live?.isConfirmed && live?.exDate && !live?.payDate) {
-    const d = new Date(live.exDate);
+  if (isConfirmed && exDate && !payDate) {
+    const d = new Date(exDate);
     if (!isNaN(d.getTime())) {
       d.setDate(d.getDate() + 2);
       payDate = d.toISOString().slice(0, 10);
@@ -1053,7 +1080,7 @@ export function resolveDividendSchedule(symbol: string): {
 
   // Derive human-readable month
   let month = staticSched?.month;
-  if (!month || isConfirmed) {
+  if (!month || isConfirmed || (exDate && exDate >= todayStr)) {
     if (payDate || exDate) {
       const d = new Date(payDate || exDate);
       if (!isNaN(d.getTime())) {
@@ -1074,7 +1101,7 @@ export function resolveDividendSchedule(symbol: string): {
     month,
     isConfirmed,
     status,
-    confirmedDPS: live?.lastDPS || undefined,
+    confirmedDPS,
   };
 }
 
@@ -1390,7 +1417,7 @@ export const MASTER_COMPARATOR_ASSETS: DividendComparatorAsset[] = [
     market: 'BIST',
     currency: 'TRY',
     currentPrice: 1045.00,
-    dividendYield: 5.60,
+    dividendYield: 3.77,
     payoutFrequency: 'Semi-Annual',
     safetyRating: 'A+',
     payoutRatio: 55.0,
@@ -1891,12 +1918,12 @@ export function generateMarketDividendCatalysts(livePrices?: Record<string, numb
     {
       symbol: 'FROTO',
       market: 'BIST' as const,
-      title: 'Ford Otosan (FROTO) 2. Taksit Nakit Temettü Dağıtım Kararı',
-      details: 'Yönetim Kurulu ve Genel Kurul onayıyla pay başına net ₺14.25 nakit kâr payı dağıtılacaktır. Hak kullanım (Ex-date) tarihi 26 Kasım 2026, hesaba geçiş 28 Kasım 2026 olarak kesinleşmiştir.',
-      aiTakeaway: 'Otomotiv devi %5.60 net temettü verimiyle BIST sanayi şirketleri arasında en yüksek nakit akışını sunmaktadır. Hak kazanmak için son alım günü 25 Kasım kapanışıdır.',
+      title: 'Ford Otosan (FROTO) Nakit Temettü Dağıtım Kararı',
+      details: '24 Kasım 2026 Olağanüstü Genel Kurul onayıyla pay başına brüt ₺3.07, net ₺2.6095 (toplam ₺10.77 milyar brüt) nakit kâr payı dağıtımı kesinleşmiştir. Hak kullanım (Ex-date) tarihi 26 Kasım 2026 (Perşembe), MKK nezdinde hak sahipleri kayıt tarihi 27 Kasım 2026, yatırımcı hesaplarına nakit aktarım tarihi (T+2) 30 Kasım 2026 (Pazartesi) olarak uygulanacaktır.',
+      aiTakeaway: 'Hak kazanmak için hissenin en geç 25 Kasım kapanışında portföyde bulunması gerekir; 26 Kasım ex-date ve sonrasında alınan paylar bu temettü hakkını içermez. Cari temettü verimi yaklaşık %3.77 seviyesindedir.',
       exDate: '2026-11-26',
-      dps: 14.25,
-      yieldPct: 5.60
+      dps: 2.6095,
+      yieldPct: 3.77
     },
     {
       symbol: 'BIMAS',

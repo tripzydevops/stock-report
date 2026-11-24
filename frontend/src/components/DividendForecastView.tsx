@@ -117,7 +117,7 @@ export default function DividendForecastView({
       frequencyEn: 'Quarterly & Annual',
       holdings: [
         { sym: 'SCHD', weight: 35, yield: 3.65, curr: 'USD' },
-        { sym: 'FROTO', weight: 25, yield: 5.60, curr: 'TRY' },
+        { sym: 'FROTO', weight: 25, yield: 3.77, curr: 'TRY' },
         { sym: 'VICI', weight: 20, yield: 5.35, curr: 'USD' },
         { sym: 'KO', weight: 20, yield: 3.10, curr: 'USD' },
       ],
@@ -426,7 +426,7 @@ export default function DividendForecastView({
                     <option value="ISMEN">ISMEN (İş Yatırım Menkul) - %8.55 Verim</option>
                     <option value="TURSG">TURSG (Türkiye Sigorta) - %7.09 Verim</option>
                     <option value="TUPRS">TUPRS (Tüpraş) - %7.40 Verim</option>
-                    <option value="FROTO">FROTO (Ford Otosan) - %5.60 Verim</option>
+                    <option value="FROTO">FROTO (Ford Otosan) - %3.77 Verim</option>
                     <option value="AKBNK">AKBNK (Akbank) - %4.73 Verim</option>
                   </optgroup>
                   <optgroup label="Midas ABD REIT & Gayrimenkul">

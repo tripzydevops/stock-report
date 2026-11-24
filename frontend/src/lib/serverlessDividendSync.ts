@@ -114,14 +114,31 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
 
       // If exDate is upcoming (>= today)
       if (exDateStr && exDateStr >= todayStr) {
-        // If payDate is missing, default to T+2 business days
+        // Determine frequency and payout divisor
+        const isMonthlyUS = ['O', 'JEPI', 'JEPQ', 'MAIN'].includes(cleanSym);
+        const frequency = isBist ? 'Semi-Annual' : (isMonthlyUS ? 'Monthly' : 'Quarterly');
+        const freqDiv = isBist ? 2 : (isMonthlyUS ? 12 : 4);
+
+        // If payDate is missing:
         if (!payDateStr) {
           const d = new Date(exDateStr);
-          d.setDate(d.getDate() + 2);
+          if (isBist) {
+            // T+2 business days for BIST Takasbank settlement
+            const dayOfWeek = d.getDay(); // 0 is Sun, 4 is Thu, 5 is Fri
+            const addDays = (dayOfWeek === 4) ? 4 : (dayOfWeek === 5) ? 4 : 2;
+            d.setDate(d.getDate() + addDays);
+          } else {
+            // US dividends typically pay ~14 days after ex-date
+            d.setDate(d.getDate() + 14);
+          }
           payDateStr = d.toISOString().slice(0, 10);
         }
 
-        const rate = detail?.dividendRate || null;
+        const annualRate = detail?.dividendRate || null;
+        // CRITICAL FIX: Yahoo Finance dividendRate is ANNUALIZED forward dividend.
+        // We must divide by frequency divisor (4 for quarterly, 12 for monthly, 2 for semi-annual)
+        // to record the true single-distribution cash amount per share.
+        const dps = annualRate ? Number((annualRate / freqDiv).toFixed(4)) : null;
         const assetId = assetIdMap.get(cleanSym) || assetIdMap.get(tickerSym) || null;
 
         rowsToUpsert.push({
@@ -129,10 +146,10 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           symbol: tickerSym,
           ex_date: exDateStr,
           payment_date: payDateStr,
-          amount: rate || 0,
+          amount: dps || 0,
           currency: currency,
-          frequency: isBist ? 'Semi-Annual' : 'Quarterly',
-          is_confirmed: true,
+          frequency: frequency,
+          is_confirmed: Boolean(payDateObj),
           source: 'YAHOO_LIVE'
         });
 
@@ -140,7 +157,7 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           symbol: cleanSym,
           exDate: exDateStr,
           paymentDate: payDateStr,
-          rate: rate,
+          rate: dps,
           currency: currency
         });
       }
