@@ -58,6 +58,25 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-v1
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright & Dependencies
+        working-directory: frontend
+        run: |
+          npm install playwright @supabase/supabase-js
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            npx playwright install chromium --with-deps
+          else
+            npx playwright install-deps chromium
+          fi
+
       - name: Execute Autonomous BIST Dividend Scraping & Verification (Playwright)
         working-directory: frontend
         env:
@@ -66,9 +85,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.SUPABASE_KEY }}
         run: |
-          npm install playwright @supabase/supabase-js
-          npx playwright install chromium --with-deps
-          node scripts/scrape_bist_dividends_playwright.mjs || true
+          node scripts/scrape_bist_dividends_playwright.mjs
 
       - name: Verify Post-Sync Pipeline Health, Freshness & Self-Healing
         if: always()

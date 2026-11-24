@@ -2,8 +2,14 @@ import urllib.request
 import json
 import yfinance as yf
 
-SUPABASE_URL = "https://erzxltcalghadzfevfjx.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI"
+import os
+import sys
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://erzxltcalghadzfevfjx.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+if not SUPABASE_KEY:
+    print("[comprehensive_portfolio_analysis] Error: SUPABASE_KEY or SUPABASE_SERVICE_KEY environment variable required.", file=sys.stderr)
+    sys.exit(1)
 
 headers = {
     "apikey": SUPABASE_KEY,

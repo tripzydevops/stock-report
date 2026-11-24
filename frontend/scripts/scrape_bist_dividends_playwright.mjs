@@ -2,22 +2,68 @@
  * MarketPulse: Automated BIST Dividend Scraper & Ingestor via Playwright
  *
  * Runs headless Chromium with genuine browser headers to bypass Cloudflare/WAF,
- * extracts announced BIST dividend payments from verified market calendars,
- * audits them via strict mathematical rules, and upserts them into Supabase `asset_dividends`.
+ * extracts announced BIST dividend payments using header-based dynamic table resolution,
+ * audits them via mathematical & Turkish holiday rules, and upserts them into Supabase `asset_dividends`.
+ *
+ * Strict provenance:
+ * - Fintables scrape: 'FINTABLES_DIVIDEND_CALENDAR'
+ * - İş Yatırım scrape: 'ISYATIRIM_CORPORATE_ACTIONS'
  */
 
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://erzxltcalghadzfevfjx.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyenhsdGNhbGdoYWR6ZmV2Zmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwODQxMzEsImV4cCI6MjEwNTY2MDEzMX0.dEQ91ShlS9PBWUwF9U6hDuTqZBwlF3_nZNsjqfIifrI';
+// Priority 1: Require explicit environment variables; fail closed if absent
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ Fatal: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY) must be provided in environment variables.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function isValidDate(str) {
-  if (!str || typeof str !== 'string') return false;
-  const d = new Date(str);
-  return !isNaN(d.getTime()) && str.length >= 10;
+// Official Turkish Public Holidays (Fixed annual dates: MM-DD)
+const TURKISH_FIXED_HOLIDAYS = new Set([
+  '01-01', // Yılbaşı
+  '04-23', // Ulusal Egemenlik ve Çocuk Bayramı
+  '05-01', // Emek ve Dayanışma Günü
+  '05-19', // Atatürk'ü Anma, Gençlik ve Spor Bayramı
+  '07-15', // Demokrasi ve Milli Birlik Günü
+  '08-30', // Zafer Bayramı
+  '10-29'  // Cumhuriyet Bayramı
+]);
+
+/**
+ * Calendar-aware date helper: checks if a date falls on a weekend or Turkish holiday.
+ */
+function isTurkishBusinessDay(dateObj) {
+  const day = dateObj.getDay();
+  if (day === 0 || day === 6) return false; // 0=Sunday, 6=Saturday
+
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  if (TURKISH_FIXED_HOLIDAYS.has(`${mm}-${dd}`)) return false;
+
+  return true;
+}
+
+/**
+ * Shifts a date string (YYYY-MM-DD) forward to the next valid Turkish business day.
+ */
+function rollToNextBusinessDay(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const cur = new Date(y, m - 1, d);
+
+  while (!isTurkishBusinessDay(cur)) {
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const resY = cur.getFullYear();
+  const resM = String(cur.getMonth() + 1).padStart(2, '0');
+  const resD = String(cur.getDate()).padStart(2, '0');
+  return `${resY}-${resM}-${resD}`;
 }
 
 function parseTurkishNumber(str) {
@@ -27,10 +73,16 @@ function parseTurkishNumber(str) {
   return isNaN(num) ? 0 : num;
 }
 
-function isWeekend(dateStr) {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  return day === 0 || day === 6; // Sunday or Saturday
+function parseDateToIso(dStr) {
+  if (!dStr) return '';
+  const m = String(dStr).match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (m) {
+    const year = m[3];
+    const month = m[2].padStart(2, '0');
+    const day = m[1].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return '';
 }
 
 export async function scrapeAndIngestBistDividends() {
@@ -55,108 +107,154 @@ export async function scrapeAndIngestBistDividends() {
     try {
       await page.goto('https://fintables.com/temettu-takvimi', {
         waitUntil: 'domcontentloaded',
-        timeout: 25000
+        timeout: 30000
       });
       await page.waitForTimeout(4000);
 
-      // Extract table rows
-      const rows = await page.$$eval('table tbody tr', trs => {
-        return trs.map(tr => {
-          const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
-          return cells;
-        });
+      // Header-based dynamic column resolution
+      const tableData = await page.evaluate(() => {
+        const table = document.querySelector('table');
+        if (!table) return null;
+
+        const ths = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText.trim().toLowerCase());
+        const trs = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+          Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim())
+        );
+
+        return { headers: ths, rows: trs };
       });
 
-      console.log(`📊 Found ${rows.length} rows in Fintables table.`);
+      if (tableData && tableData.rows.length > 0) {
+        const { headers, rows } = tableData;
+        console.log(`📋 Resolved Table Headers: ${JSON.stringify(headers)}`);
 
-      for (const row of rows) {
-        if (row.length < 4) continue;
-        const sym = row[0].replace('.IS', '').trim().toUpperCase();
-        if (!sym || sym.length > 6) continue;
+        // Find column indices dynamically
+        const symIdx = headers.findIndex(h => /kod|hisse|sembol|ticker/i.test(h));
+        const exDateIdx = headers.findIndex(h => /hak kullanım|ex-date|dağıtım tarihi|tarih/i.test(h));
+        const payDateIdx = headers.findIndex(h => /ödeme tarihi|hesaba geçiş|nakit ödeme/i.test(h));
+        const grossIdx = headers.findIndex(h => /brüt|gross/i.test(h));
+        const netIdx = headers.findIndex(h => /net/i.test(h));
 
-        // Fintables column pattern: [Kod, Şirket, Hak Kullanım Tarihi, Ödeme Tarihi, Brüt Temettü, Net Temettü, Verim]
-        const exDateRaw = row[2] || '';
-        const payDateRaw = row[3] || '';
-        const grossDpsRaw = row[4] || '0';
-        const netDpsRaw = row[5] || row[4] || '0';
-
-        const grossDps = parseTurkishNumber(grossDpsRaw);
-        const netDps = parseTurkishNumber(netDpsRaw);
-
-        // Parse date DD.MM.YYYY to YYYY-MM-DD
-        const toIso = (dStr) => {
-          const m = dStr.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
-          if (m) {
-            return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-          }
-          return '';
-        };
-
-        const exDate = toIso(exDateRaw);
-        let payDate = toIso(payDateRaw) || exDate;
-
-        if (exDate && grossDps > 0) {
-          extractedRecords.push({
-            symbol: sym,
-            exDate,
-            payDate,
-            grossDps,
-            netDps: netDps > 0 ? netDps : Number((grossDps * 0.85).toFixed(4)),
-            source: 'FINTABLES_KAP'
-          });
+        if (symIdx === -1 || grossIdx === -1) {
+          console.warn(`⚠️ Warning: Critical columns (symbol/gross) not found via header match. Falling back to default layout.`);
         }
+
+        const effectiveSymIdx = symIdx !== -1 ? symIdx : 0;
+        const effectiveExIdx = exDateIdx !== -1 ? exDateIdx : 2;
+        const effectivePayIdx = payDateIdx !== -1 ? payDateIdx : 3;
+        const effectiveGrossIdx = grossIdx !== -1 ? grossIdx : 4;
+        const effectiveNetIdx = netIdx !== -1 ? netIdx : 5;
+
+        for (const row of rows) {
+          if (row.length < 4) continue;
+          const sym = (row[effectiveSymIdx] || '').replace('.IS', '').trim().toUpperCase();
+          if (!sym || sym.length > 6) continue;
+
+          const exDate = parseDateToIso(row[effectiveExIdx] || '');
+          let payDate = parseDateToIso(row[effectivePayIdx] || '') || exDate;
+          const grossDps = parseTurkishNumber(row[effectiveGrossIdx] || '0');
+          const netDpsRaw = parseTurkishNumber(row[effectiveNetIdx] || '0');
+          const netDps = netDpsRaw > 0 ? netDpsRaw : Number((grossDps * 0.85).toFixed(4));
+
+          if (exDate && grossDps > 0) {
+            extractedRecords.push({
+              symbol: sym,
+              exDate,
+              payDate,
+              grossDps,
+              netDps,
+              source: 'FINTABLES_DIVIDEND_CALENDAR'
+            });
+          }
+        }
+        console.log(`📊 Successfully extracted ${extractedRecords.length} records from Fintables.`);
       }
     } catch (fintablesErr) {
       console.warn(`⚠️ Fintables scrape note: ${fintablesErr.message}`);
     }
 
-    // 2. Fallback Source: İş Yatırım Sermaye Artırımları
+    // 2. Fallback Source: İş Yatırım Sermaye Artırımları (Properly parsed if Fintables fails)
     if (extractedRecords.length === 0) {
       console.log('🌐 Attempting fallback to İş Yatırım Sermaye Artırımları...');
       try {
         await page.goto('https://arastirma.isyatirim.com.tr/sermaye-artirimlari/', {
           waitUntil: 'networkidle',
-          timeout: 25000
+          timeout: 30000
         });
         await page.waitForTimeout(3000);
 
-        const isRows = await page.$$eval('table tr', trs => {
-          return trs.map(tr => Array.from(tr.querySelectorAll('td, th')).map(c => c.innerText.trim()));
+        const isTableData = await page.evaluate(() => {
+          const table = document.querySelector('table');
+          if (!table) return null;
+          const ths = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim().toLowerCase());
+          const trs = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+            Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim())
+          );
+          return { headers: ths, rows: trs };
         });
 
-        console.log(`📊 Found ${isRows.length} rows in İş Yatırım table.`);
+        if (isTableData && isTableData.rows.length > 0) {
+          const { headers, rows } = isTableData;
+          const symIdx = headers.findIndex(h => /kod|hisse|şirket/i.test(h));
+          const exIdx = headers.findIndex(h => /tarih|hak kullanım/i.test(h));
+          const grossIdx = headers.findIndex(h => /temettü|brüt|nakit/i.test(h));
+
+          for (const row of rows) {
+            const sym = (row[symIdx !== -1 ? symIdx : 0] || '').replace('.IS', '').trim().toUpperCase();
+            const exDate = parseDateToIso(row[exIdx !== -1 ? exIdx : 1] || '');
+            const grossDps = parseTurkishNumber(row[grossIdx !== -1 ? grossIdx : 2] || '0');
+            if (sym && exDate && grossDps > 0) {
+              extractedRecords.push({
+                symbol: sym,
+                exDate,
+                payDate: exDate,
+                grossDps,
+                netDps: Number((grossDps * 0.85).toFixed(4)),
+                source: 'ISYATIRIM_CORPORATE_ACTIONS'
+              });
+            }
+          }
+          console.log(`📊 Successfully extracted ${extractedRecords.length} fallback records from İş Yatırım.`);
+        }
       } catch (isErr) {
-        console.warn(`⚠️ İş Yatırım scrape note: ${isErr.message}`);
+        console.warn(`⚠️ İş Yatırım fallback note: ${isErr.message}`);
       }
     }
 
   } catch (err) {
-    console.error('❌ Scraper encountered error:', err.message);
+    console.error('❌ Scraper encountered unhandled error:', err.message);
   } finally {
     await browser.close();
+  }
+
+  // Priority 8: Fail loudly if no records extracted
+  if (extractedRecords.length === 0) {
+    console.error('❌ Scraper extracted 0 records from all sources. Aborting with failure code to alert cron.');
+    process.exit(1);
   }
 
   console.log(`\n🔍 Extracted ${extractedRecords.length} announced dividend declarations.`);
 
   // 3. Mathematical Audit & Supabase Ingestion
   let auditedCount = 0;
+  let failedCount = 0;
+
   for (const item of extractedRecords) {
     // Audit Rule 1: Net DPS <= Gross DPS
-    if (item.netDps > item.grossDps * 1.05) {
-      console.warn(`⚠️ Skipping corrupted item for ${item.symbol}: Net DPS (${item.netDps}) > Gross DPS (${item.grossDps})`);
+    if (item.netDps <= 0 || item.netDps > item.grossDps * 1.05) {
+      console.warn(`⚠️ Skipping corrupted item for ${item.symbol}: Net DPS (${item.netDps}) out of bounds vs Gross (${item.grossDps})`);
+      failedCount++;
       continue;
     }
 
-    // Audit Rule 2: Payment date cannot be a weekend
-    if (isWeekend(item.payDate)) {
-      console.warn(`⚠️ Adjusting weekend payDate ${item.payDate} for ${item.symbol} to following Monday.`);
-      const d = new Date(item.payDate);
-      const addDays = d.getDay() === 6 ? 2 : 1;
-      d.setDate(d.getDate() + addDays);
-      item.payDate = d.toISOString().slice(0, 10);
+    // Audit Rule 2: Ensure payment date is a valid Turkish business day (not weekend or public holiday)
+    const normalizedPayDate = rollToNextBusinessDay(item.payDate);
+    if (normalizedPayDate !== item.payDate) {
+      console.log(`📅 Adjusted holiday/weekend payDate ${item.payDate} -> ${normalizedPayDate} for ${item.symbol}`);
+      item.payDate = normalizedPayDate;
     }
 
-    // Upsert into Supabase
+    // Upsert into Supabase with accurate source provenance
     const ticker = `${item.symbol}.IS`;
     const row = {
       symbol: ticker,
@@ -166,7 +264,7 @@ export async function scrapeAndIngestBistDividends() {
       currency: 'TRY',
       frequency: 'Semi-Annual',
       is_confirmed: true,
-      source: 'KAP_SCRAPER_PLAYWRIGHT'
+      source: item.source // Priority 3: 'FINTABLES_DIVIDEND_CALENDAR' or 'ISYATIRIM_CORPORATE_ACTIONS'
     };
 
     try {
@@ -175,25 +273,34 @@ export async function scrapeAndIngestBistDividends() {
         .upsert(row, { onConflict: 'symbol,ex_date' });
 
       if (error) {
-        console.warn(`⚠️ Supabase upsert note for ${ticker}: ${error.message}`);
+        console.warn(`⚠️ Supabase upsert failed for ${ticker}: ${error.message}`);
+        failedCount++;
       } else {
         auditedCount++;
-        console.log(`✅ [AUDITED & SAVED] ${ticker}: Ex: ${item.exDate} | Pay: ${item.payDate} | Net: ₺${item.netDps.toFixed(4)} | Gross: ₺${item.grossDps.toFixed(4)}`);
+        console.log(`✅ [AUDITED & SAVED] ${ticker} | Source: ${item.source} | Ex: ${item.exDate} | Pay: ${item.payDate} | Net: ₺${item.netDps.toFixed(4)} | Gross: ₺${item.grossDps.toFixed(4)}`);
       }
     } catch (upsertErr) {
-      console.warn(`⚠️ Upsert error for ${ticker}: ${upsertErr.message}`);
+      console.warn(`⚠️ Upsert exception for ${ticker}: ${upsertErr.message}`);
+      failedCount++;
     }
   }
 
-  console.log(`\n🎉 Ingestion finished: ${auditedCount} verified BIST corporate actions synced to Supabase.`);
-  return { extracted: extractedRecords.length, audited: auditedCount };
+  console.log(`\n🎉 Ingestion finished: ${auditedCount} verified BIST corporate actions synced, ${failedCount} skipped/failed.`);
+
+  // If all upserts failed, fail the process
+  if (auditedCount === 0 && extractedRecords.length > 0) {
+    console.error('❌ All records failed database ingestion. Exiting with failure code.');
+    process.exit(1);
+  }
+
+  return { extracted: extractedRecords.length, audited: auditedCount, failed: failedCount };
 }
 
 if (process.argv[1]?.endsWith('scrape_bist_dividends_playwright.mjs')) {
   scrapeAndIngestBistDividends()
     .then(() => process.exit(0))
     .catch(err => {
-      console.error(err);
+      console.error('Fatal scrape error:', err);
       process.exit(1);
     });
 }

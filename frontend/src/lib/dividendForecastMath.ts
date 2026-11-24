@@ -1010,6 +1010,50 @@ export interface LiveDividendRecord {
 export const LIVE_DIVIDEND_RECORDS: Record<string, LiveDividendRecord> =
   (liveDividendSchedulesData as unknown as Record<string, LiveDividendRecord>) || {};
 
+/**
+ * Safely adds N months to a YYYY-MM-DD string, clamping to the last valid day of the target month
+ * to prevent date overflow (e.g. 2026-01-31 + 1 month -> 2026-02-28, not 2026-03-03).
+ */
+export function addMonthsClamped(dateStr: string, months: number): string {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+
+  const totalMonths = y * 12 + (m - 1) + months;
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonth = ((totalMonths % 12) + 12) % 12; // 0-indexed month
+  // Determine days in target month using UTC
+  const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(d, daysInMonth);
+
+  const mm = String(targetMonth + 1).padStart(2, '0');
+  const dd = String(clampedDay).padStart(2, '0');
+  return `${targetYear}-${mm}-${dd}`;
+}
+
+/**
+ * Calculates BIST T+2 business days settlement date (skipping Saturday and Sunday)
+ */
+export function calculateBistTPlus2Settlement(exDateStr: string): string {
+  const parts = exDateStr.split('-');
+  if (parts.length !== 3) return exDateStr;
+  const d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
+  if (isNaN(d.getTime())) return exDateStr;
+
+  let added = 0;
+  while (added < 2) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const day = d.getUTCDay();
+    if (day !== 0 && day !== 6) {
+      added++;
+    }
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 export function resolveDividendSchedule(symbol: string): {
   exDate: string;
   payDate: string;
@@ -1043,6 +1087,7 @@ export function resolveDividendSchedule(symbol: string): {
   let payDate = (live?.isConfirmed && live?.payDate) ? live.payDate : (staticSched?.payDate || exDate || '');
   let isConfirmed = rawIsConfirmed;
   let confirmedDPS = live?.lastDPS || undefined;
+  let isRolledForward = false;
 
   // Auto-roll forward for periodic payers if recorded date is in the past
   if (exDate && exDate < todayStr) {
@@ -1052,18 +1097,19 @@ export function resolveDividendSchedule(symbol: string): {
 
     if (isMonthly || isQuarterly || isSemiAnnual) {
       const stepMonths = isMonthly ? 1 : (isQuarterly ? 3 : 6);
-      const exD = new Date(exDate);
-      const payD = payDate ? new Date(payDate) : new Date(exDate);
+      let currentEx = exDate;
+      let currentPay = payDate || exDate;
 
-      while (exD.toISOString().slice(0, 10) < todayStr) {
-        exD.setMonth(exD.getMonth() + stepMonths);
-        payD.setMonth(payD.getMonth() + stepMonths);
+      while (currentEx < todayStr) {
+        currentEx = addMonthsClamped(currentEx, stepMonths);
+        currentPay = addMonthsClamped(currentPay, stepMonths);
       }
 
-      exDate = exD.toISOString().slice(0, 10);
-      payDate = payD.toISOString().slice(0, 10);
+      exDate = currentEx;
+      payDate = currentPay;
       isConfirmed = false;
       confirmedDPS = undefined;
+      isRolledForward = true;
     }
   }
 
@@ -1071,11 +1117,7 @@ export function resolveDividendSchedule(symbol: string): {
 
   // If live data has confirmed exDate but payDate is null (common for BIST), calculate payDate as exDate + 2 business days
   if (isConfirmed && exDate && !payDate) {
-    const d = new Date(exDate);
-    if (!isNaN(d.getTime())) {
-      d.setDate(d.getDate() + 2);
-      payDate = d.toISOString().slice(0, 10);
-    }
+    payDate = calculateBistTPlus2Settlement(exDate);
   }
 
   // Derive human-readable month
@@ -1085,7 +1127,9 @@ export function resolveDividendSchedule(symbol: string): {
       const d = new Date(payDate || exDate);
       if (!isNaN(d.getTime())) {
         const trMonths = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-        const suffix = staticSched?.month?.includes('Taksit') ? ` (${staticSched.month.split('(')[1]}` : '';
+        const suffix = staticSched?.month?.includes('Taksit')
+          ? ` (${staticSched.month.split('(')[1]}`
+          : (isRolledForward ? ' (Tahmini Döngü)' : '');
         month = `${trMonths[d.getMonth()]} ${d.getFullYear()}${suffix}`;
       } else {
         month = staticSched?.month || 'Tarih Belirlenmedi';

@@ -100,11 +100,12 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
 
     try {
       const summary = await yf.quoteSummary(tickerSym, {
-        modules: ['calendarEvents', 'summaryDetail']
+        modules: ['calendarEvents', 'summaryDetail', 'defaultKeyStatistics']
       });
 
       const cal = summary?.calendarEvents;
       const detail = summary?.summaryDetail;
+      const stats = summary?.defaultKeyStatistics;
 
       const exDateObj = cal?.exDividendDate || detail?.exDividendDate;
       const exDateStr = exDateObj ? new Date(exDateObj).toISOString().slice(0, 10) : null;
@@ -128,17 +129,26 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
             const addDays = (dayOfWeek === 4) ? 4 : (dayOfWeek === 5) ? 4 : 2;
             d.setDate(d.getDate() + addDays);
           } else {
-            // US dividends typically pay ~14 days after ex-date
+            // US dividends typically pay ~14-21 days after ex-date
             d.setDate(d.getDate() + 14);
           }
           payDateStr = d.toISOString().slice(0, 10);
         }
 
-        const annualRate = detail?.dividendRate || null;
-        // CRITICAL FIX: Yahoo Finance dividendRate is ANNUALIZED forward dividend.
-        // We must divide by frequency divisor (4 for quarterly, 12 for monthly, 2 for semi-annual)
-        // to record the true single-distribution cash amount per share.
-        const dps = annualRate ? Number((annualRate / freqDiv).toFixed(4)) : null;
+        // Priority 7: Use the provider's declared single cash distribution whenever available
+        // (defaultKeyStatistics.lastDividendValue represents the actual single cash payout per share)
+        let dps: number | null = null;
+        let isConfirmed = false;
+
+        if (stats?.lastDividendValue && stats.lastDividendValue > 0) {
+          dps = Number(Number(stats.lastDividendValue).toFixed(4));
+          isConfirmed = Boolean(payDateObj);
+        } else if (detail?.dividendRate && detail.dividendRate > 0) {
+          // Fallback: estimate single payment from annualized forward rate
+          dps = Number((detail.dividendRate / freqDiv).toFixed(4));
+          isConfirmed = false; // Mark estimated: do not fabricate certainty from an annualized aggregate
+        }
+
         const assetId = assetIdMap.get(cleanSym) || assetIdMap.get(tickerSym) || null;
 
         rowsToUpsert.push({
@@ -149,8 +159,8 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           amount: dps || 0,
           currency: currency,
           frequency: frequency,
-          is_confirmed: Boolean(payDateObj),
-          source: 'YAHOO_LIVE'
+          is_confirmed: isConfirmed,
+          source: isConfirmed ? 'YAHOO_CONFIRMED' : 'YAHOO_ESTIMATED'
         });
 
         upcomingEvents.push({

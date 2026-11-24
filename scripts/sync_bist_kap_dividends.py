@@ -20,13 +20,24 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 try:
     from supabase import create_client, Client
 except ImportError:
     create_client = None
     Client = None
+
+# Official Turkish Fixed Public Holidays
+TURKISH_FIXED_HOLIDAYS = {
+    (1, 1),   # Yılbaşı
+    (4, 23),  # Ulusal Egemenlik ve Çocuk Bayramı
+    (5, 1),   # Emek ve Dayanışma Günü
+    (5, 19),  # Gençlik ve Spor Bayramı
+    (7, 15),  # Demokrasi ve Milli Birlik Günü
+    (8, 30),  # Zafer Bayramı
+    (10, 29), # Cumhuriyet Bayramı
+}
 
 class KapDividendDeclaration(BaseModel):
     symbol: str = Field(..., description="BIST Ticker symbol (e.g. FROTO or FROTO.IS)")
@@ -48,26 +59,42 @@ class KapDividendDeclaration(BaseModel):
     def validate_business_day(cls, v: date) -> date:
         if v.weekday() >= 5:  # 5=Saturday, 6=Sunday
             raise ValueError(f"Invalid settlement date {v}: Takasbank does not settle dividends on weekends.")
+        if (v.month, v.day) in TURKISH_FIXED_HOLIDAYS:
+            raise ValueError(f"Invalid settlement date {v}: Takasbank does not settle dividends on official Turkish holidays.")
         return v
 
     @field_validator("net_dps")
     @classmethod
-    def validate_withholding_tax(cls, v: float, info) -> float:
+    def validate_net_dps_bounds(cls, v: float, info) -> float:
         gross = info.data.get("gross_dps")
-        if gross:
-            expected_net = round(gross * 0.85, 4)
-            # Allow minor rounding tolerance (within 0.01 TRY)
-            if abs(v - expected_net) > 0.02:
-                raise ValueError(
-                    f"Net DPS {v} deviates from 15% statutory withholding tax formula (expected approx {expected_net} for gross {gross})"
-                )
+        if gross is not None:
+            if v <= 0:
+                raise ValueError(f"Net DPS {v} must be greater than 0")
+            if v > gross:
+                raise ValueError(f"Net DPS {v} cannot exceed Gross DPS {gross}")
+            effective_tax = (gross - v) / gross if gross > 0 else 0
+            if effective_tax > 0.35:
+                print(f"⚠️ Audit note: Net DPS yields an unusually high withholding tax rate: {effective_tax*100:.1f}%")
         return v
+
+    @model_validator(mode="after")
+    def validate_market_cap_consistency(self):
+        # Priority 5: Enforce market-cap consistency check with small rounding tolerance
+        if self.total_gross_amount_try and self.total_shares_outstanding:
+            computed_gross = self.total_gross_amount_try / self.total_shares_outstanding
+            if abs(computed_gross - self.gross_dps) > 0.02:
+                raise ValueError(
+                    f"Market cap check failed: total {self.total_gross_amount_try:,.0f} TRY / "
+                    f"{self.total_shares_outstanding:,.0f} shares = ₺{computed_gross:.4f}, "
+                    f"which violates declared gross DPS ₺{self.gross_dps:.4f} (deviation > 0.02)"
+                )
+        return self
 
 
 def get_supabase_client() -> Optional[Client]:
-    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_ANON_KEY")
-    if not url or not key:
+    url = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+    if not url or not key or create_client is None:
         return None
     return create_client(url, key)
 
