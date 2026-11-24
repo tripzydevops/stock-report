@@ -39,6 +39,7 @@ interface PortfolioViewProps {
   portfolioDividends?: DividendAsset[];
   isGuest?: boolean;
   userEmail?: string | null;
+  isGuestCustomized?: boolean;
   syncStatus?: 'synced' | 'syncing' | 'offline_queued' | 'offline' | 'local_only';
   offlineQueueCount?: number;
   failedMutations?: Array<{

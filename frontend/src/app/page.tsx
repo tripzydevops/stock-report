@@ -1109,11 +1109,13 @@ const OFFLINE_QUEUE_KEY = 'marketpulse_offline_mutation_queue';
 
 const FAILED_MUTATIONS_KEY = 'marketpulse_failed_mutations';
 
+export type OrderSide = 'BUY' | 'SELL';
+
 export interface OfflineMutationPayload {
   symbol: string;
   shares: number;
   price: number;
-  side?: 'BUY' | 'SELL';
+  side?: OrderSide;
   market?: string;
   name?: string;
   currency?: string;
@@ -1124,7 +1126,8 @@ export interface OfflineMutationPayload {
   reduceCostBasis?: boolean;
   costBasis?: number;
   client_order_id?: string;
-  [key: string]: any;
+  quantity?: number;
+  [key: string]: unknown;
 }
 
 export interface OfflineMutation {
@@ -3383,7 +3386,7 @@ export default function Home() {
       orderDate: orderDateStr,
       orderType: 'Limit',
       status: 'Filled',
-      side: 'BUY',
+      side: 'BUY' as const,
       client_order_id: clientOrderId,
     };
 
@@ -3585,7 +3588,7 @@ export default function Home() {
       symbol: cleanSymUpper,
       shares: additionalShares,
       price: buyPrice,
-      side: 'BUY',
+      side: 'BUY' as const,
       market: target?.market || 'BIST',
       name: target?.name || cleanSymUpper,
       currency: target?.currency || 'TRY',
@@ -3886,7 +3889,7 @@ export default function Home() {
       symbol: cleanSymUpper,
       shares: actualSold,
       price: sellPrice,
-      side: 'SELL',
+      side: 'SELL' as const,
       market: target.market || 'BIST',
       name: target.name || cleanSymUpper,
       currency: target.currency || 'TRY',
