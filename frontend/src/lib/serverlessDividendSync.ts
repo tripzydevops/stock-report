@@ -325,10 +325,23 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
     const distinctSymbols = Array.from(new Set(
       positions.map(p => ((p as any)?.assets?.symbol || '').replace('.IS', '').toUpperCase()).filter(Boolean)
     ));
+    // Query both naked and .IS symbol representations to prevent catalog mismatch
+    const searchSymbols = Array.from(new Set(
+      distinctSymbols.flatMap(s => [s, `${s}.IS`])
+    ));
     const { data: corporateActions } = await supabase
       .from('corporate_actions')
       .select('symbol, action_type, split_ratio, effective_date')
-      .in('symbol', distinctSymbols);
+      .in('symbol', searchSymbols);
+
+    // Whitelist action types that genuinely multiply share counts for free (exclude RIGHTS_OFFERING / BEDELLI which require cash capital subscription)
+    const MULTIPLIER_ACTIONS = new Set([
+      'FORWARD_SPLIT',
+      'REVERSE_SPLIT',
+      'STOCK_SPLIT',
+      'BONUS_ISSUE',
+      'BEDELSIZ'
+    ]);
 
     // 4. Match positions against due dividends
     for (const pos of positions) {
@@ -348,9 +361,11 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
         const exDate = div.ex_date;
         const payDate = div.payment_date || todayStr;
         const tagKey = `${userId}:${portfolioKey}:${divCleanSym}:${exDate}`;
+        const legacyTagKey = `${userId}:${divCleanSym}:${exDate}`;
 
-        // Rule A: Check if already credited (also check legacy un-scoped key if default/null portfolio)
-        if (existingTags.has(tagKey) || (!pos.portfolio_id && existingTags.has(`${userId}:${divCleanSym}:${exDate}`))) {
+        // Rule A: Check if already credited
+        // If a legacy unscoped credit exists for this user and event, treat as already credited to block double payout
+        if (existingTags.has(tagKey) || existingTags.has(legacyTagKey)) {
           summary.skippedCount++;
           continue;
         }
@@ -383,9 +398,12 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
               let adjustedQty = Number(ord.quantity) || 0;
 
               // Apply Corporate Actions Engine adjustment formula: q_i* = q_i * product(R_k)
+              // Only multiply for stock splits and bonus issues; rights offerings (Bedelli) require paid subscription
               if (corporateActions && corporateActions.length > 0) {
                 for (const ca of corporateActions) {
-                  if (ca.symbol === divCleanSym && ca.effective_date >= ordDateIstanbul && ca.effective_date < exDate) {
+                  const caSym = (ca.symbol || '').replace('.IS', '').trim().toUpperCase();
+                  const actionType = (ca.action_type || '').toUpperCase();
+                  if (caSym === divCleanSym && MULTIPLIER_ACTIONS.has(actionType) && ca.effective_date >= ordDateIstanbul && ca.effective_date < exDate) {
                     const ratio = Number(ca.split_ratio) || 1.0;
                     adjustedQty *= ratio;
                   }

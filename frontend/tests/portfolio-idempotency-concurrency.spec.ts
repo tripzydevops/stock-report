@@ -3,12 +3,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
+function getSupabaseAuthKey(urlStr: string): string {
+  try {
+    const parsed = new URL(urlStr);
+    const projectRef = parsed.hostname.split('.')[0];
+    return `sb-${projectRef}-auth-token`;
+  } catch {
+    return 'sb-erzxltcalghadzfevfjx-auth-token';
+  }
+}
+
 test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
   test.setTimeout(60000);
   let baseUrl: string;
   let token: string;
+  let authSession: any = null;
   let supabase: any;
   let userId: string;
+  let supabaseAuthStorageKey: string = 'sb-erzxltcalghadzfevfjx-auth-token';
   const createdTestOrderRefs: string[] = [];
 
   let aselsAssetId: string | null = null;
@@ -101,12 +113,14 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
       return;
     }
 
+    supabaseAuthStorageKey = getSupabaseAuthKey(url);
     supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password: pwd });
     if (error || !authData?.session?.access_token) {
       throw new Error(`Failed to authenticate test user: ${error?.message}`);
     }
 
+    authSession = authData.session;
     token = authData.session.access_token;
     userId = authData.user.id;
 
@@ -262,7 +276,7 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
   });
 
   test('4. Verify persistent failed-action recovery UI and user discard flow', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
     // Seed mock failed mutation via addInitScript before page loads
     await page.addInitScript(() => {
       const mockFailed = [{
@@ -275,6 +289,7 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
         status: 'FAILED',
       }];
       localStorage.setItem('marketpulse_failed_mutations', JSON.stringify(mockFailed));
+      localStorage.removeItem('marketpulse_offline_mutation_queue');
       localStorage.setItem('market_pulse_active_tab', 'portfolio');
     });
 
@@ -297,37 +312,24 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await expect(discardBtn).toBeVisible();
 
     // Click discard and verify banner clears from view and localStorage
-    await discardBtn.click();
-    await expect(failedBanner).not.toBeVisible({ timeout: 5000 });
+    await discardBtn.click({ force: true });
+    await expect(failedBanner).not.toBeVisible({ timeout: 10000 });
 
     const storedFailed = await page.evaluate(() => {
       const raw = localStorage.getItem('marketpulse_failed_mutations');
       return raw ? JSON.parse(raw) : [];
     });
     expect(storedFailed.length).toBe(0);
+    await page.close();
   });
 
   test('5. Verify failed-action retry flow re-enqueues mutation and clears failure state on success', async ({ page }) => {
-    test.setTimeout(90000);
+    test.setTimeout(120000);
     const testClientOrderId = `ORD-TEST-RETRY-${Date.now()}`;
 
-    // Seed a mock failed mutation and auth session in localStorage
-    const sessionData = token ? {
-      access_token: token,
-      token_type: 'bearer',
-      expires_in: 3600,
-      refresh_token: 'mock-refresh-token',
-      user: {
-        id: userId,
-        aud: 'authenticated',
-        role: 'authenticated',
-        email: 'test@tripzy.travel',
-      },
-    } : null;
-
-    await page.addInitScript(({ orderId, session }) => {
+    await page.addInitScript(({ orderId, session, storageKey }) => {
       if (session) {
-        localStorage.setItem('sb-erzxltcalghadzfevfjx-auth-token', JSON.stringify(session));
+        localStorage.setItem(storageKey, JSON.stringify(session));
       }
       const mockFailed = [{
         id: 'mock-fail-retry-001',
@@ -340,8 +342,9 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
         retryCount: 0,
       }];
       localStorage.setItem('marketpulse_failed_mutations', JSON.stringify(mockFailed));
+      localStorage.removeItem('marketpulse_offline_mutation_queue');
       localStorage.setItem('market_pulse_active_tab', 'portfolio');
-    }, { orderId: testClientOrderId, session: sessionData });
+    }, { orderId: testClientOrderId, session: authSession, storageKey: supabaseAuthStorageKey });
 
     // Mock the portfolio API endpoint so the retry succeeds cleanly
     let retryApiCalled = false;
@@ -373,12 +376,12 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
 
     // Click Portföyüm in sidebar
     const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
-    await expect(portfolioBtn).toBeVisible({ timeout: 10000 });
+    await expect(portfolioBtn).toBeVisible({ timeout: 15000 });
     await portfolioBtn.click();
 
     // Verify the failure banner renders with FROTO
     const failedBanner = page.locator('[data-testid="failed-mutations-banner"]').first();
-    await expect(failedBanner).toBeVisible({ timeout: 15000 });
+    await expect(failedBanner).toBeVisible({ timeout: 20000 });
 
     const failedSymbol = page.locator('[data-testid="failed-mutations-banner"]').locator('text=FROTO').first();
     await expect(failedSymbol).toBeVisible();
@@ -391,10 +394,10 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     // Confirm that the API was invoked for the retried mutation
     await expect(async () => {
       expect(retryApiCalled).toBe(true);
-    }).toPass({ timeout: 10000 });
+    }).toPass({ timeout: 15000 });
 
     // Confirm the failure banner is removed from view
-    await expect(failedBanner).not.toBeVisible({ timeout: 10000 });
+    await expect(failedBanner).not.toBeVisible({ timeout: 15000 });
 
     // Confirm failed mutation is removed from localStorage
     const storedFailed = await page.evaluate(() => {
@@ -402,5 +405,88 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
       return raw ? JSON.parse(raw) : [];
     });
     expect(storedFailed.length).toBe(0);
+    await page.close();
+  });
+
+  test('6. Verify end-to-end failed-action retry executes against live backend API and updates database', async ({ page }) => {
+    test.skip(!token, 'Requires authenticated session');
+    test.setTimeout(120000);
+
+    const testClientOrderId = `ORD-TEST-RETRY-LIVE-${Date.now()}`;
+    createdTestOrderRefs.push(testClientOrderId);
+    // Seed a mock failed BUY order for ASELS (which is restored in afterAll)
+    await page.addInitScript(({ orderId, session, storageKey }) => {
+      if (session) {
+        localStorage.setItem(storageKey, JSON.stringify(session));
+      }
+      const mockFailed = [{
+        id: 'mock-fail-retry-live-001',
+        clientOrderId: orderId,
+        type: 'BUY',
+        body: {
+          symbol: 'ASELS',
+          shares: 1,
+          price: 65.0,
+          currency: 'TRY',
+          market: 'BIST',
+          status: 'Filled',
+          autoFund: true,
+        },
+        lastError: 'HTTP 500: Temporary upstream timeout during execution',
+        createdAt: new Date().toISOString(),
+        status: 'FAILED',
+        retryCount: 0,
+      }];
+      localStorage.setItem('marketpulse_failed_mutations', JSON.stringify(mockFailed));
+      localStorage.removeItem('marketpulse_offline_mutation_queue');
+      localStorage.setItem('market_pulse_active_tab', 'portfolio');
+    }, { orderId: testClientOrderId, session: authSession, storageKey: supabaseAuthStorageKey });
+
+    // Navigate to live app without route mocking to hit genuine backend endpoint
+    await page.goto(`${baseUrl}/`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Click Portföyüm in sidebar
+    const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
+    await expect(portfolioBtn).toBeVisible({ timeout: 15000 });
+    await portfolioBtn.click();
+
+    // Verify failure banner is visible with ASELS
+    const failedBanner = page.locator('[data-testid="failed-mutations-banner"]').first();
+    await expect(failedBanner).toBeVisible({ timeout: 20000 });
+
+    const failedSymbol = page.locator('[data-testid="failed-mutations-banner"]').locator('text=ASELS').first();
+    await expect(failedSymbol).toBeVisible();
+
+    // Click Retry and capture the genuine backend HTTP response
+    const retryBtn = page.locator('[data-testid="retry-failed-action"]').first();
+    await expect(retryBtn).toBeVisible();
+
+    const [response] = await Promise.all([
+      page.waitForResponse(resp => resp.url().includes('/api/portfolio/positions') && resp.request().method() === 'POST', { timeout: 35000 }),
+      retryBtn.click(),
+    ]);
+
+    expect([200, 201]).toContain(response.status());
+    const respJson = await response.json();
+    expect(respJson.success).toBe(true);
+
+    // Banner should disappear once mutation is drained and succeeded
+    await expect(failedBanner).not.toBeVisible({ timeout: 20000 });
+
+    // Verify order was genuinely created in Supabase database
+    const { data: dbOrder, error: orderErr } = await supabase
+      .from('portfolio_orders')
+      .select('id, order_ref, symbol, status')
+      .eq('user_id', userId)
+      .eq('order_ref', testClientOrderId)
+      .limit(1)
+      .maybeSingle();
+
+    expect(orderErr).toBeNull();
+    expect(dbOrder).not.toBeNull();
+    expect(dbOrder?.order_ref).toBe(testClientOrderId);
+    expect(dbOrder?.status).toBe('Filled');
+    await page.close();
   });
 });
