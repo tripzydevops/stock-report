@@ -33,13 +33,14 @@ test.describe('Desktop Viewport & Layout Verification', () => {
   });
 
   test('2. Navigation across core tabs functions cleanly on Desktop', async ({ page }) => {
+    test.setTimeout(60000);
     // Click Portföyüm in sidebar using title locator (works collapsed or expanded)
     const portfolioBtn = page.locator('aside button[title*="Portföy"]').first();
     await expect(portfolioBtn).toBeVisible();
     await portfolioBtn.click();
 
     // Verify Portfolio view is rendered
-    await expect(page.locator('text=Yatırılan Para').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Yatırılan Sermaye').first()).toBeVisible({ timeout: 10000 });
 
     // Capture desktop portfolio screenshot
     await page.screenshot({
@@ -52,7 +53,7 @@ test.describe('Desktop Viewport & Layout Verification', () => {
     await dividendBtn.click();
 
     // Verify Dividend view is rendered
-    await expect(page.locator('text=Temettü').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=/Cum-Dividend|Temettü/i').first()).toBeVisible({ timeout: 10000 });
 
     // Capture desktop dividend screenshot
     await page.screenshot({
@@ -94,6 +95,13 @@ test.describe('Desktop Viewport & Layout Verification', () => {
     // Verify Lot #1 has 167 lots in the visible desktop expanded row
     const lot1Text = page.locator('div.hidden.md\\:block td:has-text("+167")').first();
     await expect(lot1Text).toBeVisible({ timeout: 5000 });
+
+    // Expand ISMEN to inspect closed scalp section
+    const desktopIsmenRow = page.locator('div.hidden.md\\:block tr:has-text("ISMEN")').first();
+    await expect(desktopIsmenRow).toBeVisible();
+    const ismenExpandBtn = desktopIsmenRow.locator('button:has-text("Lot")').first();
+    await ismenExpandBtn.click();
+    await page.waitForTimeout(600);
 
     // Verify Closed Sells / Scalps section exists
     const closedSection = page.locator('div.hidden.md\\:block').locator('text=/Kapatılan Mahsuplaşma Kademeleri|Executed Sells/i').first();

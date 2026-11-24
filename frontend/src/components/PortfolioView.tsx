@@ -631,7 +631,7 @@ export default function PortfolioView({
 
         {/* Failed Mutations Actionable Alert Banner */}
         {failedMutations && failedMutations.length > 0 && (
-          <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-rose-500/15 via-red-500/15 to-orange-500/15 border border-rose-400/80 dark:border-rose-500/60 shadow-xs space-y-2">
+          <div data-testid="failed-mutations-banner" className="mb-3 p-3 rounded-xl bg-gradient-to-r from-rose-500/15 via-red-500/15 to-orange-500/15 border border-rose-400/80 dark:border-rose-500/60 shadow-xs space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-base">⚠️</span>
@@ -664,7 +664,7 @@ export default function PortfolioView({
                       {item.body?.symbol || 'Unknown'}
                     </span>
                     <span className="text-neutral-500 text-[11px]">
-                      {item.body?.shares || item.body?.quantity} {language === 'tr' ? 'lot' : 'shares'} @ {item.body?.price} {item.body?.currency || 'TRY'}
+                      {item.body?.shares ?? item.body?.quantity ?? 0} {language === 'tr' ? 'lot' : 'shares'} @ {item.body?.price} {item.body?.currency || 'TRY'}
                     </span>
                     {item.lastError && (
                       <span className="text-rose-700 dark:text-rose-300 text-[11px] font-medium truncate max-w-[200px] sm:max-w-xs" title={item.lastError}>
@@ -686,6 +686,7 @@ export default function PortfolioView({
                     {onDiscardFailedMutation && (
                       <button
                         type="button"
+                        data-testid="discard-failed-action"
                         onClick={() => onDiscardFailedMutation(item.clientOrderId)}
                         className="px-2.5 py-1 rounded-md bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 active:scale-95 text-neutral-800 dark:text-neutral-200 text-[11px] font-bold transition-all cursor-pointer"
                       >

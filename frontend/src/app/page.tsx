@@ -1109,11 +1109,29 @@ const OFFLINE_QUEUE_KEY = 'marketpulse_offline_mutation_queue';
 
 const FAILED_MUTATIONS_KEY = 'marketpulse_failed_mutations';
 
-interface OfflineMutation {
+export interface OfflineMutationPayload {
+  symbol: string;
+  shares: number;
+  price: number;
+  side?: 'BUY' | 'SELL';
+  market?: string;
+  name?: string;
+  currency?: string;
+  notes?: string;
+  orderType?: string;
+  status?: string;
+  autoFund?: boolean;
+  reduceCostBasis?: boolean;
+  costBasis?: number;
+  client_order_id?: string;
+  [key: string]: any;
+}
+
+export interface OfflineMutation {
   id: string;
   clientOrderId: string;
   type: 'BUY' | 'SELL';
-  body: any;
+  body: OfflineMutationPayload;
   createdAt: string;
   retryCount?: number;
   lastError?: string;
@@ -1185,8 +1203,15 @@ function recordFailedMutation(mutation: OfflineMutation, reason: string): void {
 function enqueueOfflineMutation(mutation: OfflineMutation): void {
   const current = getOfflineQueue();
   if (current.some(m => m.clientOrderId === mutation.clientOrderId)) return;
+  const normalizedShares = Number(mutation.body?.shares ?? mutation.body?.quantity ?? 0);
+  const normalizedBody: OfflineMutationPayload = {
+    ...mutation.body,
+    shares: normalizedShares,
+    quantity: normalizedShares,
+  };
   const itemWithRetry: OfflineMutation = {
     ...mutation,
+    body: normalizedBody,
     retryCount: mutation.retryCount || 0,
     status: mutation.status || 'PENDING',
   };
@@ -1221,7 +1246,20 @@ export default function Home() {
   const { language, setLanguage, t } = useLanguage();
   const { user, session, isDemoMode, signOut, signInAsAdmin } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>('signals');
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const queryTab = params.get('tab')?.trim().toLowerCase() as TabId;
+        const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
+        if (VALID_TABS.includes(queryTab)) return queryTab;
+        if (VALID_TABS.includes(hash)) return hash;
+        const savedTab = localStorage.getItem('market_pulse_active_tab') as TabId;
+        if (VALID_TABS.includes(savedTab)) return savedTab;
+      } catch (e) {}
+    }
+    return 'signals';
+  });
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>(undefined);
@@ -1505,6 +1543,13 @@ export default function Home() {
         }
       }
 
+      setFailedMutations(getFailedMutations());
+      const handleStorageChange = () => {
+        setFailedMutations(getFailedMutations());
+        setOfflineQueueCount(getOfflineQueue().length);
+      };
+      window.addEventListener('storage', handleStorageChange);
+
       const handleHashChange = () => {
         const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
         if (VALID_TABS.includes(hash)) {
@@ -1514,6 +1559,7 @@ export default function Home() {
       window.addEventListener('hashchange', handleHashChange);
       window.addEventListener('popstate', handleHashChange);
       return () => {
+        window.removeEventListener('storage', handleStorageChange);
         window.removeEventListener('hashchange', handleHashChange);
         window.removeEventListener('popstate', handleHashChange);
       };

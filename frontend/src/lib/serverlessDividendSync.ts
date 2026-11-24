@@ -242,7 +242,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
     // 1. Fetch all open positions with positive quantity
     const { data: positions, error: posErr } = await supabase
       .from('portfolio_positions')
-      .select('id, user_id, asset_id, quantity, entry_date, is_open, assets(id, symbol)')
+      .select('id, user_id, portfolio_id, asset_id, quantity, entry_date, is_open, assets(id, symbol)')
       .eq('is_open', true)
       .gt('quantity', 0);
 
@@ -312,13 +312,18 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
 
         // Rule B: Calculate exact entitled shares on ex-date with Istanbul timezone normalization:
         // Sum of all Filled BUYs executed before ex-date minus sum of all Filled SELLs executed before ex-date
-        const { data: userOrders } = await supabase
+        let orderQuery = supabase
           .from('portfolio_orders')
-          .select('side, quantity, executed_at')
+          .select('side, quantity, executed_at, portfolio_id')
           .eq('user_id', userId)
           .eq('symbol', divCleanSym)
-          .eq('status', 'Filled')
-          .order('executed_at', { ascending: true });
+          .eq('status', 'Filled');
+
+        if (pos.portfolio_id) {
+          orderQuery = orderQuery.eq('portfolio_id', pos.portfolio_id);
+        }
+
+        const { data: userOrders } = await orderQuery.order('executed_at', { ascending: true });
 
         let entitledShares = 0;
         const hasAnyOrderHistory = Boolean(userOrders && userOrders.length > 0);
