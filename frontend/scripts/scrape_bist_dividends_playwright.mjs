@@ -20,16 +20,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const calendarPath = path.resolve(__dirname, '../src/data/bist_calendar.json');
 
-// Priority 1: Require explicit environment variables; fail closed if absent
+// Priority 5: Require explicit SUPABASE_SERVICE_ROLE_KEY for automated ingestion writes
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('❌ Fatal: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY) must be provided in environment variables.');
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Fatal: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be provided for automated dividend ingestion.');
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Official BIST Market Holidays from bist_calendar.json (including religious holidays: Ramazan and Kurban Bayramı)
 let bistHolidays = new Set();
@@ -37,7 +37,13 @@ try {
   const calData = JSON.parse(fs.readFileSync(calendarPath, 'utf8'));
   bistHolidays = new Set(Object.keys(calData.full_holidays || {}));
 } catch (e) {
-  console.warn('⚠️ Note: Could not read bist_calendar.json, using built-in fixed holiday set');
+  console.error(`❌ Fatal: BIST authoritative calendar could not be loaded from ${calendarPath}: ${e.message}`);
+}
+
+// Priority 3: Fail closed if BIST calendar cannot be loaded in unattended production cron
+if (!bistHolidays.size) {
+  console.error('❌ Fatal: BIST authoritative calendar contains 0 holidays. Failing closed to prevent incorrect holiday settlement in cron.');
+  process.exit(1);
 }
 
 // Official Turkish Public Holidays (Fixed annual fallback dates: MM-DD)
@@ -196,22 +202,24 @@ export async function scrapeAndIngestBistDividends() {
           if (!sym || sym.length > 6) continue;
 
           const exDate = parseDateToIso(row[effectiveExIdx] || '');
-          let payDate = parseDateToIso(row[effectivePayIdx] || '');
-          if (!payDate && exDate) {
-            payDate = calculateBistTPlus2Settlement(exDate);
-          }
+          const rawPayStr = row[effectivePayIdx] ? row[effectivePayIdx].trim() : '';
+          const parsedPayDate = parseDateToIso(rawPayStr);
+          const hasDeclaredPayDate = Boolean(parsedPayDate);
+          const payDate = parsedPayDate || (exDate ? calculateBistTPlus2Settlement(exDate) : null);
           const grossDps = parseTurkishNumber(row[effectiveGrossIdx] || '0');
           const netDpsRaw = parseTurkishNumber(row[effectiveNetIdx] || '0');
-          // Priority 5: Do NOT infer net DPS = gross * 0.85 (REITs/corporate have different withholding)
-          const netDps = netDpsRaw > 0 ? netDpsRaw : null;
+          const hasDeclaredNet = netDpsRaw > 0;
+          const netDps = hasDeclaredNet ? netDpsRaw : null;
 
           if (exDate && grossDps > 0) {
             extractedRecords.push({
               symbol: sym,
               exDate,
               payDate,
+              hasDeclaredPayDate,
               grossDps,
               netDps,
+              hasDeclaredNet,
               source: 'FINTABLES_DIVIDEND_CALENDAR'
             });
           }
@@ -253,14 +261,15 @@ export async function scrapeAndIngestBistDividends() {
             const exDate = parseDateToIso(row[exIdx !== -1 ? exIdx : 1] || '');
             const grossDps = parseTurkishNumber(row[grossIdx !== -1 ? grossIdx : 2] || '0');
             if (sym && exDate && grossDps > 0) {
-              // Priority 4: Do NOT infer payDate = exDate. Calculate via shared BIST T+2 settlement helper.
               const payDate = calculateBistTPlus2Settlement(exDate);
               extractedRecords.push({
                 symbol: sym,
                 exDate,
                 payDate,
+                hasDeclaredPayDate: false, // Inferred via T+2 settlement
                 grossDps,
-                netDps: null, // Do not infer net DPS from gross DPS
+                netDps: null, // No net DPS column in İş Yatırım
+                hasDeclaredNet: false,
                 source: 'ISYATIRIM_CORPORATE_ACTIONS'
               });
             }
@@ -309,25 +318,27 @@ export async function scrapeAndIngestBistDividends() {
         finalPayDate = normalizedPayDate;
       }
     }
+    // Strict Cash-Ledger Protection:
+    // A confirmed dividend requires BOTH a source-declared net DPS and a source-declared payment date.
+    // If net DPS is not declared, DO NOT store gross DPS as the creditable amount.
+    // Setting amount = 0 and is_confirmed = false ensures processDueDividendsToCashLedger() can NEVER credit it.
+    const hasDeclaredNet = item.hasDeclaredNet === true && item.netDps !== null && item.netDps > 0;
+    const hasDeclaredPayDate = item.hasDeclaredPayDate === true && Boolean(finalPayDate);
+    const isConfirmed = hasDeclaredNet && hasDeclaredPayDate;
 
-    // Upsert into Supabase with accurate source provenance
-    const ticker = `${item.symbol}.IS`;
-    // Priority 1 FIX: Never use gross DPS as a creditable cash-ledger amount!
-    // If net DPS is not declared, creditable amount is 0 and is_confirmed is false (no cash credit until KAP announcement).
-    const creditableNetAmount = item.netDps !== null && item.netDps > 0 ? item.netDps : 0;
-    const isConfirmed = Boolean(finalPayDate && item.netDps !== null && item.netDps > 0);
+    // Do NOT write gross DPS into the field consumed as a user cash credit.
+    const creditableAmount = hasDeclaredNet ? item.netDps : 0;
+    const provenance = !hasDeclaredNet ? `${item.source}_GROSS_ONLY_UNCONFIRMED` : item.source;
 
     const row = {
       symbol: ticker,
       ex_date: item.exDate,
       payment_date: finalPayDate,
-      amount: creditableNetAmount,
-      gross_amount: item.grossDps > 0 ? item.grossDps : null,
-      net_amount: item.netDps !== null ? item.netDps : null,
+      amount: creditableAmount,
       currency: 'TRY',
       frequency: 'Semi-Annual',
       is_confirmed: isConfirmed,
-      source: item.source
+      source: provenance
     };
 
     try {
@@ -340,8 +351,9 @@ export async function scrapeAndIngestBistDividends() {
         failedCount++;
       } else {
         auditedCount++;
-        const netStr = item.netDps !== null ? `₺${item.netDps.toFixed(4)}` : 'NULL (Açıklanmadı)';
-        console.log(`✅ [AUDITED & SAVED] ${ticker} | Source: ${item.source} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
+        const netStr = item.netDps !== null ? `₺${item.netDps.toFixed(4)}` : 'NULL (Açıklanmadı -> Creditable: ₺0.00)';
+        const statusStr = isConfirmed ? 'CONFIRMED' : 'ESTIMATED';
+        console.log(`✅ [AUDITED & SAVED] ${ticker} | Status: ${statusStr} | Source: ${provenance} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
       }
     } catch (upsertErr) {
       console.warn(`⚠️ Upsert exception for ${ticker}: ${upsertErr.message}`);

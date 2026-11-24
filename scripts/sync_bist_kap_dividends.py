@@ -40,7 +40,12 @@ if CALENDAR_PATH.exists():
             cal = json.load(f)
             BIST_HOLIDAYS_SET = set(cal.get("full_holidays", {}).keys())
     except Exception as e:
-        print(f"⚠️ Warning: Could not load {CALENDAR_PATH}: {e}", file=sys.stderr)
+        print(f"❌ Fatal: Could not load {CALENDAR_PATH}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if not BIST_HOLIDAYS_SET:
+    print(f"❌ Fatal: BIST authoritative calendar contains 0 holidays from {CALENDAR_PATH}. Failing closed.", file=sys.stderr)
+    sys.exit(1)
 
 # Official Turkish Fixed Public Holidays (fallback)
 TURKISH_FIXED_HOLIDAYS = {

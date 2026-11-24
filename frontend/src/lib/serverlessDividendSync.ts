@@ -134,19 +134,17 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           }
         }
 
-        // Use the provider's declared single cash distribution whenever available
+        // Provider declared cash distribution handling:
+        // Yahoo Finance calendarEvents exposes exDividendDate and dividendDate, but does not provide
+        // a forward declared cash distribution amount.
+        // Therefore, defaultKeyStatistics.lastDividendValue represents the most recent realized single cash distribution,
+        // used as an unconfirmed forward proxy (is_confirmed: false).
         let dps: number | null = null;
         let isConfirmed = false;
         let sourceProvenance = 'YAHOO_ESTIMATED';
 
-        const declaredCashDps = (cal as any)?.dividend || (cal as any)?.amount;
-        if (declaredCashDps && Number(declaredCashDps) > 0) {
-          dps = Number(Number(declaredCashDps).toFixed(4));
-          isConfirmed = Boolean(payDateObj);
-          sourceProvenance = isConfirmed ? 'YAHOO_CALENDAR_DECLARED' : 'YAHOO_ESTIMATED';
-        } else if (stats?.lastDividendValue && stats.lastDividendValue > 0) {
-          // Priority 6: Treat lastDividendValue as an estimate for upcoming distributions.
-          // It represents the most recent realized single distribution, not a guaranteed forward contract.
+        if (stats?.lastDividendValue && stats.lastDividendValue > 0) {
+          // Treat lastDividendValue as an unconfirmed estimate for upcoming distributions.
           dps = Number(Number(stats.lastDividendValue).toFixed(4));
           isConfirmed = false;
           sourceProvenance = 'YAHOO_LAST_DIVIDEND_VALUE';
@@ -372,11 +370,11 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
       return summary;
     }
 
-    // 2. Fetch all dividends where payment_date <= todayStr, amount > 0, and is_confirmed = true
-    // Priority 1 FIX: Only confirmed dividends with declared net payout are credited. Unannounced net DPS is NEVER credited.
+    // 2. Fetch all confirmed net dividends where payment_date <= todayStr, amount > 0, and is_confirmed = true
+    // Only confirmed dividends with declared net payout are credited. Unannounced net DPS is NEVER credited.
     const { data: dividends, error: divErr } = await supabase
       .from('asset_dividends')
-      .select('id, asset_id, symbol, ex_date, payment_date, amount, currency, is_confirmed')
+      .select('id, asset_id, symbol, ex_date, payment_date, amount, currency, is_confirmed, source')
       .lte('payment_date', todayStr)
       .eq('is_confirmed', true)
       .gt('amount', 0);
@@ -444,6 +442,13 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
       });
 
       for (const div of matchingDivs) {
+        // Strict Cash-Ledger Protection:
+        // Never credit unconfirmed dividends, zero-amount dividends, or gross-only unconfirmed placeholders
+        if (!div.is_confirmed || !div.amount || Number(div.amount) <= 0 || (div as any).source?.includes('GROSS_ONLY')) {
+          summary.skippedCount++;
+          continue;
+        }
+
         const divCleanSym = (div.symbol || cleanSym).replace('.IS', '').toUpperCase();
         const exDate = div.ex_date;
         const payDate = div.payment_date || todayStr;
