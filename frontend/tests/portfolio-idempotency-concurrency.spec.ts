@@ -497,10 +497,9 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await page.close();
   });
 
-  test('7. Verify deep-link tab initialization via URL hash (#portfolio) and query param (?tab=portfolio)', async ({ page }) => {
+  test('7. Verify deep-link tab initialization via URL hash (#portfolio)', async ({ page }) => {
     test.setTimeout(60000);
 
-    // 7A: Verify deep-linking via URL hash: /#portfolio
     await page.addInitScript(({ session, storageKey }) => {
       if (session) {
         localStorage.setItem(storageKey, JSON.stringify(session));
@@ -510,21 +509,31 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await page.goto(`${baseUrl}/#portfolio`);
     await page.waitForLoadState('domcontentloaded');
 
-    const portfolioViewByHash = page.locator('[data-testid="portfolio-view"]').first();
-    await expect(portfolioViewByHash).toBeVisible({ timeout: 20000 });
+    const portfolioView = page.locator('[data-testid="portfolio-view"]').first();
+    await expect(portfolioView).toBeVisible({ timeout: 20000 });
 
-    // Verify active tab in sidebar is highlighted
     const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
     await expect(portfolioBtn).toHaveClass(/bg-blue-600/);
+    await page.close();
+  });
 
-    // 7B: Verify deep-linking via query parameter: /?tab=portfolio
+  test('8. Verify deep-link tab initialization via query parameter (?tab=portfolio)', async ({ page }) => {
+    test.setTimeout(60000);
+
+    await page.addInitScript(({ session, storageKey }) => {
+      if (session) {
+        localStorage.setItem(storageKey, JSON.stringify(session));
+      }
+    }, { session: authSession, storageKey: supabaseAuthStorageKey });
+
     await page.goto(`${baseUrl}/?tab=portfolio`);
     await page.waitForLoadState('domcontentloaded');
 
-    const portfolioViewByQuery = page.locator('[data-testid="portfolio-view"]').first();
-    await expect(portfolioViewByQuery).toBeVisible({ timeout: 20000 });
-    await expect(portfolioBtn).toHaveClass(/bg-blue-600/);
+    const portfolioView = page.locator('[data-testid="portfolio-view"]').first();
+    await expect(portfolioView).toBeVisible({ timeout: 20000 });
 
+    const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
+    await expect(portfolioBtn).toHaveClass(/bg-blue-600/);
     await page.close();
   });
 });

@@ -33,13 +33,15 @@ test.describe('Corporate Actions & Dividend Entitlement Engine', () => {
     expect(entitled).toBe(300);
   });
 
-  test('3. Bedelsiz action type alias (BEDELSIZ) is recognized by MULTIPLIER_ACTIONS', () => {
-    expect(MULTIPLIER_ACTIONS.has('BEDELSIZ')).toBe(true);
+  test('3. Bedelsiz action type alias (BEDELSIZ) is canonicalized to BONUS_ISSUE', () => {
     expect(MULTIPLIER_ACTIONS.has('BONUS_ISSUE')).toBe(true);
+    // Canonical taxonomy uses BONUS_ISSUE as standard enum value
+    expect(MULTIPLIER_ACTIONS.has('BEDELSIZ')).toBe(false);
 
     const orders: OrderLedgerEntry[] = [
       { side: 'BUY', quantity: 80, executed_at: '2026-02-15T10:00:00Z' }
     ];
+    // Ingestion alias BEDELSIZ normalized at runtime to BONUS_ISSUE
     const corporateActions: CorporateActionEntry[] = [
       { symbol: 'ASELS', action_type: 'BEDELSIZ', split_ratio: 2.0, effective_date: '2026-03-15' }
     ];
@@ -62,8 +64,8 @@ test.describe('Corporate Actions & Dividend Entitlement Engine', () => {
     expect(entitled).toBe(50);
   });
 
-  test('5. Inverted reverse split data-entry safeguard: split_ratio > 1 is inverted to 1/ratio', () => {
-    // Data entry error: user entered 10 instead of 0.10 for a 1-for-10 reverse split
+  test('5. Stricter reverse-split rejection: ratio >= 1.0 is rejected, not silently guessed', () => {
+    // Bad source data / data-entry error: user or upstream entered 10.0 instead of 0.10
     const orders: OrderLedgerEntry[] = [
       { side: 'BUY', quantity: 500, executed_at: '2026-03-01T10:00:00Z' }
     ];
@@ -73,8 +75,8 @@ test.describe('Corporate Actions & Dividend Entitlement Engine', () => {
     const exDate = '2026-05-01';
 
     const entitled = calculateAdjustedEntitlement(orders, corporateActions, 'TSLA', exDate);
-    // Must NOT multiply to 5000; must invert 10 -> 0.10 to yield 50
-    expect(entitled).toBe(50);
+    // Must reject the invalid action; pre-split holdings remain unmultiplied (500), NOT inflated to 5000
+    expect(entitled).toBe(500);
   });
 
   test('6. Rights offerings (RIGHTS_OFFERING and BEDELLI) are excluded from automatic share multiplication', () => {
@@ -155,5 +157,35 @@ test.describe('Corporate Actions & Dividend Entitlement Engine', () => {
     // Querying with FROTO.IS
     const entitledSuffix = calculateAdjustedEntitlement(orders, corporateActions, 'FROTO.IS', exDate);
     expect(entitledSuffix).toBe(360);
+  });
+
+  test('11. Pre-split sell adjustment: sells executed before split are adjusted upward before netting', () => {
+    // Buy 200 shares, Sell 50 shares, both BEFORE a 2-for-1 forward split
+    const orders: OrderLedgerEntry[] = [
+      { side: 'BUY', quantity: 200, executed_at: '2026-02-01T10:00:00Z' },
+      { side: 'SELL', quantity: 50, executed_at: '2026-02-15T10:00:00Z' }, // Pre-split sell!
+    ];
+    const corporateActions: CorporateActionEntry[] = [
+      { symbol: 'SISE', action_type: 'FORWARD_SPLIT', split_ratio: 2.0, effective_date: '2026-03-01' }
+    ];
+    const exDate = '2026-04-01';
+
+    // BUY 200 adjusted to 400; SELL 50 adjusted to 100. Net entitlement = 400 - 100 = 300 shares ((200 - 50) * 2).
+    const entitled = calculateAdjustedEntitlement(orders, corporateActions, 'SISE', exDate);
+    expect(entitled).toBe(300);
+  });
+
+  test('12. Forward split or bonus issue with invalid ratio (<= 1.0) is rejected', () => {
+    const orders: OrderLedgerEntry[] = [
+      { side: 'BUY', quantity: 100, executed_at: '2026-03-01T10:00:00Z' }
+    ];
+    const corporateActions: CorporateActionEntry[] = [
+      { symbol: 'TCELL', action_type: 'FORWARD_SPLIT', split_ratio: 0.80, effective_date: '2026-04-01' }
+    ];
+    const exDate = '2026-05-01';
+
+    // Forward split must have ratio > 1.0; 0.80 is rejected and left at 100 shares
+    const entitled = calculateAdjustedEntitlement(orders, corporateActions, 'TCELL', exDate);
+    expect(entitled).toBe(100);
   });
 });

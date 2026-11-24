@@ -56,7 +56,7 @@ $$q_i^* = q_i \times \prod_{\substack{k \in \mathcal{C}_{\text{sym}} \\ t_i \le 
 The final entitlement on $t_{\text{ex}}$ is:
 $$\text{Entitled Shares}^* = \sum_{\substack{\text{BUY} \\ t_i < t_{\text{ex}}}} q_i^* - \sum_{\substack{\text{SELL} \\ t_j < t_{\text{ex}}}} q_j^*$$
 
-### 4.3 Reverse-Split Ratio Validation & Data-Entry Safeguard
+### 4.3 Reverse-Split Ratio Validation & Strict Rejection Policy
 A reverse stock split consolidates existing shares into fewer shares.
 - Example: A 1-for-10 reverse split must be stored with fractional multiplier $R = 0.10$.
 - **Database CHECK Constraint:** PostgreSQL strictly enforces:
@@ -64,11 +64,12 @@ A reverse stock split consolidates existing shares into fewer shares.
   CONSTRAINT corporate_actions_reverse_split_ratio_check 
   CHECK (action_type != 'REVERSE_SPLIT' OR split_ratio < 1.0)
   ```
-- **Application Safeguard:** If an inverted ratio ($R > 1.0$, such as $10.0$ entered instead of $0.10$) is detected during runtime evaluation, `calculateAdjustedEntitlement` automatically logs a warning and sanitizes the ratio to $\frac{1.0}{R}$ ($0.10$), preventing an accidental 10x multiplication of user holdings.
+- **Strict Rejection Policy:** Rather than silently guessing user or upstream intent, any `REVERSE_SPLIT` with ratio $R \ge 1.0$ (or non-positive ratio) is immediately **rejected** at evaluation time, logged as an error with `console.error`, and excluded from entitlement calculations pending human review.
+- **Canonical Taxonomy:** Corporate actions strictly use canonical type `BONUS_ISSUE`. Turkish display/ingestion aliases (`BEDELSIZ`) are mapped to `BONUS_ISSUE` upon entry.
 
 ---
 
-## 5. Schema Specification for `corporate_actions`
+## 5. Schema Specification for `corporate_actions` & `asset_dividends`
 
 ```sql
 CREATE TABLE IF NOT EXISTS public.corporate_actions (
@@ -87,26 +88,32 @@ CREATE TABLE IF NOT EXISTS public.corporate_actions (
 
 CREATE INDEX IF NOT EXISTS corporate_actions_symbol_date_idx 
 ON public.corporate_actions (symbol, effective_date);
+
+-- Separated gross and net DPS tracking
+ALTER TABLE public.asset_dividends 
+ADD COLUMN IF NOT EXISTS gross_amount NUMERIC;
+
+ALTER TABLE public.asset_dividends 
+ADD COLUMN IF NOT EXISTS net_amount NUMERIC;
 ```
 
 ---
 
-## 6. Legacy Dividend Transfer Tag Tradeoff & Planned Migration
+## 6. Gross DPS Protection & Executed Legacy Migration
 
-### 6.1 The Legacy Tag Tradeoff
-The dividend sync engine enforces deduplication via:
-```typescript
-if (existingTags.has(tagKey) || existingTags.has(legacyTagKey)) {
-  summary.skippedCount++;
-  continue;
-}
-```
-- **Why this rule is conservative & safe:** Legacy unscoped transfer tags (`[DIVIDEND:<symbol>:<ex_date>]`) predate the introduction of `portfolio_id`. If a user previously received a dividend transfer before portfolio scoping was introduced, blocking new credits across all portfolios prevents duplicate cash payouts.
-- **Known Migration Limitation:** If a user subsequently creates multiple separate portfolios and the legacy credit belonged to only one of them, another portfolio holding the same asset could be skipped / under-credited by the legacy tag guard.
-- **Planned One-Time Migration:** To cleanly resolve this limitation without sacrificing idempotency, a database migration script will:
-  1. Inspect legacy transfers with notes matching `[DIVIDEND:<symbol>:<ex_date>]`.
-  2. Resolve the original position's `portfolio_id` based on user holding records.
-  3. Rewrite the tag note into the scoped format `[DIVIDEND:<portfolio_id>:<symbol>:<ex_date>]` and populate `portfolio_transfers.portfolio_id`.
+### 6.1 Strict Net DPS Enforcement
+To guarantee users are never overpaid based on unannounced withholding rates:
+- `asset_dividends.gross_amount` stores gross DPS for research and tax reporting.
+- `asset_dividends.net_amount` stores declared net DPS.
+- `asset_dividends.amount` (the creditable amount) is strictly set to declared net DPS.
+- If net DPS is not yet declared by the company on KAP, `amount` is set to `0` and `is_confirmed = false`.
+- `processDueDividendsToCashLedger` strictly queries `.eq('is_confirmed', true).gt('amount', 0)`, completely preventing unconfirmed gross amounts from ever being credited to the user's cash ledger.
+
+### 6.2 Executed Migration (`20261124160000`)
+Migration `20261124160000_corporate_actions_and_dividend_durability.sql` was applied to the live database:
+- Re-scoped all historical `[DIVIDEND:<symbol>:<ex_date>]` transfer notes to `[DIVIDEND:<portfolio_id>:<symbol>:<ex_date>]` (or `[DIVIDEND:default:...]`).
+- Populated `portfolio_transfers.portfolio_id` based on user position records.
+- Verified: Count of unscoped legacy tags in `portfolio_transfers` is now **0**.
 
 ---
 
@@ -119,5 +126,6 @@ if (existingTags.has(tagKey) || existingTags.has(legacyTagKey)) {
 - [x] Offline queue with exponential backoff (`1m, 5m, 15m, 1h`) and 60-second auto-retry scheduler.
 - [x] Persistent actionable failed-action banner with `[Retry]` and `[Discard]`.
 - [x] 100% test teardown restoring positions and auto-deposits cleanly.
-- [x] Corporate action roadmap, reverse-split ratio validation, and mathematical adjustment formulas formalized.
-- [x] Documented legacy-tag deduplication tradeoff and planned migration path.
+- [x] Corporate action roadmap, strict reverse-split ratio validation, and mathematical adjustment formulas formalized.
+- [x] Versioned Supabase migration `20261124160000` applied; legacy tags migrated to portfolio scope (0 remaining).
+- [x] Strict Net DPS guard: gross DPS cannot be credited without declared net confirmation.

@@ -270,19 +270,18 @@ export interface CorporateActionEntry {
   effective_date: string;
 }
 
-// Whitelist action types that genuinely multiply share counts for free (exclude RIGHTS_OFFERING / BEDELLI which require cash capital subscription)
+// Whitelist canonical action types that genuinely multiply share counts for free (exclude RIGHTS_OFFERING / BEDELLI which require cash capital subscription)
 export const MULTIPLIER_ACTIONS = new Set([
   'FORWARD_SPLIT',
   'REVERSE_SPLIT',
   'STOCK_SPLIT',
-  'BONUS_ISSUE',
-  'BEDELSIZ'
+  'BONUS_ISSUE'
 ]);
 
 /**
  * Calculates dividend-entitled shares for a symbol as of exDate based strictly on order history,
  * dynamically applying corporate action split multipliers that took effect between execution and exDate.
- * Enforces reverse-split validation (preventing inverted ratios > 1 from accidentally multiplying holdings).
+ * Rejects invalid reverse splits (ratio >= 1.0) and invalid forward splits (ratio <= 1.0) without guessing intent.
  */
 export function calculateAdjustedEntitlement(
   orders: OrderLedgerEntry[],
@@ -304,7 +303,10 @@ export function calculateAdjustedEntitlement(
       if (corporateActions && corporateActions.length > 0) {
         for (const ca of corporateActions) {
           const caSym = (ca.symbol || '').replace('.IS', '').trim().toUpperCase();
-          const actionType = (ca.action_type || '').toUpperCase();
+          const rawActionType = (ca.action_type || '').toUpperCase();
+          // Normalize Turkish display/ingestion alias BEDELSIZ to canonical BONUS_ISSUE
+          const actionType = rawActionType === 'BEDELSIZ' ? 'BONUS_ISSUE' : rawActionType;
+
           if (
             caSym === cleanSym &&
             MULTIPLIER_ACTIONS.has(actionType) &&
@@ -312,12 +314,20 @@ export function calculateAdjustedEntitlement(
             ca.effective_date < exDate
           ) {
             let ratio = Number(ca.split_ratio) || 1.0;
-            // Reverse-split data integrity guard: A reverse split must reduce shares (ratio < 1).
-            // If an inverted ratio > 1 was entered (e.g. 10 for a 1-for-10 reverse split), sanitize to 1 / ratio.
-            if (actionType === 'REVERSE_SPLIT' && ratio > 1.0) {
-              console.warn(`[CorporateActions] Inverting invalid reverse split ratio ${ratio} > 1 for ${caSym} to ${1.0 / ratio}`);
-              ratio = 1.0 / ratio;
+
+            // Priority 3: Reject—not silently fix—invalid reverse splits with ratio >= 1.0.
+            // Reverse split must be strictly fractional (< 1.0). Ratios >= 1.0 are bad source data;
+            // reject and log an error so it does not affect dividend entitlement without human review.
+            if (actionType === 'REVERSE_SPLIT') {
+              if (ratio >= 1.0 || ratio <= 0) {
+                console.error(`[CorporateActions] REJECTED invalid reverse split ratio ${ratio} for ${caSym}. Expected fractional ratio < 1.0. Adjustment skipped pending human review.`);
+                continue;
+              }
+            } else if ((actionType === 'FORWARD_SPLIT' || actionType === 'BONUS_ISSUE' || actionType === 'STOCK_SPLIT') && ratio <= 1.0) {
+              console.error(`[CorporateActions] REJECTED invalid split/bonus ratio ${ratio} <= 1.0 for ${caSym}. Expected multiplier > 1.0. Adjustment skipped.`);
+              continue;
             }
+
             if (ratio > 0) {
               adjustedQty *= ratio;
             }
@@ -362,11 +372,13 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
       return summary;
     }
 
-    // 2. Fetch all dividends where payment_date <= todayStr
+    // 2. Fetch all dividends where payment_date <= todayStr, amount > 0, and is_confirmed = true
+    // Priority 1 FIX: Only confirmed dividends with declared net payout are credited. Unannounced net DPS is NEVER credited.
     const { data: dividends, error: divErr } = await supabase
       .from('asset_dividends')
       .select('id, asset_id, symbol, ex_date, payment_date, amount, currency, is_confirmed')
       .lte('payment_date', todayStr)
+      .eq('is_confirmed', true)
       .gt('amount', 0);
 
     if (divErr || !dividends || dividends.length === 0) {

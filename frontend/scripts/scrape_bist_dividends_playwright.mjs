@@ -312,14 +312,18 @@ export async function scrapeAndIngestBistDividends() {
 
     // Upsert into Supabase with accurate source provenance
     const ticker = `${item.symbol}.IS`;
-    const amount = item.netDps !== null ? item.netDps : item.grossDps;
-    const isConfirmed = Boolean(finalPayDate && item.netDps !== null);
+    // Priority 1 FIX: Never use gross DPS as a creditable cash-ledger amount!
+    // If net DPS is not declared, creditable amount is 0 and is_confirmed is false (no cash credit until KAP announcement).
+    const creditableNetAmount = item.netDps !== null && item.netDps > 0 ? item.netDps : 0;
+    const isConfirmed = Boolean(finalPayDate && item.netDps !== null && item.netDps > 0);
 
     const row = {
       symbol: ticker,
       ex_date: item.exDate,
       payment_date: finalPayDate,
-      amount: amount,
+      amount: creditableNetAmount,
+      gross_amount: item.grossDps > 0 ? item.grossDps : null,
+      net_amount: item.netDps !== null ? item.netDps : null,
       currency: 'TRY',
       frequency: 'Semi-Annual',
       is_confirmed: isConfirmed,
