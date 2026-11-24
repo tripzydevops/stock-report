@@ -278,13 +278,30 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
     if (existingTransfers) {
       for (const t of existingTransfers) {
         if (t.notes) {
-          const match = t.notes.match(/\[DIVIDEND:([A-Za-z0-9._]+):([0-9-]+)\]/);
-          if (match) {
-            existingTags.add(`${t.user_id}:${match[1].toUpperCase()}:${match[2]}`);
+          // Parse 3-part tag: [DIVIDEND:<portfolio_id>:<symbol>:<ex_date>]
+          const match3 = t.notes.match(/\[DIVIDEND:([A-Za-z0-9._-]+):([A-Za-z0-9._]+):([0-9-]+)\]/);
+          if (match3) {
+            existingTags.add(`${t.user_id}:${match3[1]}:${match3[2].toUpperCase()}:${match3[3]}`);
+          } else {
+            // Parse legacy 2-part tag: [DIVIDEND:<symbol>:<ex_date>]
+            const match2 = t.notes.match(/\[DIVIDEND:([A-Za-z0-9._]+):([0-9-]+)\]/);
+            if (match2) {
+              existingTags.add(`${t.user_id}:${match2[1].toUpperCase()}:${match2[2]}`);
+              existingTags.add(`${t.user_id}:default:${match2[1].toUpperCase()}:${match2[2]}`);
+            }
           }
         }
       }
     }
+
+    // 3.1 Fetch corporate actions for positions to dynamically adjust historical order quantities
+    const distinctSymbols = Array.from(new Set(
+      positions.map(p => ((p as any)?.assets?.symbol || '').replace('.IS', '').toUpperCase()).filter(Boolean)
+    ));
+    const { data: corporateActions } = await supabase
+      .from('corporate_actions')
+      .select('symbol, action_type, split_ratio, effective_date')
+      .in('symbol', distinctSymbols);
 
     // 4. Match positions against due dividends
     for (const pos of positions) {
@@ -292,6 +309,7 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
       const posSymbol = ((pos as any)?.assets?.symbol || '').toUpperCase();
       const cleanSym = posSymbol.replace('.IS', '');
       const userId = pos.user_id;
+      const portfolioKey = pos.portfolio_id || 'default';
 
       const matchingDivs = dividends.filter(d => {
         const dSym = (d.symbol || '').replace('.IS', '').toUpperCase();
@@ -302,16 +320,17 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
         const divCleanSym = (div.symbol || cleanSym).replace('.IS', '').toUpperCase();
         const exDate = div.ex_date;
         const payDate = div.payment_date || todayStr;
-        const tagKey = `${userId}:${divCleanSym}:${exDate}`;
+        const tagKey = `${userId}:${portfolioKey}:${divCleanSym}:${exDate}`;
 
-        // Rule A: Check if already credited
-        if (existingTags.has(tagKey)) {
+        // Rule A: Check if already credited (also check legacy un-scoped key if default/null portfolio)
+        if (existingTags.has(tagKey) || (!pos.portfolio_id && existingTags.has(`${userId}:${divCleanSym}:${exDate}`))) {
           summary.skippedCount++;
           continue;
         }
 
         // Rule B: Calculate exact entitled shares on ex-date with Istanbul timezone normalization:
-        // Sum of all Filled BUYs executed before ex-date minus sum of all Filled SELLs executed before ex-date
+        // Sum of all Filled BUYs executed before ex-date minus sum of all Filled SELLs executed before ex-date,
+        // dynamically adjusted for any forward/reverse splits or bonus share issuances occurring between order and ex-date.
         let orderQuery = supabase
           .from('portfolio_orders')
           .select('side, quantity, executed_at, portfolio_id')
@@ -334,8 +353,20 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
             const ordDateIstanbul = toIstanbulCalendarDate(ord.executed_at);
             // In BIST and NYSE, shares must be purchased and settled before ex-date
             if (ordDateIstanbul < exDate) {
-              if (ord.side === 'BUY') entitledShares += Number(ord.quantity) || 0;
-              else if (ord.side === 'SELL') entitledShares -= Number(ord.quantity) || 0;
+              let adjustedQty = Number(ord.quantity) || 0;
+
+              // Apply Corporate Actions Engine adjustment formula: q_i* = q_i * product(R_k)
+              if (corporateActions && corporateActions.length > 0) {
+                for (const ca of corporateActions) {
+                  if (ca.symbol === divCleanSym && ca.effective_date >= ordDateIstanbul && ca.effective_date < exDate) {
+                    const ratio = Number(ca.split_ratio) || 1.0;
+                    adjustedQty *= ratio;
+                  }
+                }
+              }
+
+              if (ord.side === 'BUY') entitledShares += adjustedQty;
+              else if (ord.side === 'SELL') entitledShares -= adjustedQty;
             }
           }
         } else {
@@ -361,12 +392,13 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
         }
 
         const currency = div.currency || (divCleanSym.endsWith('.IS') || div.symbol?.endsWith('.IS') ? 'TRY' : 'USD');
-        const noteTag = `[DIVIDEND:${divCleanSym}:${exDate}]`;
+        const noteTag = `[DIVIDEND:${portfolioKey}:${divCleanSym}:${exDate}]`;
 
         const { error: insErr } = await supabase
           .from('portfolio_transfers')
           .insert({
             user_id: userId,
+            portfolio_id: pos.portfolio_id || null,
             transfer_type: 'DIVIDEND',
             amount: totalAmount,
             currency: currency,

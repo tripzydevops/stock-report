@@ -676,6 +676,7 @@ export default function PortfolioView({
                     {onRetryFailedMutation && (
                       <button
                         type="button"
+                        data-testid="retry-failed-action"
                         onClick={() => onRetryFailedMutation(item)}
                         className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-[11px] font-black shadow-xs transition-all cursor-pointer flex items-center gap-1"
                       >

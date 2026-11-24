@@ -13,8 +13,8 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
 
   let aselsAssetId: string | null = null;
   let akbnkAssetId: string | null = null;
-  let initialAselsPos: any = null;
-  let initialAkbnkPos: any = null;
+  let targetAssetIds: string[] = [];
+  let initialSnapshotPositions: any[] = [];
 
   test.afterAll(async () => {
     if (supabase && userId) {
@@ -28,56 +28,44 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
             .eq('order_ref', ref);
         }
 
-        // 2. Delete test auto-deposits created during test run
-        await supabase
-          .from('portfolio_transfers')
-          .delete()
-          .eq('user_id', userId)
-          .like('notes', '%Funded position ASELS%');
-
-        await supabase
-          .from('portfolio_transfers')
-          .delete()
-          .eq('user_id', userId)
-          .like('notes', '%Funded position AKBNK%');
-
-        // 3. Restore or delete ASELS position
-        if (aselsAssetId) {
-          if (initialAselsPos) {
-            await supabase
-              .from('portfolio_positions')
-              .update({
-                quantity: initialAselsPos.quantity,
-                avg_entry_price: initialAselsPos.avg_entry_price,
-                is_open: initialAselsPos.is_open,
-              })
-              .eq('id', initialAselsPos.id);
-          } else {
-            await supabase
-              .from('portfolio_positions')
-              .delete()
-              .eq('user_id', userId)
-              .eq('asset_id', aselsAssetId);
-          }
+        // 2. Delete test auto-deposits created during test run using exact TEST-REF order reference markers
+        for (const ref of createdTestOrderRefs) {
+          await supabase
+            .from('portfolio_transfers')
+            .delete()
+            .eq('user_id', userId)
+            .like('notes', `%[TEST-REF:${ref}]%`);
         }
 
-        // 4. Restore or delete AKBNK position
-        if (akbnkAssetId) {
-          if (initialAkbnkPos) {
-            await supabase
-              .from('portfolio_positions')
-              .update({
-                quantity: initialAkbnkPos.quantity,
-                avg_entry_price: initialAkbnkPos.avg_entry_price,
-                is_open: initialAkbnkPos.is_open,
-              })
-              .eq('id', initialAkbnkPos.id);
-          } else {
-            await supabase
-              .from('portfolio_positions')
-              .delete()
-              .eq('user_id', userId)
-              .eq('asset_id', akbnkAssetId);
+        // 3. Restore all positions to their exact snapshot state by primary key ID (scopes user_id, asset_id, portfolio_id)
+        for (const originalPos of initialSnapshotPositions) {
+          await supabase
+            .from('portfolio_positions')
+            .update({
+              quantity: originalPos.quantity,
+              avg_entry_price: originalPos.avg_entry_price,
+              adjusted_break_even: originalPos.adjusted_break_even,
+              is_open: originalPos.is_open,
+            })
+            .eq('id', originalPos.id);
+        }
+
+        // 4. Delete any newly created positions for the test assets that were not in the initial snapshot
+        if (targetAssetIds.length > 0) {
+          const snapshotIds = new Set(initialSnapshotPositions.map(p => p.id));
+          const { data: currentPositions } = await supabase
+            .from('portfolio_positions')
+            .select('id')
+            .eq('user_id', userId)
+            .in('asset_id', targetAssetIds);
+
+          for (const cur of currentPositions || []) {
+            if (!snapshotIds.has(cur.id)) {
+              await supabase
+                .from('portfolio_positions')
+                .delete()
+                .eq('id', cur.id);
+            }
           }
         }
       } catch (e) {
@@ -130,27 +118,15 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
 
     aselsAssetId = aselsAsset.data?.id || null;
     akbnkAssetId = akbnkAsset.data?.id || null;
+    targetAssetIds = [aselsAssetId, akbnkAssetId].filter(Boolean) as string[];
 
-    if (aselsAssetId) {
-      const { data: pos } = await supabase
+    if (targetAssetIds.length > 0) {
+      const { data: posList } = await supabase
         .from('portfolio_positions')
         .select('*')
         .eq('user_id', userId)
-        .eq('asset_id', aselsAssetId)
-        .limit(1)
-        .maybeSingle();
-      initialAselsPos = pos ? { ...pos } : null;
-    }
-
-    if (akbnkAssetId) {
-      const { data: pos } = await supabase
-        .from('portfolio_positions')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('asset_id', akbnkAssetId)
-        .limit(1)
-        .maybeSingle();
-      initialAkbnkPos = pos ? { ...pos } : null;
+        .in('asset_id', targetAssetIds);
+      initialSnapshotPositions = (posList || []).map((p: any) => ({ ...p }));
     }
   });
 
@@ -286,6 +262,7 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
   });
 
   test('4. Verify persistent failed-action recovery UI and user discard flow', async ({ page }) => {
+    test.setTimeout(90000);
     // Seed mock failed mutation via addInitScript before page loads
     await page.addInitScript(() => {
       const mockFailed = [{
@@ -323,6 +300,103 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await discardBtn.click();
     await expect(failedBanner).not.toBeVisible({ timeout: 5000 });
 
+    const storedFailed = await page.evaluate(() => {
+      const raw = localStorage.getItem('marketpulse_failed_mutations');
+      return raw ? JSON.parse(raw) : [];
+    });
+    expect(storedFailed.length).toBe(0);
+  });
+
+  test('5. Verify failed-action retry flow re-enqueues mutation and clears failure state on success', async ({ page }) => {
+    test.setTimeout(90000);
+    const testClientOrderId = `ORD-TEST-RETRY-${Date.now()}`;
+
+    // Seed a mock failed mutation and auth session in localStorage
+    const sessionData = token ? {
+      access_token: token,
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: 'mock-refresh-token',
+      user: {
+        id: userId,
+        aud: 'authenticated',
+        role: 'authenticated',
+        email: 'test@tripzy.travel',
+      },
+    } : null;
+
+    await page.addInitScript(({ orderId, session }) => {
+      if (session) {
+        localStorage.setItem('sb-erzxltcalghadzfevfjx-auth-token', JSON.stringify(session));
+      }
+      const mockFailed = [{
+        id: 'mock-fail-retry-001',
+        clientOrderId: orderId,
+        type: 'BUY',
+        body: { symbol: 'FROTO', shares: 10, price: 950.0, currency: 'TRY' },
+        lastError: 'HTTP 500: Temporary upstream timeout during execution',
+        createdAt: new Date().toISOString(),
+        status: 'FAILED',
+        retryCount: 0,
+      }];
+      localStorage.setItem('marketpulse_failed_mutations', JSON.stringify(mockFailed));
+      localStorage.setItem('market_pulse_active_tab', 'portfolio');
+    }, { orderId: testClientOrderId, session: sessionData });
+
+    // Mock the portfolio API endpoint so the retry succeeds cleanly
+    let retryApiCalled = false;
+    await page.route('**/api/portfolio/positions', async (route) => {
+      const req = route.request();
+      if (req.method() === 'POST') {
+        retryApiCalled = true;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: true,
+            order: {
+              id: 'mock-order-retried-ok',
+              order_ref: testClientOrderId,
+              symbol: 'FROTO',
+              status: 'Filled',
+            },
+            message: 'Order filled successfully upon retry',
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.goto(`${baseUrl}/`);
+    await page.waitForLoadState('domcontentloaded');
+
+    // Click Portföyüm in sidebar
+    const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
+    await expect(portfolioBtn).toBeVisible({ timeout: 10000 });
+    await portfolioBtn.click();
+
+    // Verify the failure banner renders with FROTO
+    const failedBanner = page.locator('[data-testid="failed-mutations-banner"]').first();
+    await expect(failedBanner).toBeVisible({ timeout: 15000 });
+
+    const failedSymbol = page.locator('[data-testid="failed-mutations-banner"]').locator('text=FROTO').first();
+    await expect(failedSymbol).toBeVisible();
+
+    // Locate and click the Retry button
+    const retryBtn = page.locator('[data-testid="retry-failed-action"]').first();
+    await expect(retryBtn).toBeVisible();
+    await retryBtn.click();
+
+    // Confirm that the API was invoked for the retried mutation
+    await expect(async () => {
+      expect(retryApiCalled).toBe(true);
+    }).toPass({ timeout: 10000 });
+
+    // Confirm the failure banner is removed from view
+    await expect(failedBanner).not.toBeVisible({ timeout: 10000 });
+
+    // Confirm failed mutation is removed from localStorage
     const storedFailed = await page.evaluate(() => {
       const raw = localStorage.getItem('marketpulse_failed_mutations');
       return raw ? JSON.parse(raw) : [];

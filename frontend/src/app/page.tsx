@@ -1246,20 +1246,7 @@ export default function Home() {
   const { language, setLanguage, t } = useLanguage();
   const { user, session, isDemoMode, signOut, signInAsAdmin } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const queryTab = params.get('tab')?.trim().toLowerCase() as TabId;
-        const hash = window.location.hash.replace('#', '').trim().toLowerCase() as TabId;
-        if (VALID_TABS.includes(queryTab)) return queryTab;
-        if (VALID_TABS.includes(hash)) return hash;
-        const savedTab = localStorage.getItem('market_pulse_active_tab') as TabId;
-        if (VALID_TABS.includes(savedTab)) return savedTab;
-      } catch (e) {}
-    }
-    return 'signals';
-  });
+  const [activeTab, setActiveTab] = useState<TabId>('signals');
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
   const [usRegime, setUsRegime] = useState<RegimeStatus | undefined>(undefined);
@@ -3178,13 +3165,21 @@ export default function Home() {
         continue;
       }
 
-      if (session?.access_token) {
+      let activeToken = session?.access_token;
+      if (!activeToken) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          activeToken = data.session?.access_token;
+        } catch {}
+      }
+
+      if (activeToken) {
         try {
           const res = await fetch('/api/portfolio/positions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
+              'Authorization': `Bearer ${activeToken}`,
               'Idempotency-Key': mutation.clientOrderId,
             },
             body: JSON.stringify({
