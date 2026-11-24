@@ -12,6 +12,13 @@
 
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const calendarPath = path.resolve(__dirname, '../src/data/bist_calendar.json');
 
 // Priority 1: Require explicit environment variables; fail closed if absent
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -24,7 +31,16 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Official Turkish Public Holidays (Fixed annual dates: MM-DD)
+// Official BIST Market Holidays from bist_calendar.json (including religious holidays: Ramazan and Kurban Bayramı)
+let bistHolidays = new Set();
+try {
+  const calData = JSON.parse(fs.readFileSync(calendarPath, 'utf8'));
+  bistHolidays = new Set(Object.keys(calData.full_holidays || {}));
+} catch (e) {
+  console.warn('⚠️ Note: Could not read bist_calendar.json, using built-in fixed holiday set');
+}
+
+// Official Turkish Public Holidays (Fixed annual fallback dates: MM-DD)
 const TURKISH_FIXED_HOLIDAYS = new Set([
   '01-01', // Yılbaşı
   '04-23', // Ulusal Egemenlik ve Çocuk Bayramı
@@ -36,21 +52,50 @@ const TURKISH_FIXED_HOLIDAYS = new Set([
 ]);
 
 /**
- * Calendar-aware date helper: checks if a date falls on a weekend or Turkish holiday.
+ * Checks if a date falls on an official BIST closed holiday
+ */
+function isBistHoliday(dateObj) {
+  const y = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const dateStr = `${y}-${mm}-${dd}`;
+  return bistHolidays.has(dateStr) || TURKISH_FIXED_HOLIDAYS.has(`${mm}-${dd}`);
+}
+
+/**
+ * Calendar-aware date helper: checks if a date falls on a weekend or BIST holiday.
  */
 function isTurkishBusinessDay(dateObj) {
   const day = dateObj.getDay();
   if (day === 0 || day === 6) return false; // 0=Sunday, 6=Saturday
-
-  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const dd = String(dateObj.getDate()).padStart(2, '0');
-  if (TURKISH_FIXED_HOLIDAYS.has(`${mm}-${dd}`)) return false;
-
+  if (isBistHoliday(dateObj)) return false;
   return true;
 }
 
 /**
- * Shifts a date string (YYYY-MM-DD) forward to the next valid Turkish business day.
+ * Calculates BIST T+2 business-day settlement date (skipping weekends and official BIST market holidays).
+ */
+function calculateBistTPlus2Settlement(exDateStr) {
+  const parts = exDateStr.split('-');
+  if (parts.length !== 3) return null;
+  const cur = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  if (isNaN(cur.getTime())) return null;
+
+  let added = 0;
+  while (added < 2) {
+    cur.setDate(cur.getDate() + 1);
+    if (isTurkishBusinessDay(cur)) {
+      added++;
+    }
+  }
+  const resY = cur.getFullYear();
+  const resM = String(cur.getMonth() + 1).padStart(2, '0');
+  const resD = String(cur.getDate()).padStart(2, '0');
+  return `${resY}-${resM}-${resD}`;
+}
+
+/**
+ * Shifts a date string (YYYY-MM-DD) forward to the next valid Turkish business day if on weekend/holiday.
  */
 function rollToNextBusinessDay(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -151,10 +196,14 @@ export async function scrapeAndIngestBistDividends() {
           if (!sym || sym.length > 6) continue;
 
           const exDate = parseDateToIso(row[effectiveExIdx] || '');
-          let payDate = parseDateToIso(row[effectivePayIdx] || '') || exDate;
+          let payDate = parseDateToIso(row[effectivePayIdx] || '');
+          if (!payDate && exDate) {
+            payDate = calculateBistTPlus2Settlement(exDate);
+          }
           const grossDps = parseTurkishNumber(row[effectiveGrossIdx] || '0');
           const netDpsRaw = parseTurkishNumber(row[effectiveNetIdx] || '0');
-          const netDps = netDpsRaw > 0 ? netDpsRaw : Number((grossDps * 0.85).toFixed(4));
+          // Priority 5: Do NOT infer net DPS = gross * 0.85 (REITs/corporate have different withholding)
+          const netDps = netDpsRaw > 0 ? netDpsRaw : null;
 
           if (exDate && grossDps > 0) {
             extractedRecords.push({
@@ -204,12 +253,14 @@ export async function scrapeAndIngestBistDividends() {
             const exDate = parseDateToIso(row[exIdx !== -1 ? exIdx : 1] || '');
             const grossDps = parseTurkishNumber(row[grossIdx !== -1 ? grossIdx : 2] || '0');
             if (sym && exDate && grossDps > 0) {
+              // Priority 4: Do NOT infer payDate = exDate. Calculate via shared BIST T+2 settlement helper.
+              const payDate = calculateBistTPlus2Settlement(exDate);
               extractedRecords.push({
                 symbol: sym,
                 exDate,
-                payDate: exDate,
+                payDate,
                 grossDps,
-                netDps: Number((grossDps * 0.85).toFixed(4)),
+                netDps: null, // Do not infer net DPS from gross DPS
                 source: 'ISYATIRIM_CORPORATE_ACTIONS'
               });
             }
@@ -240,31 +291,39 @@ export async function scrapeAndIngestBistDividends() {
   let failedCount = 0;
 
   for (const item of extractedRecords) {
-    // Audit Rule 1: Net DPS <= Gross DPS
-    if (item.netDps <= 0 || item.netDps > item.grossDps * 1.05) {
-      console.warn(`⚠️ Skipping corrupted item for ${item.symbol}: Net DPS (${item.netDps}) out of bounds vs Gross (${item.grossDps})`);
-      failedCount++;
-      continue;
+    // Audit Rule 1: If Net DPS is provided, check bounds: 0 < netDps <= grossDps * 1.02
+    if (item.netDps !== null) {
+      if (item.netDps <= 0 || item.netDps > item.grossDps * 1.02) {
+        console.warn(`⚠️ Skipping corrupted item for ${item.symbol}: Net DPS (${item.netDps}) out of bounds vs Gross (${item.grossDps})`);
+        failedCount++;
+        continue;
+      }
     }
 
     // Audit Rule 2: Ensure payment date is a valid Turkish business day (not weekend or public holiday)
-    const normalizedPayDate = rollToNextBusinessDay(item.payDate);
-    if (normalizedPayDate !== item.payDate) {
-      console.log(`📅 Adjusted holiday/weekend payDate ${item.payDate} -> ${normalizedPayDate} for ${item.symbol}`);
-      item.payDate = normalizedPayDate;
+    let finalPayDate = item.payDate;
+    if (finalPayDate) {
+      const normalizedPayDate = rollToNextBusinessDay(finalPayDate);
+      if (normalizedPayDate !== finalPayDate) {
+        console.log(`📅 Adjusted holiday/weekend payDate ${finalPayDate} -> ${normalizedPayDate} for ${item.symbol}`);
+        finalPayDate = normalizedPayDate;
+      }
     }
 
     // Upsert into Supabase with accurate source provenance
     const ticker = `${item.symbol}.IS`;
+    const amount = item.netDps !== null ? item.netDps : item.grossDps;
+    const isConfirmed = Boolean(finalPayDate && item.netDps !== null);
+
     const row = {
       symbol: ticker,
       ex_date: item.exDate,
-      payment_date: item.payDate,
-      amount: item.netDps,
+      payment_date: finalPayDate,
+      amount: amount,
       currency: 'TRY',
       frequency: 'Semi-Annual',
-      is_confirmed: true,
-      source: item.source // Priority 3: 'FINTABLES_DIVIDEND_CALENDAR' or 'ISYATIRIM_CORPORATE_ACTIONS'
+      is_confirmed: isConfirmed,
+      source: item.source
     };
 
     try {
@@ -277,7 +336,8 @@ export async function scrapeAndIngestBistDividends() {
         failedCount++;
       } else {
         auditedCount++;
-        console.log(`✅ [AUDITED & SAVED] ${ticker} | Source: ${item.source} | Ex: ${item.exDate} | Pay: ${item.payDate} | Net: ₺${item.netDps.toFixed(4)} | Gross: ₺${item.grossDps.toFixed(4)}`);
+        const netStr = item.netDps !== null ? `₺${item.netDps.toFixed(4)}` : 'NULL (Açıklanmadı)';
+        console.log(`✅ [AUDITED & SAVED] ${ticker} | Source: ${item.source} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
       }
     } catch (upsertErr) {
       console.warn(`⚠️ Upsert exception for ${ticker}: ${upsertErr.message}`);

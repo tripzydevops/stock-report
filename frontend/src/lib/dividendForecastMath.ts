@@ -4,6 +4,8 @@
 
 import liveDividendSchedulesData from '../data/live_dividend_schedules.json';
 import { DividendAsset, MarketCatalyst } from './supabaseClient';
+import { calculateBistTPlus2Settlement } from './bistCalendar';
+export { calculateBistTPlus2Settlement };
 
 export interface ForecastParams {
   initialCapital: number; // in chosen currency
@@ -1032,26 +1034,6 @@ export function addMonthsClamped(dateStr: string, months: number): string {
   const mm = String(targetMonth + 1).padStart(2, '0');
   const dd = String(clampedDay).padStart(2, '0');
   return `${targetYear}-${mm}-${dd}`;
-}
-
-/**
- * Calculates BIST T+2 business days settlement date (skipping Saturday and Sunday)
- */
-export function calculateBistTPlus2Settlement(exDateStr: string): string {
-  const parts = exDateStr.split('-');
-  if (parts.length !== 3) return exDateStr;
-  const d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
-  if (isNaN(d.getTime())) return exDateStr;
-
-  let added = 0;
-  while (added < 2) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const day = d.getUTCDay();
-    if (day !== 0 && day !== 6) {
-      added++;
-    }
-  }
-  return d.toISOString().slice(0, 10);
 }
 
 export function resolveDividendSchedule(symbol: string): {

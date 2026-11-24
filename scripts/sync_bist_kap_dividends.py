@@ -22,13 +22,27 @@ if sys.platform == "win32":
         pass
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+import json
+from pathlib import Path
+
 try:
     from supabase import create_client, Client
 except ImportError:
     create_client = None
     Client = None
 
-# Official Turkish Fixed Public Holidays
+# Official BIST Market Holidays (loaded from shared bist_calendar.json)
+CALENDAR_PATH = Path(__file__).resolve().parent.parent / "frontend" / "src" / "data" / "bist_calendar.json"
+BIST_HOLIDAYS_SET = set()
+if CALENDAR_PATH.exists():
+    try:
+        with open(CALENDAR_PATH, "r", encoding="utf-8") as f:
+            cal = json.load(f)
+            BIST_HOLIDAYS_SET = set(cal.get("full_holidays", {}).keys())
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load {CALENDAR_PATH}: {e}", file=sys.stderr)
+
+# Official Turkish Fixed Public Holidays (fallback)
 TURKISH_FIXED_HOLIDAYS = {
     (1, 1),   # Yılbaşı
     (4, 23),  # Ulusal Egemenlik ve Çocuk Bayramı
@@ -38,6 +52,19 @@ TURKISH_FIXED_HOLIDAYS = {
     (8, 30),  # Zafer Bayramı
     (10, 29), # Cumhuriyet Bayramı
 }
+
+def is_bist_holiday(d: date) -> bool:
+    return d.isoformat() in BIST_HOLIDAYS_SET or (d.month, d.day) in TURKISH_FIXED_HOLIDAYS
+
+def calculate_bist_t_plus_2_settlement(ex_date: date) -> date:
+    """Calculates Takasbank T+2 trading days settlement skipping weekends and BIST holidays."""
+    cur = ex_date
+    added = 0
+    while added < 2:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5 and not is_bist_holiday(cur):
+            added += 1
+    return cur
 
 class KapDividendDeclaration(BaseModel):
     symbol: str = Field(..., description="BIST Ticker symbol (e.g. FROTO or FROTO.IS)")
@@ -59,8 +86,8 @@ class KapDividendDeclaration(BaseModel):
     def validate_business_day(cls, v: date) -> date:
         if v.weekday() >= 5:  # 5=Saturday, 6=Sunday
             raise ValueError(f"Invalid settlement date {v}: Takasbank does not settle dividends on weekends.")
-        if (v.month, v.day) in TURKISH_FIXED_HOLIDAYS:
-            raise ValueError(f"Invalid settlement date {v}: Takasbank does not settle dividends on official Turkish holidays.")
+        if is_bist_holiday(v):
+            raise ValueError(f"Invalid settlement date {v}: Takasbank does not settle dividends on official BIST market holidays.")
         return v
 
     @field_validator("net_dps")

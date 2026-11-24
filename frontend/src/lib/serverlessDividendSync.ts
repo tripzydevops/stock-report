@@ -1,4 +1,5 @@
 import { getServerSupabase } from './supabaseServer';
+import { calculateBistTPlus2Settlement } from './bistCalendar';
 import YahooFinance from 'yahoo-finance2';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -122,31 +123,38 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
 
         // If payDate is missing:
         if (!payDateStr) {
-          const d = new Date(exDateStr);
           if (isBist) {
-            // T+2 business days for BIST Takasbank settlement
-            const dayOfWeek = d.getDay(); // 0 is Sun, 4 is Thu, 5 is Fri
-            const addDays = (dayOfWeek === 4) ? 4 : (dayOfWeek === 5) ? 4 : 2;
-            d.setDate(d.getDate() + addDays);
+            // T+2 business days for BIST Takasbank settlement skipping weekends and BIST holidays
+            payDateStr = calculateBistTPlus2Settlement(exDateStr);
           } else {
             // US dividends typically pay ~14-21 days after ex-date
+            const d = new Date(exDateStr);
             d.setDate(d.getDate() + 14);
+            payDateStr = d.toISOString().slice(0, 10);
           }
-          payDateStr = d.toISOString().slice(0, 10);
         }
 
-        // Priority 7: Use the provider's declared single cash distribution whenever available
-        // (defaultKeyStatistics.lastDividendValue represents the actual single cash payout per share)
+        // Use the provider's declared single cash distribution whenever available
         let dps: number | null = null;
         let isConfirmed = false;
+        let sourceProvenance = 'YAHOO_ESTIMATED';
 
-        if (stats?.lastDividendValue && stats.lastDividendValue > 0) {
-          dps = Number(Number(stats.lastDividendValue).toFixed(4));
+        const declaredCashDps = (cal as any)?.dividend || (cal as any)?.amount;
+        if (declaredCashDps && Number(declaredCashDps) > 0) {
+          dps = Number(Number(declaredCashDps).toFixed(4));
           isConfirmed = Boolean(payDateObj);
+          sourceProvenance = isConfirmed ? 'YAHOO_CALENDAR_DECLARED' : 'YAHOO_ESTIMATED';
+        } else if (stats?.lastDividendValue && stats.lastDividendValue > 0) {
+          // Priority 6: Treat lastDividendValue as an estimate for upcoming distributions.
+          // It represents the most recent realized single distribution, not a guaranteed forward contract.
+          dps = Number(Number(stats.lastDividendValue).toFixed(4));
+          isConfirmed = false;
+          sourceProvenance = 'YAHOO_LAST_DIVIDEND_VALUE';
         } else if (detail?.dividendRate && detail.dividendRate > 0) {
-          // Fallback: estimate single payment from annualized forward rate
+          // Fallback: estimate single payment from annualized forward rate divided by frequency
           dps = Number((detail.dividendRate / freqDiv).toFixed(4));
-          isConfirmed = false; // Mark estimated: do not fabricate certainty from an annualized aggregate
+          isConfirmed = false;
+          sourceProvenance = 'YAHOO_ANNUALIZED_ESTIMATE';
         }
 
         const assetId = assetIdMap.get(cleanSym) || assetIdMap.get(tickerSym) || null;
@@ -160,7 +168,7 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           currency: currency,
           frequency: frequency,
           is_confirmed: isConfirmed,
-          source: isConfirmed ? 'YAHOO_CONFIRMED' : 'YAHOO_ESTIMATED'
+          source: sourceProvenance
         });
 
         upcomingEvents.push({

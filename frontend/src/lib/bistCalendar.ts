@@ -181,3 +181,26 @@ export function isValidBistQuoteSession(quoteSessionDate: string, now: Date = ne
 
   return false;
 }
+
+/**
+ * Calculates BIST T+2 business-day settlement date (skipping weekends and official BIST market holidays).
+ * In Turkey (Takasbank), cash dividend payment is credited on T+2 trading days following the ex-date.
+ */
+export function calculateBistTPlus2Settlement(exDateStr: string): string {
+  const parts = exDateStr.split('-');
+  if (parts.length !== 3) return exDateStr;
+  const target = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)));
+  if (isNaN(target.getTime())) return exDateStr;
+
+  let added = 0;
+  while (added < 2) {
+    target.setUTCDate(target.getUTCDate() + 1);
+    const day = target.getUTCDay();
+    const dateFormatted = target.toISOString().slice(0, 10);
+    // Business day: not Saturday (6), not Sunday (0), and not a BIST full holiday
+    if (day !== 0 && day !== 6 && !isBistHoliday(dateFormatted)) {
+      added++;
+    }
+  }
+  return target.toISOString().slice(0, 10);
+}
