@@ -2106,7 +2106,7 @@ Ask about any sector or company for deep qualitative diagnostics.`;
                   <span className="text-base">{sec.icon}</span>
                   <span>{language === 'tr' ? sec.nameTr : sec.nameEn}</span>
                   {userOwnedInSector > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                       isSelected
                         ? 'bg-white/20 text-white'
                         : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'

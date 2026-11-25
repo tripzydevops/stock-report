@@ -913,7 +913,7 @@ export default function DividendForecastView({
                           <span className="font-mono text-sm font-black text-gray-900 dark:text-white">
                             {a.symbol}
                           </span>
-                          <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-md ${
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
                             a.market === 'US' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
                           }`}>
                             {a.market}
@@ -1218,7 +1218,7 @@ export default function DividendForecastView({
                         <div key={h.sym} className="flex items-center justify-between text-xs py-1 px-2.5 rounded-lg bg-gray-50/80 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-750">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-gray-900 dark:text-white">{h.sym}</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold">
                               {h.curr}
                             </span>
                           </div>

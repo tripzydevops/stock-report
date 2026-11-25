@@ -499,7 +499,7 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
                         : `Borsa Istanbul Daily +9.99% Ceiling. Min ${minSessionsNeeded} consecutive ceiling sessions needed.`}
                     >
                       <span>⚡ Tavan: {formatPrice(tavanCeiling)}</span>
-                      <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                      <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${
                         isUnreachable
                           ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
                           : isWithinSingleDayCeiling 

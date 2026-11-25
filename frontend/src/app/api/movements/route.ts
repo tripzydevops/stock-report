@@ -51,7 +51,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const movements = (data || []).map((row: any) => ({
+    interface MovementQueryResult {
+      id: string;
+      asset_id: string;
+      assets?: { symbol?: string; name?: string; market?: string } | null;
+      movement_time: string;
+      direction?: string;
+      change_amount?: number;
+      change_pct?: number;
+      signal?: string;
+      score?: number;
+      metadata?: Record<string, unknown>;
+      report_file_id?: string;
+      created_at?: string;
+    }
+
+    const movements = ((data as MovementQueryResult[]) || []).map((row) => ({
       id: row.id,
       asset_id: row.asset_id,
       symbol: row.assets?.symbol || null,
@@ -69,7 +84,8 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json(movements);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errorMsg || 'Internal Server Error' }, { status: 500 });
   }
 }

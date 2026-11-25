@@ -51,6 +51,21 @@ export interface LiveAsset {
   low52w?: number;
 }
 
+export interface AssetData {
+  id: string;
+  symbol: string;
+  name: string;
+  market: string;
+  price: number;
+  changePercent: number;
+  rsi: number;
+  emaStatus: 'Above 200 EMA' | 'Below 200 EMA' | 'Near 50 EMA' | string;
+  volumeRatio: number;
+  high52w?: number;
+  low52w?: number;
+  currency?: string;
+}
+
 export interface LiveSignal {
   symbol: string;
   name: string;

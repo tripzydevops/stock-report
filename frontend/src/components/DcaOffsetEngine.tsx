@@ -191,7 +191,7 @@ export default function DcaOffsetEngine({
               <span className="text-xs font-black tracking-tight text-white uppercase">
                 {language === 'tr' ? 'DCA Kademeli Mahsuplaşma & Başa Baş Motoru' : 'DCA Tranche Netting & Breakeven Engine'}
               </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
                 {sortedLots.length} {language === 'tr' ? 'Kademe' : 'Lots'}
               </span>
             </div>

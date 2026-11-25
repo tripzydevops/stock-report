@@ -2,6 +2,11 @@
 
 @theme {
   --font-sans: var(--font-inter);
+  --color-gray-750: #262e3d;
+  --color-gray-850: #161f30;
+  --color-slate-750: #243044;
+  --color-slate-850: #131c2e;
+  --blur-xs: 2px;
 }
 
 @layer utilities {

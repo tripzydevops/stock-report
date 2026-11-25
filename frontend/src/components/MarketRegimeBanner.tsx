@@ -3,20 +3,9 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
-export interface RegimeStatus {
-  status: 'Bullish' | 'Neutral' | 'Bearish';
-  close: number;
-  trend: 'up' | 'down' | 'flat';
-  changePct?: number;
-  return5d?: number;
-  descriptionTr?: string;
-  descriptionEn?: string;
-  isCorrection?: boolean;
-  recommendedEquityPct?: number;
-  recommendedCashPct?: number;
-  strategyTiltTr?: string;
-  strategyTiltEn?: string;
-}
+import { RegimeStatus } from '../lib/regime';
+
+export type { RegimeStatus };
 
 interface MarketRegimeBannerProps {
   usRegime?: RegimeStatus;

@@ -1,5 +1,11 @@
 import unittest
+import os
+import sys
 from datetime import date
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from scripts.sync_bist_kap_dividends import (
     KapDividendDeclaration,
     calculate_bist_t_plus_2_settlement,

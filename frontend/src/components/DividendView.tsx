@@ -1095,16 +1095,16 @@ export default function DividendView({
 
                         {/* Country Flag */}
                         {asset.market === 'US' || asset.currency === 'USD' ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
                             🇺🇸 US
                           </span>
                         ) : (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
                             🇹🇷 BIST
                           </span>
                         )}
 
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full border ${countdown.badgeClass}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${countdown.badgeClass}`}>
                           {countdown.text}
                         </span>
                       </div>

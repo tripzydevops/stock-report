@@ -86,7 +86,7 @@ export default function NavigationTabs({
             >
               <span className="text-sm shrink-0">{AI_COPILOT_ITEM.icon}</span>
               <span className="hidden sm:inline">{language === 'tr' ? AI_COPILOT_ITEM.labelTr : AI_COPILOT_ITEM.labelEn}</span>
-              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-black ${
                 isAiActive ? 'bg-purple-800 text-white' : 'bg-purple-600 text-white'
               }`}>
                 PRO
@@ -98,7 +98,7 @@ export default function NavigationTabs({
               <div className="hidden xl:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">🇺🇸 SPY</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100">${usRegime.close.toFixed(2)}</span>
-                <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                   usRegime.status === 'Bullish' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
                   usRegime.status === 'Bearish' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                 }`}>
@@ -114,7 +114,7 @@ export default function NavigationTabs({
               <div className="hidden lg:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">🇹🇷 BIST</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{bistRegime.close.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                   bistRegime.status === 'Bullish' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
                   bistRegime.status === 'Bearish' ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400' : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                 }`}>
@@ -180,7 +180,7 @@ export default function NavigationTabs({
                   <span className="text-xs">{subTab.icon}</span>
                   <span>{language === 'tr' ? subTab.labelTr : subTab.labelEn}</span>
                   {subTab.id === 'catalysts' && catalystsCount > 0 && (
-                    <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-mono ${
                       isSubActive
                         ? 'bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold'
@@ -189,7 +189,7 @@ export default function NavigationTabs({
                     </span>
                   )}
                   {subTab.badge && (
-                    <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-mono ${
                       isSubActive
                         ? 'bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'

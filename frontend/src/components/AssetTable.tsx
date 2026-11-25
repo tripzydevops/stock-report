@@ -4,20 +4,9 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { Pagination } from './Pagination';
 
-export interface AssetData {
-  id: string;
-  symbol: string;
-  name: string;
-  market: string;
-  price: number;
-  changePercent: number;
-  rsi: number;
-  emaStatus: 'Above 200 EMA' | 'Below 200 EMA' | 'Near 50 EMA' | string;
-  volumeRatio: number;
-  high52w?: number;
-  low52w?: number;
-  currency?: string;
-}
+import { AssetData } from '../lib/supabaseClient';
+
+export type { AssetData };
 
 interface AssetTableProps {
   assets: AssetData[];

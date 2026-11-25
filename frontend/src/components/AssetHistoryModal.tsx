@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { AssetData } from './AssetTable';
+import { supabase, AssetData } from '../lib/supabaseClient';
 import InteractiveCanvasChart, { ChartPriceBar } from './InteractiveCanvasChart';
 import KoyfinPriceOverviewChart from './KoyfinPriceOverviewChart';
 import { getTradingViewSymbol } from './TradingViewChart';
@@ -577,7 +576,7 @@ export default function AssetHistoryModal({
             >
               <span>Price Target</span>
               {analystUpsidePct !== null && (
-                <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${
+                <span className={`text-[10px] px-1 py-0.5 rounded font-mono ${
                   analystUpsidePct >= 0 ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'
                 }`}>
                   {analystUpsidePct > 0 ? `+${analystUpsidePct}%` : `${analystUpsidePct}%`}
@@ -1447,7 +1446,7 @@ export default function AssetHistoryModal({
                           <span>{row.date}</span>
                           {row.isCloseOnly && (
                             <span 
-                              className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-normal shrink-0"
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-normal shrink-0"
                               title="Bu işlem günü için tam OHLC verisi bulunmamaktadır; sadece resmi kapanış fiyatı kaydedilmiştir."
                             >
                               Kapanış

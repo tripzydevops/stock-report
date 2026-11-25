@@ -62,8 +62,9 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
         }
       }
     }
-  } catch (err: any) {
-    console.warn('[DividendSync] Could not fetch portfolio positions:', err.message);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.warn('[DividendSync] Could not fetch portfolio positions:', errorMsg);
   }
 
   // 2. Fetch assets table map for ID resolution
@@ -79,8 +80,9 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
         assetIdMap.set(a.symbol.toUpperCase(), a.id);
       }
     }
-  } catch (err: any) {
-    console.warn('[DividendSync] Could not fetch assets map:', err.message);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.warn('[DividendSync] Could not fetch assets map:', errorMsg);
   }
 
   // Combine targets
@@ -177,9 +179,10 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           currency: currency
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Non-critical: some symbols may lack dividend calendar entries
-      errors.push(`${tickerSym}: ${err.message || 'fetch_failed'}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      errors.push(`${tickerSym}: ${errorMsg || 'fetch_failed'}`);
     }
   }
 
@@ -544,8 +547,9 @@ export async function processDueDividendsToCashLedger(): Promise<DividendCreditS
         }
       }
     }
-  } catch (err: any) {
-    summary.errors.push(`Unexpected error: ${err.message || String(err)}`);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    summary.errors.push(`Unexpected error: ${errorMsg}`);
   }
 
   return summary;

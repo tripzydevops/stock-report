@@ -6,7 +6,7 @@ import SidebarNav from '../components/SidebarNav';
 import { RegimeStatus } from '../lib/regime';
 import MarketCorrectionBanner from '../components/MarketCorrectionBanner';
 import TradeCard, { TradeSignal } from '../components/TradeCard';
-import AssetTable, { AssetData } from '../components/AssetTable';
+import AssetTable from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
 import PositionCalculatorModal from '../components/PositionCalculatorModal';
 import AddAssetModal from '../components/AddAssetModal';
@@ -36,6 +36,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth, ADMIN_USER_ID } from '../context/AuthContext';
 import {
   supabase,
+  AssetData,
   PortfolioItem,
   DividendAsset,
   StrategyStat,

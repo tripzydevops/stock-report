@@ -434,7 +434,7 @@ export default function TradeHoldingModal({
                               {language === 'tr' ? 'Hedef 1 (%50)' : 'Target 1 (50%)'}
                             </span>
                             {isT1Hit && (
-                              <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-600 text-white animate-pulse">
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-600 text-white animate-pulse">
                                 {language === 'tr' ? '✓ BÖLGEDE' : '✓ IN ZONE'}
                               </span>
                             )}

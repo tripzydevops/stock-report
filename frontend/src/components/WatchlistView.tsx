@@ -218,9 +218,10 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
       } else {
         setItems(data.items || []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Watchlist fetch error:', err);
-      setError(err.message || 'Veriler yüklenemedi');
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg || 'Veriler yüklenemedi');
     } finally {
       setLoading(false);
     }
@@ -1103,7 +1104,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                     }`}
                   >
                     <span className="font-black">{item.symbol.replace('.IS', '')}</span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
                       isLastDay ? 'bg-amber-600 text-white animate-pulse' : isToday ? 'bg-rose-600 text-white' : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
                     }`}>
                       {isLastDay ? (language === 'tr' ? '⚡ YARIN EX-DATE (SON ALIM!)' : '⚡ TOMORROW EX-DATE!') : isToday ? (language === 'tr' ? '🔴 BUGÜN' : '🔴 TODAY') : `${diffDays}g kaldı`}
@@ -1234,7 +1235,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                 }`}
               >
                 <span>{tab.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${marketFilter === tab.id ? 'bg-blue-700 text-blue-100' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${marketFilter === tab.id ? 'bg-blue-700 text-blue-100' : 'bg-slate-200 dark:bg-slate-700'}`}>
                   {tab.count}
                 </span>
               </button>
@@ -1408,7 +1409,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                         <span className="text-base font-black text-slate-900 dark:text-white tracking-tight">
                           {cleanSym}
                         </span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                           {badgeType}
                         </span>
                         {divCountdown && (
@@ -1643,7 +1644,7 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                               </span>
                               {divCountdown && (
                                 <span
-                                  className={`text-[9px] font-black px-1.5 py-0.2 rounded flex items-center gap-0.5 ${
+                                  className={`text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 ${
                                     divCountdown.diffDays === 1
                                       ? 'bg-amber-500 text-white animate-pulse'
                                       : divCountdown.diffDays === 0

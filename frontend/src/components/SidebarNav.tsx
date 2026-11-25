@@ -102,7 +102,7 @@ export default function SidebarNav({
                   <span className="font-black text-base tracking-tight text-slate-900 dark:text-white truncate">
                     MarketPulse
                   </span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 shrink-0">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 shrink-0">
                     4-HUB
                   </span>
                 </div>
@@ -156,7 +156,7 @@ export default function SidebarNav({
               <div className="text-left min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <span className="font-black text-xs">AI Copilot</span>
-                  <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-purple-200/80 dark:bg-purple-900 text-purple-800 dark:text-purple-300">
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-200/80 dark:bg-purple-900 text-purple-800 dark:text-purple-300">
                     PRO
                   </span>
                 </div>
@@ -210,12 +210,12 @@ export default function SidebarNav({
                         </span>
                       )}
                       {count !== undefined && count > 0 && (
-                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white shrink-0">
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-rose-500 text-white shrink-0">
                           {count}
                         </span>
                       )}
                       {item.badge && (!isCollapsed || isMobileOpen) && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
                           {item.badge}
                         </span>
                       )}
