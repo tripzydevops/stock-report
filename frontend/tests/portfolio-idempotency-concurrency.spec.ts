@@ -440,18 +440,19 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
       localStorage.setItem('market_pulse_active_tab', 'portfolio');
     }, { orderId: testClientOrderId, session: authSession, storageKey: supabaseAuthStorageKey });
 
-    let capturedPostRequest: {
+    type CapturedPostRequest = {
       url: string;
       method: string;
       headers: Record<string, string>;
       body: any;
-    } | null = null;
+    };
+    const capturedPost: { value: CapturedPostRequest | null } = { value: null };
 
     // Mock API to guarantee test isolation without polluting user portfolio
     await page.route('**/api/portfolio/positions', async (route) => {
       const req = route.request();
       if (req.method() === 'POST') {
-        capturedPostRequest = {
+        capturedPost.value = {
           url: req.url(),
           method: req.method(),
           headers: req.headers(),
@@ -506,12 +507,12 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await expect(failedBanner).not.toBeVisible({ timeout: 20000 });
 
     // Assert intercepted route payload: clientOrderId match and TESTXYZ symbol
-    expect(capturedPostRequest).not.toBeNull();
+    expect(capturedPost.value).not.toBeNull();
     expect(
-      capturedPostRequest?.body?.client_order_id === testClientOrderId ||
-      capturedPostRequest?.headers?.['idempotency-key'] === testClientOrderId
+      capturedPost.value?.body?.client_order_id === testClientOrderId ||
+      capturedPost.value?.headers?.['idempotency-key'] === testClientOrderId
     ).toBe(true);
-    expect(capturedPostRequest?.body?.symbol).toBe('TESTXYZ');
+    expect(capturedPost.value?.body?.symbol).toBe('TESTXYZ');
 
     // Confirm both failed list and pending offline queue are cleared in localStorage on success
     const { storedFailed, storedPending } = await page.evaluate(() => {
