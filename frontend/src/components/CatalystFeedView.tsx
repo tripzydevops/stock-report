@@ -135,8 +135,9 @@ export default function CatalystFeedView({
           setSemanticMatches([]);
           setSearchMode('none');
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof Error && err.name === 'AbortError') return;
         if (currentReqId === activeRequestIdRef.current) {
           setSemanticMatches(null);
           setSearchMode('none');

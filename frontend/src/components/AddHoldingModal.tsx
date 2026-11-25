@@ -187,8 +187,8 @@ export default function AddHoldingModal({
       setStopLossStr('');
       setIsDividend(false);
       setShowSuggestions(false);
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Pozisyon eklenirken bir hata oluştu.');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Pozisyon eklenirken bir hata oluştu.');
     } finally {
       setIsSubmitting(false);
     }

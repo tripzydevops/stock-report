@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
         publishedAt: r.published_at,
       })),
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }

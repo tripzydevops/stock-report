@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       ...data,
       download_url: signedData?.signedUrl || null,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }

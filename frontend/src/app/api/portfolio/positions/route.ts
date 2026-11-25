@@ -423,11 +423,12 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
     console.error(JSON.stringify({
       event: 'portfolio_mutation_exception',
-      error: err?.message || 'Internal Server Error',
+      error: errMsg || 'Internal Server Error',
     }));
-    return NextResponse.json({ error: err?.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: errMsg || 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, count: rows.length });
-  } catch (err: any) {
-    console.warn('[UserSignals API] Processing exception:', err.message);
+  } catch (err: unknown) {
+    console.warn('[UserSignals API] Processing exception:', (err instanceof Error ? err.message : String(err)));
     return NextResponse.json({ ok: true, count: 0 });
   }
 }

@@ -47,8 +47,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           onClose();
         }
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'An unexpected error occurred');
+    } catch (err: unknown) {
+      setErrorMsg((err instanceof Error ? err.message : String(err)) || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -65,8 +65,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       } else {
         onClose();
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Quick admin sign-in failed');
+    } catch (err: unknown) {
+      setErrorMsg((err instanceof Error ? err.message : String(err)) || 'Quick admin sign-in failed');
     } finally {
       setLoading(false);
     }

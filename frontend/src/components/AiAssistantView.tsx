@@ -323,14 +323,14 @@ ${rec.key_risks.map((k: string) => `- ${k}`).join('\n')}
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to get response from AI Assistant:', err);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: isEn
-          ? `⚠️ Unable to retrieve real-time data: ${err.message}. Please verify network connection.`
-          : `⚠️ Veri alınırken bir aksaklık oluştu: ${err.message}. Lütfen bağlantınızı kontrol edin.`,
+          ? `⚠️ Unable to retrieve real-time data: ${(err instanceof Error ? err.message : String(err))}. Please verify network connection.`
+          : `⚠️ Veri alınırken bir aksaklık oluştu: ${(err instanceof Error ? err.message : String(err))}. Lütfen bağlantınızı kontrol edin.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMessage]);

@@ -175,12 +175,12 @@ export async function GET(request: Request) {
     };
 
     return NextResponse.json(report);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in /api/signals/health:', err);
     return NextResponse.json({
       status: 'CRITICAL',
       isHealthy: false,
-      issues: [`Diagnostic failed: ${err.message || err}`],
+      issues: [`Diagnostic failed: ${(err instanceof Error ? err.message : String(err)) || err}`],
       checkedAt: new Date().toISOString()
     }, { status: 500 });
   }
@@ -278,8 +278,8 @@ export async function POST(request: Request) {
       syncResult,
       timestamp: new Date().toISOString()
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in /api/signals/health POST:', err);
-    return NextResponse.json({ success: false, error: err.message || 'Healing failed' }, { status: 500 });
+    return NextResponse.json({ success: false, error: (err instanceof Error ? err.message : String(err)) || 'Healing failed' }, { status: 500 });
   }
 }

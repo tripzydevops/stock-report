@@ -258,9 +258,9 @@ export async function GET(request: NextRequest) {
       refreshFailed: isStale,
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Watchlist API GET error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -525,9 +525,9 @@ export async function POST(request: NextRequest) {
 
     invalidateCatalogCache();
     return NextResponse.json({ success: true, item: resultData, userId: user.id }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Watchlist API POST error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -598,9 +598,9 @@ export async function DELETE(request: NextRequest) {
 
     invalidateCatalogCache();
     return NextResponse.json({ success: true, message: 'Takip listesinden çıkarıldı', userId: user.id });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Watchlist API DELETE error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -648,8 +648,8 @@ export async function PATCH(request: NextRequest) {
 
     invalidateCatalogCache();
     return NextResponse.json({ success: true, item: data[0], userId: user.id });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Watchlist API PATCH error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }

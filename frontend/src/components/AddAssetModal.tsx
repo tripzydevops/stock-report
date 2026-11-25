@@ -81,8 +81,8 @@ export default function AddAssetModal({ isOpen, onClose, onSuccess }: AddAssetMo
       setName('');
       setAssetClass('Stock');
       setMarket('US');
-    } catch (err: any) {
-      setError(err.message || 'Failed to add asset');
+    } catch (err: unknown) {
+      setError((err instanceof Error ? err.message : String(err)) || 'Failed to add asset');
     } finally {
       setLoading(false);
     }

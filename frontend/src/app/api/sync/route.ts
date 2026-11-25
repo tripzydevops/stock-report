@@ -746,10 +746,10 @@ export async function POST(request: Request) {
       orbCount: orbUpsertSuccessCount,
       timestamp: new Date().toISOString()
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in /api/sync:', err);
     return NextResponse.json(
-      { success: false, error: err.message || 'Internal server error' },
+      { success: false, error: (err instanceof Error ? err.message : String(err)) || 'Internal server error' },
       { status: 500 }
     );
   }

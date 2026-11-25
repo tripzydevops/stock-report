@@ -249,9 +249,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(finalData);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Assets GET route exception:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -486,8 +486,8 @@ const KNOWN_TEFAS_FUNDS: Record<string, { name: string; sector: string; defaultP
       addedToWatchlist,
       userId,
     }, { status: existingAsset ? 200 : 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Assets POST route exception:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }

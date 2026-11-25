@@ -149,8 +149,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(summaryData || []);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Dividends API exception:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? (err instanceof Error ? err.message : String(err)) : String(err)) || 'Internal Server Error' }, { status: 500 });
   }
 }

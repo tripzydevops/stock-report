@@ -165,8 +165,8 @@ except Exception as e:
     }
 
     return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in /api/assets/[symbol]/fundamentals:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: (err instanceof Error ? err.message : String(err)) || 'Internal server error' }, { status: 500 });
   }
 }

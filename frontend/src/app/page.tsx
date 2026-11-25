@@ -3008,9 +3008,10 @@ export default function Home() {
         type: 'success'
       });
       setTimeout(() => setSyncFeedback(null), 5000);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       setSyncFeedback({
-        message: language === 'tr' ? `⚠️ Yenileme başarısız: ${err.message || err}` : `⚠️ Refresh failed: ${err.message || err}`,
+        message: language === 'tr' ? `⚠️ Yenileme başarısız: ${errMsg}` : `⚠️ Refresh failed: ${errMsg}`,
         type: 'error'
       });
       setTimeout(() => setSyncFeedback(null), 5000);
@@ -3433,7 +3434,7 @@ export default function Home() {
             type: 'success'
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Network error persisting portfolio position, queueing offline:', err);
         enqueueOfflineMutation({
           id: `mut-${Date.now()}`,
@@ -3642,7 +3643,7 @@ export default function Home() {
           });
           loadData(false).catch(err => console.warn('Background reload failed:', err));
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Network error executing DCA holding, queuing offline & executing locally:', err);
         enqueueOfflineMutation({
           id: `mut-${Date.now()}`,
@@ -3947,7 +3948,7 @@ export default function Home() {
             type: 'success'
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.warn('Network error executing SELL holding, queuing offline & executing locally:', err);
         enqueueOfflineMutation({
           id: `mut-${Date.now()}`,

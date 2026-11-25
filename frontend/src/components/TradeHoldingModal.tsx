@@ -113,8 +113,8 @@ export default function TradeHoldingModal({
       try {
         await onBuyMore(holding.symbol, buyAdditionalShares, buyExecPrice, tradeDate);
         onClose();
-      } catch (err: any) {
-        setErrorMsg(err?.message || (language === 'tr' ? 'Alım işlemi sırasında hata oluştu.' : 'Failed to record purchase.'));
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : (language === 'tr' ? 'Alım işlemi sırasında hata oluştu.' : 'Failed to record purchase.'));
       } finally {
         setIsSubmitting(false);
       }
@@ -128,8 +128,8 @@ export default function TradeHoldingModal({
       try {
         await onSell(holding.symbol, sellShares, sellExecPrice, tradeDate, passedEntryPrice, reduceCostBasis);
         onClose();
-      } catch (err: any) {
-        setErrorMsg(err?.message || (language === 'tr' ? 'Satış işlemi sırasında hata oluştu.' : 'Failed to record sale.'));
+      } catch (err: unknown) {
+        setErrorMsg(err instanceof Error ? err.message : (language === 'tr' ? 'Satış işlemi sırasında hata oluştu.' : 'Failed to record sale.'));
       } finally {
         setIsSubmitting(false);
       }
