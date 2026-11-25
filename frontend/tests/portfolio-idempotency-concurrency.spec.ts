@@ -491,10 +491,17 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     const failedSymbol = page.locator('[data-testid="failed-mutations-banner"]').locator('text=TESTXYZ').first();
     await expect(failedSymbol).toBeVisible();
 
-    // Click Retry and verify banner disappears
+    // Click Retry, await POST response, and verify banner disappears
     const retryBtn = page.locator('[data-testid="retry-failed-action"]').first();
     await expect(retryBtn).toBeVisible();
+    const responsePromise = page.waitForResponse(
+      (res) => res.url().includes('/api/portfolio/positions') && res.request().method() === 'POST'
+    );
     await retryBtn.click();
+    const retryResponse = await responsePromise;
+    expect(retryResponse.status()).toBe(200);
+    const retryJson = await retryResponse.json();
+    expect(retryJson.success).toBe(true);
 
     await expect(failedBanner).not.toBeVisible({ timeout: 20000 });
 
@@ -506,12 +513,17 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     ).toBe(true);
     expect(capturedPostRequest?.body?.symbol).toBe('TESTXYZ');
 
-    // Confirm failed mutation is removed from localStorage on success
-    const storedFailed = await page.evaluate(() => {
-      const raw = localStorage.getItem('marketpulse_failed_mutations');
-      return raw ? JSON.parse(raw) : [];
+    // Confirm both failed list and pending offline queue are cleared in localStorage on success
+    const { storedFailed, storedPending } = await page.evaluate(() => {
+      const rawFailed = localStorage.getItem('marketpulse_failed_mutations');
+      const rawPending = localStorage.getItem('marketpulse_offline_mutation_queue');
+      return {
+        storedFailed: rawFailed ? JSON.parse(rawFailed) : [],
+        storedPending: rawPending ? JSON.parse(rawPending) : [],
+      };
     });
     expect(storedFailed.length).toBe(0);
+    expect(storedPending.length).toBe(0);
     await page.close();
   });
 
