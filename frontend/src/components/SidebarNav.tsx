@@ -12,25 +12,17 @@ interface NavItem {
   labelTr: string;
   labelEn: string;
   icon: string;
-  category: 'core' | 'advanced';
   badge?: string;
+  count?: number;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  // Core Portfolio & Trading
-  { id: 'signals', labelTr: 'Sinyaller & Fırsatlar', labelEn: 'Signals & Picks', icon: '🎯', category: 'core' },
-  { id: 'assistant', labelTr: 'AI Piyasa Asistanı', labelEn: 'AI Market Copilot', icon: '🤖', category: 'core', badge: 'AI' },
-  { id: 'watchlist', labelTr: 'Takip Listem & Radar', labelEn: 'Watchlist & Favorites', icon: '⭐', category: 'core', badge: 'RADAR' },
-  { id: 'portfolio', labelTr: 'Portföyüm', labelEn: 'My Portfolio', icon: '💼', category: 'core' },
-  { id: 'dividend', labelTr: 'Temettü Gelirleri', labelEn: 'Dividend Tracker', icon: '💰', category: 'core' },
-  { id: 'forecast', labelTr: 'Kartopu & Projeksiyon', labelEn: 'Snowball Forecast', icon: '🔮', category: 'core' },
-
-  // Advanced & Intelligence
-  { id: 'catalysts', labelTr: 'KAP Bildirimleri', labelEn: 'KAP Catalysts', icon: '⚡', category: 'advanced' },
-  { id: 'quant', labelTr: 'Kurumsal Quant Hub', labelEn: 'Quant Stat-Arb', icon: '🏛️', category: 'advanced', badge: 'PRO' },
-  { id: 'scorecard', labelTr: 'Strateji Karnesi', labelEn: 'Strategy Scorecard', icon: '📈', category: 'advanced' },
-  { id: 'orb', labelTr: 'Açılış Seansı (ORB)', labelEn: 'Opening Direction', icon: '🔔', category: 'advanced' },
-];
+interface HubGroup {
+  id: string;
+  labelTr: string;
+  labelEn: string;
+  icon: string;
+  items: NavItem[];
+}
 
 interface SidebarNavProps {
   activeTab: TabId;
@@ -89,6 +81,52 @@ export default function SidebarNav({
     onCloseMobile();
   };
 
+  // 4-Core Hub Organization
+  const hubGroups: HubGroup[] = [
+    {
+      id: 'trade',
+      labelTr: 'Al-Sat & Radar',
+      labelEn: 'Trade & Radar',
+      icon: '🎯',
+      items: [
+        { id: 'signals', labelTr: 'Sinyaller & Fırsatlar', labelEn: 'Signals & Picks', icon: '🎯' },
+        { id: 'orb', labelTr: '15-dk Açılış (ORB)', labelEn: '15-min Opening (ORB)', icon: '🔔' },
+        { id: 'watchlist', labelTr: 'Takip Listem & Radar', labelEn: 'Watchlist & Alerts', icon: '⭐', badge: 'RADAR' },
+      ],
+    },
+    {
+      id: 'portfolio',
+      labelTr: 'Portföy & Kasa',
+      labelEn: 'Portfolio & Wealth',
+      icon: '💼',
+      items: [
+        { id: 'portfolio', labelTr: 'Canlı Portföyüm', labelEn: 'My Portfolio', icon: '💼' },
+      ],
+    },
+    {
+      id: 'dividend',
+      labelTr: 'Temettü & Gelir',
+      labelEn: 'Dividends & Cashflow',
+      icon: '💧',
+      items: [
+        { id: 'dividend', labelTr: 'Yağmur Takvimi (12-Ay)', labelEn: 'Raindrop Calendar', icon: '💧' },
+        { id: 'forecast', labelTr: 'Kartopu Simülatörü', labelEn: 'Snowball Forecast', icon: '🔮', badge: 'DRIP' },
+      ],
+    },
+    {
+      id: 'quant',
+      labelTr: 'Quant & Araştırma',
+      labelEn: 'Quant & Research',
+      icon: '🏛️',
+      items: [
+        { id: 'catalysts', labelTr: 'KAP Bildirimleri', labelEn: 'KAP Catalysts', icon: '⚡', count: catalystsCount },
+        { id: 'quant', labelTr: 'Pairs Stat-Arb', labelEn: 'Pairs Stat-Arb', icon: '🏛️', badge: 'PRO' },
+        { id: 'scorecard', labelTr: 'Strateji Karnesi', labelEn: 'Strategy Scorecard', icon: '📈' },
+        { id: 'help', labelTr: 'Kullanım Rehberi & SSS', labelEn: 'Guide & FAQ', icon: '📖' },
+      ],
+    },
+  ];
+
   return (
     <>
       {/* Mobile Backdrop Overlay */}
@@ -112,7 +150,7 @@ export default function SidebarNav({
         {/* Brand & Collapse Header */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-200/80 dark:border-slate-800/80 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
@@ -124,11 +162,11 @@ export default function SidebarNav({
                     MarketPulse
                   </span>
                   <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 shrink-0">
-                    LIVE
+                    4-HUB
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 truncate">
-                  {language === 'tr' ? 'Otonom Tavsiye & Portföy' : 'Autonomous AI Advisor'}
+                  {language === 'tr' ? 'Otonom Finans Platformu' : 'Autonomous Financial OS'}
                 </p>
               </div>
             )}
@@ -154,265 +192,158 @@ export default function SidebarNav({
           </button>
         </div>
 
-        {/* Scrollable Navigation Items */}
-        <div className="flex-1 overflow-y-auto no-scrollbar py-4 px-3 space-y-6">
-          {/* Core Section */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 pb-1 block">
-                {language === 'tr' ? 'Portföy & Fırsatlar' : 'Core & Portfolio'}
+        {/* AI Co-Pilot Highlight Card / Trigger */}
+        <div className="p-3 border-b border-slate-100 dark:border-slate-800/80">
+          <button
+            type="button"
+            onClick={() => handleSelectTab('assistant')}
+            className={`w-full p-2.5 rounded-xl border flex items-center gap-2.5 transition-all cursor-pointer shadow-xs ${
+              activeTab === 'assistant'
+                ? 'bg-purple-600 text-white border-purple-500 shadow-purple-500/30 ring-2 ring-purple-400/40'
+                : 'bg-purple-50/70 dark:bg-purple-950/30 border-purple-200/80 dark:border-purple-800/60 hover:bg-purple-100/80 text-purple-900 dark:text-purple-200'
+            }`}
+            title="AI Market Copilot"
+          >
+            <div className="relative shrink-0">
+              <span className="text-xl">🤖</span>
+              <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
               </span>
-            )}
-            {NAV_ITEMS.filter(item => item.category === 'core').map(item => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  data-tab={item.id}
-                  onClick={() => handleSelectTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                  }`}
-                  title={language === 'tr' ? item.labelTr : item.labelEn}
-                >
-                  <span className="text-base shrink-0">{item.icon}</span>
-                  {(!isCollapsed || isMobileOpen) && (
-                    <span className="truncate flex-1 text-left">
-                      {language === 'tr' ? item.labelTr : item.labelEn}
-                    </span>
-                  )}
-                  {item.badge && (!isCollapsed || isMobileOpen) && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Advanced Section */}
-          <div className="space-y-1">
+            </div>
             {(!isCollapsed || isMobileOpen) && (
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 pb-1 block">
-                {language === 'tr' ? 'Gelişmiş Analizler' : 'Advanced Analytics'}
-              </span>
+              <div className="text-left min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-xs">AI Copilot</span>
+                  <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-purple-200/80 dark:bg-purple-900 text-purple-800 dark:text-purple-300">
+                    PRO
+                  </span>
+                </div>
+                <p className="text-[10px] opacity-80 truncate">
+                  {language === 'tr' ? 'Otonom Piyasa & Portföy Danışmanı' : 'Autonomous Portfolio Intelligence'}
+                </p>
+              </div>
             )}
-            {NAV_ITEMS.filter(item => item.category === 'advanced').map(item => {
-              const isActive = activeTab === item.id;
-              const isKap = item.id === 'catalysts';
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleSelectTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                  }`}
-                  title={language === 'tr' ? item.labelTr : item.labelEn}
-                >
-                  <span className="text-base shrink-0">{item.icon}</span>
-                  {(!isCollapsed || isMobileOpen) && (
-                    <span className="truncate flex-1 text-left">
-                      {language === 'tr' ? item.labelTr : item.labelEn}
-                    </span>
-                  )}
-                  {isKap && catalystsCount > 0 && (
-                    <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white shrink-0">
-                      {catalystsCount}
-                    </span>
-                  )}
-                  {item.badge && (!isCollapsed || isMobileOpen) && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 shrink-0">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Help & Knowledge Base Section */}
-          <div className="space-y-1">
-            {(!isCollapsed || isMobileOpen) && (
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-3 pb-1 block">
-                {language === 'tr' ? 'Rehber & Destek' : 'Guide & Support'}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => handleSelectTab('help')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group ${
-                activeTab === 'help'
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-              title={language === 'tr' ? 'Kullanım Rehberi & SSS' : 'User Guide & FAQ'}
-            >
-              <span className="text-base shrink-0">📖</span>
-              {(!isCollapsed || isMobileOpen) && (
-                <span className="truncate flex-1 text-left">
-                  {language === 'tr' ? 'Kullanım Rehberi' : 'User Guide'}
-                </span>
-              )}
-              {(!isCollapsed || isMobileOpen) && (
-                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0">
-                  {language === 'tr' ? 'REHBER' : 'GUIDE'}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onOpenReports?.();
-                if (isMobileOpen) onCloseMobile();
-              }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer group text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60"
-              title={language === 'tr' ? 'Excel Raporları & Geçmiş Arşiv' : 'Excel Reports & Session Archive'}
-            >
-              <span className="text-base shrink-0">📊</span>
-              {(!isCollapsed || isMobileOpen) && (
-                <span className="truncate flex-1 text-left">
-                  {language === 'tr' ? 'Excel Rapor Arşivi' : 'Excel Reports'}
-                </span>
-              )}
-              {(!isCollapsed || isMobileOpen) && (
-                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 shrink-0">
-                  XLSX
-                </span>
-              )}
-            </button>
-          </div>
+          </button>
         </div>
 
-        {/* Sidebar Footer Utility Dock */}
-        <div className="p-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2 shrink-0 bg-slate-50/60 dark:bg-slate-900/40">
-          {/* Market Status Widget */}
+        {/* Scrollable Hub Groups */}
+        <div className="flex-1 overflow-y-auto no-scrollbar py-3 px-3 space-y-4">
+          {hubGroups.map((hub) => {
+            const isHubActive = hub.items.some(item => item.id === activeTab);
+
+            return (
+              <div key={hub.id} className="space-y-1">
+                {(!isCollapsed || isMobileOpen) && (
+                  <div className="flex items-center justify-between px-2.5 py-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <span>{hub.icon}</span>
+                      <span>{language === 'tr' ? hub.labelTr : hub.labelEn}</span>
+                    </span>
+                    {isHubActive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                    )}
+                  </div>
+                )}
+
+                {hub.items.map((item) => {
+                  const isActive = activeTab === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      data-tab={item.id}
+                      onClick={() => handleSelectTab(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer group ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                      }`}
+                      title={language === 'tr' ? item.labelTr : item.labelEn}
+                    >
+                      <span className="text-base shrink-0">{item.icon}</span>
+                      {(!isCollapsed || isMobileOpen) && (
+                        <span className="truncate flex-1 text-left">
+                          {language === 'tr' ? item.labelTr : item.labelEn}
+                        </span>
+                      )}
+                      {item.count !== undefined && item.count > 0 && (
+                        <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white shrink-0">
+                          {item.count}
+                        </span>
+                      )}
+                      {item.badge && (!isCollapsed || isMobileOpen) && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Sidebar Footer with Market Regimes & Tools */}
+        <div className="p-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2 shrink-0">
           {(!isCollapsed || isMobileOpen) ? (
-            <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {language === 'tr' ? 'Piyasa Durumu' : 'Market Status'}
-                </span>
-                <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400">
-                  ₺{usdTryRate.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">🇹🇷 BIST 100</span>
-                <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
-                  bistRegime?.status === 'Bearish'
-                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                    : bistRegime?.status === 'Bullish'
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                }`}>
-                  {bistRegime?.status === 'Bearish' ? 'Düzeltme' : bistRegime?.status === 'Bullish' ? 'Boğa' : 'Dengeleme'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">🇺🇸 SPY</span>
-                <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
-                  usRegime?.status === 'Bearish'
-                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                    : usRegime?.status === 'Bullish'
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                }`}>
-                  {usRegime?.status === 'Bearish' ? 'Düzeltme' : usRegime?.status === 'Bullish' ? 'Boğa' : 'Nötr'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 py-1 text-center">
-              <span className="text-sm" title={`USD/TRY: ₺${usdTryRate.toFixed(2)}`}>💵</span>
-              <span className={`w-2.5 h-2.5 rounded-full ${usRegime?.status === 'Bearish' ? 'bg-rose-500' : 'bg-emerald-500'}`} title="Piyasa Rejimi" />
-            </div>
-          )}
-
-          {/* Quick Actions Strip */}
-          {isMobileOpen ? (
             <div className="space-y-2">
-              <button
-                onClick={() => onTriggerSync?.(false)}
-                disabled={isRefreshing}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50 active:scale-95"
-                title="Piyasa Verilerini Canlı Senkronize Et"
-              >
-                <svg
-                  className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>
-                  {isRefreshing
-                    ? (language === 'tr' ? 'Veriler Yenileniyor...' : 'Syncing Data...')
-                    : (language === 'tr' ? 'Piyasa Verilerini Canlı Yenile' : 'Sync Live Market Data')}
-                </span>
-              </button>
-              <div className="flex items-center justify-between gap-1 pt-1 border-t border-slate-200 dark:border-slate-800">
+              {/* Macro Regime Mini Pills */}
+              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                {bistRegime && (
+                  <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 flex items-center justify-between">
+                    <span className="font-bold text-slate-500">🇹🇷 BIST</span>
+                    <span className={`font-black ${bistRegime.status === 'Bullish' ? 'text-emerald-500' : bistRegime.status === 'Bearish' ? 'text-rose-500' : 'text-amber-500'}`}>
+                      {bistRegime.status === 'Bullish' ? '▲ Boğa' : bistRegime.status === 'Bearish' ? '▼ Ayı' : '▶ Nötr'}
+                    </span>
+                  </div>
+                )}
+                {usRegime && (
+                  <div className="p-1.5 rounded-lg bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-750 flex items-center justify-between">
+                    <span className="font-bold text-slate-500">🇺🇸 SPY</span>
+                    <span className={`font-black ${usRegime.status === 'Bullish' ? 'text-emerald-500' : usRegime.status === 'Bearish' ? 'text-rose-500' : 'text-amber-500'}`}>
+                      {usRegime.status === 'Bullish' ? '▲ Boğa' : usRegime.status === 'Bearish' ? '▼ Ayı' : '▶ Nötr'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Utility Action Buttons */}
+              <div className="flex items-center justify-between pt-1 text-slate-400">
                 <button
+                  type="button"
                   onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
-                  className="flex-1 py-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 text-center transition-all cursor-pointer"
-                  title={language === 'tr' ? 'Switch to English' : 'Türkçe Dilini Seç'}
+                  className="px-2 py-1 rounded text-xs font-bold hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
-                  {language === 'tr' ? '🇹🇷 Türkçe' : '🇬🇧 English'}
+                  🌐 {language === 'tr' ? 'EN' : 'TR'}
                 </button>
                 <button
-                  onClick={onOpenSettings}
-                  className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-                  title="Ayarlar & Profil"
+                  type="button"
+                  onClick={onOpenShortcuts}
+                  className="px-2 py-1 rounded text-xs font-mono font-bold hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                  title="Kısayollar"
                 >
-                  ⚙️
+                  ⌨️ [?]
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenReports}
+                  className="px-2 py-1 rounded text-xs font-bold hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                  title="Raporlar"
+                >
+                  📄
                 </button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-1">
-              {/* Sync Button */}
+            <div className="flex flex-col items-center gap-2">
               <button
-                onClick={() => onTriggerSync?.(false)}
-                disabled={isRefreshing}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                  isCollapsed
-                    ? 'bg-transparent text-slate-500 hover:text-blue-600'
-                    : 'bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                }`}
-                title="Verileri Canlı Senkronize Et"
-              >
-                <svg
-                  className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {!isCollapsed && <span>{isRefreshing ? '...' : (language === 'tr' ? 'Yenile' : 'Sync')}</span>}
-              </button>
-
-              {/* Language Switcher */}
-              <button
+                type="button"
                 onClick={() => setLanguage(language === 'tr' ? 'en' : 'tr')}
-                className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-                title={language === 'tr' ? 'Switch to English' : 'Türkçe Dilini Seç'}
+                className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold flex items-center justify-center cursor-pointer"
               >
-                {language === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
-              </button>
-
-              {/* Settings Trigger */}
-              <button
-                onClick={onOpenSettings}
-                className="p-1.5 rounded-xl hover:bg-slate-200/80 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
-                title="Ayarlar & Profil"
-              >
-                ⚙️
+                🌐
               </button>
             </div>
           )}

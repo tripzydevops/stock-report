@@ -26,67 +26,41 @@ export default function MobileBottomNav({
   const { language } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const secondaryTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; descTr: string; descEn: string; badge?: string; count?: string }[] = [
+  // Hub grouping for drawer sheet
+  const hubDrawerSections = [
     {
-      id: 'watchlist',
-      labelTr: 'Takip Listem & Radar',
-      labelEn: 'Watchlist & Radar',
-      icon: '⭐',
-      descTr: 'Portföyden bağımsız BIST, ABD ve TEFAS fonları takip listesi ve fiyat alarmları',
-      descEn: 'Independent watchlist for BIST, US, and TEFAS funds with price alerts',
-      badge: 'YENİ',
+      titleTr: '🎯 Al-Sat & Radar',
+      titleEn: '🎯 Trade & Radar',
+      items: [
+        { id: 'signals' as TabId, labelTr: 'Sinyaller & Fırsatlar', labelEn: 'Signals & Picks', icon: '🎯', descTr: 'Kademeli alım, pullback ve trend kırılım fırsatları', descEn: 'DCA dips, pullbacks and breakouts' },
+        { id: 'orb' as TabId, labelTr: '15-dk Açılış (ORB)', labelEn: '15-min Opening (ORB)', icon: '🔔', descTr: 'Açılış seansı yön kırılımları ve hacim patlamaları', descEn: 'Opening range breakouts and volume anomalies' },
+        { id: 'watchlist' as TabId, labelTr: 'Takip Listem & Radar', labelEn: 'Watchlist & Alerts', icon: '⭐', descTr: 'BIST, ABD ve TEFAS fonları takip listesi ve alarmlar', descEn: 'Independent watchlist and price alerts', badge: 'RADAR' },
+      ],
     },
     {
-      id: 'forecast',
-      labelTr: 'Kartopu & Projeksiyon',
-      labelEn: 'Snowball & Forecast',
-      icon: '🔮',
-      descTr: 'DRIP simülatörü, kartopu hedefleri ve BIST/Midas ABD hisseleri kıyaslaması',
-      descEn: 'DRIP compounding simulator, snowball milestones & BIST/US stock comparator',
-      badge: 'YENİ',
+      titleTr: '💼 Portföyüm',
+      titleEn: '💼 My Portfolio',
+      items: [
+        { id: 'portfolio' as TabId, labelTr: 'Canlı Portföy & Kasa', labelEn: 'Live Portfolio & Ledger', icon: '💼', descTr: 'Pozisyonlar, nakit kasa defteri ve gerçekleşen kâr/zarar', descEn: 'Holdings, cash ledger and realized PnL' },
+      ],
     },
     {
-      id: 'catalysts',
-      labelTr: 'KAP Bildirimleri & Haberler',
-      labelEn: 'KAP Catalysts & News',
-      icon: '⚡',
-      descTr: 'Canlı KAP akışı, şirket haberleri ve anlık katalizörler',
-      descEn: 'Real-time corporate filings, news announcements & catalysts',
-      count: catalystsCount > 0 ? `${catalystsCount}` : undefined,
+      titleTr: '💧 Temettü & Gelir',
+      titleEn: '💧 Dividends & Cashflow',
+      items: [
+        { id: 'dividend' as TabId, labelTr: 'Yağmur Takvimi (12-Ay)', labelEn: 'Raindrop Calendar', icon: '💧', descTr: 'KAP tescilli kesinleşenler ve tahmini döngüler', descEn: 'Confirmed corporate payouts and forecast cycles' },
+        { id: 'forecast' as TabId, labelTr: 'Kartopu Simülatörü (DRIP)', labelEn: 'Snowball DRIP Lab', icon: '🔮', descTr: 'Bileşik temettü büyümesi ve hisse kıyaslayıcı', descEn: 'Dividend compounding simulator and stock comparator', badge: 'DRIP' },
+      ],
     },
     {
-      id: 'orb',
-      labelTr: 'Açılış Seansı (15dk ORB)',
-      labelEn: 'Opening Direction (ORB)',
-      icon: '🔔',
-      descTr: '15-dk Açılış kırılım yönleri, hacim anormallikleri ve seans yönü',
-      descEn: '15-min Opening Range Breakouts & volume anomalies',
-    },
-    {
-      id: 'quant',
-      labelTr: 'Kurumsal Quant Hub',
-      labelEn: 'Institutional Quant Hub',
-      icon: '🏛️',
-      descTr: 'Stat-Arb, Eşbütünleşme (Cointegration) ve Z-Score spread arbitrajı',
-      descEn: 'Statistical Arbitrage, Cointegration & Z-score pairs',
-      badge: 'PRO',
-    },
-    {
-      id: 'scorecard',
-      labelTr: 'Strateji Karnesi & Başarı Oranları',
-      labelEn: 'Strategy Scorecard & Win Rates',
-      icon: '📈',
-      descTr: '1,173 geçmiş trade istatistiği, kâr faktörü ve strateji beklenti analizi',
-      descEn: '1,173 trade backtest history, profit factors & expectancy metrics',
-    },
-    {
-      id: 'help',
-      labelTr: 'Kullanım Rehberi & SSS',
-      labelEn: 'User Guide & FAQ',
-      icon: '📖',
-      descTr: 'Kademeli alım, stop-loss, temettü kartopu ve AI danışmanı rehberi',
-      descEn: 'Step-by-step guide for DCA, stop-losses, DRIP compounding and AI advisor',
-      badge: 'REHBER',
+      titleTr: '🏛️ Quant & Araştırma',
+      titleEn: '🏛️ Quant & Research',
+      items: [
+        { id: 'catalysts' as TabId, labelTr: 'KAP Bildirimleri', labelEn: 'KAP Catalysts', icon: '⚡', descTr: 'Şirket haberleri, temettü bildirimleri ve genel kurul', descEn: 'Real-time filings and catalysts', count: catalystsCount > 0 ? `${catalystsCount}` : undefined },
+        { id: 'quant' as TabId, labelTr: 'Pairs Stat-Arb', labelEn: 'Pairs Arbitrage', icon: '🏛️', descTr: 'Eşbütünleşme (Cointegration) ve Z-Score arbitrajı', descEn: 'Statistical Arbitrage and Z-score spread', badge: 'PRO' },
+        { id: 'scorecard' as TabId, labelTr: 'Strateji Karnesi', labelEn: 'Strategy Scorecard', icon: '📈', descTr: '1,173 geçmiş trade istatistiği ve başarı oranları', descEn: 'Historical backtest trade stats' },
+        { id: 'help' as TabId, labelTr: 'Kullanım Rehberi & SSS', labelEn: 'User Guide & FAQ', icon: '📖', descTr: 'Kademeli alım kuralları, stop-loss ve platform rehberi', descEn: 'Platform guide and beginner safety rules' },
+      ],
     },
   ];
 
@@ -95,58 +69,33 @@ export default function MobileBottomNav({
     setIsMenuOpen(false);
   };
 
-  const isMoreActive = ['watchlist', 'forecast', 'catalysts', 'quant', 'scorecard', 'orb', 'help'].includes(activeTab);
-
-  const getActiveMoreLabel = () => {
-    switch (activeTab) {
-      case 'watchlist': return language === 'tr' ? 'Takip' : 'Watchlist';
-      case 'forecast': return language === 'tr' ? 'Kartopu' : 'Forecast';
-      case 'catalysts': return 'KAP';
-      case 'orb': return language === 'tr' ? 'Açılış' : 'Opening';
-      case 'quant': return 'Quant';
-      case 'scorecard': return language === 'tr' ? 'Karne' : 'Scorecard';
-      case 'help': return language === 'tr' ? 'Rehber' : 'Guide';
-      default: return language === 'tr' ? 'Menü' : 'More';
-    }
-  };
-
-  const getActiveMoreIcon = () => {
-    switch (activeTab) {
-      case 'watchlist': return '⭐';
-      case 'forecast': return '🔮';
-      case 'catalysts': return '⚡';
-      case 'orb': return '🔔';
-      case 'quant': return '🏛️';
-      case 'scorecard': return '📈';
-      case 'help': return '📖';
-      default: return '☰';
-    }
-  };
+  const isTradeActive = ['signals', 'orb', 'watchlist'].includes(activeTab);
+  const isPortfolioActive = activeTab === 'portfolio';
+  const isDividendActive = ['dividend', 'forecast'].includes(activeTab);
+  const isQuantActive = ['catalysts', 'quant', 'scorecard', 'help'].includes(activeTab);
+  const isAiActive = activeTab === 'assistant';
 
   return (
     <>
-      {/* Slide-up Bottom Drawer / Action Sheet for "Menü / Diğer" */}
+      {/* Slide-up Bottom Drawer / Action Sheet */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden animate-in fade-in duration-200">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMenuOpen(false)}
           />
 
-          {/* Drawer Content */}
           <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-xl rounded-t-3xl border-t border-slate-200 dark:border-slate-800 p-5 shadow-2xl z-50 space-y-4 animate-in slide-in-from-bottom duration-250 pb-8 safe-bottom">
-            {/* Grab Handle */}
             <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto" />
 
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <h3 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
                   <span>📱</span>
-                  <span>{language === 'tr' ? 'Tüm MarketPulse Sayfaları' : 'All MarketPulse Views'}</span>
+                  <span>{language === 'tr' ? 'MarketPulse Finansal Merkezleri' : 'MarketPulse Financial Hubs'}</span>
                 </h3>
                 <p className="text-xs text-gray-500 font-medium">
-                  {language === 'tr' ? 'İstediğiniz analiz sayfasına tek dokunuşla geçin' : 'Instant 1-tap navigation to any analytics view'}
+                  {language === 'tr' ? '4 ana finansal hub arasında tek dokunuşla geçin' : 'Instant 1-tap navigation across 4 financial hubs'}
                 </p>
               </div>
               <button
@@ -158,183 +107,83 @@ export default function MobileBottomNav({
               </button>
             </div>
 
-            {/* Quick Live Sync Card & Pro Mode Switcher in Drawer */}
-            <div className="grid grid-cols-2 gap-2">
-              {onTriggerSync && (
-                <button
-                  type="button"
-                  onClick={() => onTriggerSync(false)}
-                  disabled={isRefreshing}
-                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold text-xs active:scale-95 transition-all cursor-pointer"
-                >
-                  <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>{isRefreshing ? (language === 'tr' ? 'Yenileniyor...' : 'Syncing...') : (language === 'tr' ? 'Canlı Yenile' : 'Sync Now')}</span>
-                </button>
-              )}
-
-              {onToggleSimpleMode && (
-                <button
-                  type="button"
-                  onClick={onToggleSimpleMode}
-                  className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs active:scale-95 transition-all cursor-pointer"
-                >
-                  <span>{isSimpleMode ? '🌱' : '⚡'}</span>
-                  <span>{isSimpleMode ? (language === 'tr' ? 'Pro Moda Geç' : 'Switch to Pro') : (language === 'tr' ? 'Basit Moda Geç' : 'Switch to Simple')}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Special Section: Secondary & Institutional Features */}
-            <div className="space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                {language === 'tr' ? 'Derin Piyasa & Araştırma' : 'Deep Market & Analytics'}
-              </span>
-              <div className="grid grid-cols-1 gap-2">
-                {secondaryTabs.map((t) => {
-                  const isSelected = activeTab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handleSelectTab(t.id)}
-                      className={`flex items-start gap-3 p-3 rounded-2xl text-left transition-all border cursor-pointer ${
-                        isSelected
-                          ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-500/60 shadow-sm'
-                          : 'bg-gray-50 dark:bg-gray-800/70 border-gray-200 dark:border-gray-750 hover:bg-gray-100 dark:hover:bg-gray-750'
-                      }`}
-                    >
-                      <div className="text-2xl shrink-0 p-2 rounded-xl bg-white dark:bg-gray-900 shadow-xs border border-gray-200/50 dark:border-gray-700">
-                        {t.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
-                            {language === 'tr' ? t.labelTr : t.labelEn}
-                          </span>
-                          {t.count && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-500 text-white">
-                              {t.count}
-                            </span>
-                          )}
-                          {t.badge && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-500 text-white">
-                              {t.badge}
-                            </span>
-                          )}
-                          {isSelected && (
-                            <span className="ml-auto text-xs font-black text-blue-600 dark:text-blue-400">✓ Aktif</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
-                          {language === 'tr' ? t.descTr : t.descEn}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Quick shortcuts to 4 main pages */}
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-              <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 block mb-2">
-                {language === 'tr' ? 'Ana Sayfalar' : 'Main Pages'}
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('signals')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    activeTab === 'signals' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <span>🎯</span>
-                  <span>{language === 'tr' ? 'Sinyaller' : 'Signals'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('assistant')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    activeTab === 'assistant' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <span>🤖</span>
-                  <span>{language === 'tr' ? 'AI Asistan' : 'AI Copilot'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('portfolio')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    activeTab === 'portfolio' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <span>💼</span>
-                  <span>{language === 'tr' ? 'Portföy' : 'Portfolio'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('dividend')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    activeTab === 'dividend' ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <span>💰</span>
-                  <span>{language === 'tr' ? 'Temettü' : 'Dividend'}</span>
-                </button>
-              </div>
+            <div className="space-y-4">
+              {hubDrawerSections.map((sec, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-1">
+                    {language === 'tr' ? sec.titleTr : sec.titleEn}
+                  </span>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {sec.items.map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectTab(item.id)}
+                          className={`w-full text-left p-2.5 rounded-xl border flex items-center gap-3 transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/70 dark:border-slate-700/60 text-slate-900 dark:text-white'
+                          }`}
+                        >
+                          <span className="text-xl shrink-0">{item.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-xs">{language === 'tr' ? item.labelTr : item.labelEn}</span>
+                              {item.badge && (
+                                <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white text-blue-700' : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'}`}>
+                                  {item.badge}
+                                </span>
+                              )}
+                              {item.count && (
+                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
+                                  {item.count}
+                                </span>
+                              )}
+                            </div>
+                            <p className={`text-[10px] truncate ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                              {language === 'tr' ? item.descTr : item.descEn}
+                            </p>
+                          </div>
+                          <span className="text-xs opacity-60">→</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Fixed Bottom Navigation Bar (Mobile Only: < 768px) */}
+      {/* 4-Core Hub Mobile Bottom Navigation Bar */}
       <nav
-        aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#080d17]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] px-1 py-1 safe-bottom"
+        aria-label={language === 'tr' ? 'Mobil Gezinme Çubuğu' : 'Mobile Navigation Bar'}
+        className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#070b13]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 md:hidden shadow-lg safe-bottom"
       >
-        <div className="grid grid-cols-5 items-center justify-around">
-          {/* Tab 1: Signals / Picks */}
+        <div className="grid grid-cols-5 h-14 max-w-lg mx-auto px-1 items-center">
+          {/* Tab 1: Al-Sat (Trade & Radar) */}
           <button
             type="button"
-            onClick={() => handleSelectTab('signals')}
+            onClick={() => handleSelectTab(isTradeActive ? activeTab : 'signals')}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'signals'
+              isTradeActive
                 ? 'text-blue-600 dark:text-blue-400 font-black'
                 : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
             }`}
           >
             <span className="text-lg leading-none mb-0.5">🎯</span>
-            <span className="text-[10px] tracking-tight">{isSimpleMode ? (language === 'tr' ? 'Tavsiye' : 'Picks') : (language === 'tr' ? 'Sinyaller' : 'Signals')}</span>
+            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Al-Sat' : 'Trade'}</span>
           </button>
 
-          {/* Tab 2: AI Asistan (Prominently Placed in Bottom Nav!) */}
-          <button
-            type="button"
-            onClick={() => handleSelectTab('assistant')}
-            className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'assistant'
-                ? 'text-purple-600 dark:text-purple-400 font-black'
-                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
-            }`}
-          >
-            <div className="relative">
-              <span className="text-lg leading-none mb-0.5">🤖</span>
-              <span className="absolute -top-1 -right-2 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-              </span>
-            </div>
-            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'AI Asistan' : 'AI Copilot'}</span>
-          </button>
-
-          {/* Tab 3: Portfolio */}
+          {/* Tab 2: Portföy (Portfolio) */}
           <button
             type="button"
             onClick={() => handleSelectTab('portfolio')}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'portfolio'
+              isPortfolioActive
                 ? 'text-blue-600 dark:text-blue-400 font-black'
                 : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
             }`}
@@ -343,32 +192,48 @@ export default function MobileBottomNav({
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Portföy' : 'Portfolio'}</span>
           </button>
 
-          {/* Tab 4: Dividend / Temettü */}
+          {/* Center Tab: AI Copilot */}
           <button
             type="button"
-            onClick={() => handleSelectTab('dividend')}
+            onClick={() => handleSelectTab('assistant')}
+            className={`relative flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
+              isAiActive
+                ? 'text-purple-600 dark:text-purple-400 font-black'
+                : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
+            }`}
+          >
+            <div className="relative -mt-3.5 w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/40">
+              <span className="text-lg">🤖</span>
+            </div>
+            <span className="text-[10px] tracking-tight mt-0.5">{language === 'tr' ? 'AI' : 'Copilot'}</span>
+          </button>
+
+          {/* Tab 4: Temettü (Dividends) */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab(isDividendActive ? activeTab : 'dividend')}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'dividend'
+              isDividendActive
                 ? 'text-blue-600 dark:text-blue-400 font-black'
                 : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
             }`}
           >
-            <span className="text-lg leading-none mb-0.5">💰</span>
+            <span className="text-lg leading-none mb-0.5">💧</span>
             <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Temettü' : 'Dividends'}</span>
           </button>
 
-          {/* Tab 5: Menu / Diğer Drawer Trigger */}
+          {/* Tab 5: Quant & Menü Drawer */}
           <button
             type="button"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            onClick={() => setIsMenuOpen(true)}
             className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all cursor-pointer ${
-              isMoreActive || isMenuOpen
+              isQuantActive || isMenuOpen
                 ? 'text-blue-600 dark:text-blue-400 font-black'
                 : 'text-gray-500 dark:text-gray-400 font-semibold hover:text-gray-800'
             }`}
           >
-            <span className="text-lg leading-none mb-0.5">{getActiveMoreIcon()}</span>
-            <span className="text-[10px] tracking-tight">{getActiveMoreLabel()}</span>
+            <span className="text-lg leading-none mb-0.5">🏛️</span>
+            <span className="text-[10px] tracking-tight">{language === 'tr' ? 'Quant' : 'Quant'}</span>
           </button>
         </div>
       </nav>

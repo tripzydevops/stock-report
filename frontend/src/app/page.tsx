@@ -4622,6 +4622,21 @@ export default function Home() {
               )}
             </button>
 
+            {/* Ambient AI Copilot Quick Header Pill */}
+            <button
+              type="button"
+              onClick={() => handleTabChange('assistant')}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 ${
+                activeTab === 'assistant'
+                  ? 'bg-purple-600 text-white border-purple-500 shadow-purple-500/20 ring-2 ring-purple-400/30'
+                  : 'bg-purple-50/80 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
+              }`}
+              title="AI Market Copilot"
+            >
+              <span className="text-sm">🤖</span>
+              <span className="hidden sm:inline font-black">AI Copilot</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsDateFilterExpanded(prev => !prev)}
@@ -4700,6 +4715,144 @@ export default function Home() {
               currentFilter={dateFilter}
               onChange={handleDateFilterChange}
             />
+          )}
+
+          {/* 4-CORE HUB SUB-NAVIGATION STRIP */}
+          {['signals', 'orb', 'watchlist'].includes(activeTab) && (
+            <div className="flex items-center justify-between pb-1 gap-2 border-b border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('signals')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'signals'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>🎯</span>
+                  <span>{language === 'tr' ? 'Sinyaller & Fırsatlar' : 'Signals & Picks'}</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${activeTab === 'signals' ? 'bg-blue-700 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
+                    {signals.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('orb')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'orb'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>🔔</span>
+                  <span>{language === 'tr' ? '15-dk Açılış (ORB)' : '15-min Opening (ORB)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('watchlist')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'watchlist'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>⭐</span>
+                  <span>{language === 'tr' ? 'Takip Listem & Radar' : 'Watchlist & Alerts'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {['dividend', 'forecast'].includes(activeTab) && (
+            <div className="flex items-center justify-between pb-1 gap-2 border-b border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('dividend')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'dividend'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>💧</span>
+                  <span>{language === 'tr' ? 'Yağmur Takvimi & Ödemeler' : 'Raindrop Matrix & Schedule'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('forecast')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'forecast'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>🔮</span>
+                  <span>{language === 'tr' ? 'Kartopu & DRIP Simülatörü' : 'Snowball & DRIP Lab'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {['catalysts', 'quant', 'scorecard', 'help'].includes(activeTab) && (
+            <div className="flex items-center justify-between pb-1 gap-2 border-b border-slate-200/80 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('catalysts')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'catalysts'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>⚡</span>
+                  <span>{language === 'tr' ? 'KAP Bildirimleri & Haberler' : 'KAP Catalysts & News'}</span>
+                  {catalysts.length > 0 && (
+                    <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white">
+                      {catalysts.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('quant')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'quant'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>🏛️</span>
+                  <span>{language === 'tr' ? 'Pairs Stat-Arb' : 'Pairs Stat-Arb'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('scorecard')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'scorecard'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>📈</span>
+                  <span>{language === 'tr' ? 'Strateji Karnesi' : 'Strategy Scorecard'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('help')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    activeTab === 'help'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <span>📖</span>
+                  <span>{language === 'tr' ? 'Kullanım Rehberi & SSS' : 'Guide & FAQ'}</span>
+                </button>
+              </div>
+            </div>
           )}
 
         {/* TAB 1: SIGNALS & SCANNER */}
