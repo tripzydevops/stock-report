@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import NavigationTabs, { TabId } from '../components/NavigationTabs';
 import SidebarNav from '../components/SidebarNav';
-import MarketRegimeBanner, { RegimeStatus } from '../components/MarketRegimeBanner';
+import { RegimeStatus } from '../lib/regime';
 import MarketCorrectionBanner from '../components/MarketCorrectionBanner';
 import TradeCard, { TradeSignal } from '../components/TradeCard';
 import AssetTable, { AssetData } from '../components/AssetTable';
@@ -4664,6 +4664,19 @@ export default function Home() {
             </button>
           </div>
         </header>
+
+        {/* Primary Hub & Sub-Navigation Strip (Single Owner for Hubs + Sub-Tabs on Mobile & Desktop) */}
+        <NavigationTabs
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          catalystsCount={catalysts.length}
+          usRegime={usRegime}
+          bistRegime={bistRegime}
+          usdTryRate={usdTryRate}
+          onOpenShortcuts={() => setIsShortcutsModalOpen(true)}
+          isSimpleMode={isSimpleMode}
+          onToggleSimpleMode={handleToggleSimpleMode}
+        />
 
         {/* Floating Sync Notification Toast */}
         {syncFeedback && (

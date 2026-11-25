@@ -177,6 +177,10 @@ export interface DividendAsset {
   paymentStatus?: 'Estimated' | 'Confirmed';
   isHeld?: boolean;
   market?: 'BIST' | 'US';
+  source?: string;
+  announcementId?: string;
+  announcementUrl?: string;
+  declaredAt?: string;
 }
 
 export interface StrategyStat {

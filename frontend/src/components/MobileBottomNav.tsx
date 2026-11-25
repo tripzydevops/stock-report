@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TabId, CORE_HUBS, AI_COPILOT_ITEM } from '../config/navigation';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -29,23 +29,55 @@ export default function MobileBottomNav({
 }: MobileBottomNavProps) {
   const { language, setLanguage } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Background scroll locking and Escape key dismissal for accessibility
+  // Background scroll locking, initial focus, focus trapping, focus restoration & Escape dismissal
   useEffect(() => {
     if (isMenuOpen) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+
+      const rafId = requestAnimationFrame(() => {
+        closeBtnRef.current?.focus();
+      });
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           setIsMenuOpen(false);
+          return;
+        }
+        if (e.key === 'Tab' && dialogRef.current) {
+          const focusable = Array.from(
+            dialogRef.current.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter(el => el.offsetParent !== null);
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey) {
+            if (document.activeElement === first || !dialogRef.current.contains(document.activeElement)) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last || !dialogRef.current.contains(document.activeElement)) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
         }
       };
 
       window.addEventListener('keydown', handleKeyDown);
       return () => {
+        cancelAnimationFrame(rafId);
         document.body.style.overflow = originalOverflow;
         window.removeEventListener('keydown', handleKeyDown);
+        previousFocusRef.current?.focus();
       };
     }
   }, [isMenuOpen]);
@@ -64,7 +96,8 @@ export default function MobileBottomNav({
     <>
       {/* Accessible Slide-up Bottom Drawer / Navigation & Settings Sheet */}
       {isMenuOpen && (
-        <div 
+        <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-label={language === 'tr' ? 'MarketPulse Gezinti ve Ayarlar Menüsü' : 'MarketPulse Navigation & Settings Menu'}
@@ -91,6 +124,7 @@ export default function MobileBottomNav({
                 </p>
               </div>
               <button
+                ref={closeBtnRef}
                 type="button"
                 onClick={() => setIsMenuOpen(false)}
                 className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center font-bold text-sm cursor-pointer"
@@ -101,9 +135,10 @@ export default function MobileBottomNav({
             </div>
 
             {/* AI Copilot Utility Highlight Banner */}
-            <div 
+            <button
+              type="button"
               onClick={() => handleSelectTab('assistant')}
-              className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/15 via-indigo-600/15 to-blue-600/15 border border-purple-300 dark:border-purple-800 flex items-center justify-between cursor-pointer hover:border-purple-400 transition-all active:scale-[0.99]"
+              className="w-full text-left p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/15 via-indigo-600/15 to-blue-600/15 border border-purple-300 dark:border-purple-800 flex items-center justify-between cursor-pointer hover:border-purple-400 transition-all active:scale-[0.99]"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xl shadow-md shadow-purple-500/30">
@@ -114,7 +149,7 @@ export default function MobileBottomNav({
                     <span className="text-sm font-black text-purple-950 dark:text-purple-200">
                       {language === 'tr' ? 'AI Piyasa & Portföy Asistanı' : 'AI Market & Portfolio Copilot'}
                     </span>
-                    <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-purple-600 text-white">
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-purple-600 text-white">
                       PRO
                     </span>
                   </div>
@@ -124,7 +159,7 @@ export default function MobileBottomNav({
                 </div>
               </div>
               <span className="text-purple-600 dark:text-purple-400 text-sm font-bold">➔</span>
-            </div>
+            </button>
 
             {/* Hub Directory Sections */}
             <div className="space-y-4">
@@ -161,7 +196,7 @@ export default function MobileBottomNav({
                                 </span>
                                 {item.badge && (
                                   <span
-                                    className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
+                                    className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
                                       isActive
                                         ? 'bg-white/20 text-white'
                                         : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
@@ -171,7 +206,7 @@ export default function MobileBottomNav({
                                   </span>
                                 )}
                                 {item.id === 'catalysts' && catalystsCount > 0 && (
-                                  <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>
+                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>
                                     {catalystsCount}
                                   </span>
                                 )}

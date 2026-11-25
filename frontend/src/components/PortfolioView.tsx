@@ -110,6 +110,28 @@ export default function PortfolioView({
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
   const [portfolioSubTab, setPortfolioSubTab] = useState<'holdings' | 'ledger' | 'realized' | 'dca'>('holdings');
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncFromUrl = () => {
+      const sec = new URLSearchParams(window.location.search).get('section');
+      if (sec === 'holdings' || sec === 'ledger' || sec === 'realized' || sec === 'dca') {
+        setPortfolioSubTab(sec);
+      }
+    };
+    syncFromUrl();
+    window.addEventListener('popstate', syncFromUrl);
+    return () => window.removeEventListener('popstate', syncFromUrl);
+  }, []);
+
+  const selectPortfolioSubTab = (nextTab: 'holdings' | 'ledger' | 'realized' | 'dca') => {
+    setPortfolioSubTab(nextTab);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('section', nextTab);
+      window.history.pushState(null, '', url.toString());
+    }
+  };
   const [dcaSelectedSymbol, setDcaSelectedSymbol] = useState<string>('');
   const [dcaSimulatePrice, setDcaSimulatePrice] = useState<number>(0);
   const [dcaSimulateShares, setDcaSimulateShares] = useState<number>(10);
@@ -119,6 +141,15 @@ export default function PortfolioView({
   const [showSectorRisk, setShowSectorRisk] = useState(true);
   const [orderSideFilter, setOrderSideFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
   const [orderAssetFilter, setOrderAssetFilter] = useState<string>('ALL');
+
+  const availableOrderSymbols = React.useMemo(() => {
+    const unique = new Set<string>();
+    for (const o of orders) {
+      const clean = (o.symbol || '').replace('.IS', '').trim().toUpperCase();
+      if (clean) unique.add(clean);
+    }
+    return ['ALL', ...Array.from(unique).sort()];
+  }, [orders]);
   const [editingStopSymbol, setEditingStopSymbol] = useState<string | null>(null);
   const [editStopValue, setEditStopValue] = useState<string>('');
   const [editingTargetSymbol, setEditingTargetSymbol] = useState<string | null>(null);
@@ -855,18 +886,23 @@ export default function PortfolioView({
       {/* Top Portfolio Summary KPI Cards (5 Pillars of Wealth) - Compact 2-Col Grid on Mobile */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* Card 1: Total Account Value (Full Width on Mobile) */}
-        <div 
-          onClick={() => setPortfolioSubTab('holdings')}
-          className={`col-span-2 lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer ${
+        <div
+          className={`col-span-2 lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border transition-all ${
             portfolioSubTab === 'holdings'
               ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-md'
               : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-300 dark:hover:border-blue-800'
           } flex flex-col justify-between`}
         >
           <div>
-            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>{language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}</span>
-              <div className="flex items-center gap-1.5">
+            <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider gap-2">
+              <button
+                type="button"
+                onClick={() => selectPortfolioSubTab('holdings')}
+                className="text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              >
+                {language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}
+              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsPortfolioBriefOpen(true)}
@@ -878,23 +914,29 @@ export default function PortfolioView({
                 </button>
                 <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5">
                   <button
+                    type="button"
                     onClick={() => setCurrencyMode('TRY')}
-                    className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'TRY' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
+                    className={`px-2 py-0.5 text-xs font-bold rounded-md cursor-pointer ${currencyMode === 'TRY' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
                   >
                     TRY
                   </button>
                   <button
+                    type="button"
                     onClick={() => setCurrencyMode('USD')}
-                    className={`px-2 py-0.5 text-xs font-bold rounded-md ${currencyMode === 'USD' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
+                    className={`px-2 py-0.5 text-xs font-bold rounded-md cursor-pointer ${currencyMode === 'USD' ? 'bg-blue-600 text-white' : 'text-gray-500'}`}
                   >
                     USD
                   </button>
                 </div>
               </div>
             </div>
-            <div className="mt-1.5 sm:mt-2 text-2xl font-black text-gray-900 dark:text-white">
+            <button
+              type="button"
+              onClick={() => selectPortfolioSubTab('holdings')}
+              className="mt-1.5 sm:mt-2 text-2xl font-black text-gray-900 dark:text-white text-left w-full cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+            >
               {formatCurr(totalValDisplay)}
-            </div>
+            </button>
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-2 pt-2 border-t border-gray-100 dark:border-gray-750 flex flex-wrap items-center justify-between gap-1">
             <div>
@@ -996,30 +1038,36 @@ export default function PortfolioView({
         </div>
 
         {/* Card 4: Dry Powder / Cash Balance */}
-        <div 
-          onClick={() => setPortfolioSubTab('ledger')}
-          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all cursor-pointer ${
+        <div
+          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all ${
             portfolioSubTab === 'ledger'
               ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-md'
               : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800'
           } flex flex-col justify-between`}
         >
           <div>
-            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span className="truncate">{language === 'tr' ? 'Nakit (Boşta)' : 'Cash Balance'}</span>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider gap-1">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsDepositModalOpen(true);
-                }}
+                onClick={() => selectPortfolioSubTab('ledger')}
+                className="truncate text-left hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+              >
+                {language === 'tr' ? 'Nakit (Boşta)' : 'Cash Balance'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDepositModalOpen(true)}
                 className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
                 title={language === 'tr' ? "Nakit yatır veya çek" : "Transfer cash"}
               >
                 <span>+ Transfer</span>
               </button>
             </div>
-            <div className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-blue-600 dark:text-blue-400 truncate">
+            <button
+              type="button"
+              onClick={() => selectPortfolioSubTab('ledger')}
+              className="mt-1 sm:mt-2 text-base sm:text-2xl font-black text-blue-600 dark:text-blue-400 truncate text-left w-full cursor-pointer hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+            >
               {ledgerCash.isLedgerEmpty ? (
                 <span className="text-xs sm:text-sm font-semibold text-slate-400">
                   {language === 'tr' ? 'Nakit Kaydı Yok' : 'No Cash History'}
@@ -1027,7 +1075,7 @@ export default function PortfolioView({
               ) : (
                 formatCurr(cashDisplay)
               )}
-            </div>
+            </button>
             {hasUsAssets && (
               <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px] font-mono">
                 <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" title="TRY Cüzdanı">
@@ -1070,22 +1118,26 @@ export default function PortfolioView({
         </div>
 
         {/* Card 5: Realized Profit / Losses */}
-        <div 
-          onClick={() => setPortfolioSubTab('realized')}
-          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all cursor-pointer ${
-            portfolioSubTab === 'realized' 
-              ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md' 
+        <div
+          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all ${
+            portfolioSubTab === 'realized'
+              ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md'
               : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-purple-300 dark:hover:border-purple-800'
           } flex flex-col justify-between`}
         >
           <div>
-            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span className="truncate">{language === 'tr' ? 'Kapatılan Kâr' : 'Realized'}</span>
+            <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider gap-1">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPortfolioSubTab('realized');
+                onClick={() => selectPortfolioSubTab('realized')}
+                className="truncate text-left hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded"
+              >
+                {language === 'tr' ? 'Kapatılan Kâr' : 'Realized'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  selectPortfolioSubTab('realized');
                   setShowRealized(true);
                 }}
                 className="text-[10px] sm:text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-bold cursor-pointer shrink-0"
@@ -1093,19 +1145,27 @@ export default function PortfolioView({
                 {portfolioSubTab === 'realized' ? (language === 'tr' ? 'Aktif' : 'Active') : (language === 'tr' ? 'Geçmiş' : 'History')}
               </button>
             </div>
-            <div className={`mt-1 sm:mt-2 text-base sm:text-2xl font-black truncate ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
+            <button
+              type="button"
+              onClick={() => selectPortfolioSubTab('realized')}
+              className={`mt-1 sm:mt-2 text-base sm:text-2xl font-black truncate text-left w-full cursor-pointer hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 rounded ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}
+            >
               {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
-            </div>
+            </button>
           </div>
           <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate flex items-center justify-between">
             <span>
-              {realizedTrades.length > 0 
-                ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trades Locked`) 
+              {realizedTrades.length > 0
+                ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trades Locked`)
                 : (language === 'tr' ? 'İşlem Yok' : 'None Yet')}
             </span>
-            <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">
+            <button
+              type="button"
+              onClick={() => selectPortfolioSubTab('realized')}
+              className="text-[9px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+            >
               ➔ {language === 'tr' ? 'Defter' : 'Journal'}
-            </span>
+            </button>
           </div>
         </div>
       </div>
@@ -1114,7 +1174,7 @@ export default function PortfolioView({
       <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-gray-100/90 dark:bg-gray-800/90 border border-gray-200/80 dark:border-gray-700/80 overflow-x-auto no-scrollbar shadow-xs touch-pan-x">
         <button
           type="button"
-          onClick={() => setPortfolioSubTab('holdings')}
+          onClick={() => selectPortfolioSubTab('holdings')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
             portfolioSubTab === 'holdings'
               ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
@@ -1123,14 +1183,14 @@ export default function PortfolioView({
         >
           <span className="text-sm">💼</span>
           <span>{language === 'tr' ? 'Varlıklarım & Kademeler' : 'Holdings & Lots'}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'holdings' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${portfolioSubTab === 'holdings' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
             {cleanPortfolio.length}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => setPortfolioSubTab('ledger')}
+          onClick={() => selectPortfolioSubTab('ledger')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
             portfolioSubTab === 'ledger'
               ? 'bg-white dark:bg-gray-900 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
@@ -1139,14 +1199,14 @@ export default function PortfolioView({
         >
           <span className="text-sm">💰</span>
           <span>{language === 'tr' ? 'Kasa & Nakit Defteri' : 'Cash Ledger'}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'ledger' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${portfolioSubTab === 'ledger' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
             {effectiveTransfers.length + effectiveOrders.length}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => setPortfolioSubTab('realized')}
+          onClick={() => selectPortfolioSubTab('realized')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
             portfolioSubTab === 'realized'
               ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
@@ -1155,14 +1215,14 @@ export default function PortfolioView({
         >
           <span className="text-sm">📈</span>
           <span>{language === 'tr' ? 'Gerçekleşen K/Z Günlüğü' : 'Realized Journal'}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'realized' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${portfolioSubTab === 'realized' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
             {effectiveRealizedTrades.length}
           </span>
         </button>
 
         <button
           type="button"
-          onClick={() => setPortfolioSubTab('dca')}
+          onClick={() => selectPortfolioSubTab('dca')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
             portfolioSubTab === 'dca'
               ? 'bg-white dark:bg-gray-900 text-amber-600 dark:text-amber-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
@@ -1171,7 +1231,7 @@ export default function PortfolioView({
         >
           <span className="text-sm">🧮</span>
           <span>{language === 'tr' ? 'DCA Başa Baş Motoru' : 'DCA Breakeven Engine'}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'dca' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${portfolioSubTab === 'dca' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
             {dcaEligibleHoldings.length > 0 ? `${dcaEligibleHoldings.length} Kademe` : 'Lab'}
           </span>
         </button>
@@ -1461,7 +1521,7 @@ export default function PortfolioView({
                         const isUp = orb.gapPercent >= 0;
                         return (
                           <span
-                            className={`text-[10px] font-bold px-1.5 py-0.2 rounded border inline-flex items-center gap-1 ${
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${
                               orb.orbStatus === 'Broke High'
                                 ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-700 animate-pulse'
                                 : isUp
@@ -1510,7 +1570,7 @@ export default function PortfolioView({
                         </span>
                       )}
                       {symbolSwingGains > 0 && (item.adjustedBreakEven === undefined || item.adjustedBreakEven === null) && (
-                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
                           (-{formatCurr(symbolSwingGains, item.currency)})
                         </span>
                       )}
@@ -1527,7 +1587,7 @@ export default function PortfolioView({
                     <div className={`font-black mt-0.5 ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
                     </div>
-                    <span className={`inline-block text-[10px] font-black px-1.5 py-0.2 rounded mt-0.5 ${
+                    <span className={`inline-block text-[10px] font-black px-1.5 py-0.5 rounded mt-0.5 ${
                       isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
                     }`}>
                       {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
@@ -1906,7 +1966,7 @@ export default function PortfolioView({
                             const isUp = orb.gapPercent >= 0;
                             return (
                               <span
-                                className={`text-[10px] font-bold px-1.5 py-0.2 rounded border inline-flex items-center gap-1 ${
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${
                                   orb.orbStatus === 'Broke High'
                                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-300 dark:border-blue-700 animate-pulse'
                                     : isUp
@@ -1967,7 +2027,7 @@ export default function PortfolioView({
                                 </span>
                               )}
                               {symbolSwingGains > 0 && (item.adjustedBreakEven === undefined || item.adjustedBreakEven === null) && (
-                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.2 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
+                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded border border-emerald-200 dark:border-emerald-800" title={language === 'tr' ? 'Kâr İndirimi ile Düşürülmüş Maliyet' : 'Cost reduced by realized swing gains'}>
                                   (-{formatCurr(symbolSwingGains, item.currency)})
                                 </span>
                               )}
@@ -1986,7 +2046,7 @@ export default function PortfolioView({
                             <div className={`font-bold font-mono ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                               {isProfit ? '+' : ''}{formatCurr(item.pnlAmount, item.currency)}
                             </div>
-                            <span className={`inline-block text-[10px] font-black px-1.5 py-0.2 rounded mt-0.5 ${
+                            <span className={`inline-block text-[10px] font-black px-1.5 py-0.5 rounded mt-0.5 ${
                               isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
                             }`}>
                               {isProfit ? '▲ +' : '▼ '}{item.pnlPercent.toFixed(2)}%
@@ -2047,7 +2107,7 @@ export default function PortfolioView({
                                 <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
                                   🛡️ {formatCurr(item.stopLoss, item.currency)}
                                 </span>
-                                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 mt-0.5">
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 mt-0.5">
                                   FREE TRADE
                                 </span>
                               </div>
@@ -2073,12 +2133,12 @@ export default function PortfolioView({
                                   <button
                                     type="button"
                                     onClick={() => onUpdateStopLoss?.(item.symbol, item.entryPrice)}
-                                    className="mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 cursor-pointer"
+                                    className="mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 cursor-pointer"
                                   >
                                     🛡️ Breakeven
                                   </button>
                                 ) : item.distanceToStop < 3 && item.stopLoss > 0 ? (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500 text-white animate-pulse block mt-0.5">
                                     ⚠️ STOP RİSKİ
                                   </span>
                                 ) : (
@@ -2136,7 +2196,7 @@ export default function PortfolioView({
                                 {/* Personal TP Target T0 */}
                                 <div className="mt-1 pt-0.5">
                                   <span 
-                                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
                                       item.pnlPercent >= 3.0 && item.pnlPercent <= 5.0
                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-700 animate-pulse'
                                         : item.pnlPercent > 5.0
@@ -2155,7 +2215,7 @@ export default function PortfolioView({
                                   const effectiveRR = effRisk > 0 ? (effReward / effRisk).toFixed(1) : null;
                                   if (!effectiveRR) return null;
                                   return (
-                                    <span className={`inline-block mt-0.5 text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                                    <span className={`inline-block mt-0.5 text-[9px] font-black px-1.5 py-0.5 rounded border ${
                                       Number(effectiveRR) >= 3.0
                                         ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                                         : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
@@ -2537,7 +2597,7 @@ export default function PortfolioView({
                                   <div className="text-[10px] flex items-center gap-1 mt-0.5">
                                     <span className="text-gray-500 dark:text-gray-400 font-medium">T1: {formatCurr(matchedSig!.targetPrice, item.currency)}</span>
                                     {isT1Hit ? (
-                                      <span className="px-1 py-0.2 rounded text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                      <span className="px-1 py-0.5 rounded text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                                         ✓ Hit
                                       </span>
                                     ) : (
@@ -2548,7 +2608,7 @@ export default function PortfolioView({
                                   </div>
                                 )}
 
-                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 mt-0.5 shadow-xs">
                                   +{upsidePct.toFixed(1)}% {hasT1 ? 'T2 runner' : 'target'} {distFromCurr > 0 ? `(${distFromCurr >= 0 ? '+' : ''}${distFromCurr.toFixed(1)}% left)` : '🎯 Target Hit!'}
                                 </span>
 
@@ -2819,7 +2879,7 @@ export default function PortfolioView({
                                           <span className={`font-mono font-bold ${isLotProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
                                             {isLotProfit ? '+' : ''}{formatCurr(lot.pnl, item.currency)}
                                           </span>
-                                          <span className={`ml-1 text-[10px] font-bold px-1 py-0.2 rounded ${
+                                          <span className={`ml-1 text-[10px] font-bold px-1 py-0.5 rounded ${
                                             isLotProfit ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400'
                                           }`}>
                                             {isLotProfit ? '+' : ''}{lot.pnlPct.toFixed(2)}%
@@ -3074,7 +3134,7 @@ export default function PortfolioView({
                             <div className={isProfit ? 'text-emerald-500' : 'text-rose-500'}>
                               {isProfit ? '+' : ''}{formatCurr(trade.realizedPnl, trade.currency)}
                             </div>
-                            <span className={`inline-block text-[11px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
+                            <span className={`inline-block text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${
                               isProfit ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400'
                             }`}>
                               {isProfit ? '▲ +' : '▼ '}{trade.realizedPnlPercent.toFixed(2)}%
@@ -3468,8 +3528,8 @@ export default function PortfolioView({
                 </div>
 
                 {/* Asset filter */}
-                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
-                  {['ALL', 'ISMEN', 'TURSG', 'AKBNK'].map((sym) => (
+                <div className="inline-flex flex-wrap rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+                  {availableOrderSymbols.map((sym) => (
                     <button
                       key={sym}
                       type="button"
@@ -3480,7 +3540,7 @@ export default function PortfolioView({
                           : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
                       }`}
                     >
-                      {sym}
+                      {sym === 'ALL' ? (language === 'tr' ? 'Tümü' : 'All') : sym}
                     </button>
                   ))}
                 </div>
@@ -3496,6 +3556,7 @@ export default function PortfolioView({
               ) : (
                 paginatedOrders.map((ord) => {
                   const isBuy = ord.side === 'BUY';
+                  const ordCurr = ord.currency || (ord.market === 'US' ? 'USD' : 'TRY');
                   return (
                     <div
                       key={ord.id}
@@ -3539,11 +3600,11 @@ export default function PortfolioView({
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                           <div className="text-[10px] text-gray-400 font-semibold uppercase">{language === 'tr' ? 'Fiyat' : 'Price'}</div>
-                          <div className="font-bold text-gray-900 dark:text-white mt-0.5">₺{ord.price.toFixed(2)}</div>
+                          <div className="font-bold text-gray-900 dark:text-white mt-0.5">{formatCurr(ord.price, ordCurr)}</div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
                           <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">{language === 'tr' ? 'Tutar' : 'Total'}</div>
-                          <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                          <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">{formatCurr(ord.totalValue, ordCurr)}</div>
                         </div>
                       </div>
 
@@ -3588,6 +3649,7 @@ export default function PortfolioView({
                   ) : (
                     paginatedOrders.map((ord) => {
                       const isBuy = ord.side === 'BUY';
+                      const ordCurr = ord.currency || (ord.market === 'US' ? 'USD' : 'TRY');
                       return (
                         <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                           <td className="px-5 py-3.5 whitespace-nowrap">
@@ -3625,10 +3687,10 @@ export default function PortfolioView({
                             {ord.quantity.toLocaleString()}
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
-                            ₺{ord.price.toFixed(2)}
+                            {formatCurr(ord.price, ordCurr)}
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
-                            ₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {formatCurr(ord.totalValue, ordCurr)}
                           </td>
                           <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
                             {ord.dcaNote || '-'}
@@ -3715,7 +3777,7 @@ export default function PortfolioView({
                         }`}
                       >
                         <span>{item.symbol.replace('.IS', '')}</span>
-                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
                           isSelected 
                             ? 'bg-amber-600 text-white' 
                             : isLoss 
