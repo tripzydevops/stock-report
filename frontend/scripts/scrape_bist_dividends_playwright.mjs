@@ -342,6 +342,23 @@ export async function scrapeAndIngestBistDividends() {
     };
 
     try {
+      // Guard against confirmed-record downgrade:
+      // A later unconfirmed or gross-only scrape must NEVER overwrite an already confirmed dividend record
+      if (!isConfirmed) {
+        const { data: existing } = await supabase
+          .from('asset_dividends')
+          .select('is_confirmed')
+          .eq('symbol', ticker)
+          .eq('ex_date', item.exDate)
+          .maybeSingle();
+
+        if (existing?.is_confirmed) {
+          console.log(`🛡️ [GUARDED] Preserving existing confirmed net dividend for ${ticker} on ${item.exDate}; rejected unconfirmed downgrade.`);
+          auditedCount++;
+          continue;
+        }
+      }
+
       const { error } = await supabase
         .from('asset_dividends')
         .upsert(row, { onConflict: 'symbol,ex_date' });
