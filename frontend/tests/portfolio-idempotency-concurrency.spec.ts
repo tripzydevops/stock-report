@@ -440,10 +440,23 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
       localStorage.setItem('market_pulse_active_tab', 'portfolio');
     }, { orderId: testClientOrderId, session: authSession, storageKey: supabaseAuthStorageKey });
 
+    let capturedPostRequest: {
+      url: string;
+      method: string;
+      headers: Record<string, string>;
+      body: any;
+    } | null = null;
+
     // Mock API to guarantee test isolation without polluting user portfolio
     await page.route('**/api/portfolio/positions', async (route) => {
       const req = route.request();
       if (req.method() === 'POST') {
+        capturedPostRequest = {
+          url: req.url(),
+          method: req.method(),
+          headers: req.headers(),
+          body: req.postDataJSON ? req.postDataJSON() : null,
+        };
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -484,6 +497,14 @@ test.describe('Portfolio Idempotency & Concurrency Stress Verification', () => {
     await retryBtn.click();
 
     await expect(failedBanner).not.toBeVisible({ timeout: 20000 });
+
+    // Assert intercepted route payload: clientOrderId match and TESTXYZ symbol
+    expect(capturedPostRequest).not.toBeNull();
+    expect(
+      capturedPostRequest?.body?.client_order_id === testClientOrderId ||
+      capturedPostRequest?.headers?.['idempotency-key'] === testClientOrderId
+    ).toBe(true);
+    expect(capturedPostRequest?.body?.symbol).toBe('TESTXYZ');
 
     // Confirm failed mutation is removed from localStorage on success
     const storedFailed = await page.evaluate(() => {

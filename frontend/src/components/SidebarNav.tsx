@@ -5,24 +5,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { RegimeStatus } from './MarketRegimeBanner';
 import { useAuth } from '../context/AuthContext';
 
-export type TabId = 'signals' | 'watchlist' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help' | 'assistant';
+import { TabId, CORE_HUBS } from '../config/navigation';
 
-interface NavItem {
-  id: TabId;
-  labelTr: string;
-  labelEn: string;
-  icon: string;
-  badge?: string;
-  count?: number;
-}
-
-interface HubGroup {
-  id: string;
-  labelTr: string;
-  labelEn: string;
-  icon: string;
-  items: NavItem[];
-}
+export type { TabId };
 
 interface SidebarNavProps {
   activeTab: TabId;
@@ -81,51 +66,7 @@ export default function SidebarNav({
     onCloseMobile();
   };
 
-  // 4-Core Hub Organization
-  const hubGroups: HubGroup[] = [
-    {
-      id: 'trade',
-      labelTr: 'Al-Sat & Radar',
-      labelEn: 'Trade & Radar',
-      icon: '🎯',
-      items: [
-        { id: 'signals', labelTr: 'Sinyaller & Fırsatlar', labelEn: 'Signals & Picks', icon: '🎯' },
-        { id: 'orb', labelTr: '15-dk Açılış (ORB)', labelEn: '15-min Opening (ORB)', icon: '🔔' },
-        { id: 'watchlist', labelTr: 'Takip Listem & Radar', labelEn: 'Watchlist & Alerts', icon: '⭐', badge: 'RADAR' },
-      ],
-    },
-    {
-      id: 'portfolio',
-      labelTr: 'Portföy & Kasa',
-      labelEn: 'Portfolio & Wealth',
-      icon: '💼',
-      items: [
-        { id: 'portfolio', labelTr: 'Canlı Portföyüm', labelEn: 'My Portfolio', icon: '💼' },
-      ],
-    },
-    {
-      id: 'dividend',
-      labelTr: 'Temettü & Gelir',
-      labelEn: 'Dividends & Cashflow',
-      icon: '💧',
-      items: [
-        { id: 'dividend', labelTr: 'Yağmur Takvimi (12-Ay)', labelEn: 'Raindrop Calendar', icon: '💧' },
-        { id: 'forecast', labelTr: 'Kartopu Simülatörü', labelEn: 'Snowball Forecast', icon: '🔮', badge: 'DRIP' },
-      ],
-    },
-    {
-      id: 'quant',
-      labelTr: 'Quant & Araştırma',
-      labelEn: 'Quant & Research',
-      icon: '🏛️',
-      items: [
-        { id: 'catalysts', labelTr: 'KAP Bildirimleri', labelEn: 'KAP Catalysts', icon: '⚡', count: catalystsCount },
-        { id: 'quant', labelTr: 'Pairs Stat-Arb', labelEn: 'Pairs Stat-Arb', icon: '🏛️', badge: 'PRO' },
-        { id: 'scorecard', labelTr: 'Strateji Karnesi', labelEn: 'Strategy Scorecard', icon: '📈' },
-        { id: 'help', labelTr: 'Kullanım Rehberi & SSS', labelEn: 'Guide & FAQ', icon: '📖' },
-      ],
-    },
-  ];
+
 
   return (
     <>
@@ -229,11 +170,11 @@ export default function SidebarNav({
 
         {/* Scrollable Hub Groups */}
         <div className="flex-1 overflow-y-auto no-scrollbar py-3 px-3 space-y-4">
-          {hubGroups.map((hub) => {
-            const isHubActive = hub.items.some(item => item.id === activeTab);
+          {CORE_HUBS.map((hub) => {
+            const isHubActive = hub.subTabs.some(item => item.id === activeTab);
 
             return (
-              <div key={hub.id} className="space-y-1">
+              <div key={hub.hubKey} className="space-y-1">
                 {(!isCollapsed || isMobileOpen) && (
                   <div className="flex items-center justify-between px-2.5 py-1">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -246,8 +187,9 @@ export default function SidebarNav({
                   </div>
                 )}
 
-                {hub.items.map((item) => {
+                {hub.subTabs.map((item) => {
                   const isActive = activeTab === item.id;
+                  const count = item.id === 'catalysts' ? catalystsCount : undefined;
 
                   return (
                     <button
@@ -267,9 +209,9 @@ export default function SidebarNav({
                           {language === 'tr' ? item.labelTr : item.labelEn}
                         </span>
                       )}
-                      {item.count !== undefined && item.count > 0 && (
+                      {count !== undefined && count > 0 && (
                         <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-rose-500 text-white shrink-0">
-                          {item.count}
+                          {count}
                         </span>
                       )}
                       {item.badge && (!isCollapsed || isMobileOpen) && (

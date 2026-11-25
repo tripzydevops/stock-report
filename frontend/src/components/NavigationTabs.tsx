@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { RegimeStatus } from './MarketRegimeBanner';
+import { TabId, CORE_HUBS, AI_COPILOT_ITEM, getActiveHubForTab } from '../config/navigation';
 
-export type TabId = 'signals' | 'watchlist' | 'portfolio' | 'dividend' | 'forecast' | 'scorecard' | 'orb' | 'catalysts' | 'quant' | 'help' | 'assistant';
-
-export type HubKey = 'trade' | 'portfolio' | 'dividend' | 'quant' | 'ai';
+export type { TabId };
 
 interface NavigationTabsProps {
   activeTab: TabId;
@@ -31,83 +30,13 @@ export default function NavigationTabs({
   isSimpleMode = true,
   onToggleSimpleMode,
 }: NavigationTabsProps) {
-  const { t, language } = useLanguage();
-  const activeTabRef = useRef<HTMLButtonElement | null>(null);
+  const { language } = useLanguage();
 
-  // 4-Core Hub Model Definitions
-  const hubs: {
-    hubKey: HubKey;
-    primaryTab: TabId;
-    labelTr: string;
-    labelEn: string;
-    icon: string;
-    badge?: string;
-    subTabs: { id: TabId; labelTr: string; labelEn: string; icon: string; count?: string }[];
-  }[] = [
-    {
-      hubKey: 'trade',
-      primaryTab: 'signals',
-      labelTr: 'Al-Sat & Radar',
-      labelEn: 'Trade & Radar',
-      icon: '🎯',
-      subTabs: [
-        { id: 'signals', labelTr: 'Sinyaller', labelEn: 'Picks', icon: '🎯' },
-        { id: 'orb', labelTr: '15m Açılış (ORB)', labelEn: '15m ORB', icon: '🔔' },
-        { id: 'watchlist', labelTr: 'Takip & Radar', labelEn: 'Watchlist', icon: '⭐', count: 'Radar' },
-      ],
-    },
-    {
-      hubKey: 'portfolio',
-      primaryTab: 'portfolio',
-      labelTr: 'Portföyüm',
-      labelEn: 'My Portfolio',
-      icon: '💼',
-      subTabs: [
-        { id: 'portfolio', labelTr: 'Varlıklarım', labelEn: 'Holdings', icon: '💼' },
-      ],
-    },
-    {
-      hubKey: 'dividend',
-      primaryTab: 'dividend',
-      labelTr: 'Temettü & Gelir',
-      labelEn: 'Dividends & Cash',
-      icon: '💧',
-      subTabs: [
-        { id: 'dividend', labelTr: 'Yağmur Takvimi', labelEn: 'Raindrop Calendar', icon: '💧' },
-        { id: 'forecast', labelTr: 'Kartopu Simülatörü', labelEn: 'Snowball DRIP', icon: '🔮', count: 'DRIP' },
-      ],
-    },
-    {
-      hubKey: 'quant',
-      primaryTab: 'catalysts',
-      labelTr: 'Quant & Araştırma',
-      labelEn: 'Quant & Intel',
-      icon: '🏛️',
-      subTabs: [
-        { id: 'catalysts', labelTr: 'KAP Akışı', labelEn: 'KAP Filings', icon: '⚡', count: `${catalystsCount}` },
-        { id: 'quant', labelTr: 'Pairs Stat-Arb', labelEn: 'Pairs Arbitrage', icon: '🏛️', count: 'PRO' },
-        { id: 'scorecard', labelTr: 'Karne (1,173)', labelEn: 'Scorecard', icon: '📈' },
-        { id: 'help', labelTr: 'Rehber', labelEn: 'Guide', icon: '📖' },
-      ],
-    },
-    {
-      hubKey: 'ai',
-      primaryTab: 'assistant',
-      labelTr: 'AI Copilot',
-      labelEn: 'AI Copilot',
-      icon: '🤖',
-      badge: 'AI',
-      subTabs: [
-        { id: 'assistant', labelTr: 'AI Piyasa Asistanı', labelEn: 'Market Copilot', icon: '🤖' },
-      ],
-    },
-  ];
+  // Determine active Hub from shared configuration
+  const activeHub = getActiveHubForTab(activeTab);
+  const isAiActive = activeTab === 'assistant';
 
-  // Determine active Hub
-  const activeHub = hubs.find(h => h.subTabs.some(st => st.id === activeTab)) || hubs[0];
-
-  const handleHubClick = (hub: typeof hubs[0]) => {
-    // If current tab is already in this hub, keep it; otherwise switch to hub's primary tab
+  const handleHubClick = (hub: typeof CORE_HUBS[0]) => {
     const hasCurrent = hub.subTabs.some(st => st.id === activeTab);
     if (!hasCurrent) {
       onTabChange(hub.primaryTab);
@@ -117,48 +46,56 @@ export default function NavigationTabs({
   return (
     <div className="block bg-white/95 dark:bg-[#090e1a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 sticky top-14 sm:top-16 z-30 shadow-xs">
       <div className="max-w-[1720px] mx-auto px-2.5 sm:px-6 lg:px-8">
-        {/* ROW 1: The 4 Core Hubs + AI Copilot */}
+        {/* ROW 1: The 4 Primary Financial Hubs + Utility Actions on Right */}
         <div className="flex items-center justify-between gap-2 sm:gap-4 py-1.5 sm:py-2 border-b border-slate-100 dark:border-slate-800/60">
-          {/* Left: 4 Hub Buttons */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2 overflow-x-auto no-scrollbar scroll-smooth w-full md:w-auto touch-pan-x">
-            {hubs.map((hub) => {
-              const isHubActive = activeHub.hubKey === hub.hubKey;
+          {/* Left: 4 Primary Core Hubs */}
+          <nav aria-label="Main Hubs" className="flex items-center space-x-1.5 sm:space-x-2 overflow-x-auto no-scrollbar scroll-smooth w-full md:w-auto touch-pan-x">
+            {CORE_HUBS.map((hub) => {
+              const isHubActive = !isAiActive && activeHub.hubKey === hub.hubKey;
 
               return (
                 <button
                   key={hub.hubKey}
+                  type="button"
                   onClick={() => handleHubClick(hub)}
                   className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                     isHubActive
-                      ? hub.hubKey === 'ai'
-                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30 ring-2 ring-purple-400/40'
-                        : 'bg-blue-600 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400/40'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400/40'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   <span className="text-sm shrink-0">{hub.icon}</span>
                   <span>{language === 'tr' ? hub.labelTr : hub.labelEn}</span>
-                  {hub.badge && (
-                    <span
-                      className={`ml-1 text-[9px] px-1.5 py-0.2 rounded-full font-black ${
-                        isHubActive
-                          ? 'bg-purple-700 text-white'
-                          : 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300'
-                      }`}
-                    >
-                      {hub.badge}
-                    </span>
-                  )}
                 </button>
               );
             })}
-          </div>
+          </nav>
 
-          {/* Right: Embedded Macro Tickers & Tools */}
-          <div className="hidden lg:flex items-center space-x-2 shrink-0">
+          {/* Right: AI Copilot Utility + Macro Tickers & Tools */}
+          <div className="flex items-center space-x-2 shrink-0">
+            {/* AI Copilot Utility Trigger Button */}
+            <button
+              type="button"
+              onClick={() => onTabChange('assistant')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                isAiActive
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-500/30 ring-2 ring-purple-400/40'
+                  : 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 shadow-xs'
+              }`}
+              title={language === 'tr' ? 'Otonom AI Piyasa & Portföy Asistanı' : 'Autonomous AI Market & Portfolio Copilot'}
+            >
+              <span className="text-sm shrink-0">{AI_COPILOT_ITEM.icon}</span>
+              <span className="hidden sm:inline">{language === 'tr' ? AI_COPILOT_ITEM.labelTr : AI_COPILOT_ITEM.labelEn}</span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                isAiActive ? 'bg-purple-800 text-white' : 'bg-purple-600 text-white'
+              }`}>
+                PRO
+              </span>
+            </button>
+
             {/* US Regime (SPY) */}
             {usRegime && (
-              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+              <div className="hidden xl:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">🇺🇸 SPY</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100">${usRegime.close.toFixed(2)}</span>
                 <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
@@ -174,7 +111,7 @@ export default function NavigationTabs({
 
             {/* BIST Regime (XU100) */}
             {bistRegime && (
-              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+              <div className="hidden lg:flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">🇹🇷 BIST</span>
                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{bistRegime.close.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                 <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
@@ -193,7 +130,7 @@ export default function NavigationTabs({
               <button
                 type="button"
                 onClick={onToggleSimpleMode}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95 ${
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs active:scale-95 ${
                   isSimpleMode
                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25'
                     : 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/25'
@@ -206,20 +143,22 @@ export default function NavigationTabs({
             )}
 
             {/* Keyboard Shortcuts */}
-            <button
-              type="button"
-              onClick={onOpenShortcuts}
-              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
-              title="Klavye Kısayolları ([?])"
-            >
-              <span>⌨️</span>
-              <span>[?]</span>
-            </button>
+            {onOpenShortcuts && (
+              <button
+                type="button"
+                onClick={onOpenShortcuts}
+                className="hidden sm:flex px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors items-center gap-1 cursor-pointer"
+                title="Klavye Kısayolları ([?])"
+              >
+                <span>⌨️</span>
+                <span>[?]</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* ROW 2: Active Hub Sub-Navigation Pills (if Hub has more than 1 view) */}
-        {activeHub.subTabs.length > 1 && (
+        {/* ROW 2: Active Hub Sub-Navigation Pills (Owned purely by NavigationTabs) */}
+        {!isAiActive && activeHub.subTabs.length > 1 && (
           <div className="flex items-center space-x-1.5 py-1.5 overflow-x-auto no-scrollbar">
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-1 shrink-0">
               {language === 'tr' ? `${activeHub.labelTr}:` : `${activeHub.labelEn}:`}
@@ -230,6 +169,7 @@ export default function NavigationTabs({
               return (
                 <button
                   key={subTab.id}
+                  type="button"
                   onClick={() => onTabChange(subTab.id)}
                   className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
                     isSubActive
@@ -239,13 +179,22 @@ export default function NavigationTabs({
                 >
                   <span className="text-xs">{subTab.icon}</span>
                   <span>{language === 'tr' ? subTab.labelTr : subTab.labelEn}</span>
-                  {subTab.count && (
+                  {subTab.id === 'catalysts' && catalystsCount > 0 && (
+                    <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                      isSubActive
+                        ? 'bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-bold'
+                    }`}>
+                      {catalystsCount}
+                    </span>
+                  )}
+                  {subTab.badge && (
                     <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
                       isSubActive
                         ? 'bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
-                      {subTab.count}
+                      {subTab.badge}
                     </span>
                   )}
                 </button>

@@ -109,6 +109,11 @@ export default function PortfolioView({
 }: PortfolioViewProps) {
   const { t, language } = useLanguage();
   const [currencyMode, setCurrencyMode] = useState<'TRY' | 'USD'>('TRY');
+  const [portfolioSubTab, setPortfolioSubTab] = useState<'holdings' | 'ledger' | 'realized' | 'dca'>('holdings');
+  const [dcaSelectedSymbol, setDcaSelectedSymbol] = useState<string>('');
+  const [dcaSimulatePrice, setDcaSimulatePrice] = useState<number>(0);
+  const [dcaSimulateShares, setDcaSimulateShares] = useState<number>(10);
+  const [transferFilterType, setTransferFilterType] = useState<'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'DIVIDEND'>('ALL');
   const [showRealized, setShowRealized] = useState(true);
   const [showTransfers, setShowTransfers] = useState(false);
   const [showSectorRisk, setShowSectorRisk] = useState(true);
@@ -501,6 +506,26 @@ export default function PortfolioView({
     return cleanTransfers.filter(t => isDateInRange(t.transferDate, dateFilter));
   }, [cleanTransfers, dateFilter]);
 
+  const filteredTransfers = React.useMemo(() => {
+    if (transferFilterType === 'ALL') return effectiveTransfers;
+    return effectiveTransfers.filter(t => t.transferType === transferFilterType);
+  }, [effectiveTransfers, transferFilterType]);
+
+  const dcaEligibleHoldings = React.useMemo(() => {
+    return cleanPortfolio.filter(item => {
+      const lots = getBuyLotsForHolding(item);
+      return lots.length > 1 || item.pnlPercent < 0;
+    });
+  }, [cleanPortfolio]);
+
+  const activeDcaHolding = React.useMemo(() => {
+    if (dcaSelectedSymbol) {
+      const found = cleanPortfolio.find(p => p.symbol === dcaSelectedSymbol);
+      if (found) return found;
+    }
+    return dcaEligibleHoldings[0] || cleanPortfolio[0] || null;
+  }, [dcaSelectedSymbol, cleanPortfolio, dcaEligibleHoldings]);
+
   // Reset pages when date filter or collections change
   React.useEffect(() => {
     setRealizedPage(1);
@@ -830,7 +855,14 @@ export default function PortfolioView({
       {/* Top Portfolio Summary KPI Cards (5 Pillars of Wealth) - Compact 2-Col Grid on Mobile */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* Card 1: Total Account Value (Full Width on Mobile) */}
-        <div className="col-span-2 lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div 
+          onClick={() => setPortfolioSubTab('holdings')}
+          className={`col-span-2 lg:col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer ${
+            portfolioSubTab === 'holdings'
+              ? 'border-blue-500 ring-2 ring-blue-500/30 shadow-md'
+              : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-300 dark:hover:border-blue-800'
+          } flex flex-col justify-between`}
+        >
           <div>
             <div className="flex justify-between items-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span>{language === 'tr' ? 'Toplam Portföy Değeri' : 'Total Account Value'}</span>
@@ -964,13 +996,23 @@ export default function PortfolioView({
         </div>
 
         {/* Card 4: Dry Powder / Cash Balance */}
-        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div 
+          onClick={() => setPortfolioSubTab('ledger')}
+          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all cursor-pointer ${
+            portfolioSubTab === 'ledger'
+              ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-md'
+              : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800'
+          } flex flex-col justify-between`}
+        >
           <div>
             <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span className="truncate">{language === 'tr' ? 'Nakit (Boşta)' : 'Cash Balance'}</span>
               <button
                 type="button"
-                onClick={() => setIsDepositModalOpen(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDepositModalOpen(true);
+                }}
                 className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
                 title={language === 'tr' ? "Nakit yatır veya çek" : "Transfer cash"}
               >
@@ -1028,35 +1070,117 @@ export default function PortfolioView({
         </div>
 
         {/* Card 5: Realized Profit / Losses */}
-        <div className="col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
+        <div 
+          onClick={() => setPortfolioSubTab('realized')}
+          className={`col-span-1 bg-white dark:bg-gray-800 rounded-2xl p-3 sm:p-5 border transition-all cursor-pointer ${
+            portfolioSubTab === 'realized' 
+              ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md' 
+              : 'border-gray-200 dark:border-gray-700 shadow-sm hover:border-purple-300 dark:hover:border-purple-800'
+          } flex flex-col justify-between`}
+        >
           <div>
             <div className="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <span className="truncate">{language === 'tr' ? 'Kapatılan Kâr' : 'Realized'}</span>
               <button
-                onClick={() => {
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPortfolioSubTab('realized');
                   setShowRealized(true);
-                  setTimeout(() => {
-                    document.getElementById('realized-trades-section')?.scrollIntoView({ behavior: 'smooth' });
-                  }, 50);
                 }}
-                className="text-[10px] sm:text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-bold cursor-pointer shrink-0"
+                className="text-[10px] sm:text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-bold cursor-pointer shrink-0"
               >
-                {showRealized ? (language === 'tr' ? 'Gizle' : 'Hide') : (language === 'tr' ? 'Geçmiş' : 'History')}
+                {portfolioSubTab === 'realized' ? (language === 'tr' ? 'Aktif' : 'Active') : (language === 'tr' ? 'Geçmiş' : 'History')}
               </button>
             </div>
             <div className={`mt-1 sm:mt-2 text-base sm:text-2xl font-black truncate ${totalRealizedPnlTRY > 0 ? 'text-emerald-500' : totalRealizedPnlTRY < 0 ? 'text-rose-500' : 'text-gray-900 dark:text-white'}`}>
               {totalRealizedPnlTRY > 0 ? '+' : ''}{formatCurr(totalRealizedDisplay)}
             </div>
           </div>
-          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate">
-            {realizedTrades.length > 0 
-              ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trades Locked`) 
-              : (language === 'tr' ? 'İşlem Yok' : 'None Yet')}
+          <div className="text-[10px] sm:text-[11px] text-gray-500 mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-750 truncate flex items-center justify-between">
+            <span>
+              {realizedTrades.length > 0 
+                ? (language === 'tr' ? `${realizedTrades.length} İşlem Kapatıldı` : `${realizedTrades.length} Trades Locked`) 
+                : (language === 'tr' ? 'İşlem Yok' : 'None Yet')}
+            </span>
+            <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">
+              ➔ {language === 'tr' ? 'Defter' : 'Journal'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Beginner Mode Friendly Guide Card */}
+      {/* Portfolio Sub-Navigation Strip (4 Strategic Pillars) */}
+      <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-gray-100/90 dark:bg-gray-800/90 border border-gray-200/80 dark:border-gray-700/80 overflow-x-auto no-scrollbar shadow-xs touch-pan-x">
+        <button
+          type="button"
+          onClick={() => setPortfolioSubTab('holdings')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
+            portfolioSubTab === 'holdings'
+              ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span className="text-sm">💼</span>
+          <span>{language === 'tr' ? 'Varlıklarım & Kademeler' : 'Holdings & Lots'}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'holdings' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+            {cleanPortfolio.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPortfolioSubTab('ledger')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
+            portfolioSubTab === 'ledger'
+              ? 'bg-white dark:bg-gray-900 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span className="text-sm">💰</span>
+          <span>{language === 'tr' ? 'Kasa & Nakit Defteri' : 'Cash Ledger'}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'ledger' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+            {effectiveTransfers.length + effectiveOrders.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPortfolioSubTab('realized')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
+            portfolioSubTab === 'realized'
+              ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span className="text-sm">📈</span>
+          <span>{language === 'tr' ? 'Gerçekleşen K/Z Günlüğü' : 'Realized Journal'}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'realized' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+            {effectiveRealizedTrades.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setPortfolioSubTab('dca')}
+          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap cursor-pointer min-h-[44px] ${
+            portfolioSubTab === 'dca'
+              ? 'bg-white dark:bg-gray-900 text-amber-600 dark:text-amber-400 shadow-xs ring-1 ring-black/5 dark:ring-white/10'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span className="text-sm">🧮</span>
+          <span>{language === 'tr' ? 'DCA Başa Baş Motoru' : 'DCA Breakeven Engine'}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${portfolioSubTab === 'dca' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+            {dcaEligibleHoldings.length > 0 ? `${dcaEligibleHoldings.length} Kademe` : 'Lab'}
+          </span>
+        </button>
+      </div>
+
+      {/* SUB-TAB 1: HOLDINGS & TRANCHES */}
+      {portfolioSubTab === 'holdings' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Beginner Mode Friendly Guide Card */}
       {isSimpleMode && (
         <div className="p-4 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-start gap-3 shadow-xs">
           <span className="text-xl shrink-0">💡</span>
@@ -2782,9 +2906,11 @@ export default function PortfolioView({
           </table>
         </div>
       </div>
+    </div>
+  )}
 
-      {/* Realized Trades & Closed Positions History (Collapsible / Toggleable) */}
-      {(showRealized || realizedTrades.length > 0) && (
+      {/* SUB-TAB 3: REALIZED TRADES JOURNAL */}
+      {portfolioSubTab === 'realized' && (
         <div id="realized-trades-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden animate-in fade-in duration-200">
           {/* Card Header */}
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
@@ -3153,86 +3279,234 @@ export default function PortfolioView({
         </div>
       )}
 
-      {/* 4. Executed Orders & Broker Trade History */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
-          <div>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
-              <span>📜</span>
-              <span>Executed Orders & DCA Accumulation Log</span>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
-                {effectiveOrders.length} Executed
-              </span>
-            </h3>
-            <p className="text-xs text-gray-500">
-              {language === 'tr'
-                ? 'Aracı kurum standartlarında canlı işlem kaydı: Açık pozisyonlar ağırlıklı ortalama ile birleştirilirken, tüm münferit kademeli alım ve satım lotları fill saatleri, fiyatları ve referans kodlarıyla burada bağımsız olarak saklanır.'
-                : 'Live synchronization with your brokerage executed orders, showing individual fills, timestamps, ref IDs, and DCA lot history.'}
-            </p>
+      {/* SUB-TAB 2: CASH LEDGER & TRANSFERS */}
+      {portfolioSubTab === 'ledger' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Capital Transfers & Funding Inflows History */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                  <span>💸</span>
+                  <span>{language === 'tr' ? 'Nakit Transferleri & Fonlama Geçmişi' : 'Capital Deposits & Transfers History'}</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                    {filteredTransfers.length} {language === 'tr' ? 'Kayıt' : 'Records'}
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {language === 'tr'
+                    ? 'Kasa nakit giriş ve çıkışları: Gerçek yatırım kârlılığını (ROI) hesaplamak için yatırılan ana para, temettü nakitleri ve çekilen tutarlar.'
+                    : 'Every bank transfer into or out of your brokerage account to track true lifetime ROI.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                {/* Transfer Type Filter */}
+                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+                  {(['ALL', 'DEPOSIT', 'WITHDRAWAL', 'DIVIDEND'] as const).map((tType) => (
+                    <button
+                      key={tType}
+                      type="button"
+                      onClick={() => setTransferFilterType(tType)}
+                      className={`px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${
+                        transferFilterType === tType
+                          ? tType === 'DEPOSIT'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : tType === 'WITHDRAWAL'
+                            ? 'bg-rose-600 text-white shadow-xs'
+                            : tType === 'DIVIDEND'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-blue-600 text-white shadow-xs'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                      }`}
+                    >
+                      {tType === 'ALL'
+                        ? (language === 'tr' ? 'Tümü' : 'All')
+                        : tType === 'DEPOSIT'
+                        ? (language === 'tr' ? 'Girişler' : 'Deposits')
+                        : tType === 'WITHDRAWAL'
+                        ? (language === 'tr' ? 'Çıkışlar' : 'Withdrawals')
+                        : (language === 'tr' ? 'Temettüler' : 'Dividends')}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsDepositModalOpen(true)}
+                  className="px-3.5 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  <span>+</span>
+                  <span>{language === 'tr' ? 'Transfer Kaydet' : 'Record Transfer'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile Transfers List (md:hidden) */}
+            <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2">
+              {filteredTransfers.length === 0 ? (
+                <div className="py-6 text-center text-gray-500 text-xs">
+                  {language === 'tr' ? 'Filtreye uygun transfer kaydı bulunamadı.' : 'No transfers recorded yet.'}
+                </div>
+              ) : (
+                filteredTransfers.map((t) => (
+                  <div key={t.id} className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${
+                        t.transferType === 'DIVIDEND'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
+                          : t.transferType === 'DEPOSIT'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
+                          : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
+                      }`}>
+                        {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ' : t.transferType === 'DEPOSIT' ? '↓ GİRİŞ (Deposit)' : '↑ ÇIKIŞ (Withdrawal)'}
+                      </span>
+                      <span className="font-black text-sm text-gray-900 dark:text-white">
+                        {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{t.notes || (language === 'tr' ? 'Kasa transferi' : 'Brokerage funding')}</span>
+                      <span className="font-mono text-[11px]">{t.transferDate}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Transfers Table (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto touch-pan-x">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-5 py-3 whitespace-nowrap">{language === 'tr' ? 'Transfer Türü' : 'Transfer Type'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Tutar' : 'Amount'}</th>
+                    <th className="px-5 py-3 whitespace-nowrap">{language === 'tr' ? 'Açıklama / Not' : 'Notes / Purpose'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Tarih' : 'Date'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredTransfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-6 text-center text-gray-500">
+                        {language === 'tr' ? 'Filtreye uygun transfer kaydı bulunamadı.' : 'No transfers recorded yet.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTransfers.map((t) => (
+                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${
+                            t.transferType === 'DIVIDEND'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
+                              : t.transferType === 'DEPOSIT'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
+                              : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
+                          }`}>
+                            {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ' : t.transferType === 'DEPOSIT' ? '↓ GİRİŞ (Deposit)' : '↑ ÇIKIŞ (Withdrawal)'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white whitespace-nowrap">
+                          {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
+                          {t.notes || (language === 'tr' ? 'Kasa transferi' : 'Brokerage funding')}
+                        </td>
+                        <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-xs border border-gray-200 dark:border-gray-600 shadow-xs font-mono">
+                            <span>🗓️</span>
+                            <span>{t.transferDate}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Side filter */}
-            <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
-              {(['ALL', 'BUY', 'SELL'] as const).map((side) => (
-                <button
-                  key={side}
-                  onClick={() => setOrderSideFilter(side)}
-                  className={`px-2.5 py-1 font-bold rounded-md transition-all ${
-                    orderSideFilter === side
-                      ? side === 'BUY'
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : side === 'SELL'
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'bg-blue-600 text-white shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-                  }`}
-                >
-                  {side === 'ALL' ? 'All Sides' : side === 'BUY' ? 'Buys' : 'Sells'}
-                </button>
-              ))}
+          {/* Executed Orders & Broker Trade History */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                  <span>📜</span>
+                  <span>{language === 'tr' ? 'Gerçekleşen Borsa Emirleri & İşlem Defteri' : 'Executed Orders & DCA Accumulation Log'}</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
+                    {effectiveOrders.length} {language === 'tr' ? 'İşlem' : 'Executed'}
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {language === 'tr'
+                    ? 'Aracı kurum standartlarında canlı işlem kaydı: Açık pozisyonlar ağırlıklı ortalama ile birleştirilirken, tüm münferit kademeli alım ve satım lotları fill saatleri, fiyatları ve referans kodlarıyla burada saklanır.'
+                    : 'Live synchronization with your brokerage executed orders, showing individual fills, timestamps, ref IDs, and DCA lot history.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Side filter */}
+                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+                  {(['ALL', 'BUY', 'SELL'] as const).map((side) => (
+                    <button
+                      key={side}
+                      type="button"
+                      onClick={() => setOrderSideFilter(side)}
+                      className={`px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${
+                        orderSideFilter === side
+                          ? side === 'BUY'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : side === 'SELL'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'bg-blue-600 text-white shadow-xs'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                      }`}
+                    >
+                      {side === 'ALL' ? (language === 'tr' ? 'Tümü' : 'All') : side === 'BUY' ? (language === 'tr' ? 'Alışlar' : 'Buys') : (language === 'tr' ? 'Satışlar' : 'Sells')}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Asset filter */}
+                <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+                  {['ALL', 'ISMEN', 'TURSG', 'AKBNK'].map((sym) => (
+                    <button
+                      key={sym}
+                      type="button"
+                      onClick={() => setOrderAssetFilter(sym)}
+                      className={`px-2 py-1 font-semibold rounded-md transition-all cursor-pointer ${
+                        orderAssetFilter === sym
+                          ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-xs font-bold'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      {sym}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Asset filter */}
-            <div className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
-              {['ALL', 'ISMEN', 'TURSG', 'AKBNK'].map((sym) => (
-                <button
-                  key={sym}
-                  onClick={() => setOrderAssetFilter(sym)}
-                  className={`px-2 py-1 font-semibold rounded-md transition-all ${
-                    orderAssetFilter === sym
-                      ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm font-bold'
-                      : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  {sym}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile View: Executed Orders Cards (md:hidden) */}
-        <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2.5">
-          {filteredOrders.length === 0 ? (
-            <div className="py-8 text-center text-gray-500 text-xs">
-              Filtreye uygun işlem bulunamadı.
-            </div>
-          ) : (
-            paginatedOrders.map((ord) => {
+            {/* Mobile View: Executed Orders Cards (md:hidden) */}
+            <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2.5">
+              {filteredOrders.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-xs">
+                  {language === 'tr' ? 'Filtreye uygun işlem bulunamadı.' : 'No orders matching filter.'}
+                </div>
+              ) : (
+                paginatedOrders.map((ord) => {
                   const isBuy = ord.side === 'BUY';
                   return (
                     <div
                       key={ord.id}
                       className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-2"
                     >
-                      {/* Top row: Symbol, Market, Side Badge, Status */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => onSelectTicker?.(ord.symbol)}
-                            className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 flex items-center gap-1"
+                            className="font-black text-base text-gray-900 dark:text-white hover:text-blue-600 flex items-center gap-1 cursor-pointer"
                           >
                             <span>{ord.symbol}</span>
                             <span className="text-[10px] text-blue-500">📈</span>
@@ -3256,26 +3530,23 @@ export default function PortfolioView({
                         </div>
                       </div>
 
-                      {/* Asset name */}
                       <div className="text-xs text-gray-500 truncate">{ord.name}</div>
 
-                      {/* 3-box key metric pills */}
                       <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
                         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
-                          <div className="text-[10px] text-gray-400 font-semibold uppercase">Miktar</div>
+                          <div className="text-[10px] text-gray-400 font-semibold uppercase">{language === 'tr' ? 'Miktar' : 'Qty'}</div>
                           <div className="font-bold text-gray-900 dark:text-white mt-0.5">{ord.quantity.toLocaleString()} lot</div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
-                          <div className="text-[10px] text-gray-400 font-semibold uppercase">Fiyat</div>
+                          <div className="text-[10px] text-gray-400 font-semibold uppercase">{language === 'tr' ? 'Fiyat' : 'Price'}</div>
                           <div className="font-bold text-gray-900 dark:text-white mt-0.5">₺{ord.price.toFixed(2)}</div>
                         </div>
                         <div className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200/60 dark:border-gray-700">
-                          <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">Tutar</div>
+                          <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase">{language === 'tr' ? 'Tutar' : 'Total'}</div>
                           <div className="font-bold text-blue-600 dark:text-blue-400 mt-0.5">₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                         </div>
                       </div>
 
-                      {/* Footer: Date & DCA Note / Ref */}
                       <div className="flex items-center justify-between pt-1 text-[11px] text-gray-500">
                         <span className="font-mono">🗓️ {ord.dateTime}</span>
                         {ord.dcaNote && (
@@ -3288,209 +3559,202 @@ export default function PortfolioView({
                     </div>
                   );
                 })
-            )}
-        </div>
+              )}
+            </div>
 
-        {/* Desktop View: Full Table (hidden md:block) */}
-        <div className="hidden md:block overflow-x-auto touch-pan-x">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th className="px-5 py-3 whitespace-nowrap">Asset</th>
-                <th className="px-5 py-3 text-center whitespace-nowrap">Side / Order</th>
-                <th className="px-5 py-3 text-center whitespace-nowrap">Status</th>
-                <th className="px-5 py-3 text-right whitespace-nowrap">Quantity</th>
-                <th className="px-5 py-3 text-right whitespace-nowrap">Realzd. Price</th>
-                <th className="px-5 py-3 text-right whitespace-nowrap">Total Amount</th>
-                <th className="px-5 py-3 whitespace-nowrap">DCA Note / Purpose</th>
-                <th className="px-5 py-3 text-right whitespace-nowrap">Date & Time</th>
-                <th className="px-5 py-3 text-right whitespace-nowrap">Ref ID</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
-                    Filtreye uygun işlem bulunamadı.
-                  </td>
-                </tr>
-              ) : (
-                paginatedOrders.map((ord) => {
-                  const isBuy = ord.side === 'BUY';
-                  return (
-                    <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => onSelectTicker?.(ord.symbol)}
-                            className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
-                            title={`Click to view ${ord.symbol} chart & indicators`}
-                          >
-                            <span className="group-hover:underline">{ord.symbol}</span>
-                            <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
-                          </button>
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                            {ord.market}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-500">{ord.name}</div>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-black ${
-                          isBuy 
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' 
-                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-300 dark:border-purple-800'
-                        }`}>
-                          {isBuy ? 'BUY' : 'SELL'} {ord.orderType}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
-                          ✓ {ord.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium text-gray-900 dark:text-white">
-                        {ord.quantity.toLocaleString()}
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
-                        ₺{ord.price.toFixed(2)}
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
-                        ₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
-                        {ord.dcaNote || '-'}
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right">
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-900/50 font-bold text-xs font-mono shadow-sm">
-                          <span>🗓️</span>
-                          <span>{ord.dateTime}</span>
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-mono text-gray-400">
-                        {ord.ref}
+            {/* Desktop View: Full Table (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto touch-pan-x">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-5 py-3 whitespace-nowrap">{language === 'tr' ? 'Varlık' : 'Asset'}</th>
+                    <th className="px-5 py-3 text-center whitespace-nowrap">{language === 'tr' ? 'Yön / Tip' : 'Side / Order'}</th>
+                    <th className="px-5 py-3 text-center whitespace-nowrap">{language === 'tr' ? 'Durum' : 'Status'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Miktar' : 'Quantity'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Gerçekleşen Fiyat' : 'Price'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Toplam Tutar' : 'Total Amount'}</th>
+                    <th className="px-5 py-3 whitespace-nowrap">{language === 'tr' ? 'DCA Notu / Gerekçe' : 'DCA Note'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Tarih & Saat' : 'Date & Time'}</th>
+                    <th className="px-5 py-3 text-right whitespace-nowrap">{language === 'tr' ? 'Ref No' : 'Ref ID'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-gray-500 text-xs">
+                        {language === 'tr' ? 'Filtreye uygun işlem bulunamadı.' : 'No orders matching filter.'}
                       </td>
                     </tr>
-                  );
-                }))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Executed Orders Pagination */}
-        {filteredOrders.length > 0 && (
-          <Pagination
-            currentPage={ordersPage}
-            totalItems={filteredOrders.length}
-            pageSize={ordersPageSize}
-            onPageChange={setOrdersPage}
-            onPageSizeChange={setOrdersPageSize}
-            pageSizeOptions={[10, 20, 50]}
-          />
-        )}
-      </div>
-
-      {/* 5. Capital Transfers & Funding Inflows History */}
-      {showTransfers && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden animate-in fade-in duration-200">
-          <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-850">
-            <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center space-x-2">
-                <span>💸</span>
-                <span>Capital Deposits & Transfers History</span>
-              </h3>
-              <p className="text-xs text-gray-500">Every bank transfer into or out of your brokerage account to track true lifetime ROI.</p>
+                  ) : (
+                    paginatedOrders.map((ord) => {
+                      const isBuy = ord.side === 'BUY';
+                      return (
+                        <tr key={ord.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => onSelectTicker?.(ord.symbol)}
+                                className="font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer text-left transition-colors group"
+                                title={`Click to view ${ord.symbol} chart & indicators`}
+                              >
+                                <span className="group-hover:underline">{ord.symbol}</span>
+                                <span className="text-[10px] text-blue-500 opacity-60 group-hover:opacity-100">📈</span>
+                              </button>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                {ord.market}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">{ord.name}</div>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-black ${
+                              isBuy 
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' 
+                                : 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-400 border border-purple-300 dark:border-purple-800'
+                            }`}>
+                              {isBuy ? 'BUY' : 'SELL'} {ord.orderType}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                              ✓ {ord.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium text-gray-900 dark:text-white">
+                            {ord.quantity.toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
+                            ₺{ord.price.toFixed(2)}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-right font-bold text-gray-900 dark:text-white">
+                            ₺{ord.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
+                            {ord.dcaNote || '-'}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                            <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-900/50 font-bold text-xs font-mono shadow-xs">
+                              <span>🗓️</span>
+                              <span>{ord.dateTime}</span>
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap text-right text-xs font-mono text-gray-400">
+                            {ord.ref}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-            <button
-              onClick={() => setIsDepositModalOpen(true)}
-              className="px-3 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20"
-            >
-              + Record Transfer
-            </button>
-          </div>
 
-          {/* Mobile Transfers List (md:hidden) */}
-          <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750 p-2.5 space-y-2">
-            {effectiveTransfers.length === 0 ? (
-              <div className="py-6 text-center text-gray-500 text-xs">
-                No transfers recorded yet.
+            {/* Executed Orders Pagination */}
+            {filteredOrders.length > 0 && (
+              <Pagination
+                currentPage={ordersPage}
+                totalItems={filteredOrders.length}
+                pageSize={ordersPageSize}
+                onPageChange={setOrdersPage}
+                onPageSizeChange={setOrdersPageSize}
+                pageSizeOptions={[10, 20, 50]}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 4: DCA BREAKEVEN ENGINE STUDIO */}
+      {portfolioSubTab === 'dca' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Header & Asset Selection Bar */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span>🧮</span>
+                  <span>{language === 'tr' ? 'DCA Başa Baş & Kademe Eritme Stüdyosu' : 'DCA Breakeven & Tranche Absorption Studio'}</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {language === 'tr'
+                    ? 'Yüksekten alınan kademeleri başa başa getirmek veya kâra geçirmek için gereken yeni alım miktarını ve hedef çıkış fiyatlarını simüle edin.'
+                    : 'Calculate exact shares and target prices required to neutralize drawdowns or absorb overhead tranches.'}
+                </p>
+              </div>
+              {activeDcaHolding && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    {activeDcaHolding.symbol} · {formatCurr(activeDcaHolding.currentPrice, activeDcaHolding.currency)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Asset Selection Pills */}
+            {cleanPortfolio.length > 0 ? (
+              <div className="pt-3">
+                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  {language === 'tr' ? 'Simüle Edilecek Varlık:' : 'Select Asset for DCA Breakdown:'}
+                </div>
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                  {cleanPortfolio.map((item) => {
+                    const lots = getBuyLotsForHolding(item);
+                    const isSelected = activeDcaHolding?.symbol === item.symbol;
+                    const isLoss = item.pnlPercent < 0;
+
+                    return (
+                      <button
+                        key={item.symbol}
+                        type="button"
+                        onClick={() => setDcaSelectedSymbol(item.symbol)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-amber-500 text-white shadow-xs shadow-amber-500/30 ring-2 ring-amber-400/50'
+                            : 'bg-gray-100 dark:bg-gray-750 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        <span>{item.symbol.replace('.IS', '')}</span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                          isSelected 
+                            ? 'bg-amber-600 text-white' 
+                            : isLoss 
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' 
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                        }`}>
+                          {lots.length} {language === 'tr' ? 'kademe' : 'lots'} {isLoss ? `(${item.pnlPercent.toFixed(1)}%)` : ''}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
-              effectiveTransfers.map((t) => (
-                <div key={t.id} className="bg-gray-50/70 dark:bg-gray-850/80 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black ${
-                      t.transferType === 'DIVIDEND'
-                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
-                        : t.transferType === 'DEPOSIT'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
-                        : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
-                    }`}>
-                      {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ (Dividend)' : t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
-                    </span>
-                    <span className="font-black text-sm text-gray-900 dark:text-white">
-                      {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{t.notes || 'Brokerage funding'}</span>
-                    <span className="font-mono text-[11px]">{t.transferDate}</span>
-                  </div>
-                </div>
-              ))
+              <div className="py-6 text-center text-xs text-gray-500">
+                {language === 'tr' ? 'Portföyünüzde henüz hisse bulunmuyor.' : 'No holdings in portfolio.'}
+              </div>
             )}
           </div>
 
-          {/* Desktop Transfers Table (hidden md:block) */}
-          <div className="hidden md:block overflow-x-auto touch-pan-x">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-900/60 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">
-                <tr>
-                  <th className="px-5 py-3 whitespace-nowrap">Transfer Type</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap">Amount</th>
-                  <th className="px-5 py-3 whitespace-nowrap">Notes / Purpose</th>
-                  <th className="px-5 py-3 text-right whitespace-nowrap">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {effectiveTransfers.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-6 text-center text-gray-500">
-                      No transfers recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  effectiveTransfers.map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-black ${
-                          t.transferType === 'DIVIDEND'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/70 dark:text-purple-300'
-                            : t.transferType === 'DEPOSIT'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-400'
-                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-400'
-                        }`}>
-                          {t.transferType === 'DIVIDEND' ? '💰 TEMETTÜ (Dividend)' : t.transferType === 'DEPOSIT' ? '↓ DEPOSIT (Cash In)' : '↑ WITHDRAWAL (Cash Out)'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-black text-gray-900 dark:text-white whitespace-nowrap">
-                        {t.transferType === 'WITHDRAWAL' ? '-' : '+'}{t.currency === 'USD' ? '$' : '₺'}{t.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
-                        {t.notes || 'Brokerage funding'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-bold text-xs border border-gray-200 dark:border-gray-600 shadow-sm font-mono">
-                          <span>🗓️</span>
-                          <span>{t.transferDate}</span>
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* DcaOffsetEngine Component Instance */}
+          {activeDcaHolding ? (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 sm:p-5">
+              <DcaOffsetEngine
+                symbol={activeDcaHolding.symbol}
+                name={activeDcaHolding.name}
+                currency={activeDcaHolding.currency}
+                totalShares={activeDcaHolding.shares}
+                avgEntryPrice={activeDcaHolding.entryPrice}
+                currentPrice={activeDcaHolding.currentPrice}
+                totalCost={activeDcaHolding.shares * activeDcaHolding.entryPrice}
+                currentValue={activeDcaHolding.shares * activeDcaHolding.currentPrice}
+                isDividend={activeDcaHolding.isDividend}
+                lots={getBuyLotsForHolding(activeDcaHolding)}
+                formatCurr={formatCurr}
+                onTradeHolding={() => onTradeHolding?.(activeDcaHolding, 'BUY')}
+              />
+            </div>
+          ) : null}
         </div>
       )}
 

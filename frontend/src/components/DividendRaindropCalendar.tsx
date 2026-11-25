@@ -96,6 +96,39 @@ function parseMonthFromAsset(asset: DividendAsset, dateBasis: 'payDate' | 'exDat
   return asset.currency === 'USD' ? 2 : 3;
 }
 
+function projectDateForMonth(baseDateStr: string | undefined, targetMonth: number, defaultDay: number = 20): string {
+  const currentYear = new Date().getFullYear();
+  let year = currentYear;
+  if (baseDateStr) {
+    const d = new Date(baseDateStr);
+    if (!isNaN(d.getTime())) {
+      year = d.getFullYear();
+      if (targetMonth < d.getMonth()) {
+        year += 1;
+      }
+    }
+  }
+  const mm = String(targetMonth + 1).padStart(2, '0');
+  const dd = String(defaultDay).padStart(2, '0');
+  return `${year}-${mm}-${dd}`;
+}
+
+function resolveRaindropProvenance(asset: DividendAsset, isConfirmed: boolean, isTranche: boolean = false, trancheLabel?: string): string {
+  if (isConfirmed) {
+    if (asset.currency === 'USD') {
+      return 'SEC / Şirket Resmî Bildirimi';
+    }
+    return 'KAP Resmî Bildirim';
+  }
+  if (isTranche) {
+    return `Algoritmik Projeksiyon (${trancheLabel || 'Mevsimsel Döngü'})`;
+  }
+  if (asset.frequency === 'Monthly') return 'Aylık Dağıtım Tahmini';
+  if (asset.frequency === 'Quarterly') return 'Çeyreklik Döngü Tahmini';
+  if (asset.frequency === 'Semi-Annual') return '6 Aylık Döngü Tahmini';
+  return 'Yıllık Döngü Tahmini';
+}
+
 export default function DividendRaindropCalendar({
   dividendAssets,
   usdTryRate,
@@ -154,17 +187,8 @@ export default function DividendRaindropCalendar({
         for (let t = 0; t < totalTranches; t++) {
           const targetMonth = customTranche.months[t];
           const ratio = customTranche.ratios[t] || (1 / totalTranches);
-          const trancheAmount = annualAmount * ratio;
-          const trancheTRY = isUsd ? trancheAmount * usdTryRate : trancheAmount;
-          const dps = ((asset.currentPrice || 0) * (yieldPct / 100)) * ratio;
           const trancheLabel = customTranche.monthLabels[t];
           const trancheDate = customTranche.dates[t];
-
-          let parsedDay = 18;
-          if (trancheDate) {
-            const d = new Date(trancheDate);
-            if (!isNaN(d.getTime())) parsedDay = d.getDate();
-          }
 
           // A tranche is confirmed if the overall asset is confirmed AND its target date aligns with the confirmed payout
           let trancheConfirmed = false;
@@ -180,6 +204,33 @@ export default function DividendRaindropCalendar({
             }
           }
 
+          let dps: number;
+          let trancheAmount: number;
+
+          if (trancheConfirmed && typeof asset.estimatedNextDPS === 'number' && asset.estimatedNextDPS > 0) {
+            // Confirmed event uses exact declared DPS and position shares!
+            dps = asset.estimatedNextDPS;
+            trancheAmount = asset.shares * dps;
+          } else {
+            // Estimated cycle uses seasonal allocation
+            trancheAmount = annualAmount * ratio;
+            dps = ((asset.currentPrice || 0) * (yieldPct / 100)) * ratio;
+          }
+
+          const trancheTRY = isUsd ? trancheAmount * usdTryRate : trancheAmount;
+          const trancheExDate = trancheConfirmed && asset.nextExDate 
+            ? asset.nextExDate 
+            : (trancheDate || projectDateForMonth(asset.nextExDate, targetMonth, 18));
+          const tranchePayDate = trancheConfirmed && asset.nextPaymentDate 
+            ? asset.nextPaymentDate 
+            : (trancheDate || projectDateForMonth(asset.nextPaymentDate, targetMonth, 20));
+
+          let parsedDay = 18;
+          if (tranchePayDate) {
+            const d = new Date(tranchePayDate);
+            if (!isNaN(d.getTime())) parsedDay = d.getDate();
+          }
+
           const raindropItem: RaindropItem = {
             id: `${asset.symbol}-tranche-${t}`,
             symbol: asset.symbol,
@@ -189,9 +240,9 @@ export default function DividendRaindropCalendar({
             dps: Number(dps.toFixed(4)),
             payoutAmount: trancheAmount,
             payoutAmountTRY: trancheTRY,
-            exDate: trancheDate,
-            paymentDate: trancheConfirmed ? (asset.nextPaymentDate || trancheDate) : trancheDate,
-            settlementDate: trancheConfirmed ? (asset.nextPaymentDate || trancheDate) : undefined,
+            exDate: trancheExDate,
+            paymentDate: tranchePayDate,
+            settlementDate: trancheConfirmed ? tranchePayDate : undefined,
             dayOfMonth: parsedDay,
             frequency: asset.frequency,
             dividendYield: asset.dividendYield,
@@ -201,7 +252,7 @@ export default function DividendRaindropCalendar({
             trancheNumber: t + 1,
             totalTranches,
             trancheLabel,
-            source: trancheConfirmed ? 'KAP Resmî Bildirim (T+2 Takasbank)' : 'Algoritmik Mevsimsel Döngü',
+            source: resolveRaindropProvenance(asset, trancheConfirmed, true, trancheLabel),
           };
 
           buckets[targetMonth].raindrops.push(raindropItem);
@@ -213,13 +264,31 @@ export default function DividendRaindropCalendar({
           }
         }
       } else if (asset.frequency === 'Monthly') {
-        // 12 monthly raindrops
-        const perMonthAmount = annualAmount / 12;
-        const perMonthTRY = isUsd ? perMonthAmount * usdTryRate : perMonthAmount;
-        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 12);
+        // 12 monthly raindrops with per-cycle distinct dates
+        const baseExDate = asset.nextExDate || `${new Date().getFullYear()}-01-15`;
+        const basePayDate = asset.nextPaymentDate || baseExDate;
 
         for (let m = 0; m < 12; m++) {
           const isCurrentConfirmedMonth = isAssetConfirmed && m === baseMonth;
+
+          let dps: number;
+          let perMonthAmount: number;
+          let exDateStr: string;
+          let payDateStr: string;
+
+          if (isCurrentConfirmedMonth && typeof asset.estimatedNextDPS === 'number' && asset.estimatedNextDPS > 0) {
+            dps = asset.estimatedNextDPS;
+            perMonthAmount = asset.shares * dps;
+            exDateStr = asset.nextExDate || projectDateForMonth(baseExDate, m, 15);
+            payDateStr = asset.nextPaymentDate || exDateStr;
+          } else {
+            perMonthAmount = annualAmount / 12;
+            dps = ((asset.currentPrice || 0) * (yieldPct / 100)) / 12;
+            exDateStr = projectDateForMonth(baseExDate, m, 15);
+            payDateStr = projectDateForMonth(basePayDate, m, 18);
+          }
+
+          const perMonthTRY = isUsd ? perMonthAmount * usdTryRate : perMonthAmount;
 
           const raindropItem: RaindropItem = {
             id: `${asset.symbol}-monthly-${m}`,
@@ -230,16 +299,16 @@ export default function DividendRaindropCalendar({
             dps: Number(dps.toFixed(4)),
             payoutAmount: perMonthAmount,
             payoutAmountTRY: perMonthTRY,
-            exDate: asset.nextExDate,
-            paymentDate: asset.nextPaymentDate,
-            settlementDate: isCurrentConfirmedMonth ? asset.nextPaymentDate : undefined,
+            exDate: exDateStr,
+            paymentDate: payDateStr,
+            settlementDate: isCurrentConfirmedMonth ? payDateStr : undefined,
             dayOfMonth: 15,
             frequency: asset.frequency,
             dividendYield: asset.dividendYield,
             yieldOnCost: asset.yieldOnCost,
             paymentStatus: isCurrentConfirmedMonth ? 'Confirmed' : 'Estimated',
             isQuarterlyTranche: false,
-            source: isCurrentConfirmedMonth ? 'Resmî Bildirim' : 'Aylık Dağıtım Tahmini',
+            source: resolveRaindropProvenance(asset, isCurrentConfirmedMonth),
           };
 
           buckets[m].raindrops.push(raindropItem);
@@ -251,14 +320,29 @@ export default function DividendRaindropCalendar({
           }
         }
       } else if (asset.frequency === 'Quarterly') {
-        // 4 quarterly raindrops spaced every 3 months
-        const perQuarterAmount = annualAmount / 4;
-        const perQuarterTRY = isUsd ? perQuarterAmount * usdTryRate : perQuarterAmount;
-        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 4);
-
+        // 4 quarterly raindrops spaced every 3 months with per-cycle distinct dates
         for (let q = 0; q < 4; q++) {
           const targetMonth = (baseMonth + q * 3) % 12;
           const isQuarterConfirmed = isAssetConfirmed && q === 0;
+
+          let dps: number;
+          let perQuarterAmount: number;
+          let exDateStr: string;
+          let payDateStr: string;
+
+          if (isQuarterConfirmed && typeof asset.estimatedNextDPS === 'number' && asset.estimatedNextDPS > 0) {
+            dps = asset.estimatedNextDPS;
+            perQuarterAmount = asset.shares * dps;
+            exDateStr = asset.nextExDate || projectDateForMonth(asset.nextExDate, targetMonth, 20);
+            payDateStr = asset.nextPaymentDate || exDateStr;
+          } else {
+            perQuarterAmount = annualAmount / 4;
+            dps = ((asset.currentPrice || 0) * (yieldPct / 100)) / 4;
+            exDateStr = projectDateForMonth(asset.nextExDate, targetMonth, 20);
+            payDateStr = projectDateForMonth(asset.nextPaymentDate, targetMonth, 24);
+          }
+
+          const perQuarterTRY = isUsd ? perQuarterAmount * usdTryRate : perQuarterAmount;
 
           const raindropItem: RaindropItem = {
             id: `${asset.symbol}-q-${q}`,
@@ -269,9 +353,9 @@ export default function DividendRaindropCalendar({
             dps: Number(dps.toFixed(4)),
             payoutAmount: perQuarterAmount,
             payoutAmountTRY: perQuarterTRY,
-            exDate: asset.nextExDate,
-            paymentDate: asset.nextPaymentDate,
-            settlementDate: isQuarterConfirmed ? asset.nextPaymentDate : undefined,
+            exDate: exDateStr,
+            paymentDate: payDateStr,
+            settlementDate: isQuarterConfirmed ? payDateStr : undefined,
             dayOfMonth: 20,
             frequency: asset.frequency,
             dividendYield: asset.dividendYield,
@@ -280,7 +364,7 @@ export default function DividendRaindropCalendar({
             isQuarterlyTranche: true,
             trancheNumber: q + 1,
             totalTranches: 4,
-            source: isQuarterConfirmed ? 'SEC/KAP Resmî Bildirim' : 'Çeyreklik Döngü Tahmini',
+            source: resolveRaindropProvenance(asset, isQuarterConfirmed),
           };
 
           buckets[targetMonth].raindrops.push(raindropItem);
@@ -292,14 +376,29 @@ export default function DividendRaindropCalendar({
           }
         }
       } else if (asset.frequency === 'Semi-Annual') {
-        // 2 semi-annual raindrops spaced 6 months
-        const perHalfAmount = annualAmount / 2;
-        const perHalfTRY = isUsd ? perHalfAmount * usdTryRate : perHalfAmount;
-        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100) / 2);
-
+        // 2 semi-annual raindrops spaced 6 months with per-cycle distinct dates
         for (let h = 0; h < 2; h++) {
           const targetMonth = (baseMonth + h * 6) % 12;
           const isSemiConfirmed = isAssetConfirmed && h === 0;
+
+          let dps: number;
+          let perHalfAmount: number;
+          let exDateStr: string;
+          let payDateStr: string;
+
+          if (isSemiConfirmed && typeof asset.estimatedNextDPS === 'number' && asset.estimatedNextDPS > 0) {
+            dps = asset.estimatedNextDPS;
+            perHalfAmount = asset.shares * dps;
+            exDateStr = asset.nextExDate || projectDateForMonth(asset.nextExDate, targetMonth, 25);
+            payDateStr = asset.nextPaymentDate || exDateStr;
+          } else {
+            perHalfAmount = annualAmount / 2;
+            dps = ((asset.currentPrice || 0) * (yieldPct / 100)) / 2;
+            exDateStr = projectDateForMonth(asset.nextExDate, targetMonth, 25);
+            payDateStr = projectDateForMonth(asset.nextPaymentDate, targetMonth, 28);
+          }
+
+          const perHalfTRY = isUsd ? perHalfAmount * usdTryRate : perHalfAmount;
 
           const raindropItem: RaindropItem = {
             id: `${asset.symbol}-semi-${h}`,
@@ -310,16 +409,16 @@ export default function DividendRaindropCalendar({
             dps: Number(dps.toFixed(4)),
             payoutAmount: perHalfAmount,
             payoutAmountTRY: perHalfTRY,
-            exDate: asset.nextExDate,
-            paymentDate: asset.nextPaymentDate,
-            settlementDate: isSemiConfirmed ? asset.nextPaymentDate : undefined,
+            exDate: exDateStr,
+            paymentDate: payDateStr,
+            settlementDate: isSemiConfirmed ? payDateStr : undefined,
             dayOfMonth: 25,
             frequency: asset.frequency,
             dividendYield: asset.dividendYield,
             yieldOnCost: asset.yieldOnCost,
             paymentStatus: isSemiConfirmed ? 'Confirmed' : 'Estimated',
             isQuarterlyTranche: false,
-            source: isSemiConfirmed ? 'Resmî Bildirim' : '6 Aylık Döngü Tahmini',
+            source: resolveRaindropProvenance(asset, isSemiConfirmed),
           };
 
           buckets[targetMonth].raindrops.push(raindropItem);
@@ -332,8 +431,16 @@ export default function DividendRaindropCalendar({
         }
       } else {
         // Annual single raindrop (typical BIST)
-        const dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100));
-        const payout = asset.estimatedNextPayout || (asset.shares * dps);
+        let dps: number;
+        let payout: number;
+
+        if (isAssetConfirmed && typeof asset.estimatedNextDPS === 'number' && asset.estimatedNextDPS > 0) {
+          dps = asset.estimatedNextDPS;
+          payout = asset.shares * dps;
+        } else {
+          dps = asset.estimatedNextDPS || ((asset.currentPrice || 0) * (yieldPct / 100));
+          payout = asset.estimatedNextPayout || (asset.shares * dps);
+        }
         const payoutTRY = isUsd ? payout * usdTryRate : payout;
 
         let parsedDay = 28;
@@ -360,7 +467,7 @@ export default function DividendRaindropCalendar({
           yieldOnCost: asset.yieldOnCost,
           paymentStatus: isAssetConfirmed ? 'Confirmed' : 'Estimated',
           isQuarterlyTranche: false,
-          source: isAssetConfirmed ? 'KAP Resmî Bildirim' : 'Yıllık Döngü Tahmini',
+          source: resolveRaindropProvenance(asset, isAssetConfirmed),
         };
 
         buckets[baseMonth].raindrops.push(raindropItem);
@@ -604,7 +711,7 @@ export default function DividendRaindropCalendar({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                {language === 'tr' ? 'Ödeme Tarihi (T+2)' : 'Pay Date (T+2)'}
+                {language === 'tr' ? 'Ödeme Tarihi' : 'Pay Date'}
               </button>
               <button
                 type="button"
@@ -848,7 +955,7 @@ export default function DividendRaindropCalendar({
                         <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center justify-between mt-1 pt-1 border-t border-slate-100 dark:border-slate-800">
                           <span>{drop.shares.toLocaleString()} lot</span>
                           <span className={`font-mono font-bold ${isConfirmed ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500'}`}>
-                            {drop.dps > 0 ? `₺${drop.dps.toFixed(2)}${isConfirmed ? ' Net' : ''}` : '—'}
+                            {drop.dps > 0 ? `${drop.currency === 'USD' ? '$' : '₺'}${drop.dps.toFixed(drop.currency === 'USD' ? 2 : 4)}${isConfirmed ? ' Net' : ''}` : '—'}
                           </span>
                         </div>
                       </div>
@@ -981,7 +1088,7 @@ export default function DividendRaindropCalendar({
                           )}
                           {isConfirmed ? (
                             <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
-                              ✓ {language === 'tr' ? 'KAP Kesinleşti' : 'Confirmed'}
+                              ✓ {drop.currency === 'USD' ? (language === 'tr' ? 'SEC / Resmî Kesinleşti' : 'SEC Confirmed') : (language === 'tr' ? 'KAP Kesinleşti' : 'KAP Confirmed')}
                             </span>
                           ) : (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 border border-dashed border-violet-300 dark:border-violet-700">
@@ -997,7 +1104,7 @@ export default function DividendRaindropCalendar({
                           +{formatCurr(dropDisplay)}
                         </div>
                         <span className="text-[10px] text-slate-400 font-mono">
-                          ₺{drop.dps.toFixed(4)} / lot {isConfirmed ? '(Net)' : ''}
+                          {drop.currency === 'USD' ? '$' : '₺'}{drop.dps.toFixed(drop.currency === 'USD' ? 2 : 4)} / lot {isConfirmed ? '(Net)' : '(Tahmini)'}
                         </span>
                       </div>
                     </div>
@@ -1017,7 +1124,7 @@ export default function DividendRaindropCalendar({
                       <div>
                         <span className="text-slate-400 block">
                           {isConfirmed
-                            ? (language === 'tr' ? 'Takasbank (T+2)' : 'Settlement')
+                            ? (drop.currency === 'TRY' ? (language === 'tr' ? 'Takasbank (T+2)' : 'Settlement (T+2)') : (language === 'tr' ? 'Ödeme Günü' : 'Pay Date'))
                             : (language === 'tr' ? 'Tahmini Tarih' : 'Est. Date')}
                         </span>
                         <span className={`font-bold font-mono ${isConfirmed ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-800 dark:text-slate-200'}`}>
@@ -1028,7 +1135,7 @@ export default function DividendRaindropCalendar({
 
                     {/* Provenance Footer */}
                     <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-                      <span>{drop.source || (isConfirmed ? 'KAP Resmî Bildirim' : 'Mevsimsel Projeksiyon')}</span>
+                      <span>{drop.source || (isConfirmed ? (drop.currency === 'USD' ? 'SEC / Şirket Resmî Bildirimi' : 'KAP Resmî Bildirim') : 'Mevsimsel Projeksiyon')}</span>
                       <span className="text-blue-500 group-hover:underline">Detayı Gör →</span>
                     </div>
                   </div>
