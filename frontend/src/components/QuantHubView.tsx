@@ -239,6 +239,10 @@ export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHub
   const [expandedPairId, setExpandedPairId] = useState<string | null>(null);
   const [activeColumnHelp, setActiveColumnHelp] = useState<string | null>(null);
 
+  // Pairs Filters
+  const [pairDirectionFilter, setPairDirectionFilter] = useState<'ALL' | 'ACTIONABLE' | 'LONG_SPREAD' | 'SHORT_SPREAD' | 'WATCHLIST'>('ALL');
+  const [pairSearch, setPairSearch] = useState<string>('');
+
   // Factor Filters & Pagination
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [tierFilter, setTierFilter] = useState<'ALL' | 'TOP10' | 'TOP25' | 'MID' | 'LAGGARD'>('ALL');
@@ -636,8 +640,60 @@ export default function QuantHubView({ dateFilter, portfolioValueTRY }: QuantHub
             </div>
           </div>
 
+          {/* Pairs Filter & Search Toolbar */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2.5 bg-white dark:bg-gray-800 p-3 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xs">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { id: 'ALL', tr: `Tümü (${pairs.length})`, en: `All (${pairs.length})` },
+                { id: 'ACTIONABLE', tr: `⚡ Sinyal |Z| ≥ 1.8 (${activeArbitrageCount})`, en: `⚡ Actionable (${activeArbitrageCount})` },
+                { id: 'LONG_SPREAD', tr: '↑ Long Spread', en: '↑ Long Spread' },
+                { id: 'SHORT_SPREAD', tr: '↓ Short Spread', en: '↓ Short Spread' },
+                { id: 'WATCHLIST', tr: `👀 İzleme (${watchlistCount})`, en: `👀 Watch (${watchlistCount})` },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setPairDirectionFilter(f.id)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    pairDirectionFilter === f.id
+                      ? f.id === 'ACTIONABLE'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {language === 'tr' ? f.tr : f.en}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={pairSearch}
+              onChange={(e) => setPairSearch(e.target.value)}
+              placeholder={language === 'tr' ? 'Çift veya sektör ara (AKBNK)...' : 'Search pair or sector...'}
+              className="w-full sm:w-56 px-3 py-1.5 text-xs rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pairs.map((p) => {
+            {pairs
+              .filter((p) => {
+                if (pairDirectionFilter === 'ACTIONABLE') {
+                  if (p.direction !== 'LONG_SPREAD' && p.direction !== 'SHORT_SPREAD' && Math.abs(p.z_score) < 1.8) return false;
+                } else if (pairDirectionFilter !== 'ALL' && p.direction !== pairDirectionFilter) {
+                  return false;
+                }
+                if (pairSearch.trim()) {
+                  const q = pairSearch.trim().toUpperCase();
+                  return (
+                    p.leg_a.toUpperCase().includes(q) ||
+                    p.leg_b.toUpperCase().includes(q) ||
+                    p.sector.toUpperCase().includes(q)
+                  );
+                }
+                return true;
+              })
+              .map((p) => {
               const isLongA = p.direction === 'LONG_SPREAD';
               const isShortA = p.direction === 'SHORT_SPREAD';
               const isWatch = p.direction === 'WATCHLIST';

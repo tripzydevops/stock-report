@@ -26,6 +26,7 @@ export default function CatalystFeedView({
 }: CatalystFeedViewProps) {
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<'ALL' | 'PORTFOLIO' | 'SIGNALS' | 'BUYBACK' | 'DIVIDEND' | 'MACRO'>('ALL');
+  const [verdictFilter, setVerdictFilter] = useState<'ALL' | 'Bullish' | 'Bearish' | 'HIGH_IMPACT'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [semanticMatches, setSemanticMatches] = useState<MarketCatalyst[] | null>(null);
   const [searchMode, setSearchMode] = useState<'none' | 'semantic' | 'text'>('none');
@@ -172,6 +173,10 @@ export default function CatalystFeedView({
 
     if (dateFilter && !isDateInRange(item.publishedAt, dateFilter)) return false;
 
+    if (verdictFilter === 'Bullish' && item.aiVerdict !== 'Bullish') return false;
+    if (verdictFilter === 'Bearish' && item.aiVerdict !== 'Bearish') return false;
+    if (verdictFilter === 'HIGH_IMPACT' && (item.impactScore === null || item.impactScore === undefined || item.impactScore < 7)) return false;
+
     if (filter === 'PORTFOLIO') {
       return portfolioSymbols.has(sym);
     }
@@ -199,7 +204,7 @@ export default function CatalystFeedView({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, searchQuery, dateFilter]);
+  }, [filter, verdictFilter, searchQuery, dateFilter]);
 
   const paginatedCatalysts = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -407,6 +412,38 @@ export default function CatalystFeedView({
           <span>🏛️</span>
           <span>{t.catalysts.filterMacro} ({macroCatalystsCount})</span>
         </button>
+        </div>
+
+        {/* AI Verdict & Impact Secondary Filter Bar */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2">
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">
+            {language === 'tr' ? 'Etki / Yön:' : 'AI Verdict:'}
+          </span>
+          {([
+            { id: 'ALL', tr: 'Tümü', en: 'All' },
+            { id: 'Bullish', tr: '📈 Pozitif (Bullish)', en: '📈 Bullish' },
+            { id: 'Bearish', tr: '📉 Negatif (Bearish)', en: '📉 Bearish' },
+            { id: 'HIGH_IMPACT', tr: '🔥 Yüksek Etki (7+)', en: '🔥 High Impact (7+)' },
+          ] as const).map((vf) => (
+            <button
+              key={vf.id}
+              type="button"
+              onClick={() => setVerdictFilter(vf.id)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                verdictFilter === vf.id
+                  ? vf.id === 'Bullish'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                    : vf.id === 'Bearish'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                    : vf.id === 'HIGH_IMPACT'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                    : 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 border-transparent'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
+              }`}
+            >
+              {language === 'tr' ? vf.tr : vf.en}
+            </button>
+          ))}
         </div>
       </div>
 

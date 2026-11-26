@@ -15,8 +15,19 @@ interface ScorecardViewProps {
 
 export default function ScorecardView({ strategies, scannedSignals = [], onSelectTicker, dateFilter }: ScorecardViewProps) {
   const { t, language } = useLanguage();
+  const [strategyFilter, setStrategyFilter] = React.useState<'ALL' | 'HIGH_WIN' | 'HIGH_PF'>('ALL');
+  const [strategySort, setStrategySort] = React.useState<'winRate' | 'profitFactor' | 'totalTrades' | 'expectancy'>('winRate');
 
   const isFiltered = Boolean(dateFilter && dateFilter.preset !== 'ALL');
+
+  const filteredStrategies = React.useMemo(() => {
+    const list = strategies.filter((s) => {
+      if (strategyFilter === 'HIGH_WIN') return s.winRate >= 60;
+      if (strategyFilter === 'HIGH_PF') return s.profitFactor >= 1.5;
+      return true;
+    });
+    return [...list].sort((a, b) => b[strategySort] - a[strategySort]);
+  }, [strategies, strategyFilter, strategySort]);
 
   const effectiveScannedSignals = React.useMemo(() => {
     if (!dateFilter || dateFilter.preset === 'ALL') return scannedSignals;
@@ -114,18 +125,55 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
 
       {/* Strategy Comparison Breakdown */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{t.scorecard.title}</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {language === 'tr' 
-              ? 'BIST 100, ABD Hisseleri ve ETF modellerinde 1 yıllık deneysel test sonuçları.' 
-              : 'Empirical 1-year backtest outcomes across BIST 100, US Equities, and ETFs.'}
-          </p>
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{t.scorecard.title}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {language === 'tr' 
+                ? 'BIST 100, ABD Hisseleri ve ETF modellerinde 1 yıllık deneysel test sonuçları.' 
+                : 'Empirical 1-year backtest outcomes across BIST 100, US Equities, and ETFs.'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className="inline-flex rounded-xl bg-gray-100 dark:bg-gray-700 p-0.5 text-xs">
+              {([
+                { id: 'ALL', tr: 'Tümü', en: 'All' },
+                { id: 'HIGH_WIN', tr: '≥ %60 Kazanma', en: '≥ 60% Win' },
+                { id: 'HIGH_PF', tr: '≥ 1.5 PF', en: '≥ 1.5 PF' },
+              ] as const).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStrategyFilter(f.id)}
+                  className={`px-2.5 py-1.5 font-bold rounded-lg transition-all cursor-pointer ${
+                    strategyFilter === f.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  {language === 'tr' ? f.tr : f.en}
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={strategySort}
+              onChange={(e) => setStrategySort(e.target.value as 'winRate' | 'profitFactor' | 'totalTrades' | 'expectancy')}
+              aria-label={language === 'tr' ? 'Sıralama' : 'Sort strategies'}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 cursor-pointer focus:outline-none"
+            >
+              <option value="winRate">{language === 'tr' ? 'Sırala: Kazanma %' : 'Sort: Win Rate'}</option>
+              <option value="profitFactor">{language === 'tr' ? 'Sırala: Kâr Faktörü' : 'Sort: Profit Factor'}</option>
+              <option value="expectancy">{language === 'tr' ? 'Sırala: Beklenti (R)' : 'Sort: Expectancy'}</option>
+              <option value="totalTrades">{language === 'tr' ? 'Sırala: İşlem Sayısı' : 'Sort: Sample Size'}</option>
+            </select>
+          </div>
         </div>
 
         {/* Mobile View: Strategy Cards */}
         <div className="md:hidden divide-y divide-gray-100 dark:divide-gray-750">
-          {strategies.map((stat, idx) => (
+          {filteredStrategies.map((stat, idx) => (
             <div key={idx} className="p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -196,7 +244,7 @@ export default function ScorecardView({ strategies, scannedSignals = [], onSelec
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {strategies.map((stat, idx) => (
+              {filteredStrategies.map((stat, idx) => (
                 <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                   <td className="px-5 py-4 font-bold text-gray-900 dark:text-white whitespace-nowrap">
                     {stat.strategy}
