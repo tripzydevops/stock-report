@@ -30,6 +30,7 @@ import MobileBottomNav from '../components/MobileBottomNav';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal';
 import ReportsArchiveModal from '../components/ReportsArchiveModal';
 import OnboardingWizardModal, { UserProfileContext } from '../components/OnboardingWizardModal';
+import CommandPaletteModal from '../components/CommandPaletteModal';
 import { userSignalBuffer } from '../lib/userSignalBuffer';
 import { DateRangeFilter, getDateRangeFromPreset, isDateInRange, formatFilterDisplay } from '../lib/dateFilter';
 import { useLanguage } from '../context/LanguageContext';
@@ -1306,6 +1307,8 @@ export default function Home() {
   const [calcTrade, setCalcTrade] = useState<{ entryPrice: number; stopLoss: number; targetPrice?: number; currency: 'USD' | 'TRY'; symbol?: string } | null>(null);
   const [isCalcModalOpen, setIsCalcModalOpen] = useState<boolean>(false);
   const [coPilotAsset, setCoPilotAsset] = useState<CoPilotAssetContext | null>(null);
+  const [isCoPilotDrawerOpen, setIsCoPilotDrawerOpen] = useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
@@ -4319,6 +4322,13 @@ export default function Home() {
   // Desktop Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K / Ctrl+K: Toggle global Command Palette even inside inputs
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+        return;
+      }
+
       // Don't intercept when user is typing in form controls
       const activeEl = document.activeElement;
       const isInput =
@@ -4361,9 +4371,13 @@ export default function Home() {
         return;
       }
 
-      // 'Escape': Close top active modal
+      // 'Escape': Close top active modal / drawer
       if (e.key === 'Escape') {
-        if (isReportsModalOpen) {
+        if (isCommandPaletteOpen) {
+          setIsCommandPaletteOpen(false);
+        } else if (isCoPilotDrawerOpen) {
+          setIsCoPilotDrawerOpen(false);
+        } else if (isReportsModalOpen) {
           setIsReportsModalOpen(false);
         } else if (isShortcutsModalOpen) {
           setIsShortcutsModalOpen(false);
@@ -4388,6 +4402,8 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    isCommandPaletteOpen,
+    isCoPilotDrawerOpen,
     isReportsModalOpen,
     isShortcutsModalOpen,
     isAuthModalOpen,
@@ -4635,16 +4651,29 @@ export default function Home() {
               )}
             </button>
 
-            {/* Ambient AI Copilot Quick Header Pill */}
+            {/* Global Command Palette Trigger (Cmd+K) */}
             <button
               type="button"
-              onClick={() => handleTabChange('assistant')}
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer active:scale-95 shrink-0"
+              title={language === 'tr' ? 'Hızlı Komut & Hisse Ara (Cmd+K)' : 'Command Bar & Quick Search (Cmd+K)'}
+            >
+              <span>🔍</span>
+              <kbd className="font-mono text-[10px] px-1 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Ambient AI Copilot Quick Header Pill -> Slide-Over Drawer */}
+            <button
+              type="button"
+              onClick={() => setIsCoPilotDrawerOpen(prev => !prev)}
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 ${
-                activeTab === 'assistant'
+                isCoPilotDrawerOpen || activeTab === 'assistant'
                   ? 'bg-purple-600 text-white border-purple-500 shadow-purple-500/20 ring-2 ring-purple-400/30'
                   : 'bg-purple-50/80 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40'
               }`}
-              title="AI Market Copilot"
+              title={language === 'tr' ? 'AI Piyasa Asistanı Çekmecesi' : 'AI Market Copilot Drawer'}
             >
               <span className="text-sm">🤖</span>
               <span className="hidden sm:inline font-black">AI Copilot</span>
@@ -5869,6 +5898,66 @@ export default function Home() {
         isOpen={isReportsModalOpen}
         onClose={() => setIsReportsModalOpen(false)}
       />
+
+      <CommandPaletteModal
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        assets={assets}
+        onNavigateTab={(tab) => handleTabChange(tab as TabId)}
+        onSelectTicker={handleSelectTicker}
+        onOpenCoPilotDrawer={() => setIsCoPilotDrawerOpen(true)}
+        onTriggerSync={() => handleTriggerSync(false)}
+        onOpenReports={() => setIsReportsModalOpen(true)}
+      />
+
+      {/* Slide-Over AI Co-Pilot Drawer */}
+      {isCoPilotDrawerOpen && (
+        <div className="fixed inset-0 z-[95] flex justify-end animate-in fade-in duration-150">
+          <div
+            onClick={() => setIsCoPilotDrawerOpen(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+          />
+          <aside className="relative z-10 w-full sm:w-[480px] lg:w-[540px] h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-purple-600/10 to-indigo-600/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🤖</span>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                    {language === 'tr' ? 'AI Piyasa & Portföy Co-Pilot' : 'AI Market & Portfolio Co-Pilot'}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {language === 'tr' ? 'Mevcut ekranınızı kaybetmeden anlık analiz' : 'Contextual sidecar assistant'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCoPilotDrawerOpen(false);
+                    handleTabChange('assistant');
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors cursor-pointer"
+                  title={language === 'tr' ? 'Tam Ekranda Aç' : 'Expand Fullscreen'}
+                >
+                  ⤢ {language === 'tr' ? 'Tam Ekran' : 'Expand'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCoPilotDrawerOpen(false)}
+                  aria-label={language === 'tr' ? 'Kapat' : 'Close'}
+                  className="min-w-[36px] min-h-[36px] rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 font-bold cursor-pointer transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+              <AiAssistantView />
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Mobile Settings & Profile Slide-Up Action Sheet */}
       {isSettingsSheetOpen && (
