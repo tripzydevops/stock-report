@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { evaluateDividendUpsert, normalizeBistSymbol } from '../src/lib/dividendPrecedence.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -331,7 +332,7 @@ export async function scrapeAndIngestBistDividends() {
     const provenance = !hasDeclaredNet ? `${item.source}_GROSS_ONLY_UNCONFIRMED` : item.source;
 
     // Canonical BIST symbol with .IS suffix (matches asset_dividends table)
-    const canonicalSymbol = item.symbol.replace('.IS', '').trim().toUpperCase() + '.IS';
+    const canonicalSymbol = normalizeBistSymbol(item.symbol);
 
     const row = {
       symbol: canonicalSymbol,
@@ -345,35 +346,43 @@ export async function scrapeAndIngestBistDividends() {
     };
 
     try {
-      // Guard against confirmed-record downgrade:
-      // A later unconfirmed or gross-only scrape must NEVER overwrite an already confirmed dividend record
-      if (!isConfirmed) {
-        const { data: existing } = await supabase
-          .from('asset_dividends')
-          .select('is_confirmed')
-          .eq('symbol', canonicalSymbol)
-          .eq('ex_date', item.exDate)
-          .maybeSingle();
+      const { data: existing } = await supabase
+        .from('asset_dividends')
+        .select('id, is_confirmed, source, amount')
+        .eq('symbol', canonicalSymbol)
+        .eq('ex_date', item.exDate)
+        .maybeSingle();
 
-        if (existing?.is_confirmed) {
-          console.log(`🛡️ [GUARDED] Preserving existing confirmed net dividend for ${canonicalSymbol} on ${item.exDate}; rejected unconfirmed downgrade.`);
-          auditedCount++;
-          continue;
-        }
+      const decision = evaluateDividendUpsert(existing || null, row);
+
+      if (decision.action === 'SKIP') {
+        console.log(`🛡️ [GUARDED] Preserving existing dividend for ${canonicalSymbol} on ${item.exDate} (${decision.reason}).`);
+        auditedCount++;
+        continue;
       }
 
-      const { error } = await supabase
-        .from('asset_dividends')
-        .upsert(row, { onConflict: 'symbol,ex_date' });
+      let dbError = null;
+      if (decision.action === 'UPDATE' && existing?.id) {
+        const { error } = await supabase
+          .from('asset_dividends')
+          .update(decision.payload)
+          .eq('id', existing.id);
+        dbError = error;
+      } else {
+        const { error } = await supabase
+          .from('asset_dividends')
+          .upsert(decision.payload, { onConflict: 'symbol,ex_date' });
+        dbError = error;
+      }
 
-      if (error) {
-        console.warn(`⚠️ Supabase upsert failed for ${canonicalSymbol}: ${error.message}`);
+      if (dbError) {
+        console.warn(`⚠️ Supabase upsert failed for ${canonicalSymbol}: ${dbError.message}`);
         failedCount++;
       } else {
         auditedCount++;
         const netStr = item.netDps !== null ? `₺${item.netDps.toFixed(4)}` : 'NULL (Açıklanmadı -> Creditable: ₺0.00)';
-        const statusStr = isConfirmed ? 'CONFIRMED' : 'ESTIMATED';
-        console.log(`✅ [AUDITED & SAVED] ${canonicalSymbol} | Status: ${statusStr} | Source: ${provenance} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
+        const statusStr = decision.payload.is_confirmed ? 'CONFIRMED' : 'ESTIMATED';
+        console.log(`✅ [AUDITED & SAVED] ${canonicalSymbol} | Status: ${statusStr} | Source: ${decision.payload.source} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
       }
     } catch (upsertErr) {
       console.warn(`⚠️ Upsert exception for ${canonicalSymbol}: ${upsertErr.message}`);

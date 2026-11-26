@@ -5953,7 +5953,25 @@ export default function Home() {
             onClick={() => setIsCoPilotDrawerOpen(false)}
             className="fixed inset-0 bg-black/50 backdrop-blur-xs"
           />
-          <aside className="relative z-10 w-full sm:w-[480px] lg:w-[540px] h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+          <aside
+            onKeyDown={(e) => {
+              if (e.key !== 'Tab') return;
+              const focusables = e.currentTarget.querySelectorAll<HTMLElement>(
+                'input, button, select, textarea, [href], [tabindex]:not([tabindex="-1"])'
+              );
+              if (focusables.length === 0) return;
+              const first = focusables[0];
+              const last = focusables[focusables.length - 1];
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              }
+            }}
+            className="relative z-10 w-full sm:w-[480px] lg:w-[540px] h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+          >
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-purple-600/10 to-indigo-600/10 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-lg">🤖</span>

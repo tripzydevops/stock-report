@@ -1,6 +1,7 @@
 import { getServerSupabase } from './supabaseServer';
 import { calculateBistTPlus2Settlement } from './bistCalendar';
 import YahooFinance from 'yahoo-finance2';
+import { upsertDividendEvent } from './dividendPersistence';
 
 const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
@@ -190,46 +191,12 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
   let upsertedCount = 0;
   if (rowsToUpsert.length > 0) {
     try {
-      // Upsert using (symbol, ex_date) conflict key if available, or check existing
       for (const row of rowsToUpsert) {
-        const { data: existing } = await supabase
-          .from('asset_dividends')
-          .select('id, is_confirmed, source, amount')
-          .eq('symbol', row.symbol)
-          .eq('ex_date', row.ex_date)
-          .limit(1);
-
-        if (existing && existing.length > 0) {
-          const prev = existing[0];
-          const prevSource = String(prev.source || '').toUpperCase();
-          const isAuthoritativeSource =
-            prevSource.startsWith('FINTABLES_') ||
-            prevSource.startsWith('ISYATIRIM_') ||
-            prevSource.startsWith('KAP_');
-
-          // P0 Precedence Guard:
-          // Yahoo estimates must NEVER overwrite a confirmed dividend or an authoritative KAP/Fintables/İş Yatırım record,
-          // and must NEVER promote an unconfirmed record to is_confirmed: true.
-          if (prev.is_confirmed === true || isAuthoritativeSource) {
-            continue;
-          }
-
-          await supabase
-            .from('asset_dividends')
-            .update({
-              payment_date: row.payment_date,
-              amount: row.amount > 0 ? row.amount : prev.amount,
-              is_confirmed: row.is_confirmed,
-              source: row.source,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', prev.id);
+        const res = await upsertDividendEvent(supabase, row);
+        if (res.action === 'INSERT' || res.action === 'UPDATE') {
           upsertedCount++;
-        } else {
-          const { error: insErr } = await supabase
-            .from('asset_dividends')
-            .insert(row);
-          if (!insErr) upsertedCount++;
+        } else if (res.action === 'ERROR' && res.error) {
+          errors.push(`Upsert ${row.symbol} (${row.ex_date}): ${res.error}`);
         }
       }
     } catch (dbErr: unknown) {

@@ -381,6 +381,9 @@ export async function POST(request: Request) {
       if (!pageData || pageData.length === 0) break;
       dbAssets.push(...pageData);
       offset += pageData.length;
+      if (page === MAX_PAGES - 1 && pageData.length === PAGE_SIZE) {
+        console.warn(`⚠️ Asset catalog pagination reached MAX_PAGES (${MAX_PAGES}) cap at ${dbAssets.length} rows; remaining rows may be truncated.`);
+      }
     }
 
     // 2. Fetch open portfolio positions

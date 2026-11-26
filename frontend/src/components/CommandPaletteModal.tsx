@@ -252,7 +252,7 @@ export default function CommandPaletteModal({
         onKeyDown={(e) => {
           if (e.key === 'Tab') {
             const focusables = e.currentTarget.querySelectorAll<HTMLElement>(
-              'input, button, [href], [tabindex]:not([tabindex="-1"])'
+              'input, button, select, textarea, [href], [tabindex]:not([tabindex="-1"])'
             );
             if (focusables.length > 0) {
               const first = focusables[0];
