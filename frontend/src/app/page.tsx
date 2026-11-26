@@ -10,7 +10,7 @@ import AssetTable from '../components/AssetTable';
 import PositionCalculator from '../components/PositionCalculator';
 import PositionCalculatorModal from '../components/PositionCalculatorModal';
 import AddAssetModal from '../components/AddAssetModal';
-import AddHoldingModal from '../components/AddHoldingModal';
+import AddHoldingModal, { HoldingPrefill } from '../components/AddHoldingModal';
 import TradeHoldingModal from '../components/TradeHoldingModal';
 import PortfolioView from '../components/PortfolioView';
 import DividendView from '../components/DividendView';
@@ -1293,6 +1293,7 @@ export default function Home() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isHoldingModalOpen, setIsHoldingModalOpen] = useState(false);
+  const [holdingPrefill, setHoldingPrefill] = useState<HoldingPrefill | null>(null);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [tradeModalTab, setTradeModalTab] = useState<'BUY' | 'SELL'>('BUY');
   const [selectedHolding, setSelectedHolding] = useState<PortfolioItem | null>(null);
@@ -3059,8 +3060,9 @@ export default function Home() {
 
   const handleRemoveHolding = async (symbol: string) => {
     const cleanSymUpper = symbol.replace('.IS', '').trim().toUpperCase();
+    const isSymbol = `${cleanSymUpper}.IS`;
 
-    // 1. Immediately update UI state and local cache
+    // 1. Immediately update portfolio, dividends, orders, auto-funded transfers, and cash balances
     setPortfolio(prev => {
       const updated = prev.filter(item => item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper);
       if (typeof window !== 'undefined') {
@@ -3078,11 +3080,35 @@ export default function Home() {
     });
     setDividends(prev => prev.filter(item => item.symbol.replace('.IS', '').trim().toUpperCase() !== cleanSymUpper));
 
-    // 2. Persist deletion in Supabase (synced strictly to authenticated user)
+    const nextOrders = executedOrders.filter(
+      o => (o.symbol || '').replace('.IS', '').trim().toUpperCase() !== cleanSymUpper
+    );
+    const autoFundSuffix = `funded position ${cleanSymUpper}`;
+    const nextTransfers = transfers.filter(
+      t => !(t.notes && t.notes.toLowerCase().includes('auto-deposit') && t.notes.toLowerCase().includes(autoFundSuffix))
+    );
+
+    setExecutedOrders(nextOrders);
+    setTransfers(nextTransfers);
+    const recalculatedCash = calculateLedgerCash(nextOrders, nextTransfers, usdTryRate);
+    setCashBalance(recalculatedCash.availableCashTRY);
+    setCashBalanceUSD(recalculatedCash.availableCashUSD);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(GUEST_ORDERS_KEY, JSON.stringify(nextOrders));
+        localStorage.setItem('market_pulse_cached_orders', JSON.stringify(nextOrders));
+        localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(nextTransfers));
+        localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(nextTransfers));
+      } catch (e) {
+        console.warn('Could not update cached orders/transfers on remove:', e);
+      }
+    }
+
+    // 2. Persist full cleanup in Supabase (position + orphaned orders + auto-funded shortfall deposits)
     if (!isDemoMode && user) {
       try {
-        const cleanSym = symbol.replace('.IS', '');
-        const isSymbol = `${cleanSym}.IS`;
+        const cleanSym = symbol.replace('.IS', '').trim();
         const { data: assetData } = await supabase
           .from('assets')
           .select('id')
@@ -3096,6 +3122,20 @@ export default function Home() {
             .eq('asset_id', assetData[0].id)
             .eq('user_id', user.id);
         }
+
+        await supabase
+          .from('portfolio_orders')
+          .delete()
+          .eq('user_id', user.id)
+          .or(`symbol.eq.${cleanSymUpper},symbol.eq.${isSymbol}`);
+
+        await supabase
+          .from('portfolio_transfers')
+          .delete()
+          .eq('user_id', user.id)
+          .ilike('notes', `Auto-deposit (%): Funded position ${cleanSymUpper}`);
+
+        await loadData(false);
       } catch (err) {
         console.warn('Could not remove holding from Supabase:', err);
       }
@@ -5644,31 +5684,15 @@ export default function Home() {
             onSelectTicker={handleSelectTicker}
             onOpenScreener={() => setActiveTab('signals')}
             onAddToPortfolio={(asset) => {
-              const isTry = asset.currency === 'TRY' || asset.market === 'BIST' || asset.market === 'TEFAS';
-              const currentP = asset.currentPrice || 100;
-              const defaultShares = isTry ? 10 : 2;
-              const item: PortfolioItem = {
+              const isUsd = asset.currency === 'USD' || asset.market === 'US';
+              setHoldingPrefill({
                 symbol: asset.symbol,
                 name: asset.name,
-                market: asset.market,
-                shares: defaultShares,
-                entryPrice: currentP,
-                currentPrice: currentP,
-                currency: asset.currency || (isTry ? 'TRY' : 'USD'),
-                totalCost: currentP * defaultShares,
-                currentValue: currentP * defaultShares,
-                pnlAmount: 0,
-                pnlPercent: 0,
-                stopLoss: Number((currentP * 0.95).toFixed(2)),
-                targetPrice: Number((currentP * 1.15).toFixed(2)),
-                distanceToStop: -5.0,
+                market: isUsd ? 'US' : 'BIST',
+                price: asset.currentPrice && asset.currentPrice > 0 ? asset.currentPrice : undefined,
                 isDividend: false,
-                dcaZone: 'BUY',
-                dcaRationale: 'Takip listesinden portföye eklendi.',
-                entryDate: new Date().toISOString().slice(0, 10),
-              };
-              handleAddHolding(item);
-              setActiveTab('portfolio');
+              });
+              setIsHoldingModalOpen(true);
             }}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
             dividendAssets={allMarketDividends}
@@ -5733,25 +5757,15 @@ export default function Home() {
                 console.warn('Blocked adding candidate with missing or zero market price:', cand.symbol);
                 return;
               }
-              handleAddHolding({
+              setHoldingPrefill({
                 symbol: cand.symbol,
                 name: cand.name,
-                market: cand.market,
-                shares: cand.shares,
-                entryPrice: cand.price,
-                currentPrice: cand.price,
-                currency: cand.market === 'US' ? 'USD' : 'TRY',
-                totalCost: cand.shares * cand.price,
-                currentValue: cand.shares * cand.price,
-                pnlAmount: 0,
-                pnlPercent: 0,
-                stopLoss: 0,
-                distanceToStop: 0,
+                market: cand.market === 'US' ? 'US' : 'BIST',
+                price: cand.price,
+                shares: cand.shares && cand.shares > 0 ? cand.shares : undefined,
                 isDividend: true,
-                dcaZone: 'BUY',
-                dcaRationale: 'Synthesized from AI Dividend Portfolio Lab'
-              }, true);
-              handleTabChange('portfolio');
+              });
+              setIsHoldingModalOpen(true);
             }}
           />
         )}
@@ -5831,9 +5845,13 @@ export default function Home() {
 
       <AddHoldingModal
         isOpen={isHoldingModalOpen}
-        onClose={() => setIsHoldingModalOpen(false)}
+        onClose={() => {
+          setIsHoldingModalOpen(false);
+          setHoldingPrefill(null);
+        }}
         onAddHolding={handleAddHolding}
         availableAssets={assets}
+        prefillAsset={holdingPrefill}
       />
 
       <TradeHoldingModal

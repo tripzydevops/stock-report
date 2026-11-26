@@ -1004,7 +1004,7 @@ export default function DividendView({
                                       symbol: asset.symbol,
                                       name: asset.name,
                                       market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                                      shares: 100,
+                                      shares: 0,
                                       price: asset.currentPrice,
                                       isDividend: true
                                     });
@@ -1165,7 +1165,7 @@ export default function DividendView({
                                 symbol: asset.symbol,
                                 name: asset.name,
                                 market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                                shares: 100,
+                                shares: 0,
                                 price: asset.currentPrice,
                                 isDividend: true
                               });
@@ -1334,7 +1334,7 @@ export default function DividendView({
                                     symbol: asset.symbol,
                                     name: asset.name,
                                     market: asset.market || (asset.currency === 'USD' ? 'US' : 'BIST'),
-                                    shares: 100,
+                                    shares: 0,
                                     price: asset.currentPrice,
                                     isDividend: true
                                   });

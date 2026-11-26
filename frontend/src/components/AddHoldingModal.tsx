@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { searchAssets, resolveUnambiguousAlias } from '../lib/assetSearch';
 import { PortfolioItem } from '../lib/supabaseClient';
 
@@ -11,11 +11,21 @@ export interface HoldingAssetOption {
   price?: number;
 }
 
+export interface HoldingPrefill {
+  symbol: string;
+  name?: string;
+  market?: 'BIST' | 'US' | string;
+  price?: number;
+  shares?: number;
+  isDividend?: boolean;
+}
+
 interface AddHoldingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddHolding: (holding: PortfolioItem, isDividend: boolean, dividendYield?: number) => Promise<void> | void;
   availableAssets?: HoldingAssetOption[];
+  prefillAsset?: HoldingPrefill | null;
 }
 
 const COMMON_BIST_ALIASES: Record<string, { symbol: string; name: string }> = {
@@ -53,12 +63,13 @@ export default function AddHoldingModal({
   onClose,
   onAddHolding,
   availableAssets = [],
+  prefillAsset = null,
 }: AddHoldingModalProps) {
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
   const [market, setMarket] = useState<'BIST' | 'US'>('BIST');
-  const [sharesStr, setSharesStr] = useState<string>('100');
-  const [entryPriceStr, setEntryPriceStr] = useState<string>('100');
+  const [sharesStr, setSharesStr] = useState<string>('');
+  const [entryPriceStr, setEntryPriceStr] = useState<string>('');
   const [currentPriceStr, setCurrentPriceStr] = useState<string>('');
   const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [stopLossStr, setStopLossStr] = useState<string>('');
@@ -67,6 +78,26 @@ export default function AddHoldingModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && prefillAsset) {
+      const cleanSym = prefillAsset.symbol.replace('.IS', '').trim().toUpperCase();
+      setSymbol(cleanSym);
+      setName(prefillAsset.name || cleanSym);
+      setMarket(prefillAsset.market === 'US' ? 'US' : 'BIST');
+      setSharesStr(prefillAsset.shares && prefillAsset.shares > 0 ? String(prefillAsset.shares) : '');
+      if (prefillAsset.price && prefillAsset.price > 0) {
+        setEntryPriceStr(prefillAsset.price.toFixed(2));
+        setCurrentPriceStr(prefillAsset.price.toFixed(2));
+      } else {
+        setEntryPriceStr('');
+        setCurrentPriceStr('');
+      }
+      setIsDividend(Boolean(prefillAsset.isDividend));
+      setShowSuggestions(false);
+      setErrorMsg(null);
+    }
+  }, [isOpen, prefillAsset]);
 
   // Prepare searchable catalog from availableAssets
   const searchableCatalog = useMemo(() => {
@@ -180,8 +211,8 @@ export default function AddHoldingModal({
       // Reset fields
       setSymbol('');
       setName('');
-      setSharesStr('100');
-      setEntryPriceStr('100');
+      setSharesStr('');
+      setEntryPriceStr('');
       setCurrentPriceStr('');
       setEntryDate(new Date().toISOString().slice(0, 10));
       setStopLossStr('');
