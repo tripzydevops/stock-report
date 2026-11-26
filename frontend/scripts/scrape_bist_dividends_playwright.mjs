@@ -330,8 +330,11 @@ export async function scrapeAndIngestBistDividends() {
     const creditableAmount = hasDeclaredNet ? item.netDps : 0;
     const provenance = !hasDeclaredNet ? `${item.source}_GROSS_ONLY_UNCONFIRMED` : item.source;
 
+    // Canonical BIST symbol with .IS suffix (matches asset_dividends table)
+    const canonicalSymbol = item.symbol.replace('.IS', '').trim().toUpperCase() + '.IS';
+
     const row = {
-      symbol: ticker,
+      symbol: canonicalSymbol,
       ex_date: item.exDate,
       payment_date: finalPayDate,
       amount: creditableAmount,
@@ -348,12 +351,12 @@ export async function scrapeAndIngestBistDividends() {
         const { data: existing } = await supabase
           .from('asset_dividends')
           .select('is_confirmed')
-          .eq('symbol', ticker)
+          .eq('symbol', canonicalSymbol)
           .eq('ex_date', item.exDate)
           .maybeSingle();
 
         if (existing?.is_confirmed) {
-          console.log(`🛡️ [GUARDED] Preserving existing confirmed net dividend for ${ticker} on ${item.exDate}; rejected unconfirmed downgrade.`);
+          console.log(`🛡️ [GUARDED] Preserving existing confirmed net dividend for ${canonicalSymbol} on ${item.exDate}; rejected unconfirmed downgrade.`);
           auditedCount++;
           continue;
         }
@@ -364,16 +367,16 @@ export async function scrapeAndIngestBistDividends() {
         .upsert(row, { onConflict: 'symbol,ex_date' });
 
       if (error) {
-        console.warn(`⚠️ Supabase upsert failed for ${ticker}: ${error.message}`);
+        console.warn(`⚠️ Supabase upsert failed for ${canonicalSymbol}: ${error.message}`);
         failedCount++;
       } else {
         auditedCount++;
         const netStr = item.netDps !== null ? `₺${item.netDps.toFixed(4)}` : 'NULL (Açıklanmadı -> Creditable: ₺0.00)';
         const statusStr = isConfirmed ? 'CONFIRMED' : 'ESTIMATED';
-        console.log(`✅ [AUDITED & SAVED] ${ticker} | Status: ${statusStr} | Source: ${provenance} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
+        console.log(`✅ [AUDITED & SAVED] ${canonicalSymbol} | Status: ${statusStr} | Source: ${provenance} | Ex: ${item.exDate} | Pay: ${finalPayDate || 'TBD'} | Net: ${netStr} | Gross: ₺${item.grossDps.toFixed(4)}`);
       }
     } catch (upsertErr) {
-      console.warn(`⚠️ Upsert exception for ${ticker}: ${upsertErr.message}`);
+      console.warn(`⚠️ Upsert exception for ${canonicalSymbol}: ${upsertErr.message}`);
       failedCount++;
     }
   }
