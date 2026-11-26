@@ -1682,7 +1682,7 @@ export function deriveDividendsFromPortfolio(
         if (td >= currentYearMonth) {
           const d = new Date(td);
           d.setDate(d.getDate() + 2);
-          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: false });
         }
       }
     }
@@ -1877,7 +1877,7 @@ export function deriveAllMarketDividends(
         if (td >= currentYearMonth) {
           const d = new Date(td);
           d.setDate(d.getDate() + 2);
-          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: true });
+          candidates.push({ date: td, payDate: d.toISOString().slice(0, 10), isConfirmed: false });
         }
       }
     }

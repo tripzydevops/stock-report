@@ -335,7 +335,7 @@ export default function DividendView({
 
     return effectiveAssets
       .map(asset => {
-        if (!asset.nextExDate) return null;
+        if (!asset.nextExDate || asset.paymentStatus !== 'Confirmed') return null;
         const target = new Date(asset.nextExDate);
         target.setHours(0, 0, 0, 0);
         const diffTime = target.getTime() - today.getTime();
