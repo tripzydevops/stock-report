@@ -46,13 +46,22 @@ export default function CommandPaletteModal({
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setQuery('');
-      setActiveIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 30);
-    }
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    setQuery('');
+    setActiveIndex(0);
+    const timer = setTimeout(() => inputRef.current?.focus(), 30);
+
+    return () => {
+      clearTimeout(timer);
+      document.body.style.overflow = prevOverflow;
+      previousFocusRef.current?.focus();
+    };
   }, [isOpen]);
 
   const baseCommands: CommandEntry[] = useMemo(() => [
@@ -236,8 +245,29 @@ export default function CommandPaletteModal({
       className="fixed inset-0 z-[110] flex items-start justify-center pt-[10vh] px-3 sm:px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={language === 'tr' ? 'Hızlı Komut ve Arama' : 'Command Palette'}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
+        onKeyDown={(e) => {
+          if (e.key === 'Tab') {
+            const focusables = e.currentTarget.querySelectorAll<HTMLElement>(
+              'input, button, [href], [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusables.length > 0) {
+              const first = focusables[0];
+              const last = focusables[focusables.length - 1];
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }
+          handleKeyDown(e);
+        }}
         className="w-full max-w-xl bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden"
       >
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800">

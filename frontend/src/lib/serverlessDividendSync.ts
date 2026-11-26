@@ -194,21 +194,36 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
       for (const row of rowsToUpsert) {
         const { data: existing } = await supabase
           .from('asset_dividends')
-          .select('id')
+          .select('id, is_confirmed, source, amount')
           .eq('symbol', row.symbol)
           .eq('ex_date', row.ex_date)
           .limit(1);
 
         if (existing && existing.length > 0) {
+          const prev = existing[0];
+          const prevSource = String(prev.source || '').toUpperCase();
+          const isAuthoritativeSource =
+            prevSource.startsWith('FINTABLES_') ||
+            prevSource.startsWith('ISYATIRIM_') ||
+            prevSource.startsWith('KAP_');
+
+          // P0 Precedence Guard:
+          // Yahoo estimates must NEVER overwrite a confirmed dividend or an authoritative KAP/Fintables/İş Yatırım record,
+          // and must NEVER promote an unconfirmed record to is_confirmed: true.
+          if (prev.is_confirmed === true || isAuthoritativeSource) {
+            continue;
+          }
+
           await supabase
             .from('asset_dividends')
             .update({
               payment_date: row.payment_date,
-              amount: row.amount > 0 ? row.amount : undefined,
-              is_confirmed: true,
+              amount: row.amount > 0 ? row.amount : prev.amount,
+              is_confirmed: row.is_confirmed,
+              source: row.source,
               updated_at: new Date().toISOString()
             })
-            .eq('id', existing[0].id);
+            .eq('id', prev.id);
           upsertedCount++;
         } else {
           const { error: insErr } = await supabase
@@ -217,8 +232,9 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
           if (!insErr) upsertedCount++;
         }
       }
-    } catch (dbErr: any) {
-      errors.push(`Database upsert error: ${dbErr.message}`);
+    } catch (dbErr: unknown) {
+      const dbMsg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      errors.push(`Database upsert error: ${dbMsg}`);
     }
   }
 
@@ -226,8 +242,9 @@ export async function syncServerlessDividends(customSymbols?: string[]): Promise
   let dueDividendsSettled: DividendCreditSummary | undefined;
   try {
     dueDividendsSettled = await processDueDividendsToCashLedger();
-  } catch (settleErr: any) {
-    errors.push(`Auto-credit dividends warning: ${settleErr.message}`);
+  } catch (settleErr: unknown) {
+    const settleMsg = settleErr instanceof Error ? settleErr.message : String(settleErr);
+    errors.push(`Auto-credit dividends warning: ${settleMsg}`);
   }
 
   return {

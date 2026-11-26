@@ -223,7 +223,11 @@ export default function DividendPortfolioLab({
         liveMatch && typeof liveMatch.dividendYield === 'number' && liveMatch.dividendYield > 0
           ? liveMatch.dividendYield
           : asset.yieldPercent;
-      const isConfirmed = liveMatch?.paymentStatus === 'Confirmed';
+      const isConfirmed =
+        liveMatch?.paymentStatus === 'Confirmed' &&
+        typeof liveMatch.estimatedNextDPS === 'number' &&
+        liveMatch.estimatedNextDPS > 0 &&
+        Boolean(liveMatch.nextPaymentDate);
 
       const allocatedTRY = (numericBudgetTRY * pct) / 100;
       const priceTRY = asset.currency === 'USD' ? effectivePrice * usdTryRate : effectivePrice;

@@ -1784,6 +1784,7 @@ export default function Home() {
               rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
             .order('symbol', { ascending: true })
+            .order('asset_id', { ascending: true })
             .range(0, 999),
           supabase
             .from('v_latest_prices')
@@ -1793,6 +1794,7 @@ export default function Home() {
               rsi_14, volume_ratio, high_52w, low_52w, ema_200
             `)
             .order('symbol', { ascending: true })
+            .order('asset_id', { ascending: true })
             .range(1000, 1999),
           supabase
             .from('opening_direction')
@@ -3009,14 +3011,14 @@ export default function Home() {
 
       // 2. Reload fresh data & recalculate portfolio from Supabase
       await loadData(true);
-      const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-      setLastRefreshedAt(nowStr);
       if (syncFailedMsg) {
         setSyncFeedback({
           message: language === 'tr' ? `⚠️ Senkronizasyon uyarısı: ${syncFailedMsg}` : `⚠️ Sync warning: ${syncFailedMsg}`,
           type: 'error'
         });
       } else {
+        const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        setLastRefreshedAt(nowStr);
         setSyncFeedback({
           message: syncSuccessMsg || (language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : '✅ Market data synchronized successfully'),
           type: 'success'
@@ -4455,6 +4457,17 @@ export default function Home() {
     isSettingsSheetOpen,
     isRefreshing,
   ]);
+
+  useEffect(() => {
+    if (!isCoPilotDrawerOpen) return;
+    const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      prevFocus?.focus();
+    };
+  }, [isCoPilotDrawerOpen]);
 
   const discountedDividendMetrics = useMemo(() => {
     // 1. Identify dividend compounders in portfolio
@@ -5930,7 +5943,12 @@ export default function Home() {
 
       {/* Slide-Over AI Co-Pilot Drawer */}
       {isCoPilotDrawerOpen && (
-        <div className="fixed inset-0 z-[95] flex justify-end animate-in fade-in duration-150">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="copilot-drawer-title"
+          className="fixed inset-0 z-[95] flex justify-end animate-in fade-in duration-150"
+        >
           <div
             onClick={() => setIsCoPilotDrawerOpen(false)}
             className="fixed inset-0 bg-black/50 backdrop-blur-xs"
@@ -5940,7 +5958,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <span className="text-lg">🤖</span>
                 <div>
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white">
+                  <h3 id="copilot-drawer-title" className="text-sm font-black text-gray-900 dark:text-white">
                     {language === 'tr' ? 'AI Piyasa & Portföy Co-Pilot' : 'AI Market & Portfolio Co-Pilot'}
                   </h3>
                   <p className="text-[10px] text-gray-500 dark:text-gray-400">
@@ -5962,6 +5980,7 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
+                  autoFocus
                   onClick={() => setIsCoPilotDrawerOpen(false)}
                   aria-label={language === 'tr' ? 'Kapat' : 'Close'}
                   className="min-w-[36px] min-h-[36px] rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 font-bold cursor-pointer transition-colors"

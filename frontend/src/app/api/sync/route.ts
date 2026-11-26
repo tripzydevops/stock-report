@@ -362,8 +362,9 @@ export async function POST(request: Request) {
     // 1. Fetch all assets from database catalog (paginated in 1,000-row chunks to bypass PostgREST max-rows cap)
     const dbAssets: Array<{ id: string; symbol: string; market: string; is_active: boolean }> = [];
     const PAGE_SIZE = 1000;
+    const MAX_PAGES = 50;
     let offset = 0;
-    while (true) {
+    for (let page = 0; page < MAX_PAGES; page++) {
       const { data: pageData, error: pageErr } = await supabase
         .from('assets')
         .select('id, symbol, market, is_active')
@@ -379,8 +380,7 @@ export async function POST(request: Request) {
       }
       if (!pageData || pageData.length === 0) break;
       dbAssets.push(...pageData);
-      if (pageData.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+      offset += pageData.length;
     }
 
     // 2. Fetch open portfolio positions
