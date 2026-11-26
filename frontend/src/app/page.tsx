@@ -5457,12 +5457,14 @@ export default function Home() {
                     return filtered.map((sig, idx) => {
                       const cleanSym = sig.symbol.replace('.IS', '').trim().toUpperCase();
                       const matchedHolding = portfolio.find(p => p.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
+                      const matchedOrb = orbItems.find(o => o.symbol.replace('.IS', '').trim().toUpperCase() === cleanSym) || null;
 
                       return (
                         <TradeCard 
                           key={idx} 
                           signal={sig} 
                           userHolding={matchedHolding}
+                          orbData={matchedOrb}
                           onSelectTicker={handleSelectTicker}
                           onCalcSize={(s) => {
                             setCalcTrade({
@@ -5599,6 +5601,8 @@ export default function Home() {
         {/* TAB: WATCHLIST & RADAR (FAVORİLER) */}
         {activeTab === 'watchlist' && (
           <WatchlistView
+            onSelectTicker={handleSelectTicker}
+            onOpenScreener={() => setActiveTab('signals')}
             onAddToPortfolio={(asset) => {
               const isTry = asset.currency === 'TRY' || asset.market === 'BIST' || asset.market === 'TEFAS';
               const currentP = asset.currentPrice || 100;

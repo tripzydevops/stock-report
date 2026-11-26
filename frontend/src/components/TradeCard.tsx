@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { calculateExitDate } from '../lib/tradeTiming';
-import { supabase, PortfolioItem } from '../lib/supabaseClient';
+import { supabase, PortfolioItem, OpeningDirectionItem } from '../lib/supabaseClient';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -90,13 +90,14 @@ export interface TradeSignal {
 interface TradeCardProps {
   signal: TradeSignal;
   userHolding?: PortfolioItem | null;
+  orbData?: OpeningDirectionItem | null;
   onSelectTicker?: (symbol: string) => void;
   onCalcSize?: (signal: TradeSignal) => void;
   onOpenCoPilot?: (signal: TradeSignal) => void;
   onTradeHolding?: (holding: PortfolioItem) => void;
 }
 
-export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
+export default function TradeCard({ signal, userHolding, orbData, onSelectTicker, onCalcSize, onOpenCoPilot, onTradeHolding }: TradeCardProps) {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const [isStarred, setIsStarred] = useState(false);
@@ -367,6 +368,28 @@ export default function TradeCard({ signal, userHolding, onSelectTicker, onCalcS
             <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${getStrategyColor(signal.strategy)}`}>
               {signal.strategy}
             </span>
+            {orbData && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-2xs ${
+                  orbData.orbStatus === 'Broke High'
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40'
+                    : orbData.orbStatus === 'Broke Low'
+                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-400/40'
+                }`}
+                title={`${orbData.gapType} (${orbData.gapPercent >= 0 ? '+' : ''}${orbData.gapPercent.toFixed(2)}%) · Bias: ${orbData.bias}`}
+              >
+                <span>{orbData.orbStatus === 'Broke High' ? '🚀' : orbData.orbStatus === 'Broke Low' ? '🔻' : '↔️'}</span>
+                <span>
+                  {orbData.orbStatus === 'Broke High'
+                    ? (language === 'tr' ? 'ORB Yukarı' : 'ORB High')
+                    : orbData.orbStatus === 'Broke Low'
+                    ? (language === 'tr' ? 'ORB Aşağı' : 'ORB Low')
+                    : (language === 'tr' ? 'ORB Bant İçi' : 'ORB Inside')}
+                </span>
+                {orbData.volumeSpike && <span title={language === 'tr' ? 'Hacim Patlaması' : 'Volume Spike'}>🔥</span>}
+              </span>
+            )}
             {(() => {
               const strat = signal.strategy.toLowerCase();
               if (strat.includes('vwap')) {

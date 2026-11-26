@@ -53,10 +53,12 @@ export interface CatalogAsset {
 interface WatchlistViewProps {
   onAddToPortfolio?: (asset: { symbol: string; name: string; market: string; currentPrice: number; currency: string }) => void;
   onOpenAuthModal?: () => void;
+  onSelectTicker?: (symbol: string) => void;
+  onOpenScreener?: () => void;
   dividendAssets?: DividendAsset[];
 }
 
-export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, dividendAssets }: WatchlistViewProps) {
+export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, onSelectTicker, onOpenScreener, dividendAssets }: WatchlistViewProps) {
   const { language } = useLanguage();
   const { user, session, isDemoMode } = useAuth();
 
@@ -860,8 +862,19 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
+          <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+            {onOpenScreener && (
+              <button
+                type="button"
+                onClick={onOpenScreener}
+                className="flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-2xs transition-all cursor-pointer active:scale-95"
+              >
+                <span>🎯</span>
+                <span>{language === 'tr' ? 'Tarayıcı & Sinyaller' : 'Signals & Screener'}</span>
+              </button>
+            )}
             <button
+              type="button"
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-sm shadow-blue-500/25 transition-all cursor-pointer active:scale-95"
             >
@@ -1566,6 +1579,18 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                       <span className="text-[10px] hidden sm:inline">{language === 'tr' ? 'Alarm/Not' : 'Alert'}</span>
                     </button>
 
+                    {onSelectTicker && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTicker(item.symbol)}
+                        className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                        title={language === 'tr' ? 'Grafik ve Teknik Analizi Aç' : 'Open Chart & Technicals'}
+                      >
+                        <span>📈</span>
+                        <span className="text-[10px] hidden sm:inline">{language === 'tr' ? 'Grafik' : 'Chart'}</span>
+                      </button>
+                    )}
+
                     {onAddToPortfolio && (
                       <button
                         onClick={() =>
@@ -1745,6 +1770,16 @@ export default function WatchlistView({ onAddToPortfolio, onOpenAuthModal, divid
                           >
                             🔔
                           </button>
+                          {onSelectTicker && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectTicker(item.symbol)}
+                              className="p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/50 text-blue-600 transition-colors cursor-pointer"
+                              title={language === 'tr' ? 'Grafik ve Teknik Analiz' : 'Open Chart & Technicals'}
+                            >
+                              📈
+                            </button>
+                          )}
                           {onAddToPortfolio && (
                             <button
                               onClick={() =>
