@@ -295,7 +295,10 @@ export async function scrapeAndIngestBistDividends() {
   }
 
   console.log(`\n🔍 Extracted ${extractedRecords.length} announced dividend declarations.`);
+  return await ingestAuditedDividends(extractedRecords, supabase);
+}
 
+export async function ingestAuditedDividends(extractedRecords, dbClient = supabase) {
   // 3. Mathematical Audit & Supabase Ingestion
   let auditedCount = 0;
   let failedCount = 0;
@@ -346,7 +349,7 @@ export async function scrapeAndIngestBistDividends() {
     };
 
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await dbClient
         .from('asset_dividends')
         .select('id, is_confirmed, source, amount')
         .eq('symbol', canonicalSymbol)
@@ -363,13 +366,13 @@ export async function scrapeAndIngestBistDividends() {
 
       let dbError = null;
       if (decision.action === 'UPDATE' && existing?.id) {
-        const { error } = await supabase
+        const { error } = await dbClient
           .from('asset_dividends')
           .update(decision.payload)
           .eq('id', existing.id);
         dbError = error;
       } else {
-        const { error } = await supabase
+        const { error } = await dbClient
           .from('asset_dividends')
           .upsert(decision.payload, { onConflict: 'symbol,ex_date' });
         dbError = error;
