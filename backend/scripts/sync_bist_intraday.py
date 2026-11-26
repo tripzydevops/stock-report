@@ -171,9 +171,23 @@ def main():
 
     client = get_supabase_client()
 
-    # 1. Fetch active BIST assets from database
-    assets_resp = client.table("assets").select("id, symbol, market, name").execute()
-    assets = assets_resp.data or []
+    # 1. Fetch active BIST assets from database (paginated in 1,000-row chunks)
+    assets = []
+    page_size = 1000
+    offset = 0
+    while True:
+        assets_resp = (
+            client.table("assets")
+            .select("id, symbol, market, name")
+            .order("id")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        page_data = assets_resp.data or []
+        assets.extend(page_data)
+        if len(page_data) < page_size:
+            break
+        offset += page_size
     
     bist_assets = [
         a for a in assets 

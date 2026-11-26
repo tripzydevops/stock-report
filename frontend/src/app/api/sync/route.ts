@@ -359,17 +359,28 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({ action: 'refresh' }));
     const today = new Date().toISOString().slice(0, 10);
 
-    // 1. Fetch all assets from database catalog
-    const { data: dbAssets, error: dbAssetsErr } = await supabase
-      .from('assets')
-      .select('id, symbol, market, is_active');
+    // 1. Fetch all assets from database catalog (paginated in 1,000-row chunks to bypass PostgREST max-rows cap)
+    const dbAssets: Array<{ id: string; symbol: string; market: string; is_active: boolean }> = [];
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    while (true) {
+      const { data: pageData, error: pageErr } = await supabase
+        .from('assets')
+        .select('id, symbol, market, is_active')
+        .order('id', { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
 
-    if (dbAssetsErr) {
-      console.error('Failed to load asset catalog from database:', dbAssetsErr);
-      return NextResponse.json(
-        { success: false, error: `Database catalog fetch failed: ${dbAssetsErr.message}` },
-        { status: 500 }
-      );
+      if (pageErr) {
+        console.error('Failed to load asset catalog from database:', pageErr);
+        return NextResponse.json(
+          { success: false, error: `Database catalog fetch failed: ${pageErr.message}` },
+          { status: 500 }
+        );
+      }
+      if (!pageData || pageData.length === 0) break;
+      dbAssets.push(...pageData);
+      if (pageData.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
 
     // 2. Fetch open portfolio positions

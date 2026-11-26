@@ -536,7 +536,14 @@ export default function AssetHistoryModal({
             <div className="text-right">
               <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Son Güncelleme</span>
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 font-mono">
-                {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' })}
+                {(() => {
+                  const latestBarDate = historyTable.length > 0 ? historyTable[historyTable.length - 1]?.date : null;
+                  if (!latestBarDate) return '—';
+                  const parsed = new Date(`${latestBarDate}T12:00:00Z`);
+                  return isNaN(parsed.getTime())
+                    ? latestBarDate
+                    : parsed.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+                })()}
               </span>
             </div>
           </div>

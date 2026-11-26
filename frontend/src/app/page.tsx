@@ -2974,11 +2974,14 @@ export default function Home() {
       });
 
       // 1. Trigger fast targeted quote sync on /api/sync (portfolio holdings & active signals)
+      let syncFailedMsg: string | null = null;
+      let syncSuccessMsg: string | null = null;
       try {
         const { data: { session: activeSession } } = await supabase.auth.getSession();
         const portfolioSymbols = portfolio.map(p => p.symbol.replace('.IS', '').trim().toUpperCase());
         const res = await fetch('/api/sync', {
           method: 'POST',
+          cache: 'no-store',
           headers: { 
             'Content-Type': 'application/json',
             ...(activeSession?.access_token ? { 'Authorization': `Bearer ${activeSession.access_token}` } : {})
@@ -2989,24 +2992,32 @@ export default function Home() {
           })
         });
         const json = await res.json().catch(() => ({}));
-        if (json.message) {
-          setSyncFeedback({
-            message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message,
-            type: 'success'
-          });
+        if (!res.ok || json.success === false) {
+          syncFailedMsg = json.error || json.warning || `Sync HTTP ${res.status}`;
+          console.warn('Sync API returned error:', syncFailedMsg);
+        } else if (json.message) {
+          syncSuccessMsg = language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : json.message;
         }
       } catch (e) {
         console.warn('Sync API request warning:', e);
+        syncFailedMsg = e instanceof Error ? e.message : String(e);
       }
 
       // 2. Reload fresh data & recalculate portfolio from Supabase
       await loadData(true);
       const nowStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setLastRefreshedAt(nowStr);
-      setSyncFeedback({
-        message: language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : '✅ Market data synchronized successfully',
-        type: 'success'
-      });
+      if (syncFailedMsg) {
+        setSyncFeedback({
+          message: language === 'tr' ? `⚠️ Senkronizasyon uyarısı: ${syncFailedMsg}` : `⚠️ Sync warning: ${syncFailedMsg}`,
+          type: 'error'
+        });
+      } else {
+        setSyncFeedback({
+          message: syncSuccessMsg || (language === 'tr' ? '✅ Canlı veriler başarıyla senkronize edildi' : '✅ Market data synchronized successfully'),
+          type: 'success'
+        });
+      }
       setTimeout(() => setSyncFeedback(null), 5000);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
