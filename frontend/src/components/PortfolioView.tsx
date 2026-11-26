@@ -396,6 +396,7 @@ export default function PortfolioView({
   const [modalDate, setModalDate] = useState(new Date().toISOString().slice(0, 10));
   const [modalNotes, setModalNotes] = useState('');
   const [modalCurrency, setModalCurrency] = useState<'TRY' | 'USD'>('TRY');
+  const [modalTransferError, setModalTransferError] = useState<string | null>(null);
 
   // Active portfolio calculations
   const totalCostTRY = cleanPortfolio.reduce((acc, item) => {
@@ -629,7 +630,10 @@ export default function PortfolioView({
   };
 
   const handleRemove = (symbol: string) => {
-    if (window.confirm(`Are you sure you want to remove ${symbol} from your portfolio?`)) {
+    const msg = language === 'tr'
+      ? `${symbol} portföyünüzden kaldırılsın mı?`
+      : `Remove ${symbol} from your portfolio?`;
+    if (window.confirm(msg)) {
       onRemoveHolding?.(symbol);
     }
   };
@@ -637,8 +641,10 @@ export default function PortfolioView({
   const handleSaveTransfer = (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = parseFloat(modalAmount);
-    if (!parsed || parsed <= 0) {
-      alert('Please enter a valid amount.');
+    if (!parsed || parsed <= 0 || isNaN(parsed)) {
+      setModalTransferError(
+        language === 'tr' ? 'Lütfen geçerli ve pozitif bir tutar girin.' : 'Please enter a valid positive amount.'
+      );
       return;
     }
     const newTrans: CapitalTransfer = {
@@ -647,9 +653,16 @@ export default function PortfolioView({
       amount: parsed,
       currency: modalCurrency,
       transferDate: modalDate,
-      notes: modalNotes || (modalTransferType === 'DEPOSIT' ? 'Brokerage capital deposit' : modalTransferType === 'WITHDRAWAL' ? 'Brokerage capital withdrawal' : 'Temettü nakit girişi')
+      notes:
+        modalNotes.trim() ||
+        (modalTransferType === 'DEPOSIT'
+          ? language === 'tr' ? 'Nakit yatırımı' : 'Brokerage capital deposit'
+          : modalTransferType === 'WITHDRAWAL'
+          ? language === 'tr' ? 'Nakit çekimi' : 'Brokerage capital withdrawal'
+          : language === 'tr' ? 'Temettü nakit girişi' : 'Dividend cash credit'),
     };
     onAddTransfer?.(newTrans);
+    setModalTransferError(null);
     setIsDepositModalOpen(false);
     setModalAmount('');
     setModalNotes('');
@@ -3003,7 +3016,24 @@ export default function PortfolioView({
                   {language === 'tr' ? 'Hedef Yakalama' : 'Target Capture'}
                 </div>
               </div>
-            </div>
+              <div className="h-8 w-px bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+              {(() => {
+                const wins = effectiveRealizedTrades.filter(t => t.realizedPnl > 0).length;
+                const losses = effectiveRealizedTrades.filter(t => t.realizedPnl < 0).length;
+                const total = effectiveRealizedTrades.length;
+                const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+                return (
+                  <div className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/80 dark:border-emerald-800/50 text-right hidden sm:block">
+                    <span className={`text-xs font-black ${winRate >= 50 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {wins}W / {losses}L
+                    </span>
+                    <div className="text-[10px] text-emerald-500/80 font-medium">
+                      {winRate}% {language === 'tr' ? 'Kazanma' : 'Win Rate'}
+                    </div>
+                  </div>
+                );
+              })()}
+          </div>
           </div>
 
           {/* Execution Discipline KPI Strip */}
@@ -3342,6 +3372,105 @@ export default function PortfolioView({
       {/* SUB-TAB 2: CASH LEDGER & TRANSFERS */}
       {portfolioSubTab === 'ledger' && (
         <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Cash Ledger Executive Summary Strip */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-gray-100 dark:border-gray-700">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span>🏦</span>
+                  <span>{language === 'tr' ? 'Kasa Özeti & Likidite Durumu' : 'Cash Vault & Liquidity Overview'}</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {language === 'tr'
+                    ? 'Yatırılan ana para, çekimler, temettü nakitleri ve hisse alım/satımları sonrası güncel kullanılabilir nakit.'
+                    : 'Live available cash after deposits, withdrawals, auto-credited dividends, and executed orders.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalTransferType('DEPOSIT');
+                    setModalTransferError(null);
+                    setIsDepositModalOpen(true);
+                  }}
+                  className="flex-1 sm:flex-initial min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-sm shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>↓</span>
+                  <span>{language === 'tr' ? 'Nakit Yatır' : 'Deposit'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalTransferType('WITHDRAWAL');
+                    setModalTransferError(null);
+                    setIsDepositModalOpen(true);
+                  }}
+                  className="flex-1 sm:flex-initial min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 active:scale-95 text-white shadow-sm shadow-rose-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <span>↑</span>
+                  <span>{language === 'tr' ? 'Nakit Çek' : 'Withdraw'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
+              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50">
+                <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                  {language === 'tr' ? 'Kullanılabilir Nakit (₺)' : 'Available Cash (₺)'}
+                </div>
+                <div className="text-base sm:text-lg font-black text-gray-900 dark:text-white mt-1 font-mono">
+                  {ledgerCash.isLedgerEmpty ? '—' : formatCurr(cashValTRY, 'TRY')}
+                </div>
+                {hasUsAssets && (
+                  <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 font-mono mt-0.5">
+                    USD: {formatCurr(cashValUSD, 'USD')}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-850 border border-gray-200/70 dark:border-gray-700">
+                <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                  {language === 'tr' ? 'Net Ana Para Girişi' : 'Net Capital Deposited'}
+                </div>
+                <div className="text-base sm:text-lg font-black text-gray-900 dark:text-white mt-1 font-mono">
+                  {formatCurr(netDepositedDisplay)}
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5">
+                  {language === 'tr' ? 'Giriş:' : 'In:'} {formatCurr(totalDepositedDisplay)} · {language === 'tr' ? 'Çıkış:' : 'Out:'} {formatCurr(totalWithdrawnDisplay)}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-800/50">
+                <div className="text-[11px] font-bold text-purple-700 dark:text-purple-400">
+                  {language === 'tr' ? 'Hesaba Geçen Temettü' : 'Dividends Credited'}
+                </div>
+                <div className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-300 mt-1 font-mono">
+                  +{formatCurr(
+                    currencyMode === 'USD'
+                      ? (ledgerCash.totalDividendsReceivedTRY / usdTryRate) + ledgerCash.totalDividendsReceivedUSD
+                      : ledgerCash.totalDividendsReceivedTRY + (ledgerCash.totalDividendsReceivedUSD * usdTryRate)
+                  )}
+                </div>
+                <div className="text-[11px] text-purple-600/80 dark:text-purple-400/80 mt-0.5">
+                  {language === 'tr' ? 'Onaylı net temettü ödemeleri' : 'Confirmed net payouts'}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-800/50">
+                <div className="text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                  {language === 'tr' ? 'Gerçek Yaşam Boyu ROI' : 'True Lifetime ROI'}
+                </div>
+                <div className={`text-base sm:text-lg font-black mt-1 font-mono ${trueRoiAmountTRY >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {trueRoiAmountTRY >= 0 ? '+' : ''}{formatCurr(trueRoiDisplay)}
+                </div>
+                <div className="text-[11px] text-blue-600/80 dark:text-blue-400/80 mt-0.5 font-mono">
+                  {trueRoiPercent >= 0 ? '+' : ''}{trueRoiPercent.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Capital Transfers & Funding Inflows History */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50/50 dark:bg-gray-850">
@@ -3820,73 +3949,97 @@ export default function PortfolioView({
         </div>
       )}
 
-      {/* Record Deposit Modal */}
+      {/* Record Deposit / Withdrawal Modal */}
       {isDepositModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700 shadow-2xl relative">
+        <div
+          onClick={() => {
+            setModalTransferError(null);
+            setIsDepositModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-5 sm:p-6 border border-gray-200 dark:border-gray-700 shadow-2xl relative"
+          >
             <div className="flex justify-between items-center pb-4 border-b border-gray-100 dark:border-gray-700">
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <span>💸</span>
-                <span>Record Capital Transfer</span>
+                <span>{language === 'tr' ? 'Kasa Transferi Kaydet' : 'Record Capital Transfer'}</span>
               </h3>
               <button
-                onClick={() => setIsDepositModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold"
+                type="button"
+                onClick={() => {
+                  setModalTransferError(null);
+                  setIsDepositModalOpen(false);
+                }}
+                aria-label={language === 'tr' ? 'Kapat' : 'Close'}
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 text-lg font-bold cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSaveTransfer} className="mt-4 space-y-4">
+              {modalTransferError && (
+                <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold">
+                  ⚠️ {modalTransferError}
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Transfer Type</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {language === 'tr' ? 'Transfer Türü' : 'Transfer Type'}
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setModalTransferType('DEPOSIT')}
-                    className={`py-2 text-xs font-bold rounded-xl transition-all border ${
+                    className={`min-h-[44px] py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                       modalTransferType === 'DEPOSIT'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
-                    ↓ Deposit
+                    {language === 'tr' ? '↓ Yatırım' : '↓ Deposit'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setModalTransferType('WITHDRAWAL')}
-                    className={`py-2 text-xs font-bold rounded-xl transition-all border ${
+                    className={`min-h-[44px] py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                       modalTransferType === 'WITHDRAWAL'
                         ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
-                    ↑ Withdraw
+                    {language === 'tr' ? '↑ Çekim' : '↑ Withdraw'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setModalTransferType('DIVIDEND')}
-                    className={`py-2 text-xs font-bold rounded-xl transition-all border ${
+                    className={`min-h-[44px] py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                       modalTransferType === 'DIVIDEND'
                         ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
-                    💰 Dividend
+                    {language === 'tr' ? '💰 Temettü' : '💰 Dividend'}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Cüzdan / Currency</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {language === 'tr' ? 'Cüzdan / Para Birimi' : 'Wallet / Currency'}
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setModalCurrency('TRY')}
-                    className={`py-1.5 text-xs font-bold rounded-xl transition-all border ${
+                    className={`min-h-[44px] py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                       modalCurrency === 'TRY'
                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
                     🇹🇷 ₺ TRY
@@ -3894,10 +4047,10 @@ export default function PortfolioView({
                   <button
                     type="button"
                     onClick={() => setModalCurrency('USD')}
-                    className={`py-1.5 text-xs font-bold rounded-xl transition-all border ${
+                    className={`min-h-[44px] py-2 text-xs font-bold rounded-xl transition-all border cursor-pointer ${
                       modalCurrency === 'USD'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-transparent hover:bg-gray-200 dark:hover:bg-gray-600'
                     }`}
                   >
                     🇺🇸 $ USD
@@ -3906,55 +4059,66 @@ export default function PortfolioView({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                  Amount ({modalCurrency === 'USD' ? '$ USD' : '₺ TRY'})
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {language === 'tr' ? 'Tutar' : 'Amount'} ({modalCurrency === 'USD' ? '$ USD' : '₺ TRY'})
                 </label>
                 <input
                   type="number"
                   step="0.01"
+                  min="0.01"
                   required
-                  placeholder={modalCurrency === 'USD' ? 'e.g. 500.00' : 'e.g. 5000.00'}
+                  placeholder={modalCurrency === 'USD' ? (language === 'tr' ? 'ör. 500.00' : 'e.g. 500.00') : (language === 'tr' ? 'ör. 5000.00' : 'e.g. 5000.00')}
                   value={modalAmount}
-                  onChange={(e) => setModalAmount(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => {
+                    setModalAmount(e.target.value);
+                    if (modalTransferError) setModalTransferError(null);
+                  }}
+                  className="w-full min-h-[44px] px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Transfer Date</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {language === 'tr' ? 'Transfer Tarihi' : 'Transfer Date'}
+                </label>
                 <input
                   type="date"
                   required
                   value={modalDate}
                   onChange={(e) => setModalDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full min-h-[44px] px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Notes / Description (Optional)</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                  {language === 'tr' ? 'Not / Açıklama (İsteğe Bağlı)' : 'Notes / Description (Optional)'}
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g. Monthly salary savings top-up"
+                  placeholder={language === 'tr' ? 'ör. Aylık birikim aktarımı' : 'e.g. Monthly salary savings top-up'}
                   value={modalNotes}
                   onChange={(e) => setModalNotes(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full min-h-[44px] px-3 py-2 text-sm rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsDepositModalOpen(false)}
-                  className="flex-1 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl"
+                  onClick={() => {
+                    setModalTransferError(null);
+                    setIsDepositModalOpen(false);
+                  }}
+                  className="flex-1 min-h-[44px] py-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl cursor-pointer transition-colors"
                 >
-                  Cancel
+                  {language === 'tr' ? 'Vazgeç' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20"
+                  className="flex-1 min-h-[44px] py-2 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
                 >
-                  Save Transfer
+                  {language === 'tr' ? 'Transferi Kaydet' : 'Save Transfer'}
                 </button>
               </div>
             </form>
