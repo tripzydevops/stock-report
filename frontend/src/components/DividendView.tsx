@@ -1380,6 +1380,7 @@ export default function DividendView({
       {viewMode === 'lab' && (
         <DividendPortfolioLab
           usdTryRate={usdTryRate}
+          liveDividendAssets={effectiveAssets}
           onImportCandidate={onImportCandidate}
           onSelectTicker={onSelectTicker}
         />

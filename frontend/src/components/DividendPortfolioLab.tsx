@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { DividendAsset } from '../lib/supabaseClient';
 
 export interface EvaluatedDividendAsset {
   symbol: string;
@@ -18,10 +19,15 @@ export interface EvaluatedDividendAsset {
   allocatedAmountTRY: number;
   sharesToBuy: number;
   annualPayoutTRY: number;
+  isConfirmed: boolean;
+  isLiveSynced: boolean;
+  nextExDate?: string;
+  nextPaymentDate?: string;
 }
 
 interface DividendPortfolioLabProps {
   usdTryRate: number;
+  liveDividendAssets?: DividendAsset[];
   onImportCandidate?: (candidate: { symbol: string; name: string; market: string; shares: number; price: number; isDividend: boolean }) => void;
   onSelectTicker?: (symbol: string) => void;
 }
@@ -30,6 +36,7 @@ export type StrategyPresetId = 'MAX_CASHFLOW' | 'DEFENSIVE_ARISTOCRATS' | 'MONTH
 
 export default function DividendPortfolioLab({
   usdTryRate,
+  liveDividendAssets = [],
   onImportCandidate,
   onSelectTicker
 }: DividendPortfolioLabProps) {
@@ -196,32 +203,59 @@ export default function DividendPortfolioLab({
       }
     }
 
+    const liveMap = new Map<string, DividendAsset>();
+    liveDividendAssets.forEach((d) => {
+      const cleanSym = (d.symbol || '').replace('.IS', '').trim().toUpperCase();
+      if (cleanSym) liveMap.set(cleanSym, d);
+    });
+
     const items: EvaluatedDividendAsset[] = [];
     Object.entries(weights).forEach(([sym, pct]) => {
       const asset = candidateUniverse.find(a => a.symbol === sym);
       if (!asset) return;
 
+      const liveMatch = liveMap.get(sym.replace('.IS', '').trim().toUpperCase());
+      const effectivePrice: number =
+        liveMatch && typeof liveMatch.currentPrice === 'number' && liveMatch.currentPrice > 0
+          ? liveMatch.currentPrice
+          : asset.price;
+      const effectiveYield =
+        liveMatch && typeof liveMatch.dividendYield === 'number' && liveMatch.dividendYield > 0
+          ? liveMatch.dividendYield
+          : asset.yieldPercent;
+      const isConfirmed = liveMatch?.paymentStatus === 'Confirmed';
+
       const allocatedTRY = (numericBudgetTRY * pct) / 100;
-      const priceTRY = asset.currency === 'USD' ? asset.price * usdTryRate : asset.price;
+      const priceTRY = asset.currency === 'USD' ? effectivePrice * usdTryRate : effectivePrice;
       const shares = Math.max(1, Math.floor(allocatedTRY / priceTRY));
       const exactAllocatedTRY = shares * priceTRY;
-      const annualPayoutTRY = (exactAllocatedTRY * asset.yieldPercent) / 100;
+      const annualPayoutTRY = (exactAllocatedTRY * effectiveYield) / 100;
 
       items.push({
         ...asset,
+        price: effectivePrice,
+        yieldPercent: effectiveYield,
         weightPercent: pct,
         allocatedAmountTRY: exactAllocatedTRY,
         sharesToBuy: shares,
-        annualPayoutTRY: annualPayoutTRY
+        annualPayoutTRY: annualPayoutTRY,
+        isConfirmed,
+        isLiveSynced: Boolean(liveMatch),
+        nextExDate: liveMatch?.nextExDate,
+        nextPaymentDate: liveMatch?.nextPaymentDate,
       });
     });
 
     return items;
-  }, [strategyPreset, marketScope, numericBudgetTRY, candidateUniverse, usdTryRate]);
+  }, [strategyPreset, marketScope, numericBudgetTRY, candidateUniverse, usdTryRate, liveDividendAssets]);
 
   // Aggregate stats
   const totalAllocatedTRY = modelPortfolio.reduce((acc, a) => acc + a.allocatedAmountTRY, 0);
   const totalAnnualPayoutTRY = modelPortfolio.reduce((acc, a) => acc + a.annualPayoutTRY, 0);
+  const confirmedAnnualPayoutTRY = modelPortfolio
+    .filter((a) => a.isConfirmed)
+    .reduce((acc, a) => acc + a.annualPayoutTRY, 0);
+  const confirmedRatioPct = totalAnnualPayoutTRY > 0 ? (confirmedAnnualPayoutTRY / totalAnnualPayoutTRY) * 100 : 0;
   const blendedYieldPercent = totalAllocatedTRY > 0 ? (totalAnnualPayoutTRY / totalAllocatedTRY) * 100 : 0;
   const avgMonthlyCashFlowTRY = totalAnnualPayoutTRY / 12;
 
@@ -525,6 +559,14 @@ export default function DividendPortfolioLab({
           <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
             +{(totalAnnualPayoutTRY / 12 > 0 ? formatMoney(totalAnnualPayoutTRY / 12) : '₺0')}/mo avg passive income
           </div>
+          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            <span>
+              {confirmedAnnualPayoutTRY > 0
+                ? `${confirmedRatioPct.toFixed(0)}% Confirmed (${formatMoney(confirmedAnnualPayoutTRY)})`
+                : 'Projected from forward dividend yields'}
+            </span>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
@@ -600,9 +642,26 @@ export default function DividendPortfolioLab({
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                         {item.safetyGrade}
                       </span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          item.isConfirmed
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
+                            : 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-dashed border-violet-400/60'
+                        }`}
+                        title={
+                          item.isConfirmed
+                            ? `Confirmed KAP/Market payout${item.nextExDate ? ` (Ex: ${item.nextExDate})` : ''}`
+                            : 'Projected from trailing/forward dividend yield'
+                        }
+                      >
+                        {item.isConfirmed ? '✓ Confirmed' : '~ Est.'}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-500 truncate max-w-[180px]">{item.name}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{item.sector}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                      {item.sector}
+                      {item.isLiveSynced && <span className="ml-1.5 text-emerald-500">● Live</span>}
+                    </div>
                   </td>
                   <td className="px-5 py-4 text-center">
                     <span className="inline-block px-2 py-0.5 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
@@ -634,6 +693,7 @@ export default function DividendPortfolioLab({
                   <td className="px-4 py-4 text-center">
                     {onImportCandidate && (
                       <button
+                        type="button"
                         onClick={() => onImportCandidate({
                           symbol: item.symbol,
                           name: item.name,
@@ -642,7 +702,7 @@ export default function DividendPortfolioLab({
                           price: item.price,
                           isDividend: true
                         })}
-                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center gap-1 mx-auto cursor-pointer"
+                        className="min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-300 transition-colors border border-blue-200 dark:border-blue-800 flex items-center gap-1 mx-auto cursor-pointer"
                         title="Add this holding to your active portfolio ledger"
                       >
                         <span>+ Add</span>
