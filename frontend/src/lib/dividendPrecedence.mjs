@@ -21,6 +21,13 @@ export const YAHOO_ESTIMATE_SOURCES = new Set([
   'YAHOO_LIVE',
 ]);
 
+export const YAHOO_SOURCE_RANK = {
+  YAHOO_LIVE: 3,
+  YAHOO_LAST_DIVIDEND_VALUE: 2,
+  YAHOO_ANNUALIZED_ESTIMATE: 1,
+  YAHOO_ESTIMATED: 0,
+};
+
 export function isExactAuthoritativeSource(source) {
   const norm = String(source || '').trim().toUpperCase();
   return AUTHORITATIVE_CONFIRMED_SOURCES.has(norm) || AUTHORITATIVE_UNCONFIRMED_SOURCES.has(norm);
@@ -91,7 +98,21 @@ export function evaluateDividendUpsert(existing, incoming) {
     };
   }
 
-  // Rule 3: Update existing unconfirmed/replaceable record safely
+  // Rule 3: Lower-precedence Yahoo estimate must NOT overwrite a higher-precedence Yahoo estimate
+  if (isIncomingYahoo && isYahooEstimateSource(prevSource)) {
+    const incomingRank = YAHOO_SOURCE_RANK[incomingSource] ?? 0;
+    const prevRank = YAHOO_SOURCE_RANK[prevSource] ?? 0;
+    if (incomingRank < prevRank) {
+      return {
+        action: 'SKIP',
+        reason: 'protected_higher_precedence_yahoo_estimate',
+      };
+    }
+  }
+
+  // Rule 4: Confirmed authoritative record explicitly upgrades an earlier unconfirmed placeholder
+  const isConfirmedUpgrade = safeIsConfirmed && !prevConfirmed && isExactAuthoritativeSource(incomingSource);
+
   const nextAmount =
     !safeIsConfirmed && isExactAuthoritativeSource(incomingSource)
       ? 0
@@ -101,7 +122,7 @@ export function evaluateDividendUpsert(existing, incoming) {
 
   return {
     action: 'UPDATE',
-    reason: 'safe_update',
+    reason: isConfirmedUpgrade ? 'confirmed_upgrades_unconfirmed_placeholder' : 'safe_update',
     payload: {
       payment_date: incoming.payment_date,
       amount: nextAmount,

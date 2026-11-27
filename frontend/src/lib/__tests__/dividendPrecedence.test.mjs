@@ -149,3 +149,52 @@ test('Yahoo update on existing Yahoo estimate preserves prior amount if new amou
   assert.equal(decision.payload.amount, 0.25);
   assert.equal(decision.payload.is_confirmed, false);
 });
+
+test('Confirmed Fintables record upgrades an earlier gross-only placeholder', () => {
+  const existing = {
+    id: 'row-5',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_GROSS_ONLY_UNCONFIRMED',
+    amount: 0,
+  };
+  const incomingConfirmed = {
+    symbol: 'TUPRS.IS',
+    ex_date: '2026-12-15',
+    payment_date: '2026-12-17',
+    amount: 4.25,
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: true,
+    source: 'FINTABLES_DIVIDEND_CALENDAR',
+  };
+
+  const decision = evaluateDividendUpsert(existing, incomingConfirmed);
+  assert.equal(decision.action, 'UPDATE');
+  assert.equal(decision.reason, 'confirmed_upgrades_unconfirmed_placeholder');
+  assert.equal(decision.payload.is_confirmed, true);
+  assert.equal(decision.payload.amount, 4.25);
+  assert.equal(decision.payload.source, 'FINTABLES_DIVIDEND_CALENDAR');
+});
+
+test('Lower-precedence YAHOO_ANNUALIZED_ESTIMATE cannot overwrite YAHOO_LAST_DIVIDEND_VALUE', () => {
+  const existing = {
+    id: 'row-6',
+    is_confirmed: false,
+    source: 'YAHOO_LAST_DIVIDEND_VALUE',
+    amount: 0.25,
+  };
+  const incomingLower = {
+    symbol: 'AAPL',
+    ex_date: '2026-11-10',
+    payment_date: '2026-11-14',
+    amount: 0.21,
+    currency: 'USD',
+    frequency: 'Quarterly',
+    is_confirmed: false,
+    source: 'YAHOO_ANNUALIZED_ESTIMATE',
+  };
+
+  const decision = evaluateDividendUpsert(existing, incomingLower);
+  assert.equal(decision.action, 'SKIP');
+  assert.equal(decision.reason, 'protected_higher_precedence_yahoo_estimate');
+});

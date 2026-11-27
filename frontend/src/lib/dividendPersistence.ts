@@ -33,13 +33,13 @@ export async function upsertDividendEvent(
     .select('id, is_confirmed, source, amount')
     .eq('symbol', incoming.symbol)
     .eq('ex_date', incoming.ex_date)
-    .limit(1);
+    .maybeSingle();
 
   if (fetchErr) {
     return { action: 'ERROR', reason: 'fetch_existing_failed', error: fetchErr.message };
   }
 
-  const prev = existing && existing.length > 0 ? existing[0] : null;
+  const prev = existing || null;
   const decision = evaluateDividendUpsert(prev, incoming);
 
   if (decision.action === 'SKIP') {

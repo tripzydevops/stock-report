@@ -46,16 +46,19 @@ test('ingestAuditedDividends verifies all 4 scraper ingestion & guard outcomes a
 
       if ((req.method === 'POST' || req.method === 'PATCH') && url.pathname.endsWith('/asset_dividends')) {
         const incoming = JSON.parse(body || '{}');
+        const idFilter = url.searchParams.get('id')?.replace(/^eq\./, '');
         const rows = Array.isArray(incoming) ? incoming : [incoming];
         for (const r of rows) {
-          const idx = store.findIndex((x) => x.symbol === r.symbol && x.ex_date === r.ex_date);
+          const idx = idFilter
+            ? store.findIndex((x) => x.id === idFilter)
+            : store.findIndex((x) => x.symbol === r.symbol && x.ex_date === r.ex_date);
           if (idx >= 0) {
             store[idx] = { ...store[idx], ...r };
           } else {
             store.push({ id: `row-${store.length + 1}`, ...r });
           }
         }
-        res.statusCode = 201;
+        res.statusCode = req.method === 'PATCH' ? 200 : 201;
         res.end(JSON.stringify(rows));
         return;
       }
@@ -135,6 +138,26 @@ test('ingestAuditedDividends verifies all 4 scraper ingestion & guard outcomes a
     assert.equal(asels.is_confirmed, true);
     assert.equal(asels.amount, 1.85);
     assert.equal(asels.source, 'KAP_OFFICIAL');
+
+    // Outcome 5: Later confirmed Fintables record upgrades the gross-only TUPRS.IS placeholder
+    const upgradeSummary = await ingestAuditedDividends([
+      {
+        symbol: 'TUPRS',
+        exDate: '2026-12-10',
+        payDate: '2026-12-14',
+        hasDeclaredPayDate: true,
+        grossDps: 8.5,
+        netDps: 7.225,
+        hasDeclaredNet: true,
+        source: 'FINTABLES_DIVIDEND_CALENDAR',
+      },
+    ], mockDb);
+    assert.equal(upgradeSummary.audited, 1);
+    assert.equal(upgradeSummary.failed, 0);
+    const tuprsUpgraded = store.find((r) => r.symbol === 'TUPRS.IS');
+    assert.equal(tuprsUpgraded.is_confirmed, true);
+    assert.equal(tuprsUpgraded.amount, 7.225);
+    assert.equal(tuprsUpgraded.source, 'FINTABLES_DIVIDEND_CALENDAR');
   } finally {
     server.close();
   }
