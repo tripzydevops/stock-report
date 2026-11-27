@@ -61,8 +61,8 @@ def test_main_exits_nonzero_on_price_persistence_failure():
          patch("sync_bist_intraday.fetch_tradingview_usdtry", return_value=50.0), \
          patch("sync_bist_intraday.upsert_rows") as mock_upsert:
 
-        # Mock assets return
-        mock_client.return_value.table.return_value.select.return_value.execute.return_value.data = [
+        # Mock paginated assets return (.select().order().range().execute())
+        mock_client.return_value.table.return_value.select.return_value.order.return_value.range.return_value.execute.return_value.data = [
             {"id": "asset-1", "symbol": "THYAO.IS", "market": "BIST", "name": "THY"}
         ]
         # Mock quotes return
