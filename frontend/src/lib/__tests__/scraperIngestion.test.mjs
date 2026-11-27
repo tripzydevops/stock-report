@@ -162,3 +162,53 @@ test('ingestAuditedDividends verifies all 4 scraper ingestion & guard outcomes a
     server.close();
   }
 });
+
+test('parseDateToIso and parseFintablesTableData handle Turkish month dates and th+td sticky columns', async () => {
+  process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://127.0.0.1:54321';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'local-test-service-role-key';
+
+  const { parseDateToIso, parseFintablesTableData } = await import('../../../scripts/scrape_bist_dividends_playwright.mjs');
+
+  assert.equal(parseDateToIso('28 Ara 2026 Bildirim'), '2026-12-28');
+  assert.equal(parseDateToIso('5 Mayıs 2026'), '2026-05-05');
+  assert.equal(parseDateToIso('03.04.2026'), '2026-04-03');
+
+  const records = parseFintablesTableData({
+    headers: [
+      '225 şirket',
+      'tarih',
+      'temettü verim (%)',
+      'hisse başı brüt tl',
+      'hisse başı net tl',
+      'toplam temettü (tl)',
+      'dağıtma oranı (%)',
+      'durum'
+    ],
+    rows: [
+      [{ text: '', href: null }], // spacer row
+      [
+        { text: 'MEDTR G16,94 %-0,18', href: '/sirketler/MEDTR/sermaye-artirimlari-temettuler' },
+        { text: '28 Ara 2026 Bildirim', href: '/borsa-haber-akisi/123' },
+        { text: '% 0,67', href: null },
+        { text: '₺ 0,1134', href: null },
+        { text: '₺ 0,0964', href: null },
+        { text: '₺ 13.499.991', href: null },
+        { text: 'N/A', href: null },
+        { text: 'Bekliyor', href: null }
+      ]
+    ]
+  });
+
+  assert.equal(records.length, 1);
+  assert.deepEqual(records[0], {
+    symbol: 'MEDTR',
+    exDate: '2026-12-28',
+    payDate: '2026-12-30',
+    hasDeclaredPayDate: false,
+    grossDps: 0.1134,
+    netDps: 0.0964,
+    hasDeclaredNet: true,
+    source: 'FINTABLES_DIVIDEND_CALENDAR'
+  });
+});
+

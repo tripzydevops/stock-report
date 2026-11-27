@@ -62,6 +62,10 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
+      - name: Run Dividend Precedence & Scraper Tests
+        working-directory: frontend
+        run: node --test src/lib/__tests__/dividendPrecedence.test.mjs src/lib/__tests__/scraperIngestion.test.mjs
+
       - name: Build Next.js Application
         working-directory: frontend
         env:

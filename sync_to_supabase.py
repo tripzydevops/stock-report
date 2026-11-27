@@ -38,6 +38,13 @@ def _normalize_confidence(raw: float) -> float:
     """Canonicalize confidence to a 0-100 scale at the write boundary."""
     return validate_and_normalize_confidence(raw)
 
+def _dedupe_by_key(rows, key_fn):
+    """Deduplicate batch upsert rows by conflict key (last write wins) to prevent Postgres 21000 errors."""
+    deduped = {}
+    for row in rows:
+        deduped[key_fn(row)] = row
+    return list(deduped.values())
+
 def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
     from datetime import timezone
     print("🚀 Connecting to Supabase...")
@@ -197,6 +204,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
             "low_52w": _get_float(row, "52W Low"),
         })
         
+    indicator_rows = _dedupe_by_key(indicator_rows, lambda r: (r["asset_id"], r["date"]))
     indicator_errors = 0
     for i in range(0, len(indicator_rows), 100):
         chunk = indicator_rows[i:i+100]
@@ -314,6 +322,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
         })
 
     # Upsert price_snapshots in chunks of 100
+    price_snapshot_rows = _dedupe_by_key(price_snapshot_rows, lambda r: (r["asset_id"], r["snapshot_time"]))
     snapshot_errors = 0
     for i in range(0, len(price_snapshot_rows), 100):
         chunk = price_snapshot_rows[i:i+100]
@@ -331,6 +340,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
         sync_results["price_snapshots"] = {"status": "FAILED", "errors": snapshot_errors}
 
     # Upsert stock_movements in chunks of 100
+    stock_movement_rows = _dedupe_by_key(stock_movement_rows, lambda r: (r["asset_id"], r["movement_time"]))
     movement_errors = 0
     for i in range(0, len(stock_movement_rows), 100):
         chunk = stock_movement_rows[i:i+100]
@@ -458,6 +468,7 @@ def sync_all_to_supabase(excel_path=None, report_record=None, raw_signals=None):
                 })
 
             if orb_rows:
+                orb_rows = _dedupe_by_key(orb_rows, lambda r: (r["symbol"], r["date"]))
                 for i in range(0, len(orb_rows), 100):
                     client.table("opening_direction").upsert(orb_rows[i:i+100], on_conflict="symbol,date").execute()
                 print(f"✅ Recorded {len(orb_rows)} opening direction (15m ORB) setups in Supabase.")

@@ -125,16 +125,111 @@ function parseTurkishNumber(str) {
   return isNaN(num) ? 0 : num;
 }
 
-function parseDateToIso(dStr) {
+const TURKISH_MONTHS = {
+  oca: '01', ocak: '01',
+  sub: '02', şub: '02', subat: '02', şubat: '02',
+  mar: '03', mart: '03',
+  nis: '04', nisan: '04',
+  may: '05', mayis: '05', mayıs: '05',
+  haz: '06', haziran: '06',
+  tem: '07', temmuz: '07',
+  agu: '08', ağu: '08', agustos: '08', ağustos: '08',
+  eyl: '09', eylul: '09', eylül: '09',
+  eki: '10', ekim: '10',
+  kas: '11', kasim: '11', kasım: '11',
+  ara: '12', aralik: '12', aralık: '12'
+};
+
+export function parseDateToIso(dStr) {
   if (!dStr) return '';
-  const m = String(dStr).match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  const str = String(dStr).trim();
+  const m = str.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
   if (m) {
     const year = m[3];
     const month = m[2].padStart(2, '0');
     const day = m[1].padStart(2, '0');
     return `${year}-${month}-${day}`;
   }
+  // Match Turkish text dates such as "28 Ara 2026 Bildirim" or "5 Mayıs 2026"
+  const tm = str.toLowerCase().match(/(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{4})/i);
+  if (tm) {
+    const month = TURKISH_MONTHS[tm[2]];
+    if (month) {
+      const day = tm[1].padStart(2, '0');
+      return `${tm[3]}-${month}-${day}`;
+    }
+  }
   return '';
+}
+
+/**
+ * Parses extracted Fintables table headers and rows into normalized dividend records.
+ * Supports both legacy `<td>`-only tables and current `<th> + <td>` sticky-column tables.
+ */
+export function parseFintablesTableData({ headers = [], rows = [] }) {
+  if (!rows.length) return [];
+
+  const symIdx = headers.findIndex(h => /kod|hisse|sembol|ticker|şirket/i.test(h));
+  const exDateIdx = headers.findIndex(h => /hak kullanım|ex-date|dağıtım tarihi|tarih/i.test(h));
+  const payDateIdx = headers.findIndex(h => /ödeme tarihi|hesaba geçiş|nakit ödeme/i.test(h));
+  const grossIdx = headers.findIndex(h => /brüt|gross/i.test(h));
+  const netIdx = headers.findIndex(h => /net/i.test(h));
+
+  if (symIdx === -1 || grossIdx === -1) {
+    console.warn(`⚠️ Warning: Critical columns (symbol/gross) not found via header match (${JSON.stringify(headers)}). Falling back to default layout.`);
+  }
+
+  const effectiveSymIdx = symIdx !== -1 ? symIdx : 0;
+  const effectiveExIdx = exDateIdx !== -1 ? exDateIdx : 1;
+  const effectiveGrossIdx = grossIdx !== -1 ? grossIdx : 3;
+  const effectiveNetIdx = netIdx !== -1 ? netIdx : 4;
+
+  const records = [];
+  for (const row of rows) {
+    if (!row || row.length < 4) continue;
+    const symCell = row[effectiveSymIdx];
+    const symHref = typeof symCell === 'object' && symCell !== null ? symCell.href : null;
+    const symText = typeof symCell === 'object' && symCell !== null ? symCell.text : String(symCell || '');
+
+    let sym = '';
+    const hrefMatch = symHref ? String(symHref).match(/\/sirketler\/([A-Za-z0-9]+)\b/i) : null;
+    if (hrefMatch) {
+      sym = hrefMatch[1].toUpperCase();
+    } else {
+      sym = symText.split(/\s+/)[0].replace('.IS', '').trim().toUpperCase();
+    }
+    if (!sym || sym.length > 6) continue;
+
+    const getText = idx => {
+      if (idx < 0 || idx >= row.length) return '';
+      const cell = row[idx];
+      return typeof cell === 'object' && cell !== null ? String(cell.text || '') : String(cell || '');
+    };
+
+    const exDate = parseDateToIso(getText(effectiveExIdx));
+    const rawPayStr = payDateIdx !== -1 ? getText(payDateIdx).trim() : '';
+    const parsedPayDate = parseDateToIso(rawPayStr);
+    const hasDeclaredPayDate = Boolean(parsedPayDate);
+    const payDate = parsedPayDate || (exDate ? calculateBistTPlus2Settlement(exDate) : null);
+    const grossDps = parseTurkishNumber(getText(effectiveGrossIdx) || '0');
+    const netDpsRaw = parseTurkishNumber(getText(effectiveNetIdx) || '0');
+    const hasDeclaredNet = netDpsRaw > 0;
+    const netDps = hasDeclaredNet ? netDpsRaw : null;
+
+    if (exDate && grossDps > 0) {
+      records.push({
+        symbol: sym,
+        exDate,
+        payDate,
+        hasDeclaredPayDate,
+        grossDps,
+        netDps,
+        hasDeclaredNet,
+        source: 'FINTABLES_DIVIDEND_CALENDAR'
+      });
+    }
+  }
+  return records;
 }
 
 export async function scrapeAndIngestBistDividends() {
@@ -154,77 +249,63 @@ export async function scrapeAndIngestBistDividends() {
   const extractedRecords = [];
 
   try {
-    // 1. Primary Source: Fintables Temettü Takvimi
-    console.log('🌐 Navigating to Fintables Temettü Takvimi (https://fintables.com/temettu-takvimi)...');
+    // 1. Primary Source: Fintables Temettüler (with dynamic link discovery fallback if URL changes)
+    const fintablesUrls = ['https://fintables.com/sermaye-artirimlari/temettuler'];
     try {
-      await page.goto('https://fintables.com/temettu-takvimi', {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000
-      });
-      await page.waitForTimeout(4000);
+      let tableData = null;
+      for (let i = 0; i < fintablesUrls.length; i++) {
+        const targetUrl = fintablesUrls[i];
+        console.log(`🌐 Navigating to Fintables Temettüler (${targetUrl})...`);
+        const resp = await page.goto(targetUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
+        });
+        const status = resp ? resp.status() : 0;
+        if (status >= 400) {
+          console.warn(`⚠️ Fintables returned HTTP ${status} for ${targetUrl} (final URL: ${page.url()}).`);
+          if (i === 0) {
+            // Self-healing fallback: discover dividend link from Fintables homepage
+            await page.goto('https://fintables.com', { waitUntil: 'domcontentloaded', timeout: 20000 });
+            const discovered = await page.evaluate(() => {
+              const link = Array.from(document.querySelectorAll('a[href]')).find(a =>
+                /sermaye-artirimlari\/temett|temettu/i.test(a.getAttribute('href') || '')
+              );
+              return link ? new URL(link.getAttribute('href'), location.origin).href : null;
+            });
+            if (discovered && !fintablesUrls.includes(discovered)) {
+              console.log(`🔎 Discovered fallback Fintables dividend URL: ${discovered}`);
+              fintablesUrls.push(discovered);
+            }
+          }
+          continue;
+        }
 
-      // Header-based dynamic column resolution
-      const tableData = await page.evaluate(() => {
-        const table = document.querySelector('table');
-        if (!table) return null;
+        await page.waitForSelector('table tbody tr a[href*="/sirketler/"]', { state: 'attached', timeout: 15000 }).catch(() => null);
+        await page.waitForTimeout(500);
 
-        const ths = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText.trim().toLowerCase());
-        const trs = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
-          Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim())
-        );
+        tableData = await page.evaluate(() => {
+          const table = document.querySelector('table');
+          if (!table) return null;
 
-        return { headers: ths, rows: trs };
-      });
+          const ths = Array.from(table.querySelectorAll('thead th')).map(th => th.innerText.trim().toLowerCase());
+          const trs = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+            Array.from(tr.querySelectorAll('th, td')).map(cell => ({
+              text: cell.innerText.trim().replace(/\s+/g, ' '),
+              href: cell.querySelector('a')?.getAttribute('href') || null
+            }))
+          );
+
+          return { headers: ths, rows: trs };
+        });
+
+        if (tableData && tableData.rows.length > 0) break;
+        console.warn(`⚠️ Fintables returned 0 table rows on ${targetUrl} (HTTP ${status}).`);
+      }
 
       if (tableData && tableData.rows.length > 0) {
-        const { headers, rows } = tableData;
-        console.log(`📋 Resolved Table Headers: ${JSON.stringify(headers)}`);
-
-        // Find column indices dynamically
-        const symIdx = headers.findIndex(h => /kod|hisse|sembol|ticker/i.test(h));
-        const exDateIdx = headers.findIndex(h => /hak kullanım|ex-date|dağıtım tarihi|tarih/i.test(h));
-        const payDateIdx = headers.findIndex(h => /ödeme tarihi|hesaba geçiş|nakit ödeme/i.test(h));
-        const grossIdx = headers.findIndex(h => /brüt|gross/i.test(h));
-        const netIdx = headers.findIndex(h => /net/i.test(h));
-
-        if (symIdx === -1 || grossIdx === -1) {
-          console.warn(`⚠️ Warning: Critical columns (symbol/gross) not found via header match. Falling back to default layout.`);
-        }
-
-        const effectiveSymIdx = symIdx !== -1 ? symIdx : 0;
-        const effectiveExIdx = exDateIdx !== -1 ? exDateIdx : 2;
-        const effectivePayIdx = payDateIdx !== -1 ? payDateIdx : 3;
-        const effectiveGrossIdx = grossIdx !== -1 ? grossIdx : 4;
-        const effectiveNetIdx = netIdx !== -1 ? netIdx : 5;
-
-        for (const row of rows) {
-          if (row.length < 4) continue;
-          const sym = (row[effectiveSymIdx] || '').replace('.IS', '').trim().toUpperCase();
-          if (!sym || sym.length > 6) continue;
-
-          const exDate = parseDateToIso(row[effectiveExIdx] || '');
-          const rawPayStr = row[effectivePayIdx] ? row[effectivePayIdx].trim() : '';
-          const parsedPayDate = parseDateToIso(rawPayStr);
-          const hasDeclaredPayDate = Boolean(parsedPayDate);
-          const payDate = parsedPayDate || (exDate ? calculateBistTPlus2Settlement(exDate) : null);
-          const grossDps = parseTurkishNumber(row[effectiveGrossIdx] || '0');
-          const netDpsRaw = parseTurkishNumber(row[effectiveNetIdx] || '0');
-          const hasDeclaredNet = netDpsRaw > 0;
-          const netDps = hasDeclaredNet ? netDpsRaw : null;
-
-          if (exDate && grossDps > 0) {
-            extractedRecords.push({
-              symbol: sym,
-              exDate,
-              payDate,
-              hasDeclaredPayDate,
-              grossDps,
-              netDps,
-              hasDeclaredNet,
-              source: 'FINTABLES_DIVIDEND_CALENDAR'
-            });
-          }
-        }
+        console.log(`📋 Resolved Table Headers: ${JSON.stringify(tableData.headers)}`);
+        const parsed = parseFintablesTableData(tableData);
+        extractedRecords.push(...parsed);
         console.log(`📊 Successfully extracted ${extractedRecords.length} records from Fintables.`);
       }
     } catch (fintablesErr) {
