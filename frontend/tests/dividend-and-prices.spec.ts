@@ -228,7 +228,7 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     await page.waitForLoadState('domcontentloaded');
     
     // Switch to Dividend tab via sidebar navigation
-    const divTabBtn = page.locator('aside button[title*="Temettü"], aside button:has-text("Temettü Gelirleri")').first();
+    const divTabBtn = page.locator('aside button[data-tab="dividend"]').first();
     await expect(divTabBtn).toBeVisible({ timeout: 10000 });
     await divTabBtn.click();
     await page.waitForTimeout(500);
@@ -243,7 +243,7 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Switch to Dividend tab via sidebar navigation
-    const divTabBtn = page.locator('aside button[title*="Temettü"], aside button:has-text("Temettü Gelirleri")').first();
+    const divTabBtn = page.locator('aside button[data-tab="dividend"]').first();
     await expect(divTabBtn).toBeVisible({ timeout: 10000 });
     await divTabBtn.click({ force: true });
     await page.waitForTimeout(500);
@@ -664,7 +664,7 @@ test.describe('Live Dividends & Accurate Pricing Pipeline', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Switch to Portfolio tab
-    const portTabBtn = page.locator('aside button[title*="Portföy"], aside button:has-text("Portföyüm & Takip")').first();
+    const portTabBtn = page.locator('aside button[data-tab="portfolio"]').first();
     await expect(portTabBtn).toBeVisible({ timeout: 10000 });
     await portTabBtn.click();
     await page.waitForTimeout(500);

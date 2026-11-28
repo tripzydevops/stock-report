@@ -35,7 +35,7 @@ test.describe('Desktop Viewport & Layout Verification', () => {
   test('2. Navigation across core tabs functions cleanly on Desktop', async ({ page }) => {
     test.setTimeout(60000);
     // Click Portföyüm in sidebar using title locator (works collapsed or expanded)
-    const portfolioBtn = page.locator('aside button[title*="Portföy"]').first();
+    const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
     await expect(portfolioBtn).toBeVisible();
     await portfolioBtn.click();
 
@@ -48,7 +48,7 @@ test.describe('Desktop Viewport & Layout Verification', () => {
     });
 
     // Navigate to Temettü
-    const dividendBtn = page.locator('aside button[title*="Temettü"]').first();
+    const dividendBtn = page.locator('aside button[data-tab="dividend"]').first();
     await expect(dividendBtn).toBeVisible();
     await dividendBtn.click();
 
@@ -78,7 +78,7 @@ test.describe('Desktop Viewport & Layout Verification', () => {
   test('4. TURSG tranche matching restores Lot #1 to 167 shares and shows closed scalp section', async ({ page }) => {
     test.setTimeout(60000);
     // Navigate to Portfolio
-    const portfolioBtn = page.locator('aside button[title*="Portföy"]').first();
+    const portfolioBtn = page.locator('aside button[data-tab="portfolio"]').first();
     await expect(portfolioBtn).toBeVisible();
     await portfolioBtn.click();
     await page.waitForTimeout(800);

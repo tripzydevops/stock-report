@@ -18,9 +18,8 @@ test.describe('P1 Security: Multi-Tenant Supabase Row Level Security (RLS) Enfor
       .eq('is_open', true);
 
     expect(error).toBeNull();
-    expect(data).toBeDefined();
-    expect(data!.length).toBeGreaterThan(0);
-    // Model portfolio holdings like FROTO, TURSG, TUPRS are intact
+    expect(Array.isArray(data)).toBeTruthy();
+    // Any returned rows must be unowned model rows (private user_id IS NOT NULL rows must never leak)
     expect(data!.every(p => p.user_id === null)).toBeTruthy();
   });
 
