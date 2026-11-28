@@ -356,3 +356,31 @@ test('Inferred payment date insert sets amount = 0 and is_confirmed = false for 
   assert.equal(decision.payload.source, 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED');
 });
 
+test('Yahoo estimate cannot overwrite an inferred Fintables record', () => {
+  const existingInferred = {
+    id: 'row-inferred-7',
+    symbol: 'MEDTR.IS',
+    ex_date: '2026-12-28',
+    payment_date: '2026-12-30',
+    amount: 0,
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED',
+  };
+  const incomingYahoo = {
+    symbol: 'MEDTR.IS',
+    ex_date: '2026-12-28',
+    payment_date: '2026-12-30',
+    amount: 0.10,
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: false,
+    source: 'YAHOO_LIVE',
+  };
+
+  const decision = evaluateDividendUpsert(existingInferred, incomingYahoo);
+  assert.equal(decision.action, 'SKIP');
+  assert.equal(decision.reason, 'protected_authoritative_from_yahoo');
+});
+

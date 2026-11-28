@@ -515,7 +515,7 @@ export async function ingestAuditedDividends(extractedRecords, dbClient = (defau
     }
   }
 
-  console.log(`\n🎉 Ingestion finished: ${auditedCount} verified BIST corporate actions synced, ${failedCount} skipped/failed.`);
+  console.log(`\n🎉 Ingestion finished: ${auditedCount} bounded-sample records synced, ${failedCount} skipped/failed.`);
 
   return { extracted: extractedRecords.length, audited: auditedCount, failed: failedCount };
 }
