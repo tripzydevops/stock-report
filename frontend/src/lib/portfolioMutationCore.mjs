@@ -17,6 +17,15 @@ import {
   generateClientOrderId,
 } from './portfolioMutationStorage.mjs';
 
+export function shouldRollbackOnDeterministicFailure(type, explicitOverride) {
+  if (typeof explicitOverride === 'boolean') {
+    return explicitOverride;
+  }
+  // DEPOSIT keeps optimistic state provisional by default (user can retry or discard)
+  // WITHDRAW, BUY, SELL, DELETE_POSITION roll back immediately on deterministic 4xx to prevent phantom cash/holdings
+  return type !== 'DEPOSIT';
+}
+
 export function resolveEndpointForMutation(mutation) {
   switch (mutation.type) {
     case 'BUY':
@@ -104,7 +113,31 @@ export function createPortfolioMutationController({
     // Deterministic 4xx: FAILED
     if (response.status >= 400 && response.status < 500 && response.status !== 429) {
       const failReason = response.error || `Validation error (${response.status})`;
-      recordFailedMutationItem(mutation, failReason);
+      const shouldRollback = shouldRollbackOnDeterministicFailure(
+        mutation.type,
+        request.rollbackOnDeterministicFailure
+      );
+
+      let rollbackApplied = false;
+      if (shouldRollback) {
+        const rollback = rollbackRegistry.get(clientOrderId);
+        if (rollback) {
+          try {
+            rollback();
+          } catch (err) {
+            console.warn('Rollback exception:', err);
+          }
+          rollbackRegistry.delete(clientOrderId);
+        }
+        rollbackApplied = true;
+      }
+
+      const failedMutation = {
+        ...mutation,
+        rollbackApplied,
+      };
+
+      recordFailedMutationItem(failedMutation, failReason);
       status = 'FAILED';
       activeAction = null;
       return {
@@ -158,7 +191,19 @@ export function createPortfolioMutationController({
         onReconciliationSuccess(response.data);
       }
     } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-      recordFailedMutationItem(target, response.error || 'Server rejected retry');
+      const shouldRollback = shouldRollbackOnDeterministicFailure(target.type);
+      let rollbackApplied = Boolean(target.rollbackApplied);
+      if (shouldRollback && !rollbackApplied) {
+        const rollback = rollbackRegistry.get(clientOrderId);
+        if (rollback) {
+          try {
+            rollback();
+          } catch {}
+          rollbackRegistry.delete(clientOrderId);
+        }
+        rollbackApplied = true;
+      }
+      recordFailedMutationItem({ ...target, rollbackApplied }, response.error || 'Server rejected retry');
       status = 'FAILED';
       activeAction = null;
     } else {
@@ -186,18 +231,25 @@ export function createPortfolioMutationController({
   }
 
   async function discardAction(clientOrderId) {
+    const failed = getFailedMutationList();
+    const queue = getOfflineMutationQueue();
+    const target = failed.find((m) => m.clientOrderId === clientOrderId) ||
+                   queue.find((m) => m.clientOrderId === clientOrderId);
+
+    if (!target?.rollbackApplied) {
+      const rollback = rollbackRegistry.get(clientOrderId);
+      if (rollback) {
+        try {
+          rollback();
+        } catch (err) {
+          console.warn('Rollback exception:', err);
+        }
+      }
+    }
+    rollbackRegistry.delete(clientOrderId);
+
     removeFailedMutationItem(clientOrderId);
     removeOfflineMutationItem(clientOrderId);
-
-    const rollback = rollbackRegistry.get(clientOrderId);
-    if (rollback) {
-      try {
-        rollback();
-      } catch (err) {
-        console.warn('Rollback exception:', err);
-      }
-      rollbackRegistry.delete(clientOrderId);
-    }
 
     if (activeAction?.clientOrderId === clientOrderId) {
       activeAction = null;
@@ -208,13 +260,15 @@ export function createPortfolioMutationController({
   async function discardAllFailedActions() {
     const failed = getFailedMutationList();
     for (const item of failed) {
-      const rollback = rollbackRegistry.get(item.clientOrderId);
-      if (rollback) {
-        try {
-          rollback();
-        } catch {}
-        rollbackRegistry.delete(item.clientOrderId);
+      if (!item.rollbackApplied) {
+        const rollback = rollbackRegistry.get(item.clientOrderId);
+        if (rollback) {
+          try {
+            rollback();
+          } catch {}
+        }
       }
+      rollbackRegistry.delete(item.clientOrderId);
     }
     saveFailedMutationList([]);
     status = 'IDLE';
@@ -244,7 +298,19 @@ export function createPortfolioMutationController({
       }
 
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        recordFailedMutationItem(item, response.error || 'Validation error during sync drain');
+        const shouldRollback = shouldRollbackOnDeterministicFailure(item.type);
+        let rollbackApplied = Boolean(item.rollbackApplied);
+        if (shouldRollback && !rollbackApplied) {
+          const rollback = rollbackRegistry.get(item.clientOrderId);
+          if (rollback) {
+            try {
+              rollback();
+            } catch {}
+            rollbackRegistry.delete(item.clientOrderId);
+          }
+          rollbackApplied = true;
+        }
+        recordFailedMutationItem({ ...item, rollbackApplied }, response.error || 'Validation error during sync drain');
         continue;
       }
 

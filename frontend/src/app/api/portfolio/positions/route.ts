@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getAuthenticatedSupabase, getServerSupabase } from '@/lib/supabaseServer';
+import { handleDeletePosition } from '@/lib/portfolioRouteHandlers';
 
 export const dynamic = 'force-dynamic';
 
@@ -438,85 +439,6 @@ export async function POST(request: NextRequest) {
  * Preserves historical orders and transfers as immutable financial audit records.
  */
 export async function DELETE(request: NextRequest) {
-  try {
-    const authSupabase = getAuthenticatedSupabase(request);
-    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Authentication required. Please log in to delete holdings.' },
-        { status: 401 }
-      );
-    }
-
-    const { searchParams } = new URL(request.url);
-    const positionIdParam = searchParams.get('positionId') || searchParams.get('id');
-    const body = await request.json().catch(() => ({}));
-    const rawPositionId = positionIdParam || body.positionId || body.id;
-
-    if (!rawPositionId || typeof rawPositionId !== 'string') {
-      return NextResponse.json(
-        { error: 'Explicit positionId parameter is required to delete a holding.' },
-        { status: 400 }
-      );
-    }
-
-    const trimmedId = rawPositionId.trim();
-    // Validate UUID format
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!UUID_REGEX.test(trimmedId)) {
-      return NextResponse.json(
-        { error: `Invalid positionId format '${trimmedId}'. Expected standard UUID format.` },
-        { status: 400 }
-      );
-    }
-
-    // 1. Fetch position scoped to user_id to verify existence & ownership
-    const { data: existingPos, error: fetchErr } = await authSupabase
-      .from('portfolio_positions')
-      .select('id, user_id, asset_id')
-      .eq('id', trimmedId)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (fetchErr) {
-      return NextResponse.json(
-        { error: `Failed to query position: ${fetchErr.message}` },
-        { status: 500 }
-      );
-    }
-
-    if (!existingPos) {
-      return NextResponse.json(
-        { error: `Position '${trimmedId}' not found or belongs to another user.` },
-        { status: 404 }
-      );
-    }
-
-    // 2. Delete strictly the target position; preserve orders and transfers as immutable audit records
-    const { error: deleteErr } = await authSupabase
-      .from('portfolio_positions')
-      .delete()
-      .eq('id', trimmedId)
-      .eq('user_id', user.id);
-
-    if (deleteErr) {
-      return NextResponse.json(
-        { error: `Failed to delete position: ${deleteErr.message}` },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        deletedPositionId: trimmedId,
-        message: 'Position removed successfully; order and cash transfer history preserved.',
-      },
-      { status: 200 }
-    );
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: errMsg || 'Internal Server Error' }, { status: 500 });
-  }
+  return handleDeletePosition(request);
 }
 

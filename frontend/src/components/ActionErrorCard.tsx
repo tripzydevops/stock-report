@@ -54,6 +54,22 @@ export function ActionErrorCard({
           {action.type === 'DELETE_POSITION' ? 'DELETE' : action.type}
         </span>
 
+        {action.rollbackApplied ? (
+          <span
+            data-testid="rollback-badge-rolled-back"
+            className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
+          >
+            {language === 'tr' ? 'Geri alındı — tekrar gönderin' : 'Rolled back — retry to resend'}
+          </span>
+        ) : (
+          <span
+            data-testid="rollback-badge-provisional"
+            className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-900 dark:bg-purple-950 dark:text-purple-300"
+          >
+            {language === 'tr' ? 'Geçici — işlem gerekli' : 'Provisional — action required'}
+          </span>
+        )}
+
         {descriptionLabel && (
           <span className="font-extrabold text-neutral-900 dark:text-white">
             {descriptionLabel}

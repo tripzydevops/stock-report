@@ -48,7 +48,7 @@ export function resolveEndpointForMutation(mutation: PortfolioMutation): { url: 
     case 'SELL':
       return { url: '/api/portfolio/positions', method: 'POST' };
     case 'DELETE_POSITION': {
-      const posId = mutation.body?.positionId || mutation.body?.id;
+      const posId = mutation.body?.positionId || (typeof mutation.body?.id === 'string' ? mutation.body.id : undefined);
       const url = posId ? `/api/portfolio/positions?positionId=${encodeURIComponent(posId)}` : '/api/portfolio/positions';
       return { url, method: 'DELETE' };
     }
@@ -234,7 +234,30 @@ export function usePortfolioMutation(
       // Do NOT retry automatically. Retain payload for user choice: Retry or Discard.
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
         const failReason = response.error || `Validation error (${response.status})`;
-        recordFailedMutationItem(mutation, failReason);
+        const shouldRollback = typeof request.rollbackOnDeterministicFailure === 'boolean'
+          ? request.rollbackOnDeterministicFailure
+          : mutation.type !== 'DEPOSIT';
+
+        let rollbackApplied = false;
+        if (shouldRollback) {
+          const rollback = rollbackRegistry.current.get(clientOrderId);
+          if (rollback) {
+            try {
+              rollback();
+            } catch (err) {
+              console.warn('[usePortfolioMutation] Rollback exception:', err);
+            }
+            rollbackRegistry.current.delete(clientOrderId);
+          }
+          rollbackApplied = true;
+        }
+
+        const failedMutation: PortfolioMutation = {
+          ...mutation,
+          rollbackApplied,
+        };
+
+        recordFailedMutationItem(failedMutation, failReason);
         syncStateFromStorage();
         setStatus('FAILED');
         setActiveAction(null);
@@ -301,7 +324,19 @@ export function usePortfolioMutation(
         }
       } else if (response.status >= 400 && response.status < 500 && response.status !== 429) {
         // Deterministic failure on retry: moves back to failed list
-        recordFailedMutationItem(target, response.error || 'Server rejected retry');
+        const shouldRollback = target.type !== 'DEPOSIT';
+        let rollbackApplied = Boolean(target.rollbackApplied);
+        if (shouldRollback && !rollbackApplied) {
+          const rollback = rollbackRegistry.current.get(clientOrderId);
+          if (rollback) {
+            try {
+              rollback();
+            } catch {}
+            rollbackRegistry.current.delete(clientOrderId);
+          }
+          rollbackApplied = true;
+        }
+        recordFailedMutationItem({ ...target, rollbackApplied }, response.error || 'Server rejected retry');
         syncStateFromStorage();
         setStatus('FAILED');
         setActiveAction(null);
@@ -338,18 +373,25 @@ export function usePortfolioMutation(
    */
   const discardAction = useCallback(
     async (clientOrderId: string): Promise<void> => {
+      const failed = getFailedMutationList();
+      const queue = getOfflineMutationQueue();
+      const target = failed.find((m) => m.clientOrderId === clientOrderId) ||
+                     queue.find((m) => m.clientOrderId === clientOrderId);
+
+      if (!target?.rollbackApplied) {
+        const rollback = rollbackRegistry.current.get(clientOrderId);
+        if (rollback) {
+          try {
+            rollback();
+          } catch (err) {
+            console.warn('[usePortfolioMutation] Rollback exception:', err);
+          }
+        }
+      }
+      rollbackRegistry.current.delete(clientOrderId);
+
       removeFailedMutationItem(clientOrderId);
       removeOfflineMutationItem(clientOrderId);
-
-      const rollback = rollbackRegistry.current.get(clientOrderId);
-      if (rollback) {
-        try {
-          rollback();
-        } catch (err) {
-          console.warn('[usePortfolioMutation] Rollback exception:', err);
-        }
-        rollbackRegistry.current.delete(clientOrderId);
-      }
 
       syncStateFromStorage();
       if (activeActionRef.current?.clientOrderId === clientOrderId) {
@@ -366,13 +408,15 @@ export function usePortfolioMutation(
   const discardAllFailedActions = useCallback(async (): Promise<void> => {
     const failed = getFailedMutationList();
     for (const item of failed) {
-      const rollback = rollbackRegistry.current.get(item.clientOrderId);
-      if (rollback) {
-        try {
-          rollback();
-        } catch {}
-        rollbackRegistry.current.delete(item.clientOrderId);
+      if (!item.rollbackApplied) {
+        const rollback = rollbackRegistry.current.get(item.clientOrderId);
+        if (rollback) {
+          try {
+            rollback();
+          } catch {}
+        }
       }
+      rollbackRegistry.current.delete(item.clientOrderId);
     }
     saveFailedMutationList([]);
     syncStateFromStorage();
@@ -410,7 +454,19 @@ export function usePortfolioMutation(
 
       // If deterministic 4xx error on drain, move to failed list
       if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        recordFailedMutationItem(item, response.error || 'Validation error during sync drain');
+        const shouldRollback = item.type !== 'DEPOSIT';
+        let rollbackApplied = Boolean(item.rollbackApplied);
+        if (shouldRollback && !rollbackApplied) {
+          const rollback = rollbackRegistry.current.get(item.clientOrderId);
+          if (rollback) {
+            try {
+              rollback();
+            } catch {}
+            rollbackRegistry.current.delete(item.clientOrderId);
+          }
+          rollbackApplied = true;
+        }
+        recordFailedMutationItem({ ...item, rollbackApplied }, response.error || 'Validation error during sync drain');
         continue;
       }
 

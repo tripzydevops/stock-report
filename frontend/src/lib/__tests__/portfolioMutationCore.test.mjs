@@ -234,3 +234,95 @@ test('drainQueue respects nextRetryAt backoff and leaves status in RETRYABLE if 
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].clientOrderId, 'cl-deferred');
 });
+
+test('Rollback Semantics: DEPOSIT retains provisional optimistic state on 4xx, rolls back on Discard', async () => {
+  memoryStorage.clear();
+  let rollbackCalls = 0;
+  const rollbackRegistry = new Map();
+
+  const controller = createPortfolioMutationController({
+    sendRequestToServer: async () => ({ ok: false, status: 400, error: 'Malformed deposit payload' }),
+    rollbackRegistry,
+  });
+
+  const res = await controller.executeMutation({
+    type: 'DEPOSIT',
+    body: { amount: 5000, currency: 'TRY' },
+    clientOrderId: 'cl-deposit-fail',
+    optimisticRollback: () => {
+      rollbackCalls++;
+    },
+  });
+
+  assert.equal(res.success, false);
+  assert.equal(res.status, 'FAILED');
+  assert.equal(rollbackCalls, 0, 'DEPOSIT should not roll back immediately on deterministic failure');
+
+  const failed = getFailedMutationList();
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].rollbackApplied, false, 'DEPOSIT should mark rollbackApplied: false');
+
+  // Discarding the provisional deposit MUST trigger rollback
+  await controller.discardAction('cl-deposit-fail');
+  assert.equal(rollbackCalls, 1, 'Discarding provisional deposit must trigger rollback');
+  assert.equal(rollbackRegistry.has('cl-deposit-fail'), false);
+});
+
+test('Rollback Semantics: WITHDRAW rolls back immediately on 4xx, discard does NOT double rollback', async () => {
+  memoryStorage.clear();
+  let rollbackCalls = 0;
+  const rollbackRegistry = new Map();
+
+  const controller = createPortfolioMutationController({
+    sendRequestToServer: async () => ({ ok: false, status: 400, error: 'INSUFFICIENT_CASH' }),
+    rollbackRegistry,
+  });
+
+  const res = await controller.executeMutation({
+    type: 'WITHDRAW',
+    body: { amount: 50000, currency: 'TRY' },
+    clientOrderId: 'cl-withdraw-fail',
+    optimisticRollback: () => {
+      rollbackCalls++;
+    },
+  });
+
+  assert.equal(res.success, false);
+  assert.equal(res.status, 'FAILED');
+  assert.equal(rollbackCalls, 1, 'WITHDRAW must roll back immediately on deterministic failure');
+
+  const failed = getFailedMutationList();
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].rollbackApplied, true, 'WITHDRAW should mark rollbackApplied: true');
+
+  // Discarding MUST NOT trigger rollback a second time
+  await controller.discardAction('cl-withdraw-fail');
+  assert.equal(rollbackCalls, 1, 'Discard must not invoke rollback if already applied');
+  assert.equal(rollbackRegistry.has('cl-withdraw-fail'), false);
+});
+
+test('Rollback Semantics: Explicit override rollbackOnDeterministicFailure: false disables immediate rollback on BUY', async () => {
+  memoryStorage.clear();
+  let rollbackCalls = 0;
+  const rollbackRegistry = new Map();
+
+  const controller = createPortfolioMutationController({
+    sendRequestToServer: async () => ({ ok: false, status: 400, error: 'Symbol invalid' }),
+    rollbackRegistry,
+  });
+
+  await controller.executeMutation({
+    type: 'BUY',
+    body: { symbol: 'INVALID', shares: 10, price: 100 },
+    clientOrderId: 'cl-buy-override',
+    rollbackOnDeterministicFailure: false,
+    optimisticRollback: () => {
+      rollbackCalls++;
+    },
+  });
+
+  assert.equal(rollbackCalls, 0, 'Explicit override must prevent immediate rollback');
+  const failed = getFailedMutationList();
+  assert.equal(failed[0].rollbackApplied, false);
+});
+

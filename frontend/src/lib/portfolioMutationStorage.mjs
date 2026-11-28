@@ -97,6 +97,7 @@ export function recordFailedMutationItem(mutation, reason) {
     ...mutation,
     status: 'FAILED',
     lastError: reason,
+    rollbackApplied: Boolean(mutation.rollbackApplied),
   };
 
   if (existingIdx >= 0) {

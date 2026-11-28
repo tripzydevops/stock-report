@@ -41,6 +41,7 @@ export interface PortfolioMutation {
   lastError?: string;
   nextRetryAt?: number;
   status?: 'PENDING' | 'RETRYING' | 'FAILED' | 'RETRYABLE';
+  rollbackApplied?: boolean;
 }
 
 export interface PortfolioMutationRequest {
@@ -48,6 +49,7 @@ export interface PortfolioMutationRequest {
   body: PortfolioMutationPayload;
   clientOrderId?: string;
   optimisticRollback?: () => void;
+  rollbackOnDeterministicFailure?: boolean;
 }
 
 export interface PortfolioMutationResult {
