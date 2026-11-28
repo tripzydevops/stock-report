@@ -45,35 +45,9 @@ export async function POST(request: NextRequest) {
 
     const transferDate = body.transferDate || new Date().toISOString().slice(0, 10);
     const clientOrderId = body.client_order_id || idempotencyHeader || null;
-    const notes = body.notes || (clientOrderId ? `[IDEM:${clientOrderId}] Cash transfer` : 'Cash transfer');
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : null;
 
-    // 2. Idempotency Check: Avoid duplicate transfers with identical clientOrderId tag
-    if (clientOrderId) {
-      const { data: existingTransfer } = await authSupabase
-        .from('portfolio_transfers')
-        .select('*')
-        .eq('user_id', user.id)
-        .ilike('notes', `%[IDEM:${clientOrderId}]%`)
-        .maybeSingle();
-
-      if (existingTransfer) {
-        return NextResponse.json(
-          {
-            success: true,
-            deduplicated: true,
-            transfer: existingTransfer,
-            message: 'Duplicate cash transfer suppressed via idempotency check.',
-          },
-          { status: 200 }
-        );
-      }
-    }
-
-    // 3. Insert into Supabase
-    const taggedNotes = clientOrderId && !notes.includes(`[IDEM:${clientOrderId}]`)
-      ? `[IDEM:${clientOrderId}] ${notes}`
-      : notes;
-
+    // 2. Direct insert with client_order_id column
     const { data: insertedTransfer, error: insertError } = await authSupabase
       .from('portfolio_transfers')
       .insert([
@@ -83,13 +57,41 @@ export async function POST(request: NextRequest) {
           amount: rawAmount,
           currency,
           transfer_date: transferDate,
-          notes: taggedNotes,
+          notes,
+          client_order_id: clientOrderId,
         },
       ])
       .select('*')
       .single();
 
     if (insertError) {
+      // 23505 = unique_violation: A concurrent or earlier request already inserted this client_order_id
+      const isUniqueViolation =
+        insertError.code === '23505' ||
+        insertError.message?.includes('duplicate key') ||
+        insertError.message?.includes('idx_portfolio_transfers_user_client_order_id');
+
+      if (isUniqueViolation && clientOrderId) {
+        const { data: existingTransfer } = await authSupabase
+          .from('portfolio_transfers')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('client_order_id', clientOrderId)
+          .maybeSingle();
+
+        if (existingTransfer) {
+          return NextResponse.json(
+            {
+              success: true,
+              deduplicated: true,
+              transfer: existingTransfer,
+              message: 'Duplicate cash transfer suppressed via database unique constraint.',
+            },
+            { status: 200 }
+          );
+        }
+      }
+
       return NextResponse.json(
         { error: `Failed to record cash transfer: ${insertError.message}` },
         { status: 500 }
