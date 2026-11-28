@@ -57,6 +57,16 @@ import {
 } from '../lib/dividendForecastMath';
 import { calculateLedgerCash, isValidTransfer } from '../lib/cashLedger';
 import { calculateExitDate } from '../lib/tradeTiming';
+import { usePortfolioMutation } from '../hooks/usePortfolioMutation';
+import { PortfolioMutation } from '../types/portfolioMutation';
+import {
+  getOfflineMutationQueue,
+  saveOfflineMutationQueue,
+  getFailedMutationList,
+  saveFailedMutationList,
+  recordFailedMutationItem,
+  enqueueOfflineMutationItem,
+} from '../lib/portfolioMutationStorage';
 
 const TAB_TITLES: Record<TabId, { icon: string; tr: string; en: string }> = {
   signals: { icon: '🎯', tr: 'Sinyaller', en: 'Signals' },
@@ -1148,79 +1158,27 @@ const RETRY_BACKOFF_DELAYS_MS = [60_000, 300_000, 900_000, 3_600_000]; // 1m, 5m
 const MAX_MUTATION_RETRIES = 4;
 
 function getOfflineQueue(): OfflineMutation[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getOfflineMutationQueue() as any[];
 }
 
 function saveOfflineQueue(queue: OfflineMutation[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    if (queue.length === 0) {
-      localStorage.removeItem(OFFLINE_QUEUE_KEY);
-    } else {
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
-    }
-  } catch {}
+  saveOfflineMutationQueue(queue as any[]);
 }
 
 function getFailedMutations(): OfflineMutation[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(FAILED_MUTATIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return getFailedMutationList() as any[];
 }
 
 function saveFailedMutations(list: OfflineMutation[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    if (list.length === 0) {
-      localStorage.removeItem(FAILED_MUTATIONS_KEY);
-    } else {
-      localStorage.setItem(FAILED_MUTATIONS_KEY, JSON.stringify(list));
-    }
-  } catch {}
+  saveFailedMutationList(list as any[]);
 }
 
 function recordFailedMutation(mutation: OfflineMutation, reason: string): void {
-  const failed = getFailedMutations();
-  const existingIdx = failed.findIndex(f => f.clientOrderId === mutation.clientOrderId);
-  const updatedItem: OfflineMutation = {
-    ...mutation,
-    status: 'FAILED',
-    lastError: reason,
-  };
-  if (existingIdx >= 0) {
-    failed[existingIdx] = updatedItem;
-    saveFailedMutations(failed);
-  } else {
-    saveFailedMutations([updatedItem, ...failed]);
-  }
+  recordFailedMutationItem(mutation as any, reason);
 }
 
 function enqueueOfflineMutation(mutation: OfflineMutation): void {
-  const current = getOfflineQueue();
-  if (current.some(m => m.clientOrderId === mutation.clientOrderId)) return;
-  const normalizedShares = Number(mutation.body?.shares ?? mutation.body?.quantity ?? 0);
-  const normalizedBody: OfflineMutationPayload = {
-    ...mutation.body,
-    shares: normalizedShares,
-    quantity: normalizedShares,
-  };
-  const itemWithRetry: OfflineMutation = {
-    ...mutation,
-    body: normalizedBody,
-    retryCount: mutation.retryCount || 0,
-    status: mutation.status || 'PENDING',
-  };
-  saveOfflineQueue([...current, itemWithRetry]);
+  enqueueOfflineMutationItem(mutation as any);
 }
 
 function sanitizeTransfers(transfersList: any[]): any[] {
@@ -2960,14 +2918,39 @@ export default function Home() {
     };
   }, [user?.id, isDemoMode]);
 
+  const {
+    status: portfolioMutationStatus,
+    failedActions: portfolioFailedActions,
+    offlineQueueCount: portfolioOfflineQueueCount,
+    executeMutation: executePortfolioMutation,
+    retryAction: retryPortfolioMutation,
+    discardAction: discardPortfolioMutation,
+    discardAllFailedActions: discardAllPortfolioFailedActions,
+    drainQueue: drainPortfolioMutationQueue,
+  } = usePortfolioMutation({
+    onReconciliationSuccess: async () => {
+      await loadData(false);
+    },
+    getAuthToken: async () => {
+      if (session?.access_token) return session.access_token;
+      try {
+        const { data } = await supabase.auth.getSession();
+        return data.session?.access_token || null;
+      } catch {
+        return null;
+      }
+    },
+    isOffline,
+  });
+
   // Automatic retry scheduler for due offline mutations while online
   useEffect(() => {
-    if (offlineQueueCount === 0 || isOffline) return;
+    if (portfolioOfflineQueueCount === 0 || isOffline) return;
     const timer = setInterval(() => {
       drainOfflineQueue();
     }, 60_000);
     return () => clearInterval(timer);
-  }, [offlineQueueCount, isOffline, session?.access_token]);
+  }, [portfolioOfflineQueueCount, isOffline, session?.access_token]);
 
   const handleTriggerSync = async (triggerCloudCrawl: boolean = false) => {
     try {
@@ -3145,6 +3128,7 @@ export default function Home() {
   };
 
   const handleAddTransfer = async (newTransfer: CapitalTransfer) => {
+    const prevTransfers = [...transfers];
     const updatedTrans = [newTransfer, ...transfers];
     setTransfers(updatedTrans);
     const updatedCash = calculateLedgerCash(executedOrders, updatedTrans, usdTryRate);
@@ -3162,18 +3146,30 @@ export default function Home() {
     }
 
     if (!isDemoMode && user) {
-      try {
-        await supabase.from('portfolio_transfers').insert([{
-          user_id: user.id,
-          transfer_type: newTransfer.transferType,
+      await executePortfolioMutation({
+        type: newTransfer.transferType === 'WITHDRAWAL' ? 'WITHDRAW' : 'DEPOSIT',
+        body: {
+          transferType: newTransfer.transferType,
           amount: newTransfer.amount,
           currency: newTransfer.currency || 'TRY',
-          transfer_date: newTransfer.transferDate,
-          notes: newTransfer.notes
-        }]);
-      } catch (err) {
-        console.warn('Error saving transfer to Supabase:', err);
-      }
+          transferDate: newTransfer.transferDate,
+          notes: newTransfer.notes,
+        },
+        optimisticRollback: () => {
+          setTransfers(prevTransfers);
+          const revertedCash = calculateLedgerCash(executedOrders, prevTransfers, usdTryRate);
+          setCashBalance(revertedCash.availableCashTRY);
+          setCashBalanceUSD(revertedCash.availableCashUSD);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(GUEST_TRANSFERS_KEY, JSON.stringify(prevTransfers));
+              localStorage.setItem('marketpulse_cached_transfers', JSON.stringify(prevTransfers));
+            } catch (e) {}
+          }
+        },
+      });
+      setOfflineQueueCount(getOfflineQueue().length);
+      setFailedMutations(getFailedMutations());
     }
   };
 
@@ -3208,145 +3204,21 @@ export default function Home() {
   };
 
   const drainOfflineQueue = async () => {
-    if (typeof window === 'undefined') return;
-    const queue = getOfflineQueue();
-    if (queue.length === 0) {
-      setOfflineQueueCount(0);
-      return;
-    }
-
-    const remainingQueue: OfflineMutation[] = [];
-    let syncedCount = 0;
-    const now = Date.now();
-
-    for (const mutation of queue) {
-      // Check if scheduled backoff interval has arrived
-      if (mutation.nextRetryAt && now < mutation.nextRetryAt) {
-        remainingQueue.push(mutation);
-        continue;
-      }
-
-      let activeToken = session?.access_token;
-      if (!activeToken) {
-        try {
-          const { data } = await supabase.auth.getSession();
-          activeToken = data.session?.access_token;
-        } catch {}
-      }
-
-      if (activeToken) {
-        try {
-          const res = await fetch('/api/portfolio/positions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${activeToken}`,
-              'Idempotency-Key': mutation.clientOrderId,
-            },
-            body: JSON.stringify({
-              ...mutation.body,
-              client_order_id: mutation.clientOrderId,
-            }),
-          });
-          if (res.ok) {
-            syncedCount++;
-            continue;
-          }
-
-          // Non-retryable deterministic client errors (400, 404, 409, 422):
-          // Record visibly as FAILED, do not retry silently
-          if (res.status >= 400 && res.status < 500 && res.status !== 429) {
-            const errJson = await res.json().catch(() => ({}));
-            const failReason = errJson.error || `HTTP ${res.status}`;
-            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} failed validation (${res.status}):`, failReason);
-            recordFailedMutation(mutation, failReason);
-            setFailedMutations(getFailedMutations());
-            setSyncFeedback({
-              message: language === 'tr'
-                ? `⚠️ Çevrimdışı işlem doğrulanamadı: ${mutation.body?.symbol || ''} (${failReason})`
-                : `⚠️ Offline action rejected: ${mutation.body?.symbol || ''} (${failReason})`,
-              type: 'error',
-            });
-            continue;
-          }
-
-          // Transient server error (5xx) or rate limit (429): exponential backoff
-          const currentRetries = mutation.retryCount || 0;
-          const nextRetry = currentRetries + 1;
-          if (nextRetry <= MAX_MUTATION_RETRIES) {
-            const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
-            remainingQueue.push({
-              ...mutation,
-              retryCount: nextRetry,
-              status: 'RETRYING',
-              lastError: `HTTP ${res.status}`,
-              nextRetryAt: now + backoffMs,
-            });
-          } else {
-            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} exceeded max retries (${MAX_MUTATION_RETRIES}), marking FAILED.`);
-            recordFailedMutation(mutation, `Sunucu yanıt vermedi (${MAX_MUTATION_RETRIES} deneme başarısız)`);
-            setFailedMutations(getFailedMutations());
-          }
-        } catch (netErr: any) {
-          const currentRetries = mutation.retryCount || 0;
-          const nextRetry = currentRetries + 1;
-          if (nextRetry <= MAX_MUTATION_RETRIES) {
-            const backoffMs = RETRY_BACKOFF_DELAYS_MS[Math.min(currentRetries, RETRY_BACKOFF_DELAYS_MS.length - 1)];
-            remainingQueue.push({
-              ...mutation,
-              retryCount: nextRetry,
-              status: 'RETRYING',
-              lastError: netErr?.message || 'Network error',
-              nextRetryAt: now + backoffMs,
-            });
-          } else {
-            console.warn(`[OfflineQueue] Mutation ${mutation.clientOrderId} network error exceeded max retries, marking FAILED.`);
-            recordFailedMutation(mutation, netErr?.message || 'Bağlantı hatası (Zaman aşımı)');
-            setFailedMutations(getFailedMutations());
-          }
-        }
-      } else {
-        remainingQueue.push(mutation);
-      }
-    }
-
-    saveOfflineQueue(remainingQueue);
-    setOfflineQueueCount(remainingQueue.length);
-
-    if (syncedCount > 0) {
-      setSyncFeedback({
-        message: language === 'tr'
-          ? `${syncedCount} çevrimdışı işlem başarıyla buluta aktarıldı!`
-          : `Successfully synced ${syncedCount} offline action(s) to cloud!`,
-        type: 'success',
-      });
-      await loadData(false);
-    }
+    await drainPortfolioMutationQueue();
+    setOfflineQueueCount(getOfflineQueue().length);
+    setFailedMutations(getFailedMutations());
   };
 
-  const handleRetryFailedMutation = (mutation: OfflineMutation) => {
-    // 1. Remove from failed mutations
-    const updatedFailed = failedMutations.filter(f => f.clientOrderId !== mutation.clientOrderId);
-    setFailedMutations(updatedFailed);
-    saveFailedMutations(updatedFailed);
-
-    // 2. Re-enqueue as fresh PENDING mutation in offline queue
-    enqueueOfflineMutation({
-      ...mutation,
-      retryCount: 0,
-      nextRetryAt: undefined,
-      status: 'PENDING',
-    });
+  const handleRetryFailedMutation = (mutation: { clientOrderId: string }) => {
+    retryPortfolioMutation(mutation.clientOrderId);
     setOfflineQueueCount(getOfflineQueue().length);
-
-    // 3. Immediately trigger queue drain
-    drainOfflineQueue();
+    setFailedMutations(getFailedMutations());
   };
 
   const handleDiscardFailedMutation = (clientOrderId: string) => {
-    const updatedFailed = failedMutations.filter(f => f.clientOrderId !== clientOrderId);
-    setFailedMutations(updatedFailed);
-    saveFailedMutations(updatedFailed);
+    discardPortfolioMutation(clientOrderId);
+    setOfflineQueueCount(getOfflineQueue().length);
+    setFailedMutations(getFailedMutations());
     setSyncFeedback({
       message: language === 'tr' ? 'İşlem kuyruktan silindi.' : 'Action discarded.',
       type: 'info',
@@ -3354,8 +3226,9 @@ export default function Home() {
   };
 
   const handleDiscardAllFailedMutations = () => {
+    discardAllPortfolioFailedActions();
+    setOfflineQueueCount(0);
     setFailedMutations([]);
-    saveFailedMutations([]);
     setSyncFeedback({
       message: language === 'tr' ? 'Tüm başarısız işlemler temizlendi.' : 'All failed actions cleared.',
       type: 'info',
@@ -5743,9 +5616,17 @@ export default function Home() {
             isGuest={!user || isDemoMode}
             userEmail={user?.email}
             isGuestCustomized={checkIsGuestCustomized()}
-            syncStatus={isRefreshing ? 'syncing' : (isOffline ? 'offline' : (offlineQueueCount > 0 ? 'offline_queued' : (user ? 'synced' : 'local_only')))}
-            offlineQueueCount={offlineQueueCount}
-            failedMutations={failedMutations}
+            syncStatus={
+              isRefreshing || portfolioMutationStatus === 'PENDING'
+                ? 'syncing'
+                : (isOffline || portfolioMutationStatus === 'OFFLINE'
+                    ? 'offline'
+                    : (portfolioOfflineQueueCount > 0
+                        ? 'offline_queued'
+                        : (user ? 'synced' : 'local_only')))
+            }
+            offlineQueueCount={portfolioOfflineQueueCount}
+            failedMutations={portfolioFailedActions}
             onRetryFailedMutation={handleRetryFailedMutation}
             onDiscardFailedMutation={handleDiscardFailedMutation}
             onDiscardAllFailedMutations={handleDiscardAllFailedMutations}

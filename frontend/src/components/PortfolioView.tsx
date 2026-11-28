@@ -14,6 +14,9 @@ import TradePlaybookModal from './TradePlaybookModal';
 import { calculateLedgerCash, isValidTransfer } from '../lib/cashLedger';
 import { deriveDividendsFromPortfolio } from '../lib/dividendForecastMath';
 import Pagination from './Pagination';
+import { PortfolioMutation } from '../types/portfolioMutation';
+import { SyncStateBanner } from './SyncStateBanner';
+import { ActionErrorCard } from './ActionErrorCard';
 
 interface PortfolioViewProps {
   portfolio: PortfolioItem[];
@@ -42,18 +45,8 @@ interface PortfolioViewProps {
   isGuestCustomized?: boolean;
   syncStatus?: 'synced' | 'syncing' | 'offline_queued' | 'offline' | 'local_only';
   offlineQueueCount?: number;
-  failedMutations?: Array<{
-    id: string;
-    clientOrderId: string;
-    type: 'BUY' | 'SELL';
-    body: any;
-    createdAt: string;
-    retryCount?: number;
-    lastError?: string;
-    nextRetryAt?: number;
-    status?: 'PENDING' | 'RETRYING' | 'FAILED';
-  }>;
-  onRetryFailedMutation?: (mutation: any) => void;
+  failedMutations?: PortfolioMutation[];
+  onRetryFailedMutation?: (mutation: PortfolioMutation) => void;
   onDiscardFailedMutation?: (clientOrderId: string) => void;
   onDiscardAllFailedMutations?: () => void;
   onDrainQueue?: () => void;
@@ -672,32 +665,18 @@ export default function PortfolioView({
     <div data-testid="portfolio-view" className="space-y-6 pb-20 sm:pb-8">
       {/* Portfolio Mode & Storage Sync Status Banner */}
       <div>
-        {/* Offline Queue Reconnect Alert */}
-        {offlineQueueCount > 0 && (
-          <div className="mb-2 p-2.5 sm:p-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-400/80 dark:border-amber-500/60 flex items-center justify-between gap-2 shadow-xs">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-base animate-pulse">⏳</span>
-              <div>
-                <span className="font-black text-amber-900 dark:text-amber-200">
-                  {offlineQueueCount} {language === 'tr' ? 'İşlem Çevrimdışı Kuyruğunda Bekliyor' : 'Actions Queued Offline'}
-                </span>
-                <p className="text-[11px] text-amber-700 dark:text-amber-300/80">
-                  {language === 'tr' ? 'Bağlantı kurulduğunda otomatik olarak buluta aktarılacak.' : 'Will automatically sync to cloud when connected.'}
-                </p>
-              </div>
-            </div>
-            {onDrainQueue && (
-              <button
-                type="button"
-                onClick={onDrainQueue}
-                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-black shadow-xs transition-all cursor-pointer shrink-0 flex items-center gap-1"
-              >
-                <span>🔄</span>
-                <span>{language === 'tr' ? 'Kuyruğu Eşitle' : 'Sync Queue'}</span>
-              </button>
-            )}
-          </div>
-        )}
+        {/* Unified Sync State Banner */}
+        <SyncStateBanner
+          status={
+            syncStatus === 'offline'
+              ? 'OFFLINE'
+              : (syncStatus === 'syncing' ? 'PENDING' : ((offlineQueueCount || 0) > 0 ? 'OFFLINE' : ((failedMutations?.length || 0) > 0 ? 'FAILED' : 'IDLE')))
+          }
+          pendingCount={offlineQueueCount || 0}
+          failedCount={failedMutations?.length || 0}
+          onSyncNow={onDrainQueue}
+          language={language}
+        />
 
         {/* Failed Mutations Actionable Alert Banner */}
         {failedMutations && failedMutations.length > 0 && (
@@ -712,6 +691,7 @@ export default function PortfolioView({
               {onDiscardAllFailedMutations && failedMutations.length > 1 && (
                 <button
                   type="button"
+                  data-testid="discard-all-failed-actions"
                   onClick={onDiscardAllFailedMutations}
                   className="text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:underline cursor-pointer"
                 >
@@ -722,50 +702,13 @@ export default function PortfolioView({
 
             <div className="space-y-1.5 pt-1">
               {failedMutations.map((item) => (
-                <div
+                <ActionErrorCard
                   key={item.clientOrderId}
-                  className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-white/70 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60 text-xs"
-                >
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${item.type === 'BUY' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'}`}>
-                      {item.type}
-                    </span>
-                    <span className="font-bold text-neutral-900 dark:text-white">
-                      {item.body?.symbol || 'Unknown'}
-                    </span>
-                    <span className="text-neutral-500 text-[11px]">
-                      {item.body?.shares ?? item.body?.quantity ?? 0} {language === 'tr' ? 'lot' : 'shares'} @ {item.body?.price} {item.body?.currency || 'TRY'}
-                    </span>
-                    {item.lastError && (
-                      <span className="text-rose-700 dark:text-rose-300 text-[11px] font-medium truncate max-w-[200px] sm:max-w-xs" title={item.lastError}>
-                        • {item.lastError}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                    {onRetryFailedMutation && (
-                      <button
-                        type="button"
-                        data-testid="retry-failed-action"
-                        onClick={() => onRetryFailedMutation(item)}
-                        className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-[11px] font-black shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                      >
-                        <span>🔄</span>
-                        <span>{language === 'tr' ? 'Tekrar Dene' : 'Retry'}</span>
-                      </button>
-                    )}
-                    {onDiscardFailedMutation && (
-                      <button
-                        type="button"
-                        data-testid="discard-failed-action"
-                        onClick={() => onDiscardFailedMutation(item.clientOrderId)}
-                        className="px-2.5 py-1 rounded-md bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 active:scale-95 text-neutral-800 dark:text-neutral-200 text-[11px] font-bold transition-all cursor-pointer"
-                      >
-                        {language === 'tr' ? 'Sil' : 'Discard'}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                  action={item}
+                  onRetry={() => onRetryFailedMutation && onRetryFailedMutation(item)}
+                  onDiscard={() => onDiscardFailedMutation && onDiscardFailedMutation(item.clientOrderId)}
+                  language={language}
+                />
               ))}
             </div>
           </div>
