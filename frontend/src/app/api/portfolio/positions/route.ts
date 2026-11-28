@@ -434,7 +434,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE: Atomically deletes an existing holding, its executed orders, and auto-funded shortfall transfers.
+ * DELETE: Deletes an explicit portfolio position identified by positionId UUID.
+ * Preserves historical orders and transfers as immutable financial audit records.
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -448,46 +449,71 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const symbolParam = searchParams.get('symbol');
+    const positionIdParam = searchParams.get('positionId') || searchParams.get('id');
     const body = await request.json().catch(() => ({}));
-    const rawSymbol = symbolParam || body.symbol;
+    const rawPositionId = positionIdParam || body.positionId || body.id;
 
-    if (!rawSymbol || typeof rawSymbol !== 'string') {
-      return NextResponse.json({ error: 'Valid symbol parameter is required.' }, { status: 400 });
+    if (!rawPositionId || typeof rawPositionId !== 'string') {
+      return NextResponse.json(
+        { error: 'Explicit positionId parameter is required to delete a holding.' },
+        { status: 400 }
+      );
     }
 
-    const cleanSymUpper = rawSymbol.replace(/\.IS$/i, '').trim().toUpperCase();
-    const isSymbol = `${cleanSymUpper}.IS`;
-
-    // 1. Find asset
-    const { data: assetData } = await authSupabase
-      .from('assets')
-      .select('id')
-      .or(`symbol.eq.${cleanSymUpper},symbol.eq.${isSymbol}`)
-      .limit(1);
-
-    if (assetData && assetData.length > 0) {
-      await authSupabase
-        .from('portfolio_positions')
-        .delete()
-        .eq('asset_id', assetData[0].id)
-        .eq('user_id', user.id);
+    const trimmedId = rawPositionId.trim();
+    // Validate UUID format
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(trimmedId)) {
+      return NextResponse.json(
+        { error: `Invalid positionId format '${trimmedId}'. Expected standard UUID format.` },
+        { status: 400 }
+      );
     }
 
-    // 2. Cleanup orders and auto-funded shortfall transfers
-    await authSupabase
-      .from('portfolio_orders')
-      .delete()
+    // 1. Fetch position scoped to user_id to verify existence & ownership
+    const { data: existingPos, error: fetchErr } = await authSupabase
+      .from('portfolio_positions')
+      .select('id, user_id, asset_id')
+      .eq('id', trimmedId)
       .eq('user_id', user.id)
-      .or(`symbol.eq.${cleanSymUpper},symbol.eq.${isSymbol}`);
+      .maybeSingle();
 
-    await authSupabase
-      .from('portfolio_transfers')
+    if (fetchErr) {
+      return NextResponse.json(
+        { error: `Failed to query position: ${fetchErr.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!existingPos) {
+      return NextResponse.json(
+        { error: `Position '${trimmedId}' not found or belongs to another user.` },
+        { status: 404 }
+      );
+    }
+
+    // 2. Delete strictly the target position; preserve orders and transfers as immutable audit records
+    const { error: deleteErr } = await authSupabase
+      .from('portfolio_positions')
       .delete()
-      .eq('user_id', user.id)
-      .ilike('notes', `Auto-deposit (%): Funded position ${cleanSymUpper}`);
+      .eq('id', trimmedId)
+      .eq('user_id', user.id);
 
-    return NextResponse.json({ success: true, symbol: cleanSymUpper }, { status: 200 });
+    if (deleteErr) {
+      return NextResponse.json(
+        { error: `Failed to delete position: ${deleteErr.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        deletedPositionId: trimmedId,
+        message: 'Position removed successfully; order and cash transfer history preserved.',
+      },
+      { status: 200 }
+    );
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: errMsg || 'Internal Server Error' }, { status: 500 });

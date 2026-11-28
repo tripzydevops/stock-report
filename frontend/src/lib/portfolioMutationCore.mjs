@@ -23,8 +23,8 @@ export function resolveEndpointForMutation(mutation) {
     case 'SELL':
       return { url: '/api/portfolio/positions', method: 'POST' };
     case 'DELETE_POSITION': {
-      const sym = mutation.body?.symbol;
-      const url = sym ? `/api/portfolio/positions?symbol=${encodeURIComponent(sym)}` : '/api/portfolio/positions';
+      const posId = mutation.body?.positionId || mutation.body?.id;
+      const url = posId ? `/api/portfolio/positions?positionId=${encodeURIComponent(posId)}` : '/api/portfolio/positions';
       return { url, method: 'DELETE' };
     }
     case 'DEPOSIT':

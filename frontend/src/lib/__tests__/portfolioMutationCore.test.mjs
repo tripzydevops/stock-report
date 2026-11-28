@@ -51,8 +51,8 @@ test('resolveEndpointForMutation maps actions to correct endpoints and HTTP meth
     url: '/api/portfolio/transfers',
     method: 'POST',
   });
-  assert.deepEqual(resolveEndpointForMutation({ type: 'DELETE_POSITION', body: { symbol: 'TUPRS' } }), {
-    url: '/api/portfolio/positions?symbol=TUPRS',
+  assert.deepEqual(resolveEndpointForMutation({ type: 'DELETE_POSITION', body: { positionId: 'pos-123-uuid' } }), {
+    url: '/api/portfolio/positions?positionId=pos-123-uuid',
     method: 'DELETE',
   });
 });
