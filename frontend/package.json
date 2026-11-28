@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/__tests__/dividendPrecedence.test.mjs src/lib/__tests__/scraperIngestion.test.mjs",
+    "test": "node --test src/lib/__tests__/dividendPrecedence.test.mjs src/lib/__tests__/scraperIngestion.test.mjs src/lib/__tests__/portfolioMutationStorage.test.mjs",
     "test:scraper:smoke": "node scripts/smoke_live_scraper.mjs"
   },
   "dependencies": {
