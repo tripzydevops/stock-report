@@ -24,13 +24,21 @@ export async function POST(request: NextRequest) {
     const idempotencyHeader = request.headers.get('Idempotency-Key') || request.headers.get('x-idempotency-key');
     const body = await request.json().catch(() => ({}));
 
-    const rawType = String(body.transferType || body.type || 'DEPOSIT').trim().toUpperCase();
-    const resolvedType = ALLOWED_TRANSFER_TYPES.includes(rawType as any) ? rawType : 'DEPOSIT';
+    // 2. Strict Input Validation
+    const rawType = String(body.transferType || body.type || '').trim().toUpperCase();
+    if (!['DEPOSIT', 'WITHDRAWAL'].includes(rawType)) {
+      return NextResponse.json(
+        { error: `Invalid transfer type '${rawType}'. Allowed types: DEPOSIT, WITHDRAWAL.` },
+        { status: 400 }
+      );
+    }
+    const resolvedType = rawType as 'DEPOSIT' | 'WITHDRAWAL';
 
     const rawAmount = Number(body.amount);
-    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+    const MAX_TRANSFER_AMOUNT = 1_000_000_000; // 1 Billion ceiling
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0 || rawAmount > MAX_TRANSFER_AMOUNT) {
       return NextResponse.json(
-        { error: 'Transfer amount must be a positive number.' },
+        { error: `Transfer amount must be a positive number up to ${MAX_TRANSFER_AMOUNT.toLocaleString()}.` },
         { status: 400 }
       );
     }
@@ -38,14 +46,51 @@ export async function POST(request: NextRequest) {
     const currency = String(body.currency || 'TRY').trim().toUpperCase();
     if (!['TRY', 'USD', 'EUR'].includes(currency)) {
       return NextResponse.json(
-        { error: `Invalid currency '${currency}'. Allowed: TRY, USD, EUR.` },
+        { error: `Invalid currency '${currency}'. Allowed currencies: TRY, USD, EUR.` },
         { status: 400 }
       );
     }
 
-    const transferDate = body.transferDate || new Date().toISOString().slice(0, 10);
-    const clientOrderId = body.client_order_id || idempotencyHeader || null;
-    const notes = typeof body.notes === 'string' ? body.notes.trim() : null;
+    const rawDate = body.transferDate ? String(body.transferDate).trim() : new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return NextResponse.json(
+        { error: `Invalid transfer date format '${rawDate}'. Expected ISO YYYY-MM-DD format.` },
+        { status: 400 }
+      );
+    }
+    const parsedDate = new Date(`${rawDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json(
+        { error: `Invalid calendar date '${rawDate}'.` },
+        { status: 400 }
+      );
+    }
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (rawDate > todayIso) {
+      return NextResponse.json(
+        { error: `Future transfer date '${rawDate}' is not allowed. Transfers must be today or earlier.` },
+        { status: 400 }
+      );
+    }
+    const transferDate = rawDate;
+
+    const rawClientOrderId = body.client_order_id || idempotencyHeader || null;
+    const clientOrderId = rawClientOrderId ? String(rawClientOrderId).trim() : null;
+    if (clientOrderId && clientOrderId.length > 128) {
+      return NextResponse.json(
+        { error: 'client_order_id exceeds maximum permitted length of 128 characters.' },
+        { status: 400 }
+      );
+    }
+
+    const rawNotes = typeof body.notes === 'string' ? body.notes.trim() : null;
+    if (rawNotes && rawNotes.length > 500) {
+      return NextResponse.json(
+        { error: 'notes exceeds maximum permitted length of 500 characters.' },
+        { status: 400 }
+      );
+    }
+    const notes = rawNotes;
 
     // 2. Direct insert with client_order_id column
     const { data: insertedTransfer, error: insertError } = await authSupabase
