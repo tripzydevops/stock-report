@@ -30,9 +30,13 @@ export function getOfflineMutationQueue() {
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
     const now = Date.now();
-    // Filter out expired items beyond max age
+    // Validate entry shape and filter expired items
     return parsed.filter((item) => {
+      if (!item || typeof item !== 'object' || !item.clientOrderId || !item.type) {
+        return false;
+      }
       const createdTime = new Date(item.createdAt).getTime();
       return Number.isFinite(createdTime) && now - createdTime < MAX_MUTATION_QUEUE_AGE_MS;
     });
@@ -46,14 +50,10 @@ export function saveOfflineMutationQueue(queue) {
   try {
     if (!queue || queue.length === 0) {
       localStorage.removeItem(PORTFOLIO_MUTATIONS_STORAGE_KEY);
-      localStorage.removeItem(LEGACY_OFFLINE_QUEUE_KEY);
     } else {
       // Bounded capacity cap
       const bounded = queue.slice(-MAX_MUTATION_QUEUE_SIZE);
-      const serialized = JSON.stringify(bounded);
-      localStorage.setItem(PORTFOLIO_MUTATIONS_STORAGE_KEY, serialized);
-      // Keep legacy key mirrored during transition so legacy code does not desync
-      localStorage.setItem(LEGACY_OFFLINE_QUEUE_KEY, serialized);
+      localStorage.setItem(PORTFOLIO_MUTATIONS_STORAGE_KEY, JSON.stringify(bounded));
     }
   } catch {}
 }
@@ -70,7 +70,9 @@ export function getFailedMutationList() {
       }
     }
     if (!raw) return [];
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => item && typeof item === 'object' && item.clientOrderId && item.type);
   } catch {
     return [];
   }
@@ -81,12 +83,9 @@ export function saveFailedMutationList(list) {
   try {
     if (!list || list.length === 0) {
       localStorage.removeItem(PORTFOLIO_FAILED_STORAGE_KEY);
-      localStorage.removeItem(LEGACY_FAILED_MUTATIONS_KEY);
     } else {
       const bounded = list.slice(0, MAX_MUTATION_QUEUE_SIZE);
-      const serialized = JSON.stringify(bounded);
-      localStorage.setItem(PORTFOLIO_FAILED_STORAGE_KEY, serialized);
-      localStorage.setItem(LEGACY_FAILED_MUTATIONS_KEY, serialized);
+      localStorage.setItem(PORTFOLIO_FAILED_STORAGE_KEY, JSON.stringify(bounded));
     }
   } catch {}
 }

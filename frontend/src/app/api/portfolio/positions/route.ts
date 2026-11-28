@@ -432,3 +432,65 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errMsg || 'Internal Server Error' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE: Atomically deletes an existing holding, its executed orders, and auto-funded shortfall transfers.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const authSupabase = getAuthenticatedSupabase(request);
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Authentication required. Please log in to delete holdings.' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const symbolParam = searchParams.get('symbol');
+    const body = await request.json().catch(() => ({}));
+    const rawSymbol = symbolParam || body.symbol;
+
+    if (!rawSymbol || typeof rawSymbol !== 'string') {
+      return NextResponse.json({ error: 'Valid symbol parameter is required.' }, { status: 400 });
+    }
+
+    const cleanSymUpper = rawSymbol.replace(/\.IS$/i, '').trim().toUpperCase();
+    const isSymbol = `${cleanSymUpper}.IS`;
+
+    // 1. Find asset
+    const { data: assetData } = await authSupabase
+      .from('assets')
+      .select('id')
+      .or(`symbol.eq.${cleanSymUpper},symbol.eq.${isSymbol}`)
+      .limit(1);
+
+    if (assetData && assetData.length > 0) {
+      await authSupabase
+        .from('portfolio_positions')
+        .delete()
+        .eq('asset_id', assetData[0].id)
+        .eq('user_id', user.id);
+    }
+
+    // 2. Cleanup orders and auto-funded shortfall transfers
+    await authSupabase
+      .from('portfolio_orders')
+      .delete()
+      .eq('user_id', user.id)
+      .or(`symbol.eq.${cleanSymUpper},symbol.eq.${isSymbol}`);
+
+    await authSupabase
+      .from('portfolio_transfers')
+      .delete()
+      .eq('user_id', user.id)
+      .ilike('notes', `Auto-deposit (%): Funded position ${cleanSymUpper}`);
+
+    return NextResponse.json({ success: true, symbol: cleanSymUpper }, { status: 200 });
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: errMsg || 'Internal Server Error' }, { status: 500 });
+  }
+}
+

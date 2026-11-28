@@ -19,10 +19,20 @@ export function ActionErrorCard({
   language = 'tr',
 }: ActionErrorCardProps) {
   const displayError = error || action.lastError || (language === 'tr' ? 'Bilinmeyen sunucu hatası' : 'Unknown server error');
-  const sym = action.body?.symbol || 'UNKNOWN';
+  const sym = action.body?.symbol;
   const shares = action.body?.shares ?? action.body?.quantity ?? 0;
   const price = action.body?.price ?? action.body?.entryPrice ?? 0;
+  const amount = action.body?.amount ?? 0;
   const currency = action.body?.currency || 'TRY';
+
+  let descriptionLabel = '';
+  if (action.type === 'DEPOSIT' || action.type === 'WITHDRAW') {
+    descriptionLabel = `${amount.toLocaleString(language === 'tr' ? 'tr-TR' : 'en-US')} ${currency}`;
+  } else if (sym && shares > 0) {
+    descriptionLabel = `${sym} • ${shares} ${language === 'tr' ? 'lot' : 'shares'} @ ${price} ${currency}`;
+  } else if (sym) {
+    descriptionLabel = sym;
+  }
 
   return (
     <div
@@ -36,19 +46,17 @@ export function ActionErrorCard({
               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
               : action.type === 'SELL'
               ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+              : action.type === 'DELETE_POSITION'
+              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
               : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
           }`}
         >
-          {action.type}
+          {action.type === 'DELETE_POSITION' ? 'DELETE' : action.type}
         </span>
 
-        <span className="font-extrabold text-neutral-900 dark:text-white">
-          {sym}
-        </span>
-
-        {shares > 0 && (
-          <span className="text-neutral-500 dark:text-neutral-400 text-[11px]">
-            {shares} {language === 'tr' ? 'lot' : 'shares'} @ {price} {currency}
+        {descriptionLabel && (
+          <span className="font-extrabold text-neutral-900 dark:text-white">
+            {descriptionLabel}
           </span>
         )}
 
