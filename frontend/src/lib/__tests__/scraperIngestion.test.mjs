@@ -33,6 +33,13 @@ test('ingestAuditedDividends verifies all 4 scraper ingestion & guard outcomes a
           if (matches.length === 0) {
             res.statusCode = 406;
             res.end(JSON.stringify({ message: '0 rows' }));
+          } else if (matches.length > 1) {
+            res.statusCode = 406;
+            res.end(JSON.stringify({
+              code: 'PGRST116',
+              details: `Results contain ${matches.length} rows, but 1 was requested`,
+              message: 'JSON object requested, multiple (or no) rows returned'
+            }));
           } else {
             res.statusCode = 200;
             res.end(JSON.stringify(matches[0]));
@@ -199,7 +206,7 @@ test('parseDateToIso and parseFintablesTableData handle Turkish month dates and 
     ]
   });
 
-  assert.equal(records.length, 1);
+    assert.equal(records.length, 1);
   assert.deepEqual(records[0], {
     symbol: 'MEDTR',
     exDate: '2026-12-28',
@@ -211,4 +218,116 @@ test('parseDateToIso and parseFintablesTableData handle Turkish month dates and 
     source: 'FINTABLES_DIVIDEND_CALENDAR'
   });
 });
+
+test('Duplicate (symbol, ex_date) rows cause maybeSingle() to surface PGRST116 error and halt unsafe writes', async () => {
+  // Setup local mock database with 2 duplicate rows for the same symbol and ex_date
+  const store = [
+    {
+      id: 'dup-1',
+      symbol: 'SISE.IS',
+      ex_date: '2026-11-20',
+      payment_date: '2026-11-24',
+      amount: 1.0,
+      currency: 'TRY',
+      frequency: 'Annual',
+      is_confirmed: true,
+      source: 'KAP_OFFICIAL',
+    },
+    {
+      id: 'dup-2',
+      symbol: 'SISE.IS',
+      ex_date: '2026-11-20',
+      payment_date: '2026-11-24',
+      amount: 1.0,
+      currency: 'TRY',
+      frequency: 'Annual',
+      is_confirmed: false,
+      source: 'YAHOO_ESTIMATED',
+    },
+  ];
+
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method === 'GET' && url.pathname.endsWith('/asset_dividends')) {
+      const sym = url.searchParams.get('symbol')?.replace(/^eq\./, '');
+      const ex = url.searchParams.get('ex_date')?.replace(/^eq\./, '');
+      const matches = store.filter((r) => (!sym || r.symbol === sym) && (!ex || r.ex_date === ex));
+      const accept = req.headers['accept'] || '';
+      if (accept.includes('application/vnd.pgrst.object+json')) {
+        if (matches.length === 0) {
+          res.statusCode = 406;
+          res.end(JSON.stringify({ message: '0 rows' }));
+        } else if (matches.length > 1) {
+          // Standard PostgREST error when requesting single object on duplicate rows
+          res.statusCode = 406;
+          res.end(JSON.stringify({
+            code: 'PGRST116',
+            details: `Results contain ${matches.length} rows, but 1 was requested`,
+            message: 'JSON object requested, multiple (or no) rows returned'
+          }));
+        } else {
+          res.statusCode = 200;
+          res.end(JSON.stringify(matches[0]));
+        }
+        return;
+      }
+      res.statusCode = 200;
+      res.end(JSON.stringify(matches));
+      return;
+    }
+    res.statusCode = 200;
+    res.end('[]');
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  const mockUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    const mockDb = createClient(mockUrl, 'local-test-service-role-key');
+    const { upsertDividendEvent } = await import('../dividendPersistence.ts');
+    const { ingestAuditedDividends } = await import('../../../scripts/scrape_bist_dividends_playwright.mjs');
+
+    // 1. Verify upsertDividendEvent surfaces error rather than silently choosing a row
+    const persistResult = await upsertDividendEvent(mockDb, {
+      symbol: 'SISE.IS',
+      ex_date: '2026-11-20',
+      payment_date: '2026-11-24',
+      amount: 1.25,
+      currency: 'TRY',
+      frequency: 'Annual',
+      is_confirmed: true,
+      source: 'FINTABLES_DIVIDEND_CALENDAR',
+    });
+
+    assert.equal(persistResult.action, 'ERROR');
+    assert.equal(persistResult.reason, 'fetch_existing_failed');
+    assert.match(persistResult.error, /JSON object requested, multiple/);
+
+    // 2. Verify ingestAuditedDividends treats duplicate fetch error as failed and does not corrupt store
+    const ingestSummary = await ingestAuditedDividends([
+      {
+        symbol: 'SISE',
+        exDate: '2026-11-20',
+        payDate: '2026-11-24',
+        hasDeclaredPayDate: true,
+        grossDps: 1.5,
+        netDps: 1.25,
+        hasDeclaredNet: true,
+        source: 'FINTABLES_DIVIDEND_CALENDAR',
+      },
+    ], mockDb);
+
+    assert.equal(ingestSummary.extracted, 1);
+    assert.equal(ingestSummary.audited, 0, 'Must not audit/save record when duplicate rows exist');
+    assert.equal(ingestSummary.failed, 1, 'Must mark duplicate row lookup as failed');
+
+    // Verify existing store was untouched
+    assert.equal(store.length, 2);
+  } finally {
+    server.close();
+  }
+});
+
 

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test src/lib/__tests__/dividendPrecedence.test.mjs src/lib/__tests__/scraperIngestion.test.mjs",
+    "test:scraper:smoke": "node scripts/smoke_live_scraper.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

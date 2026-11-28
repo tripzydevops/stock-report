@@ -10,6 +10,7 @@ export const AUTHORITATIVE_CONFIRMED_SOURCES = new Set([
 ]);
 
 export const AUTHORITATIVE_UNCONFIRMED_SOURCES = new Set([
+  'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED',
   'FINTABLES_DIVIDEND_CALENDAR_GROSS_ONLY_UNCONFIRMED',
   'ISYATIRIM_CORPORATE_ACTIONS_GROSS_ONLY_UNCONFIRMED',
 ]);
@@ -98,6 +99,17 @@ export function evaluateDividendUpsert(existing, incoming) {
     };
   }
 
+  // Rule 2b: Inferred payment date cannot downgrade or overwrite an already declared payment date from the same source family
+  if (
+    prevSource === 'FINTABLES_DIVIDEND_CALENDAR' &&
+    incomingSource === 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED'
+  ) {
+    return {
+      action: 'SKIP',
+      reason: 'protected_declared_payment_date_from_inferred',
+    };
+  }
+
   // Rule 3: Lower-precedence Yahoo estimate must NOT overwrite a higher-precedence Yahoo estimate
   if (isIncomingYahoo && isYahooEstimateSource(prevSource)) {
     const incomingRank = YAHOO_SOURCE_RANK[incomingSource] ?? 0;
@@ -111,7 +123,11 @@ export function evaluateDividendUpsert(existing, incoming) {
   }
 
   // Rule 4: Confirmed authoritative record explicitly upgrades an earlier unconfirmed placeholder
-  const isConfirmedUpgrade = safeIsConfirmed && !prevConfirmed && isExactAuthoritativeSource(incomingSource);
+  const isDeclaredPayDateUpgrade =
+    prevSource === 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED' &&
+    incomingSource === 'FINTABLES_DIVIDEND_CALENDAR';
+  const isConfirmedUpgrade =
+    safeIsConfirmed && !prevConfirmed && isExactAuthoritativeSource(incomingSource);
 
   const nextAmount =
     !safeIsConfirmed && isExactAuthoritativeSource(incomingSource)
@@ -122,7 +138,11 @@ export function evaluateDividendUpsert(existing, incoming) {
 
   return {
     action: 'UPDATE',
-    reason: isConfirmedUpgrade ? 'confirmed_upgrades_unconfirmed_placeholder' : 'safe_update',
+    reason: isDeclaredPayDateUpgrade
+      ? 'declared_pay_date_upgrades_inferred_placeholder'
+      : isConfirmedUpgrade
+      ? 'confirmed_upgrades_unconfirmed_placeholder'
+      : 'safe_update',
     payload: {
       payment_date: incoming.payment_date,
       amount: nextAmount,

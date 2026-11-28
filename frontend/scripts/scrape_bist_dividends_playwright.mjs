@@ -25,12 +25,18 @@ const calendarPath = path.resolve(__dirname, '../src/data/bist_calendar.json');
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ Fatal: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be provided for automated dividend ingestion.');
-  process.exit(1);
+export function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be provided for automated dividend ingestion.');
+  }
+  return createClient(url, key);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const defaultSupabase = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 // Official BIST Market Holidays from bist_calendar.json (including religious holidays: Ramazan and Kurban Bayramı)
 let bistHolidays = new Set();
@@ -250,6 +256,7 @@ export async function scrapeAndIngestBistDividends() {
 
   try {
     // 1. Primary Source: Fintables Temettüler (with dynamic link discovery fallback if URL changes)
+    const MAX_FINTABLES_URLS = 2;
     const fintablesUrls = ['https://fintables.com/sermaye-artirimlari/temettuler'];
     try {
       let tableData = null;
@@ -263,7 +270,7 @@ export async function scrapeAndIngestBistDividends() {
         const status = resp ? resp.status() : 0;
         if (status >= 400) {
           console.warn(`⚠️ Fintables returned HTTP ${status} for ${targetUrl} (final URL: ${page.url()}).`);
-          if (i === 0) {
+          if (i === 0 && fintablesUrls.length < MAX_FINTABLES_URLS) {
             // Self-healing fallback: discover dividend link from Fintables homepage
             await page.goto('https://fintables.com', { waitUntil: 'domcontentloaded', timeout: 20000 });
             const discovered = await page.evaluate(() => {
@@ -272,16 +279,24 @@ export async function scrapeAndIngestBistDividends() {
               );
               return link ? new URL(link.getAttribute('href'), location.origin).href : null;
             });
-            if (discovered && !fintablesUrls.includes(discovered)) {
-              console.log(`🔎 Discovered fallback Fintables dividend URL: ${discovered}`);
-              fintablesUrls.push(discovered);
+            if (discovered && !fintablesUrls.includes(discovered) && fintablesUrls.length < MAX_FINTABLES_URLS) {
+              try {
+                const parsedUrl = new URL(discovered);
+                if (parsedUrl.hostname === 'fintables.com' && /sermaye-artirimlari|temett/i.test(parsedUrl.pathname)) {
+                  console.log(`🔎 Discovered fallback Fintables dividend URL: ${discovered}`);
+                  fintablesUrls.push(discovered);
+                }
+              } catch {
+                // Ignore invalid URLs
+              }
             }
           }
           continue;
         }
 
         await page.waitForSelector('table tbody tr a[href*="/sirketler/"]', { state: 'attached', timeout: 15000 }).catch(() => null);
-        await page.waitForTimeout(500);
+        // Allow virtualized table to finish populating initial batch of rows
+        await page.waitForTimeout(2000);
 
         tableData = await page.evaluate(() => {
           const table = document.querySelector('table');
@@ -376,10 +391,16 @@ export async function scrapeAndIngestBistDividends() {
   }
 
   console.log(`\n🔍 Extracted ${extractedRecords.length} announced dividend declarations.`);
-  return await ingestAuditedDividends(extractedRecords, supabase);
+  const client = defaultSupabase || getSupabaseClient();
+  const summary = await ingestAuditedDividends(extractedRecords, client);
+  if (summary.audited === 0 && summary.extracted > 0) {
+    console.error('❌ All records failed database ingestion. Exiting with failure code.');
+    process.exit(1);
+  }
+  return summary;
 }
 
-export async function ingestAuditedDividends(extractedRecords, dbClient = supabase) {
+export async function ingestAuditedDividends(extractedRecords, dbClient = (defaultSupabase || getSupabaseClient())) {
   // 3. Mathematical Audit & Supabase Ingestion
   let auditedCount = 0;
   let failedCount = 0;
@@ -403,17 +424,31 @@ export async function ingestAuditedDividends(extractedRecords, dbClient = supaba
         finalPayDate = normalizedPayDate;
       }
     }
-    // Strict Cash-Ledger Protection:
-    // A confirmed dividend requires BOTH a source-declared net DPS and a source-declared payment date.
-    // If net DPS is not declared, DO NOT store gross DPS as the creditable amount.
-    // Setting amount = 0 and is_confirmed = false ensures processDueDividendsToCashLedger() can NEVER credit it.
+    // Audit Rule 3: Non-blocking data quality check when gross equals net
+    if (item.netDps !== null && item.grossDps > 0 && item.netDps === item.grossDps) {
+      console.warn(
+        `[DATA_QUALITY] Gross equals net for ${item.symbol} on ${item.exDate}; verify withholding status or parser extraction.`
+      );
+    }
+
+    // Strict Cash-Ledger Protection Decision Matrix:
+    // 1. Declared Net DPS + Declared Payment Date -> FINTABLES_DIVIDEND_CALENDAR, is_confirmed: true, creditable
+    // 2. Declared Net DPS + Inferred T+2 Pay Date -> FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED, is_confirmed: false, amount = 0
+    // 3. Gross only / unannounced net -> ${source}_GROSS_ONLY_UNCONFIRMED, is_confirmed: false, amount = 0
     const hasDeclaredNet = item.hasDeclaredNet === true && item.netDps !== null && item.netDps > 0;
     const hasDeclaredPayDate = item.hasDeclaredPayDate === true && Boolean(finalPayDate);
     const isConfirmed = hasDeclaredNet && hasDeclaredPayDate;
 
+    let provenance = item.source;
+    if (!hasDeclaredNet) {
+      provenance = `${item.source}_GROSS_ONLY_UNCONFIRMED`;
+    } else if (!hasDeclaredPayDate && item.source.startsWith('FINTABLES')) {
+      provenance = 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED';
+    }
+
     // Do NOT write gross DPS into the field consumed as a user cash credit.
-    const creditableAmount = hasDeclaredNet ? item.netDps : 0;
-    const provenance = !hasDeclaredNet ? `${item.source}_GROSS_ONLY_UNCONFIRMED` : item.source;
+    // Inferred payment date records are unconfirmed and must have amount = 0 to prevent accidental crediting.
+    const creditableAmount = isConfirmed ? item.netDps : 0;
 
     // Canonical BIST symbol with .IS suffix (matches asset_dividends table)
     const canonicalSymbol = normalizeBistSymbol(item.symbol);
@@ -430,12 +465,18 @@ export async function ingestAuditedDividends(extractedRecords, dbClient = supaba
     };
 
     try {
-      const { data: existing } = await dbClient
+      const { data: existing, error: fetchErr } = await dbClient
         .from('asset_dividends')
         .select('id, is_confirmed, source, amount')
         .eq('symbol', canonicalSymbol)
         .eq('ex_date', item.exDate)
         .maybeSingle();
+
+      if (fetchErr) {
+        console.error(`❌ Failed fetching existing dividend for ${canonicalSymbol} on ${item.exDate} (potential duplicate rows): ${fetchErr.message}`);
+        failedCount++;
+        continue;
+      }
 
       const decision = evaluateDividendUpsert(existing || null, row);
 
@@ -475,12 +516,6 @@ export async function ingestAuditedDividends(extractedRecords, dbClient = supaba
   }
 
   console.log(`\n🎉 Ingestion finished: ${auditedCount} verified BIST corporate actions synced, ${failedCount} skipped/failed.`);
-
-  // If all upserts failed, fail the process
-  if (auditedCount === 0 && extractedRecords.length > 0) {
-    console.error('❌ All records failed database ingestion. Exiting with failure code.');
-    process.exit(1);
-  }
 
   return { extracted: extractedRecords.length, audited: auditedCount, failed: failedCount };
 }

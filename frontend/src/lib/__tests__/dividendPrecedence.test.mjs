@@ -198,3 +198,161 @@ test('Lower-precedence YAHOO_ANNUALIZED_ESTIMATE cannot overwrite YAHOO_LAST_DIV
   assert.equal(decision.action, 'SKIP');
   assert.equal(decision.reason, 'protected_higher_precedence_yahoo_estimate');
 });
+
+test('Chronological precedence: confirmed record arriving before a later gross-only record is preserved without downgrade', () => {
+  // Scenario: An authoritative confirmed record (e.g., KAP or confirmed Fintables net record)
+  // was persisted first. Later, a gross-only scrape (or an unconfirmed estimate) arrives for the same (symbol, ex_date).
+  // Precedence Outcome Specification:
+  // 1. Action: MUST be 'SKIP'.
+  // 2. Reason: MUST be 'protected_confirmed_from_unconfirmed_downgrade'.
+  // 3. Database State: Existing confirmed row (is_confirmed: true, amount > 0, source) remains untouched.
+  // 4. Cash Ledger Safety: Unconfirmed gross records never overwrite verified net amounts.
+  const existingConfirmed = {
+    id: 'row-authoritative-kap',
+    symbol: 'KCHOL.IS',
+    ex_date: '2026-10-15',
+    payment_date: '2026-10-19',
+    amount: 2.85,
+    currency: 'TRY',
+    frequency: 'Annual',
+    is_confirmed: true,
+    source: 'KAP_OFFICIAL',
+  };
+
+  const laterGrossOnly = {
+    symbol: 'KCHOL.IS',
+    ex_date: '2026-10-15',
+    payment_date: '2026-10-19',
+    amount: 3.5, // Gross DPS in scrape
+    currency: 'TRY',
+    frequency: 'Annual',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_GROSS_ONLY_UNCONFIRMED',
+  };
+
+  const decision = evaluateDividendUpsert(existingConfirmed, laterGrossOnly);
+  assert.equal(decision.action, 'SKIP', 'Must SKIP incoming unconfirmed record when confirmed record already exists');
+  assert.equal(decision.reason, 'protected_confirmed_from_unconfirmed_downgrade');
+  assert.equal(decision.payload, undefined, 'No update payload generated for skipped downgrade');
+});
+
+test('Yahoo ranking: YAHOO_LAST_DIVIDEND_VALUE (rank 2) cannot overwrite YAHOO_LIVE (rank 3)', () => {
+  const existingLive = {
+    id: 'row-yahoo-live',
+    is_confirmed: false,
+    source: 'YAHOO_LIVE',
+    amount: 0.50,
+  };
+  const incomingLastValue = {
+    symbol: 'MSFT',
+    ex_date: '2026-11-19',
+    payment_date: '2026-12-10',
+    amount: 0.45,
+    currency: 'USD',
+    frequency: 'Quarterly',
+    is_confirmed: false,
+    source: 'YAHOO_LAST_DIVIDEND_VALUE',
+  };
+
+  const decision = evaluateDividendUpsert(existingLive, incomingLastValue);
+  assert.equal(decision.action, 'SKIP');
+  assert.equal(decision.reason, 'protected_higher_precedence_yahoo_estimate');
+});
+
+test('Yahoo ranking: YAHOO_LIVE (rank 3) successfully upgrades YAHOO_LAST_DIVIDEND_VALUE (rank 2)', () => {
+  const existingLastValue = {
+    id: 'row-yahoo-last',
+    is_confirmed: false,
+    source: 'YAHOO_LAST_DIVIDEND_VALUE',
+    amount: 0.45,
+  };
+  const incomingLive = {
+    symbol: 'MSFT',
+    ex_date: '2026-11-19',
+    payment_date: '2026-12-10',
+    amount: 0.50,
+    currency: 'USD',
+    frequency: 'Quarterly',
+    is_confirmed: false,
+    source: 'YAHOO_LIVE',
+  };
+
+  const decision = evaluateDividendUpsert(existingLastValue, incomingLive);
+  assert.equal(decision.action, 'UPDATE');
+  assert.equal(decision.reason, 'safe_update');
+  assert.equal(decision.payload.source, 'YAHOO_LIVE');
+  assert.equal(decision.payload.amount, 0.50);
+  assert.equal(decision.payload.is_confirmed, false);
+});
+
+test('Declared payment date upgrades inferred payment date placeholder from same source', () => {
+  const existingInferred = {
+    id: 'row-inferred',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED',
+    amount: 0,
+    payment_date: '2026-12-30',
+  };
+  const incomingDeclared = {
+    symbol: 'MEDTR.IS',
+    ex_date: '2026-12-28',
+    payment_date: '2026-12-31', // official declared pay date
+    amount: 0.0964,
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: true,
+    source: 'FINTABLES_DIVIDEND_CALENDAR',
+  };
+
+  const decision = evaluateDividendUpsert(existingInferred, incomingDeclared);
+  assert.equal(decision.action, 'UPDATE');
+  assert.equal(decision.reason, 'declared_pay_date_upgrades_inferred_placeholder');
+  assert.equal(decision.payload.is_confirmed, true);
+  assert.equal(decision.payload.amount, 0.0964);
+  assert.equal(decision.payload.payment_date, '2026-12-31');
+  assert.equal(decision.payload.source, 'FINTABLES_DIVIDEND_CALENDAR');
+});
+
+test('Inferred payment date cannot downgrade or overwrite an existing declared payment date record', () => {
+  const existingDeclared = {
+    id: 'row-declared',
+    is_confirmed: true,
+    source: 'FINTABLES_DIVIDEND_CALENDAR',
+    amount: 0.0964,
+    payment_date: '2026-12-31',
+  };
+  const incomingInferred = {
+    symbol: 'MEDTR.IS',
+    ex_date: '2026-12-28',
+    payment_date: '2026-12-30', // inferred T+2 date
+    amount: 0,
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED',
+  };
+
+  const decision = evaluateDividendUpsert(existingDeclared, incomingInferred);
+  assert.equal(decision.action, 'SKIP');
+  assert.equal(decision.reason, 'protected_confirmed_from_unconfirmed_downgrade');
+});
+
+test('Inferred payment date insert sets amount = 0 and is_confirmed = false for cash-ledger safety', () => {
+  const incomingInferred = {
+    symbol: 'MEDTR.IS',
+    ex_date: '2026-12-28',
+    payment_date: '2026-12-30',
+    amount: 0.0964, // caller might pass non-zero
+    currency: 'TRY',
+    frequency: 'Semi-Annual',
+    is_confirmed: false,
+    source: 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED',
+  };
+
+  const decision = evaluateDividendUpsert(null, incomingInferred);
+  assert.equal(decision.action, 'INSERT');
+  assert.equal(decision.payload.amount, 0, 'Unconfirmed inferred source must force amount = 0');
+  assert.equal(decision.payload.is_confirmed, false);
+  assert.equal(decision.payload.source, 'FINTABLES_DIVIDEND_CALENDAR_PAY_DATE_INFERRED');
+});
+
